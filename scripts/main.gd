@@ -10,6 +10,7 @@ var emulator: Node
 var signal_view: SubViewport
 var rom_dialog: PanelContainer
 var game_status: Label
+var controller_status: Label
 var was_paused_before_menu := false
 var provider: TrackingProvider = Simulated.new()
 var needs_center := false
@@ -97,6 +98,8 @@ func _ready() -> void:
 		panel.add_child(fade)
 	emulator = Emulation.new()
 	add_child(emulator)
+	Input.joy_connection_changed.connect(func(device, connected):
+		if not connected: emulator.gamepad.disconnect_device(device))
 	emulator.content_changed.connect(func(texture):
 		world.screen_material.set_shader_parameter("signal_texture", texture)
 		world.screen_material.set_shader_parameter("signal_size", Vector2(texture.get_width(), texture.get_height())))
@@ -168,6 +171,9 @@ func _process(delta: float) -> void:
 	var menu_open := settings_panel.visible or (is_instance_valid(rom_dialog) and rom_dialog.visible)
 	for overlay in menu_overlays: overlay.visible = menu_open
 	for hud in diagnostics: hud.modulate.a = 0.0 if menu_open else 1.0
+	if is_instance_valid(controller_status) and menu_open:
+		var pads := Input.get_connected_joypads()
+		controller_status.text = "Controller: choose a Gamepad layout in Steam" if pads.is_empty() else "Controller: " + Input.get_joy_name(emulator.gamepad.active_device if emulator.gamepad.active_device in pads else pads[0])
 	menu_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if menu_open else SubViewport.UPDATE_DISABLED
 	provider.enabled = not menu_open and not emulator.loaded
 	display_report_elapsed += delta
@@ -201,7 +207,7 @@ func _process(delta: float) -> void:
 		var near_plane := 0.05
 		eyes[i].set_frustum(2.0 * near_plane * tan(deg_to_rad(vertical_fov) / 2.0), Vector2(-offset * near_plane / convergence, 0), near_plane, 50.0)
 		var a := displayed.get_euler() * 180.0 / PI
-		diagnostics[i].text = "RETROCRT XR   /   %s\n%s\nYaw %+.1f   Pitch %+.1f   Roll %+.1f\n%.2fm  /  IPD %.0fmm  /  %.0f fps\n%s" % ["LEFT" if stereo and i == 0 else ("RIGHT" if stereo else "DESKTOP"), provider.status, a.y, a.x, a.z, distance, ipd * 1000, Engine.get_frames_per_second(), "L3 / Esc: menu   R3 / R: recenter" if emulator.loaded else "Tab / Start: settings   R / Y: recenter"]
+		diagnostics[i].text = "RETROCRT XR   /   %s\n%s\nYaw %+.1f   Pitch %+.1f   Roll %+.1f\n%.2fm  /  IPD %.0fmm  /  %.0f fps\nL + R + Start / Esc: menu   R3 / R: recenter" % ["LEFT" if stereo and i == 0 else ("RIGHT" if stereo else "DESKTOP"), provider.status, a.y, a.x, a.z, distance, ipd * 1000, Engine.get_frames_per_second()]
 	if "--capture" in OS.get_cmdline_user_args() and Engine.get_process_frames() == 30 and not screenshot_pending:
 		screenshot_pending = true
 		capture.call_deferred()
@@ -215,13 +221,22 @@ func capture() -> void:
 	get_tree().quit(result)
 
 func _input(event: InputEvent) -> void:
+	if emulator.gamepad.handle_event(event):
+		if is_instance_valid(rom_dialog) and rom_dialog.visible:
+			rom_dialog.hide()
+			emulator.set_paused(was_paused_before_menu)
+			emulator.gamepad.set_menu_active(false)
+		else: toggle_settings()
+		get_viewport().set_input_as_handled()
+		return
 	var menu_open := settings_panel.visible or (is_instance_valid(rom_dialog) and rom_dialog.visible)
 	if menu_open:
-		var cancel: bool = (event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE) or (event is InputEventJoypadButton and event.pressed and event.button_index in [JOY_BUTTON_B, JOY_BUTTON_LEFT_STICK])
+		var cancel: bool = (event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE) or (event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_B)
 		if cancel:
 			if is_instance_valid(rom_dialog) and rom_dialog.visible:
 				rom_dialog.hide()
 				emulator.set_paused(was_paused_before_menu)
+				emulator.gamepad.set_menu_active(false)
 			else: close_settings()
 		elif event is InputEventMouse:
 			for panel in panels:
@@ -256,14 +271,11 @@ func _input(event: InputEvent) -> void:
 				for label in diagnostics: label.visible = not label.visible
 	if event is InputEventJoypadButton and event.pressed:
 		match event.button_index:
-			JOY_BUTTON_Y:
-				if not emulator.loaded: recenter()
-			JOY_BUTTON_START:
-				if not emulator.loaded: toggle_settings()
-			JOY_BUTTON_BACK:
-				if not emulator.loaded: set_stereo(not stereo)
-			JOY_BUTTON_LEFT_STICK: toggle_settings()
 			JOY_BUTTON_RIGHT_STICK: recenter()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(emulator):
+		emulator.gamepad.clear()
 
 func recenter() -> void:
 	if not provider.valid:
@@ -304,6 +316,7 @@ func set_stereo(value: bool) -> void:
 
 func toggle_settings() -> void:
 	settings_panel.visible = not settings_panel.visible
+	emulator.gamepad.set_menu_active(settings_panel.visible)
 	if settings_panel.visible:
 		was_paused_before_menu = emulator.paused
 		if emulator.loaded: emulator.set_paused(true)
@@ -314,16 +327,22 @@ func toggle_settings() -> void:
 func close_settings() -> void:
 	if is_instance_valid(settings_panel) and settings_panel.visible:
 		settings_panel.hide()
+		emulator.gamepad.set_menu_active(false)
 		if emulator.loaded: emulator.set_paused(was_paused_before_menu)
 
 func choose_rom() -> void:
 	close_settings()
+	emulator.gamepad.set_menu_active(true)
 	was_paused_before_menu = emulator.paused
 	if emulator.loaded: emulator.set_paused(true)
 	if rom_dialog == null:
 		rom_dialog = ROMBrowser.new()
-		rom_dialog.file_selected.connect(func(path): emulator.load_rom(path))
-		rom_dialog.canceled.connect(func(): emulator.set_paused(was_paused_before_menu))
+		rom_dialog.file_selected.connect(func(path):
+			emulator.load_rom(path)
+			emulator.gamepad.set_menu_active(false))
+		rom_dialog.canceled.connect(func():
+			emulator.set_paused(was_paused_before_menu)
+			emulator.gamepad.set_menu_active(false))
 		menu_view.add_child(rom_dialog)
 	if not last_game_path.is_empty(): rom_dialog.current_dir = last_game_path.get_base_dir()
 	rom_dialog.popup_centered(Vector2i(860, 600))
@@ -354,6 +373,8 @@ func build_settings() -> void:
 	game_status.custom_minimum_size.x = 370
 	game_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	options.add_child(game_status)
+	controller_status = Label.new()
+	options.add_child(controller_status)
 	button(options, "OpenROM", "Open SNES ROM…", choose_rom)
 	button(options, "LastROM", "Play last game", func():
 		if FileAccess.file_exists(last_game_path):
@@ -369,8 +390,8 @@ func build_settings() -> void:
 	button(options, "TestSignal", "Stop game / return to test signal", func(): emulator.stop(); close_settings())
 	button(options, "Diagnostics", "Show / hide orientation diagnostics", func():
 		for label in diagnostics: label.visible = not label.visible)
-	button(options, "Recenter", "Recenter head  [R / Y]", recenter)
-	button(options, "Stereo", "Switch mono / SBS  [F2 / Select]", func(): set_stereo(not stereo))
+	button(options, "Recenter", "Recenter head  [R / R3]", recenter)
+	button(options, "Stereo", "Switch mono / SBS  [F2]", func(): set_stereo(not stereo))
 	button(options, "Fullscreen", "Toggle fullscreen  [F11]", toggle_fullscreen)
 	button(options, "RealTracking", "Use glasses tracking / retry", func(): use_tracking(true); close_settings())
 	button(options, "Simulation", "Use simulated tracking", func(): use_tracking(false); close_settings())

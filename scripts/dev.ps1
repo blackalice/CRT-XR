@@ -1,4 +1,4 @@
-param([switch]$Editor, [switch]$Stereo, [switch]$Test, [switch]$EmulationTest, [string]$Rom)
+param([switch]$Editor, [switch]$Stereo, [switch]$Test, [switch]$EmulationTest, [switch]$GamepadTest, [string]$Rom)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path $PSScriptRoot -Parent
 $godot = Join-Path $root 'tools/godot/Godot_v4.5.1-stable_win64_console.exe'
@@ -13,6 +13,8 @@ if ($Test) {
     & $godot --headless --path $root --script res://tests/smoke.gd
 } elseif ($EmulationTest) {
     & $godot --headless --path $root --script res://tests/emulation.gd
+} elseif ($GamepadTest) {
+    & $godot --headless --path $root --quit-after 1200 --script res://tests/gamepad.gd
 } elseif ($Editor) { & $godot --path $root --editor
 } elseif ($Rom) {
     $romPath = (Resolve-Path -LiteralPath $Rom).Path

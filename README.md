@@ -36,9 +36,9 @@ also needs the [emulation build steps](docs/emulation.md#building-dependencies).
 |---|---|---|
 | Simulate head yaw / pitch | Arrow keys or hold right mouse and drag | Right stick |
 | Simulate roll | Q / E | Keyboard in this prototype |
-| Recenter | R | Right-stick click; Y when no game is loaded |
-| Settings | Escape; Tab when no game is loaded | Left-stick click; Start when no game is loaded |
-| Mono / SBS preview | F2 | Menu; Select / Back when no game is loaded |
+| Recenter | R | Right-stick click |
+| Settings | Escape; Tab when no game is loaded | Hold L1 + R1, then press Start |
+| Mono / SBS preview | F2 | Menu |
 | Fullscreen | F11 | Settings button |
 | Pause test signal | Space | Keyboard in this prototype |
 | Pause/resume game | Space | Menu |
@@ -49,7 +49,7 @@ also needs the [emulation build steps](docs/emulation.md#building-dependencies).
 The TV stays fixed while cameras rotate. This is rotational tracking: it does
 not simulate walking around the TV. Settings pause simulated head movement.
 Settings and the in-app ROM browser appear in both eyes without leaving SBS.
-Use the D-pad and A to navigate, B to cancel, and L3 / Escape to open settings.
+Use the D-pad and A to navigate, B to cancel, and L1 + R1 + Start / Escape to open settings.
 The menu pauses a running game and restores its previous pause state on close.
 
 Settings expose TV distance, size, IPD, convergence, field of view, smoothing, axis

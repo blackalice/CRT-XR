@@ -20,6 +20,7 @@ var audio_overflows := 0
 var slow_frames := 0
 var sram_timer := 0.0
 var skip_delta := true
+var gamepad := preload("res://scripts/emulation/gamepad_input.gd").new()
 
 func _ready() -> void:
 	add_child(player)
@@ -133,14 +134,12 @@ func update_texture(force := false) -> void:
 		texture.update(image)
 
 func input_mask() -> int:
-	var mask := 0
+	if gamepad.menu_active: return 0
+	var mask: int = gamepad.mask()
 	# Libretro joypad IDs: B,Y,Select,Start,Up,Down,Left,Right,A,X,L,R.
 	var keys := [KEY_Z, KEY_A, KEY_TAB, KEY_ENTER, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_X, KEY_S, KEY_Q, KEY_W]
-	var buttons := [JOY_BUTTON_A, JOY_BUTTON_X, JOY_BUTTON_BACK, JOY_BUTTON_START, JOY_BUTTON_DPAD_UP, JOY_BUTTON_DPAD_DOWN, JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT, JOY_BUTTON_B, JOY_BUTTON_Y, JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER]
-	var pads := Input.get_connected_joypads()
 	for id in range(12):
 		var pressed := Input.is_physical_key_pressed(keys[id])
-		if not pads.is_empty(): pressed = pressed or Input.is_joy_button_pressed(pads[0], buttons[id])
 		if pressed: mask |= 1 << id
 	return mask
 

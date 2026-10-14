@@ -12,7 +12,7 @@ installed SDK; the installed desktop shortcut uses the physical-button fallback.
 3. It saves the display layout, enables 3840x1080 at 100% scaling, verifies the
    accepted mode, disables the built-in panel, and launches RetroCRT fullscreen
    with SBS already enabled. It prefers a supported rate nearest 60 Hz.
-4. Open settings with L3 / Escape. The menu and ROM browser appear in both eyes.
+4. Open settings with L1 + R1 + Start / Escape. The menu and ROM browser appear in both eyes.
    Use the D-pad and A; B cancels. **Play last game** remembers the last loaded
    ROM path. It loads the game normally; it does not automatically load a state.
 5. Choose **Exit RetroCRT** to end the session, restore mode/placement/scaling and

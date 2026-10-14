@@ -32,16 +32,33 @@ It leaves the middle of each eye unobscured. Settings are saved explicitly with
 | Action | Keyboard | Deck/gamepad |
 |---|---|---|
 | SNES B / A / Y / X | Z / X / A / S | Bottom / right / left / top face buttons |
-| SNES D-pad | Arrow keys | D-pad |
+| SNES D-pad | Arrow keys | D-pad or left stick |
 | SNES Start / Select | Enter / Tab | Start / Back |
 | SNES L / R | Q / W | Left / right shoulder |
-| Application menu | Escape | Left-stick click |
+| Application menu | Escape | Hold L1 + R1, then press Start |
 | Recenter head | R | Right-stick click |
 | Pause / resume | Space | Menu |
 | Save / load quick state | F5 / F8 | Menu, slot 0 |
 | SBS / fullscreen | F2 / F11 | Menu |
 
 Face buttons, Start and Select are reserved for the game during gameplay.
+Deck/Xbox A (bottom) maps to SNES B; B (right) to SNES A; X (left) to SNES Y;
+Y (top) to SNES X. L1/R1 map to SNES L/R. Back/View is Select. Triggers and L3
+are unassigned; R3 recentres. No face button changes display mode or recentres.
+
+Game input follows the controller receiving input instead of always polling the
+first enumerated device. Left-stick directions use a 25% deadzone. The settings
+chord is latched until all three buttons are released; hold both shoulders before
+pressing Start to avoid sending a standalone Start press first. Menu actions are
+blocked from the game until released. Focus loss and disconnection clear held
+buttons. In menus, A confirms and B cancels regardless of the SNES face mapping.
+
+Use Steam Input's **Gamepad** layout for the non-Steam shortcut. A desktop mouse
+or keyboard layout can hide the face buttons from the app; in-app mapping cannot
+recover buttons Steam never forwards. Settings show the detected controller or
+a prompt to select a Gamepad layout. Physical Deck input still needs a hardware
+check after deploying this update.
+
 Simulation keyboard movement is disabled while playing to keep arrow keys and
 Q available to the game; real glasses tracking continues normally.
 

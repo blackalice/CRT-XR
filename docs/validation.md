@@ -62,9 +62,16 @@
 
 ## Reproduce
 
+The latest local input update passed 29 gamepad checks through the app's event
+path, including all twelve SNES buttons, stick deadzone/diagonals, active-device
+selection, the menu chord, release gating, disconnect/focus cleanup, and a
+gamepad B press reaching the actual native diagnostic cartridge. Twelve GPU
+menu checks also pass. Physical Deck controls remain a next-deployment check.
+
 ```powershell
 ./scripts/dev.ps1 -Test
 ./scripts/dev.ps1 -EmulationTest
+./scripts/dev.ps1 -GamepadTest
 ./scripts/export-linux.ps1
 ```
 
