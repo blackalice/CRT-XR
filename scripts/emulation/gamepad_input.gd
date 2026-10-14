@@ -17,7 +17,7 @@ func handle_event(event: InputEvent) -> bool:
 	if not (event is InputEventJoypadButton or event is InputEventJoypadMotion): return false
 	var id := event.device
 	if not devices.has(id):
-		devices[id] = {"buttons": {}, "blocked": {}, "axes": Vector2.ZERO, "chord": false}
+		devices[id] = {"buttons": {}, "blocked": {}, "axes": Vector2.ZERO, "view_axis": 0.0, "view_blocked": false, "chord": false}
 	var state: Dictionary = devices[id]
 	if event is InputEventJoypadButton:
 		state.buttons[event.button_index] = event.pressed
@@ -26,6 +26,9 @@ func handle_event(event: InputEvent) -> bool:
 	else:
 		if event.axis == JOY_AXIS_LEFT_X: state.axes.x = event.axis_value
 		elif event.axis == JOY_AXIS_LEFT_Y: state.axes.y = event.axis_value
+		elif event.axis == JOY_AXIS_RIGHT_Y:
+			state.view_axis = event.axis_value
+			if absf(event.axis_value) <= STICK_DEADZONE: state.view_blocked = false
 		else: return false
 		if absf(event.axis_value) > STICK_DEADZONE: active_device = id
 	var held := 0
@@ -43,8 +46,16 @@ func set_menu_active(value: bool) -> void:
 	menu_active = value
 	# Menu actions must be released before they can become game actions again.
 	for state in devices.values():
+		state.view_blocked = absf(float(state.view_axis)) > STICK_DEADZONE
 		for button in state.buttons:
 			if state.buttons[button]: state.blocked[button] = true
+
+func view_distance_axis() -> float:
+	if menu_active or not devices.has(active_device): return 0.0
+	var state: Dictionary = devices[active_device]
+	if state.view_blocked: return 0.0
+	var value: float = state.view_axis
+	return signf(value) * maxf(0.0, (absf(value) - STICK_DEADZONE) / (1.0 - STICK_DEADZONE))
 
 func mask() -> int:
 	if menu_active or not devices.has(active_device): return 0

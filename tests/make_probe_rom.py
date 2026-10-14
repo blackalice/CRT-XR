@@ -8,7 +8,7 @@ import struct
 import sys
 
 
-def make_rom(path: Path) -> None:
+def make_rom(path: Path, input_delay: bool = False) -> None:
     code = bytearray()
     labels = {}
     branches = []
@@ -31,6 +31,8 @@ def make_rom(path: Path) -> None:
     for address in (0x4200, 0x212C, 0x212D, 0x2130, 0x2131, 0x2105):
         emit(0x9C, address & 255, address >> 8)  # STZ absolute
     emit(0x64, 0)  # STZ direct counter
+    if input_delay:
+        emit(0x64, 1)  # previous-frame controller value for the latency fixture
     emit(0xA9, 0x5A, 0x8F, 0, 0, 0x70)  # STA.l SRAM sentinel
     emit(0xA9, 1, 0x8D, 0, 0x42)  # enable auto joypad
     emit(0xA9, 15, 0x8D, 0, 0x21)  # display on / full brightness
@@ -45,6 +47,10 @@ def make_rom(path: Path) -> None:
     branch(0xD0, "joy")
     emit(0xE6, 0, 0x9C, 0x21, 0x21)  # increment frame counter; CGADD=0
     emit(0xAD, 0x19, 0x42, 0x29, 0x80)  # auto joypad B
+    if input_delay:
+        # Intentionally delay the fixture's reaction by one frame, so the test
+        # can distinguish ordinary output from a restored speculative frame.
+        emit(0x85, 2, 0xA5, 1, 0x48, 0xA5, 2, 0x85, 1, 0x68)
     branch(0xF0, "normal")
     emit(0xA9, 0x1F, 0x8D, 0x22, 0x21, 0xA9, 0, 0x8D, 0x22, 0x21)
     branch(0x80, "done")
@@ -79,4 +85,5 @@ def make_rom(path: Path) -> None:
 
 
 if __name__ == "__main__":
-    make_rom(Path(sys.argv[1]) if len(sys.argv) > 1 else Path("build/retrocrt-probe.sfc"))
+    make_rom(Path(sys.argv[1]) if len(sys.argv) > 1 else Path("build/retrocrt-probe.sfc"),
+             input_delay="--input-delay" in sys.argv[2:])

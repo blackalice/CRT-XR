@@ -34,6 +34,31 @@ func run() -> void:
 	check(app.menu_view.gui_get_focus_owner() != before, "Controller D-pad moves menu focus")
 	down.pressed = false
 	Input.parse_input_event(down)
+	check(app.settings_tabs.get_tab_count() == 5, "Settings are grouped into five tabs")
+	var shoulder := InputEventJoypadButton.new()
+	shoulder.button_index = JOY_BUTTON_LEFT_SHOULDER
+	shoulder.pressed = true
+	Input.parse_input_event(shoulder)
+	await settle()
+	check(app.settings_tabs.current_tab == 4 and app.menu_view.gui_get_focus_owner().is_visible_in_tree(), "L1 wraps to Setup and focuses a visible control")
+	shoulder.pressed = false
+	Input.parse_input_event(shoulder)
+	shoulder = shoulder.duplicate()
+	shoulder.button_index = JOY_BUTTON_RIGHT_SHOULDER
+	shoulder.pressed = true
+	Input.parse_input_event(shoulder)
+	await settle()
+	check(app.settings_tabs.current_tab == 0, "R1 wraps back to Game")
+	shoulder.pressed = false
+	Input.parse_input_event(shoulder)
+	app.settings_tabs.current_tab = 3
+	await settle()
+	check(app.menu_view.gui_get_focus_owner().name == "Warm", "Room tab starts at the lighting presets")
+	check(app.settings_panel.get_rect().end.y <= 720 and app.settings_panel.get_rect().end.x <= 960, "Tabbed menu fits within the shared eye canvas")
+	await RenderingServer.frame_post_draw
+	app.menu_view.get_texture().get_image().save_png("res://build/room-menu-preview.png")
+	app.settings_tabs.current_tab = 0
+	await settle()
 	app.choose_rom()
 	await settle()
 	check(app.stereo and app.rom_dialog.visible, "ROM browser preserves SBS")
@@ -75,6 +100,20 @@ func run() -> void:
 	app.toggle_settings()
 	app.close_settings()
 	check(app.emulator.paused, "A previously paused game stays paused after menu")
+	app.toggle_settings()
+	await settle()
+	app.settings_panel.find_child("Close", true, false).grab_focus()
+	await settle()
+	accept.device = 42
+	accept.pressed = true
+	Input.parse_input_event(accept)
+	Input.flush_buffered_events()
+	await settle()
+	accept.pressed = false
+	Input.parse_input_event(accept)
+	Input.flush_buffered_events()
+	await settle()
+	check(not app.settings_panel.visible, "Controller A activates the focused settings button from any device")
 	app.queue_free()
 	await process_frame
 	print("Stereo menu checks complete: ", failures, " failures")

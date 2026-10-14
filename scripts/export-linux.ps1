@@ -11,11 +11,16 @@ if ($LASTEXITCODE -ne 0) { throw 'Project import failed.' }
 & $Godot --headless --path $root --export-release 'Linux x86_64' (Join-Path $out 'retrocrt.x86_64')
 if ($LASTEXITCODE -ne 0) { throw 'Linux export failed. Install matching Godot 4.5.1 export templates in Editor > Manage Export Templates.' }
 Copy-Item -LiteralPath (Join-Path $root 'scripts/launch-deck.sh') -Destination $out
+Copy-Item -LiteralPath (Join-Path $root 'scripts/launch-steam.sh') -Destination $out
+Copy-Item -LiteralPath (Join-Path $root 'scripts/steam-session.py') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/launch-glasses.sh') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/glasses-session.py') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/driver-sbs.py') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'docs/display-setup.md') -Destination (Join-Path $out 'DISPLAY-SETUP.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/emulation.md') -Destination (Join-Path $out 'PLAYING.md')
+Copy-Item -LiteralPath (Join-Path $root 'docs/gaming-mode.md') -Destination (Join-Path $out 'GAMING-MODE.md')
+Copy-Item -LiteralPath (Join-Path $root 'docs/input-latency.md') -Destination (Join-Path $out 'INPUT-LATENCY.md')
+Copy-Item -LiteralPath (Join-Path $root 'docs/room-and-view.md') -Destination (Join-Path $out 'ROOM-AND-VIEW.md')
 $cabinet = Join-Path $root 'build/crt-model/crt_tv.glb'
 if (Test-Path -LiteralPath $cabinet) {
     $assetOut = Join-Path $out 'assets'

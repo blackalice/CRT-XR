@@ -2,6 +2,29 @@
 
 ## Latest Deck deployment
 
+Current Steam target: `~/Applications/RetroCRT/latency-20261014/`. The user has
+accepted the Desktop SBS setup flow and gameplay controls. Gaming Mode external
+resolution still requires its Steam UI setting. The latency build enables
+immediate input delivery and a switchable one-frame preview. CPU state and SRAM
+remain identical over 100 preview frames on both the diagnostic ROM and Mario;
+480 committed audio batches match baseline on Windows and the Deck. Full stereo
+offscreen comparison remains approximately 60 fps with preview off/on and no
+slow-frame or audio-overflow events during either measured section. See
+[input latency](input-latency.md) for timings, warmup results and measurement
+limits. Physical button-to-photon latency has not been measured.
+
+The Steam-aware update adds a **RetroCRT XR** non-Steam library entry, Native
+resolution and the built-in Deck gamepad template. Both main desktop icons
+launch that entry. The user confirms gameplay controls now work and the menu
+chord opens settings. A subsequent fix explicitly forwards A as UI accept;
+13 stereo/menu checks pass, including a focused Close button activated with A.
+The latest launcher shows an on-screen SBS setup prompt before loading a game.
+Desktop Mode verifies the advertised SBS mode; Gaming Mode offers A confirmation
+if Native resolution does not update. Six launcher checks cover the separate
+display managers, detection, mode wait, cancellation and timeout. The user
+confirmed the updated build boots and allows opening the menu and exiting.
+The new XR prompt and an actual Gaming Mode launch remain pending.
+
 Installed the current scene, gamepad mappings, 3.4 m distance default and
 adjustable curvature at `~/Applications/RetroCRT/scene-lighting-20261014/`.
 The local Panasonic GLB is supplied beside the executable under `assets/`.

@@ -15,6 +15,7 @@ static func load_cabinet(parent: Node3D) -> Dictionary:
 	var scene := document.generate_scene(state)
 	if scene == null:
 		return {}
+	filter_cabinet_materials(scene)
 	var holder := Node3D.new()
 	holder.name = "ImportedCabinet"
 	parent.add_child(holder)
@@ -53,6 +54,36 @@ static func load_cabinet(parent: Node3D) -> Dictionary:
 		bottom = minf(bottom, part.position.y)
 	return {"arrays": arrays, "width": bounds.size.x, "height": bounds.size.y,
 		"depth": bounds.size.z, "bottom": bottom}
+
+static func filter_cabinet_materials(scene: Node) -> void:
+	# Embedded images from the runtime GLB loader do not have mipmaps. Merely
+	# selecting mip filtering cannot suppress subpixel speaker-grille patterns.
+	# Update shared runtime images once; the original GLB remains untouched.
+	var prepared := {}
+	for part in scene.find_children("*", "MeshInstance3D", true, false):
+		for surface in range(part.mesh.get_surface_count()):
+			var material := part.get_active_material(surface) as BaseMaterial3D
+			if material == null: continue
+			material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+			for channel in range(BaseMaterial3D.TEXTURE_MAX):
+				var texture := material.get_texture(channel)
+				if texture == null: continue
+				var texture_id := texture.get_instance_id()
+				if prepared.has(texture_id):
+					material.set_texture(channel, prepared[texture_id])
+					continue
+				prepared[texture_id] = texture
+				var image := texture.get_image()
+				if image == null or image.has_mipmaps(): continue
+				if image.is_compressed() and image.decompress() != OK: continue
+				var normal_map := channel in [BaseMaterial3D.TEXTURE_NORMAL, BaseMaterial3D.TEXTURE_DETAIL_NORMAL]
+				if image.generate_mipmaps(normal_map) != OK: continue
+				if texture is ImageTexture:
+					texture.set_image(image)
+				else:
+					var filtered := ImageTexture.create_from_image(image)
+					prepared[texture_id] = filtered
+					material.set_texture(channel, filtered)
 
 static func screen_mesh(template: Dictionary, curvature: float) -> ArrayMesh:
 	var arrays: Array = template.arrays

@@ -34,7 +34,8 @@ also needs the [emulation build steps](docs/emulation.md#building-dependencies).
 
 | Action | Keyboard / mouse | Controller |
 |---|---|---|
-| Simulate head yaw / pitch | Arrow keys or hold right mouse and drag | Right stick |
+| Simulate head yaw / pitch | Arrow keys or hold right mouse and drag | Mouse / keyboard |
+| Move screen closer / farther | Page Up / Page Down | Right stick up / down (optional) |
 | Simulate roll | Q / E | Keyboard in this prototype |
 | Recenter | R | Right-stick click |
 | Settings | Escape; Tab when no game is loaded | Hold L1 + R1, then press Start |
@@ -45,12 +46,21 @@ also needs the [emulation build steps](docs/emulation.md#building-dependencies).
 | Quick save / load | F5 / F8 | Menu |
 | Hide diagnostic overlay | F1 | Keyboard in this prototype |
 | Navigate settings | Tab / arrows / Enter | D-pad / A |
+| Change settings tab | Click a tab | L1 / R1 |
+| Reset selected menu option | Reset option button | Y while a slider or switch is selected |
+| Clean screenshot | F6 | Game tab → Save clean screenshot |
 
 The TV stays fixed while cameras rotate. This is rotational tracking: it does
 not simulate walking around the TV. Settings pause simulated head movement.
 Settings and the in-app ROM browser appear in both eyes without leaving SBS.
 Use the D-pad and A to navigate, B to cancel, and L1 + R1 + Start / Escape to open settings.
 The menu pauses a running game and restores its previous pause state on close.
+
+Settings are grouped into **Game**, **View**, **Picture**, **Room** and **Setup**
+tabs, with Save and Exit always available. Room contains live lighting controls,
+warm / bright / dim presets, lamp position, shadows and distance fade. The local
+bedroom update adds a rounded wooden stand, game shelf, carpet and woven rug in
+a compact patch that fades into black. See [room and view controls](docs/room-and-view.md).
 
 Settings expose TV distance, size, IPD, convergence, field of view, smoothing, axis
 inversion, scanlines, phosphor mask and soft black view edges. **Save settings &

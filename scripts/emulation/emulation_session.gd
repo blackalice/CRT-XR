@@ -20,9 +20,14 @@ var audio_overflows := 0
 var slow_frames := 0
 var sram_timer := 0.0
 var skip_delta := true
+var run_ahead := true
+var preview_time_usec := 0
+var preview_count := 0
 var gamepad := preload("res://scripts/emulation/gamepad_input.gd").new()
 
 func _ready() -> void:
+	# Poll close to frame execution, after ordinary scene/UI processing.
+	process_priority = 100
 	add_child(player)
 	player.volume_db = -6.0
 
@@ -72,6 +77,8 @@ func load_rom(path: String) -> bool:
 	slow_frames = 0
 	sram_timer = 0.0
 	skip_delta = true
+	preview_time_usec = 0
+	preview_count = 0
 	var sram_path := "user://saves/" + rom_hash + ".srm"
 	if FileAccess.file_exists(sram_path):
 		var ram := FileAccess.get_file_as_bytes(sram_path)
@@ -88,6 +95,7 @@ func load_rom(path: String) -> bool:
 	return true
 
 func _process(delta: float) -> void:
+	Input.flush_buffered_events()
 	if not loaded or paused:
 		return
 	if skip_delta:
@@ -97,8 +105,9 @@ func _process(delta: float) -> void:
 	var period := 1.0 / fps
 	var frames := 0
 	var rendered := false
+	var buttons := input_mask()
 	while accumulator >= period and frames < 8:
-		if not core.run_frame(input_mask()):
+		if not core.run_frame(buttons):
 			set_paused(true)
 			report(str(core.last_error()), true)
 			return
@@ -115,17 +124,47 @@ func _process(delta: float) -> void:
 		if slow_frames == 1 or slow_frames % 300 == 0:
 			push_warning("Emulator cannot keep up with real time; reduce rendering load")
 	if rendered:
-		update_texture(true)
+		var preview := preview_frame(buttons) if run_ahead else {}
+		if not paused: update_texture(true, preview)
 	sram_timer += delta
 	if sram_timer >= 10.0:
 		sram_timer = 0.0
 		flush_sram()
 
-func update_texture(force := false) -> void:
+func preview_frame(buttons: int) -> Dictionary:
+	# Advance a disposable frame for presentation only. Audio was already queued
+	# from the real frames above; never enqueue the preview's audio.
+	var started := Time.get_ticks_usec()
+	var state: PackedByteArray = core.save_state()
+	if state.is_empty():
+		run_ahead = false
+		push_warning("Input preview unavailable for this core; using normal presentation.")
+		return {}
+	var ram: PackedByteArray = core.save_ram()
+	var ok: bool = core.run_frame(buttons)
 	var info: Dictionary = core.info()
+	var bytes: PackedByteArray = core.frame() if ok else PackedByteArray()
+	# Restore SRAM explicitly as well: not every core includes it in save states.
+	var restored: bool = core.load_state(state)
+	var ram_restored: bool = ram.is_empty() or core.load_ram(ram)
+	if not restored or not ram_restored:
+		set_paused(true)
+		report("Input preview could not restore game state. Reload the game with preview disabled.", true)
+		run_ahead = false
+		return {}
+	preview_time_usec += Time.get_ticks_usec() - started
+	preview_count += 1
+	if not ok:
+		run_ahead = false
+		push_warning("Input preview failed; using normal presentation.")
+		return {}
+	return {"bytes": bytes, "width": info.width, "height": info.height}
+
+func update_texture(force := false, preview: Dictionary = {}) -> void:
+	var info: Dictionary = preview if not preview.is_empty() else core.info()
 	if (not force and not info.video_changed) or int(info.width) == 0:
 		return
-	var bytes: PackedByteArray = core.frame()
+	var bytes: PackedByteArray = preview.bytes if not preview.is_empty() else core.frame()
 	var image := Image.create_from_data(int(info.width), int(info.height), false, Image.FORMAT_RGBA8, bytes)
 	if texture == null or texture.get_width() != image.get_width() or texture.get_height() != image.get_height():
 		texture = ImageTexture.create_from_image(image)
