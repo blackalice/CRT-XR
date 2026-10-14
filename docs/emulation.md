@@ -1,9 +1,10 @@
 # Emulation and soft view edges
 
-The latest local build includes an in-process Snes9x Libretro host and an
-adjustable fade to black around each eye's view. The Deck was switched off after
-the user confirmed the previous head-tracked SBS build looked good, so this
-package is ready locally and has not been deployed to hardware yet.
+The current build includes an in-process Snes9x Libretro host and an adjustable
+fade to black around each eye's view. It is deployed on the Deck under
+`~/Applications/RetroCRT/scene-lighting-20261014/`; the main desktop shortcut
+targets that build. Physical controller mappings and sustained stereo
+performance still need checking through the glasses.
 
 ## Run a game on Windows
 

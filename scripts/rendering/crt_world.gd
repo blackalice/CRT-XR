@@ -4,44 +4,50 @@ var television := Node3D.new()
 var screen_material := ShaderMaterial.new()
 var glass_material := ShaderMaterial.new()
 var curvature := 0.066
+var imported_screen: Dictionary = {}
+var distance_fade := ShaderMaterial.new()
+const ImportedCRT = preload("res://scripts/rendering/imported_crt.gd")
 
 func build(signal_texture: Texture2D) -> void:
 	var environment := WorldEnvironment.new()
 	environment.environment = Environment.new()
 	environment.environment.background_mode = Environment.BG_COLOR
-	environment.environment.background_color = Color("101826")
+	environment.environment.background_color = Color.BLACK
 	environment.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	environment.environment.ambient_light_color = Color("b1c3db")
-	environment.environment.ambient_light_energy = 0.65
+	environment.environment.ambient_light_energy = 0.12
 	add_child(environment)
-	var light := DirectionalLight3D.new()
-	light.rotation_degrees = Vector3(-40, -30, 0)
-	light.light_energy = 1.5
-	add_child(light)
-	box(self, Vector3(16, 0.08, 16), Vector3(0, -0.05, -3), Color("18202c"))
-	for i in range(-8, 9):
-		box(self, Vector3(0.008, 0.002, 16), Vector3(i, 0, -3), Color("293947"))
-		box(self, Vector3(16, 0.002, 0.008), Vector3(0, 0, i - 3), Color("293947"))
+	distance_fade.shader = load("res://shaders/distance_black.gdshader")
+	var floor_node := MeshInstance3D.new()
+	floor_node.name = "RoomFloor"
+	var floor_mesh := PlaneMesh.new()
+	floor_mesh.size = Vector2(40, 40)
+	floor_node.mesh = floor_mesh
+	floor_node.position = Vector3(0, -0.01, -3)
+	var floor_material := ShaderMaterial.new()
+	floor_material.shader = load("res://shaders/room_floor.gdshader")
+	floor_node.material_override = floor_material
+	add_child(floor_node)
 	add_child(television)
 	television.name = "StationaryTelevision"
-	box(television, Vector3(1.62, 1.20, 0.76), Vector3(0, 0, -0.40), Color("333944"))
-	box(television, Vector3(1.70, 1.26, 0.15), Vector3(0, 0, -0.06), Color("525762"))
-	box(television, Vector3(1.42, 1.08, 0.04), Vector3(-0.07, 0.035, 0.031), Color("10141b"))
-	box(television, Vector3(1.75, 0.09, 0.9), Vector3(0, -0.68, -0.27), Color("262d38"))
-	box(television, Vector3(1.48, 0.10, 0.70), Vector3(0, -0.77, -0.27), Color("624b3b"))
+	imported_screen = ImportedCRT.load_cabinet(television)
+	if imported_screen.is_empty():
+		_build_procedural_cabinet()
+	var support := Node3D.new()
+	support.name = "TelevisionSupport"
+	television.add_child(support)
+	if not imported_screen.is_empty():
+		support.position.y = float(imported_screen.bottom) + 0.635
+	box(support, Vector3(1.75, 0.09, 0.9), Vector3(0, -0.68, -0.27), Color("262d38"))
+	box(support, Vector3(1.48, 0.10, 0.70), Vector3(0, -0.77, -0.27), Color("624b3b"))
 	for side in [-1, 1]:
-		box(television, Vector3(0.10, 0.44, 0.60), Vector3(side * 0.62, -1.04, -0.27), Color("433b37"))
-	for i in range(12):
-		box(television, Vector3(0.085, 0.016, 0.014), Vector3(0.755, 0.40 - i * 0.043, 0.026), Color("1b222c"))
-	for i in range(3):
-		box(television, Vector3(0.06, 0.04, 0.025), Vector3(0.755, -0.25 - i * 0.065, 0.04), Color("89909a"))
-	box(television, Vector3(0.016, 0.012, 0.01), Vector3(0.755, -0.49, 0.045), Color("7de8b9"))
-	var badge := Label3D.new()
-	badge.text = "RETRO  /  STEREO"
-	badge.font_size = 32
-	badge.pixel_size = 0.00065
-	badge.position = Vector3(-0.08, -0.55, 0.035)
-	television.add_child(badge)
+		box(support, Vector3(0.10, 0.44, 0.60), Vector3(side * 0.62, -1.04, -0.27), Color("433b37"))
+	# A black overlay fades the cabinet and furniture without changing their PBR maps.
+	# The self-lit picture and glass are created afterwards and retain their contrast.
+	for part in television.find_children("*", "GeometryInstance3D", true, false):
+		part.material_overlay = distance_fade
+	_build_lighting()
+
 	screen_material.shader = load("res://shaders/crt.gdshader")
 	screen_material.set_shader_parameter("signal_texture", signal_texture)
 	var screen := MeshInstance3D.new()
@@ -59,6 +65,27 @@ func build(signal_texture: Texture2D) -> void:
 	glass.position = screen.position + Vector3(0, 0, 0.006)
 	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	television.add_child(glass)
+
+func _build_lighting() -> void:
+	# Local lights move with the TV distance control and leave the far room dark.
+	var key := SpotLight3D.new()
+	key.name = "WarmKeyLight"
+	key.position = Vector3(-1.8, 2.6, 2.5)
+	key.light_color = Color("ffe1b8")
+	key.light_energy = 3.0
+	key.spot_range = 7.0
+	key.spot_angle = 48.0
+	key.spot_angle_attenuation = 0.8
+	key.shadow_enabled = true
+	television.add_child(key)
+	key.look_at(television.global_position + Vector3(0, -0.1, -0.2))
+	var fill := OmniLight3D.new()
+	fill.name = "CoolFillLight"
+	fill.position = Vector3(1.8, 1.2, 1.0)
+	fill.light_color = Color("b9d5ff")
+	fill.light_energy = 0.7
+	fill.omni_range = 4.5
+	television.add_child(fill)
 
 func box(parent: Node3D, size: Vector3, at: Vector3, color: Color) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
@@ -80,6 +107,8 @@ func set_curvature(value: float) -> void:
 	television.get_node("GlassFaceplate").mesh = mesh
 
 func curved_screen() -> ArrayMesh:
+	if not imported_screen.is_empty():
+		return ImportedCRT.screen_mesh(imported_screen, curvature)
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var steps := 32
@@ -94,3 +123,19 @@ func curved_screen() -> ArrayMesh:
 					-2.0 * curvature * p.y * (1.0 - p.x * p.x) / 0.495, 1.0).normalized())
 				surface.add_vertex(Vector3(p.x * 0.66, -p.y * 0.495, curvature * (1.0 - p.x * p.x) * (1.0 - p.y * p.y)))
 	return surface.commit()
+
+func _build_procedural_cabinet() -> void:
+	box(television, Vector3(1.62, 1.20, 0.76), Vector3(0, 0, -0.40), Color("333944"))
+	box(television, Vector3(1.70, 1.26, 0.15), Vector3(0, 0, -0.06), Color("525762"))
+	box(television, Vector3(1.42, 1.08, 0.04), Vector3(-0.07, 0.035, 0.031), Color("10141b"))
+	for i in range(12):
+		box(television, Vector3(0.085, 0.016, 0.014), Vector3(0.755, 0.40 - i * 0.043, 0.026), Color("1b222c"))
+	for i in range(3):
+		box(television, Vector3(0.06, 0.04, 0.025), Vector3(0.755, -0.25 - i * 0.065, 0.04), Color("89909a"))
+	box(television, Vector3(0.016, 0.012, 0.01), Vector3(0.755, -0.49, 0.045), Color("7de8b9"))
+	var badge := Label3D.new()
+	badge.text = "RETRO  /  STEREO"
+	badge.font_size = 32
+	badge.pixel_size = 0.00065
+	badge.position = Vector3(-0.08, -0.55, 0.035)
+	television.add_child(badge)

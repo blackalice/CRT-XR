@@ -16,6 +16,13 @@ Copy-Item -LiteralPath (Join-Path $root 'scripts/glasses-session.py') -Destinati
 Copy-Item -LiteralPath (Join-Path $root 'scripts/driver-sbs.py') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'docs/display-setup.md') -Destination (Join-Path $out 'DISPLAY-SETUP.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/emulation.md') -Destination (Join-Path $out 'PLAYING.md')
+$cabinet = Join-Path $root 'build/crt-model/crt_tv.glb'
+if (Test-Path -LiteralPath $cabinet) {
+    $assetOut = Join-Path $out 'assets'
+    New-Item -ItemType Directory -Force $assetOut | Out-Null
+    Copy-Item -LiteralPath $cabinet -Destination (Join-Path $assetOut 'crt_tv.glb')
+    Copy-Item -LiteralPath (Join-Path $root 'docs/crt-model-local.md') -Destination (Join-Path $assetOut 'CRT-MODEL.md')
+}
 $core = Join-Path $root 'cores/snes9x_libretro.so'
 if (Test-Path -LiteralPath $core) {
     $coreOut = Join-Path $out 'cores'

@@ -145,8 +145,9 @@ panel and relaunched the game successfully. The user reported that Mario looked
 "amazing" through the glasses. Physical unplugging, abrupt supervisor kill,
 audible sound and sustained frame times remain unverified.
 
-Installed at `~/Applications/RetroCRT/seamless-20261014/`, with **RetroCRT XR**
-and **RetroCRT Restore Screen** desktop shortcuts. Older builds were preserved.
-The later 3.4 m default and adjustable-curvature update remains local because
-the user switched the Deck off. On next deployment, update only those requested
-viewing values in the saved settings; retain the other calibration preferences.
+Current build: `~/Applications/RetroCRT/scene-lighting-20261014/`, with the
+**RetroCRT XR** and **RetroCRT Restore Screen** desktop shortcuts updated.
+Older builds, including `seamless-20261014`, and previous shortcut files were
+preserved. The 3.4 m default, adjustable curvature, gamepad mappings, local
+Panasonic cabinet and scene lighting are deployed. No settings.cfg existed at
+deployment, so application defaults apply; no saved calibration was overwritten.

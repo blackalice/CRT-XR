@@ -18,6 +18,18 @@ func run() -> void:
 	app.use_tracking(false)
 	await process_frame
 	await process_frame
+	if FileAccess.file_exists("res://build/crt-model/crt_tv.glb"):
+		check(not app.world.imported_screen.is_empty(), "Local GLB loads with a separate live screen")
+		var mesh: ArrayMesh = app.world.television.get_node("PhosphorSurface").mesh
+		check(absf(mesh.get_aabb().size.x - 1.32) < 0.001, "Imported screen preserves the existing viewing width")
+		var normals: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_NORMAL]
+		var facing := Vector3.ZERO
+		for normal in normals:
+			facing += normal
+		check(facing.normalized().z > 0.9, "Imported screen faces the viewer")
+		app.world.set_curvature(0.0)
+		check(app.world.television.get_node("PhosphorSurface").mesh.get_aabb().size.z < 0.0001, "Imported screen supports the flat curvature setting")
+		app.world.set_curvature(0.55)
 	app.set_stereo(true)
 	await process_frame
 	await process_frame

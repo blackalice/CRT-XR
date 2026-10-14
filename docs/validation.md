@@ -1,5 +1,22 @@
 # Validation — 14 October 2026
 
+## Latest Deck deployment
+
+Installed the current scene, gamepad mappings, 3.4 m distance default and
+adjustable curvature at `~/Applications/RetroCRT/scene-lighting-20261014/`.
+The local Panasonic GLB is supplied beside the executable under `assets/`.
+The application PCK and GLB SHA-256 hashes matched the Windows source files.
+Headless startup and a bounded 180-frame Wayland/OpenGL run both completed
+without logged script/render errors on the Deck's AMD GPU (Mesa 26.1.2).
+The RetroCRT-XR and screen-recovery desktop shortcuts now target this build;
+the previous application and shortcut backups were retained.
+
+Tracking reported `driver_disabled_or_disconnected` during this check. No
+driver settings or display layout were changed. Sustained stereo performance,
+the new scene's appearance through the glasses and physical gamepad mappings
+remain hardware acceptance checks. Older pending-deployment notes below refer
+to previous checkpoints and are superseded by this transfer record.
+
 ## Completed
 
 * Imported and compiled all GDScript in Godot 4.5.1 official (f62fdbde1).

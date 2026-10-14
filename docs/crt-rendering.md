@@ -2,6 +2,27 @@
 
 Research and local prototype: 14 October 2026, Godot 4.5.1 Compatibility renderer.
 
+## Scene lighting and distance fade
+
+The room now has a black background, low cool ambient light, a warm overhead
+spotlight with shadows and a weaker cool fill. Both local lights follow the TV
+when its distance changes. The picture remains self-lit and the existing glass
+effect remains separate.
+
+Surrounding geometry fades smoothly between 4.5 and 11 metres from each eye.
+The cabinet and support use a shared black material overlay, preserving their
+original PBR maps. The floor uses the same distance curve directly in its shader;
+its subtle, antialiased grid replaces the previous individual grid meshes.
+The game picture and glass are excluded from the room fade for readability.
+This implementation uses ordinary Compatibility shaders, without volumetric fog
+or a full-screen depth effect. Cabinet overlays add a draw pass, and only the
+key light casts shadows; Steam Deck performance remains to be measured.
+
+Validation: run `tests/room_lighting.gd` with graphics enabled for pixel checks
+of the near/far floor and an opaque PBR object. Both checks passed locally,
+along with all 17 scene/stereo checks in `tests/smoke.gd`. The lighting tests use
+simple geometry, independently of the third-party cabinet.
+
 ## Recommendation
 
 Use a real curved mesh for the tube, an RGB picture shader on its phosphor
