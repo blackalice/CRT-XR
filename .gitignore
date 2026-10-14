@@ -1,0 +1,52 @@
+# Godot 4+ specific ignores
+.godot/
+.nomedia
+
+# Godot-specific ignores
+.import/
+export.cfg
+export_credentials.cfg
+
+# Imported translations (automatically generated from CSV files)
+*.translation
+
+# Mono-specific ignores
+.mono/
+data_*/
+mono_crash.*.json
+
+# Downloaded engines, SDK sources, dependencies and generated packages.
+/tools/
+/build/
+/dist/
+/extensions/bin/
+/cores/
+
+# User-supplied cartridges and emulator save data.
+*.sfc
+*.smc
+*.swc
+*.fig
+*.srm
+*.sav
+*.slot*.rst
+/saves/
+/userdata/
+
+# Logs, Python caches, local environments and credentials.
+*.log
+__pycache__/
+*.py[cod]
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local IDE and operating-system files.
+.vs/
+*.user
+*.suo
+.DS_Store
+Thumbs.db
+Desktop.ini

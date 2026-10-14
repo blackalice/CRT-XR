@@ -1,0 +1,3 @@
+*.sh text eol=lf
+*.gd text eol=lf
+*.gdshader text eol=lf

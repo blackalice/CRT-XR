@@ -1,0 +1,75 @@
+extends TrackingProvider
+## Native helper keeps driver synchronization outside Godot's rendering process.
+
+const VERIFIED_DRIVER_SHA256 := "bb14df734f6fb81fb22d584e9954a843acb4dda68c841bab176053e0371479ed"
+var socket := PacketPeerUDP.new()
+var helper_pid := -1
+var sequence := -1
+var raw_orientation := Quaternion.IDENTITY
+
+func _init() -> void:
+	valid = false
+	if OS.get_name() != "Linux":
+		status = "Real tracking requires Linux; select simulation"
+		return
+	var driver := OS.get_environment("HOME").path_join(".local/bin/xrDriver")
+	if FileAccess.get_sha256(driver) != VERIFIED_DRIVER_SHA256:
+		status = "Driver version unverified; select simulation"
+		return
+	var base := ProjectSettings.globalize_path("res://dist/linux") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()
+	var helper := base.path_join("retrocrt-tracking-bridge")
+	if not FileAccess.file_exists(helper):
+		status = "Tracking helper missing; select simulation"
+		return
+	var error := socket.bind(0, "127.0.0.1")
+	if error != OK:
+		status = "Tracking socket: " + error_string(error)
+		return
+	helper_pid = OS.create_process(helper, [str(socket.get_local_port()), str(OS.get_process_id())])
+	status = "Waiting for driver / calibration" if helper_pid > 0 else "Unable to start tracking helper"
+
+func update(_delta: float) -> void:
+	for i in range(mini(socket.get_available_packet_count(), 512)):
+		var packet := socket.get_packet()
+		if socket.get_packet_ip() != "127.0.0.1" or packet.size() > 512:
+			continue
+		var message = JSON.parse_string(packet.get_string_from_utf8())
+		if not message is Dictionary or message.get("v", 0) != 1:
+			continue
+		if not message.get("valid", false):
+			if message.get("status", "") == "driver_lock_busy":
+				continue # brief contention is not a disconnect; watchdog still applies
+			valid = false
+			status = "XR: " + str(message.get("status", "unavailable"))
+			continue
+		var next_sequence := int(message.get("sequence", -1))
+		if next_sequence <= sequence:
+			continue
+		var q = message.get("q", [])
+		if not q is Array or q.size() != 4:
+			continue
+		var pose := Quaternion(float(q[0]), float(q[1]), float(q[2]), float(q[3]))
+		if not pose.is_finite() or absf(pose.length_squared() - 1.0) > 0.02:
+			valid = false
+			status = "XR: invalid orientation"
+			continue
+		sequence = next_sequence
+		raw_orientation = pose.normalized()
+		sample_time_usec = Time.get_ticks_usec()
+		valid = true
+		status = "XRLinuxDriver / LIVE 3DoF"
+	if valid and Time.get_ticks_usec() - sample_time_usec > 300000:
+		valid = false
+		status = "XR: stale tracking / holding last pose"
+	if helper_pid > 0 and not OS.is_process_running(helper_pid):
+		valid = false
+		status = "XR: helper stopped; select simulation or retry tracking"
+	var angles := raw_orientation.get_euler()
+	angles *= Vector3(-1.0 if invert_pitch else 1.0, -1.0 if invert_yaw else 1.0, -1.0 if invert_roll else 1.0)
+	orientation = Basis.from_euler(angles).get_rotation_quaternion()
+
+func close() -> void:
+	if helper_pid > 0 and OS.is_process_running(helper_pid):
+		OS.kill(helper_pid)
+	helper_pid = -1
+	socket.close()
