@@ -1,6 +1,7 @@
 extends Node
 ## Godot owns presentation; the native Libretro host owns frame execution/callbacks.
 signal content_changed(texture: Texture2D)
+signal frame_presented(image: Image)
 signal status_changed(message: String)
 signal game_changed(active: bool)
 
@@ -171,6 +172,8 @@ func update_texture(force := false, preview: Dictionary = {}) -> void:
 		content_changed.emit(texture)
 	else:
 		texture.update(image)
+	# Reuse the CPU image already uploaded for presentation; never read the GPU.
+	frame_presented.emit(image)
 
 func input_mask() -> int:
 	if gamepad.menu_active: return 0

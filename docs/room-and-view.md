@@ -1,5 +1,10 @@
 # Room and view controls
 
+The latest **local** menu update groups controls into Game, View, Picture, Room
+and Advanced. See [Settings and startup](settings-and-startup.md) for saved
+setups, per-game picture settings and recovery. The Deck installation described
+below remains the previous version until the next transfer.
+
 The current update is installed on the Steam Deck in `library-controls-20261014`.
 Previous installations remain available for rollback.
 
@@ -82,29 +87,69 @@ scene. Bright inspection makes the cabinet easier to inspect; Dim XR keeps a
 small pool of light around it. Sliders update immediately. Save settings & close
 persists changes. Fade start/end always retain at least a 0.5 m transition.
 
+Room's expanded light controls include **Shadow darkness** (default 0.60;
+zero removes the lamp's shadow contrast, one restores full contrast). Y resets
+the selected control. Lamp shadows can still be disabled entirely.
+
+The Compatibility renderer now uses its 13-tap positional shadow filter.
+Each eye keeps a 2048 shadow atlas but reserves a single 1024 slot for our one
+shadow-casting lamp instead of subdividing it for many lights. The lamp cone
+is tightened from 48 to 34 degrees to use that detail around the TV, and a
+modest 1.5 normal bias reduces self-shadowing on the curved casing. This targets
+jagged/self-shadowed edges without blurring the game image or adding shadowed
+lights. It is filtered shadow mapping, not contact-hardening area shadows.
+Compatibility ignores `shadow_blur`; increasing that property alone would not
+help. Reference: [Godot 4.5 GLES shadow sampling](https://github.com/godotengine/godot/blob/4.5/drivers/gles3/shaders/scene.glsl).
+
+The TV's plastic casing uses its authored baked occlusion and does not receive
+live shadow maps. This deliberately trades physically exact self-shadows for
+stable shading on the curved pedestal. It still casts filtered shadows onto
+the furniture and floor. Room and screen illumination remain dynamic. The
+Shadow darkness control affects those remaining live shadows, not the authored
+occlusion in the casing. No new lightmap textures or extra rendering passes
+are introduced by the receiver exclusion itself.
+
+A subsequent Blender Cycles bake supplies stronger front/rear recess detail
+using the model's existing UVs. **Casing recess shading** in the expanded room
+controls adjusts this from 0 to 1 (default 0.70). It remains stable when the
+head or lamps move; room and screen light still affect the plastic normally.
+It uses one extra single-channel texture sample, with no extra rendering pass.
+See [the local cabinet documentation](crt-model-local.md#blender-ao-bake).
+
 A rounded oak-style shelf unit replaces the box stand. Its open shelves contain
 four unbranded game cases and a small console-shaped prop. Sage carpet and a
 muted teal/terracotta woven rug provide colour without surrounding the viewer
 with walls. The floor patch has soft black edges as well as distance fading.
 The self-lit game picture keeps its contrast as the surroundings fade.
 
-**Screen light spill is deferred and disabled.** Its menu control is hidden and
-old saved settings cannot enable it. No averaging viewport or spill rendering
-pass is created. The experimental code is retained behind `SCREEN_SPILL_ENABLED`
-for later work. Phosphor glow within the game picture remains available.
+**Screen light spill** in Room now uses two native, shadowless lights instead
+of an additive cabinet overlay. It illuminates the inset bezel, furniture and
+nearby floor using their existing materials and normals. Point specular
+highlights are disabled so the approximation does not look like two bulbs.
+The lights move with the TV and their reach follows its scale. Picture and
+glass are excluded from the receiver mask; the existing distance fade remains.
 
-The retained experiment works as follows:
+A jittered 16×12 grid samples the emulator's existing CPU presentation image at
+20 Hz, applies the picture's colour grading per sample, and averages in linear
+emitted-light space. The mean is scaled by picture coverage and smoothed with
+a 55 ms response. Bright scenes light the surroundings more than dark scenes;
+a black frame settles to no light. No spatial image detail is projected.
+Paused games retain their last frame and still respond to grading adjustments.
+The calibration signal uses a fixed approximate mean, with the same grading.
 
-This is an inexpensive approximation of diffuse screen bounce. A tiny 2×2 GPU
-viewport averages an 8×8 grid of the whole picture in linear light; every output
-pixel holds the same mean colour. The cabinet shader uses this mean, distance
-and surface orientation. Picture detail cannot appear on the cabinet. This
-replaces the initial spatial sampling, which looked like a duplicate picture.
-The corrected wash also has lower intensity. Both eyes share the averaging
-pass, which stops rendering when spill strength is zero.
-It affects the cabinet near the faceplate, without lighting the rear, adding
-shadow maps, reading video frames back to the CPU or modifying the imported
-model's textures. The existing distance blackout composites after it.
+There is no GPU readback, extra viewport, receiver overlay, shadow map or
+framebuffer copy. Zero hides both lights immediately and stops sampling.
+Default strength is 0.10, adjustable to 0.40; Y resets the selected slider.
+Existing saved zero values stay off until adjusted. The legacy
+`crt/screen_spill` preference migrates to global `room/spill_strength`;
+per-game picture saves do not override the room light.
+
+This is a diffuse area-source approximation, not ray-traced indirect lighting.
+The sources sit slightly ahead of the curved glass to light the inset bezel.
+They do not cast occlusion shadows or provide a mirror reflection of the tube;
+recessed/hidden surfaces can receive some light. Keep the strength subtle.
+
+See [screen-light.md](screen-light.md) for local validation and performance.
 
 The set and floor follow the distance and scale settings together. This remains
 a stationary virtual object with rotational tracking; changing distance moves
@@ -167,7 +212,8 @@ A short Windows RTX 4080 rendering comparison of the initial version, with the d
 off and 0.899 / 0.896 ms with it on. Corresponding p95 values were 2.012 / 2.119 ms
 off and 2.082 / 2.200 ms on. These small differences are not a reliable Deck cost
 estimate. There was an audio overflow during warm-up. The benchmark is available
-as `tests/screen_spill_performance.gd`; the pixel tests use simple synthetic
+in the historical results here. The replacement benchmark now lives in
+`tests/screen_spill_performance.gd`; the pixel tests use simple synthetic
 geometry and solid-colour signals, without image inspection of the CRT asset.
 
 The corrected version passed all nine screen-spill GPU pixel checks on the Deck,

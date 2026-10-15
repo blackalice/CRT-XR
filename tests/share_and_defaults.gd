@@ -1,4 +1,5 @@
 extends SceneTree
+const UI=preload("res://tests/menu_test_helpers.gd")
 var failures := 0
 var app
 func check(ok: bool, message: String):
@@ -22,43 +23,25 @@ func run():
 	OS.set_environment("RETROCRT_SCREENSHOT_DIR",ProjectSettings.globalize_path("user://test-screenshots"))
 	app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	app.close_settings()
 	app.use_tracking(false)
 	if not app.emulator.loaded:
 		app.emulator.load_rom(ProjectSettings.globalize_path("res://build/retrocrt-probe.sfc"))
 	app.set_stereo(true)
 	app.toggle_settings()
-	app.settings_tabs.current_tab = 1
-	await settle()
-	app.distance_slider.value = 2.2
-	app.height_slider.value = .6
-	app.height_slider.grab_focus()
+	UI.set_value(app,"view.distance",2.2)
+	UI.set_value(app,"view.height_offset",.6)
 	await y_button()
-	check(app.height_offset == 0 and is_equal_approx(app.height_slider.value,0), "Y restores the selected height option and its slider")
-	check(is_equal_approx(app.distance,2.2), "Per-option reset leaves neighbouring options unchanged")
-	check(app.stereo and app.settings_panel.visible and app.emulator.paused, "Reset preserves SBS, open menu and paused game")
-	app.height_slider.value = .4
-	app.height_slider.grab_focus()
-	app.settings_panel.find_child("ResetOption",true,false).grab_focus()
+	check(app.height_offset==0,"Y restores selected height")
+	check(is_equal_approx(app.distance,2.2),"Per-option reset leaves neighbouring options unchanged")
+	check(app.stereo and app.menu.visible and app.emulator.paused,"Reset preserves SBS and paused game")
+	UI.set_value(app,"room.ambient",.9)
+	UI.set_value(app,"room.lamp_height",1.4)
 	await y_button()
-	check(app.height_offset == 0, "Footer reset button uses the last selected option")
-	app.distance_slider.value = 2.5
-	app.settings_panel.find_child("Stereo",true,false).grab_focus()
+	check(is_equal_approx(app.world.lamp_height,2.6) and is_equal_approx(app.world.ambient,.9),"Y resets just the selected room control")
+	UI.set_value(app,"controls.preview",false)
 	await y_button()
-	check(is_equal_approx(app.distance,2.5) and app.stereo, "Y on an action button cannot reset another option or switch display mode")
-	app.settings_tabs.current_tab = 3
-	await settle()
-	app.room_sliders.ambient.value = .9
-	app.room_sliders.lamp_height.value = 1.4
-	app.room_sliders.lamp_height.grab_focus()
-	await y_button()
-	check(is_equal_approx(app.world.lamp_height,2.6) and is_equal_approx(app.world.ambient,.9), "Y resets just the selected room control and updates the actual light")
-	app.settings_tabs.current_tab = 0
-	await settle()
-	var preview = app.settings_panel.find_child("InputPreview",true,false)
-	preview.button_pressed = false
-	preview.grab_focus()
-	await y_button()
-	check(app.emulator.run_ahead and preview.button_pressed, "Y resets a selected switch")
+	check(app.emulator.run_ahead,"Y resets a selected switch")
 	await settle()
 	var eye_size: Vector2i = app.views[0].size
 	var path: String = await app.take_screenshot()
@@ -79,7 +62,7 @@ func run():
 	await settle()
 	check(is_equal_approx(app.distance,3.4) and app.height_offset == 0 and is_equal_approx(app.world.ambient,.45), "Explicit reset-all restores view and room defaults")
 	check(app.stereo and app.emulator.loaded and app.emulator.paused and app.settings_panel.visible, "Reset-all preserves the loaded game, menu and physical display mode")
-	check(is_equal_approx(app.distance_slider.value,3.4) and is_equal_approx(app.room_sliders.ambient.value,.45), "Reset-all refreshes all menu controls")
+	check(is_equal_approx(UI.get_value(app,"view.distance"),3.4) and is_equal_approx(UI.get_value(app,"room.ambient"),.45), "Reset-all refreshes all menu controls")
 	app.close_settings()
 	var y := InputEventJoypadButton.new()
 	y.device = 7

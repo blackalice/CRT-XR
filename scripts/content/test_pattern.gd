@@ -18,7 +18,11 @@ func _draw() -> void:
 	var colors := [Color("eeeecc"), Color("ffcf55"), Color("63d8cf"), Color("68b86e"), Color("d181c4"), Color("dc6654"), Color("627dc4")]
 	for i in range(7):
 		draw_rect(Rect2(16 + i * 32, 40, 32, 70), colors[i])
-	draw_circle(Vector2(128, 145), 43, Color("d6e1cb"), false, 2.0)
+	# 256x240 is displayed at 4:3, so source pixels are 1.25 times wider.
+	# Compensate the calibration circle so it is round on the physical tube.
+	draw_set_transform(Vector2(128, 145), 0, Vector2(0.8, 1.0))
+	draw_circle(Vector2.ZERO, 43, Color("d6e1cb"), false, 2.0)
+	draw_set_transform(Vector2.ZERO)
 	draw_line(Vector2(80, 145), Vector2(176, 145), Color.WHITE)
 	draw_line(Vector2(128, 100), Vector2(128, 190), Color.WHITE)
 	draw_rect(Rect2(14, 14, 228, 212), Color("a9c8c9"), false, 2.0)

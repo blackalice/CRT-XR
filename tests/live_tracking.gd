@@ -6,6 +6,7 @@ func _initialize() -> void:
 func run() -> void:
 	var app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	app.close_settings()
 	# process_frame fires before Node._process; let initial scene placement settle.
 	await process_frame
 	await process_frame

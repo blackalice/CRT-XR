@@ -2,6 +2,32 @@
 
 Research and local prototype: 14 October 2026, Godot 4.5.1 Compatibility renderer.
 
+## Current picture update (local)
+
+The latest implementation supersedes the original five-sample shader described
+below. It adapts Timothy Lottes' Gaussian beam reconstruction and Viacheslav
+Slavinsky's 20-tap PAL decoder, with an optional NTSC YIQ approximation. RGB
+remains the default. Both eyes share the composite prepass; there is no history
+buffer or additional queued emulation frame. Source files and full notices are
+retained in `third_party/shaders/` and copied by the Linux export script.
+
+Picture → Screen fit fits the complete framebuffer inside the actual tube outline
+and bezel allowance, with safe size/position controls and calibration guides.
+Picture → Signal offers presets and gamma, colour and composite adjustments.
+See [Picture controls](picture-controls.md) for usage and limitations.
+
+Local GPU checks cover gamma/neutral colours, PAL/NTSC mode selection, source
+sizes through 512x478, all source-edge markers through the imported bezel in
+both eyes at flat/default/maximum curvature, and fitting the tube into the
+neutral camera view. Settings/controller, screenshot, stereo and native
+emulation regressions also pass. Full-resolution 3840x1080 SBS runs on the local
+RTX 4080 without shader errors; this does not establish Deck performance.
+
+The older sections below record the initial prototype. Room furnishing and
+lighting controls have since been expanded; see [Room and view](room-and-view.md).
+Screen-to-cabinet illumination has since been rebuilt with native lights under
+Room; see [Screen light](screen-light.md).
+
 ## Scene lighting and distance fade
 
 The room now has a black background, low cool ambient light, a warm overhead

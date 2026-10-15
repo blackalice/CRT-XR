@@ -6,6 +6,7 @@ func _initialize() -> void:
 func run() -> void:
 	var app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	app.close_settings()
 	app.use_tracking(false)
 	app.set_stereo(true)
 	app.edge_fade = 0.075

@@ -1,4 +1,5 @@
 extends SceneTree
+const UI=preload("res://tests/menu_test_helpers.gd")
 var failures := 0
 func check(ok: bool, label: String):
 	if ok: print("PASS: ", label)
@@ -15,8 +16,13 @@ func _initialize(): call_deferred("run")
 func run():
 	var settings_existed := FileAccess.file_exists("user://settings.cfg")
 	var settings_backup := FileAccess.get_file_as_bytes("user://settings.cfg") if settings_existed else PackedByteArray()
+	var legacy := ConfigFile.new()
+	legacy.set_value("crt","screen_spill",0.0)
+	legacy.save("user://settings.cfg")
 	var app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	check(app.world.spill_strength == 0, "Legacy global Off migrates to room lighting")
+	app.close_settings()
 	app.use_tracking(false)
 	await process_frame
 	app.set_process(false)
@@ -60,12 +66,31 @@ func run():
 	app.world.shadows = false
 	app.world.apply_room_settings()
 	check(not app.world.rug_node.visible and not app.world.key_light.shadow_enabled, "Rug and shadows can be toggled independently")
-	app.world.set_spill_strength(.23)
-	check(app.world.spill_strength == 0 and app.world.spill_receivers.is_empty(), "Deferred glow cannot be re-enabled by old settings")
-	check(not is_instance_valid(app.world.spill_average), "Deferred glow creates no averaging viewport")
+	UI.set_value(app,"room.cabinet_grain_strength",.8)
+	check(is_equal_approx(app.world.cabinet_grain_strength,.8), "Plastic grain strength is adjustable")
+	UI.reset(app,"room.cabinet_grain_strength")
+	check(is_equal_approx(app.world.cabinet_grain_strength,.55), "Per-option reset restores subtle plastic grain")
+	UI.set_value(app,"room.cabinet_ao_strength",.4)
+	check(is_equal_approx(app.world.cabinet_ao_strength,.4), "Casing bake strength is adjustable")
+	UI.reset(app,"room.cabinet_ao_strength")
+	check(is_equal_approx(app.world.cabinet_ao_strength,.70), "Per-option reset restores the baked shading default")
+	UI.set_value(app,"room.shadow_strength",.35)
+	check(is_equal_approx(app.world.key_light.shadow_opacity,.35), "Shadow darkness control changes real lamp shadows")
+	UI.reset(app,"room.shadow_strength")
+	check(is_equal_approx(app.world.key_light.shadow_opacity,.60) and not app.world.key_light.shadow_enabled, "Shadow reset softens contrast without re-enabling disabled shadows")
+	UI.set_value(app,"room.shadow_strength",.35)
+	UI.set_value(app,"room.spill_strength",.28)
+	check(is_equal_approx(app.world.screen_light.strength,.28), "Room slider changes the native light strength")
+	var previous_ambient: float = app.world.ambient
+	UI.reset(app,"room.spill_strength")
+	check(is_equal_approx(app.world.spill_strength,.10) and app.world.ambient == previous_ambient, "Per-option default resets screen light without changing room ambience")
+	UI.set_value(app,"room.spill_strength",.24)
+	check(app.capture_settings().has_section_key("room","spill_strength") and not app.capture_settings().has_section_key("crt","screen_spill"), "Screen light saves globally with room preferences")
+	check(is_equal_approx(app.world.spill_strength,.24) and app.world.screen_light.lights.size() == 2, "Screen spill controls two native lights")
+	check(app.world.screen_light.find_children("*", "SubViewport").is_empty(), "Screen spill needs no GPU averaging viewport")
 	var original_distance: float = app.distance
 	var eye_y: float = app.eyes[0].position.y
-	app.height_slider.value = 0.4
+	UI.set_value(app,"view.height_offset",0.4)
 	app._process(0)
 	app.world._process(0)
 	check(is_equal_approx(app.world.television.position.y, 1.65), "Height slider raises the virtual screen")
@@ -76,10 +101,12 @@ func run():
 	app.free()
 	var restored = load("res://scenes/main.tscn").instantiate()
 	root.add_child(restored)
+	restored.close_settings()
 	restored.set_process(false)
 	check(restored.distance == 1.2 and not restored.right_stick_distance and restored.world.warmth == 1 and not restored.world.show_rug, "Room and view preferences survive reload")
-	check(restored.world.spill_strength == 0, "Glow stays disabled after settings reload")
-	check(is_equal_approx(restored.height_offset, 0.4) and is_equal_approx(restored.height_slider.value, 0.4), "Screen height and its slider survive settings reload")
+	check(is_equal_approx(restored.world.shadow_strength,.35), "Shadow darkness survives preferences reload")
+	check(is_equal_approx(restored.world.spill_strength,.24), "Screen spill strength survives settings reload")
+	check(is_equal_approx(restored.height_offset, 0.4) and is_equal_approx(UI.get_value(restored,"view.height_offset"), 0.4), "Screen height and its slider survive settings reload")
 	restored.distance_save_delay = -1
 	restored.free()
 	if settings_existed:

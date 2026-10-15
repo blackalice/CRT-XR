@@ -1,5 +1,8 @@
 extends RefCounted
 
+const SCREEN_ANCHOR := Vector3(0.0, 0.035, 0.06)
+const Plastic = preload("res://scripts/rendering/cabinet_plastic.gd")
+
 # Load a user-supplied GLB locally; no model data is embedded in source control.
 static func load_cabinet(parent: Node3D) -> Dictionary:
 	var path := ProjectSettings.globalize_path("res://build/crt-model/crt_tv.glb")
@@ -16,6 +19,7 @@ static func load_cabinet(parent: Node3D) -> Dictionary:
 	if scene == null:
 		return {}
 	filter_cabinet_materials(scene)
+	Plastic.apply(scene)
 	var holder := Node3D.new()
 	holder.name = "ImportedCabinet"
 	parent.add_child(holder)
@@ -38,7 +42,7 @@ static func load_cabinet(parent: Node3D) -> Dictionary:
 	holder.scale = Vector3.ONE * (1.32 / bounds.size.x)
 	transform = parent.global_transform.affine_inverse() * source.global_transform
 	bounds = transform * source.get_aabb()
-	var anchor := Vector3(-0.07, 0.035, 0.06)
+	var anchor := SCREEN_ANCHOR
 	holder.position += anchor - Vector3(bounds.get_center().x, bounds.get_center().y, bounds.position.z)
 	transform = parent.global_transform.affine_inverse() * source.global_transform
 	var arrays := source.mesh.surface_get_arrays(0)
@@ -48,12 +52,17 @@ static func load_cabinet(parent: Node3D) -> Dictionary:
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	source.visible = false
 	var bottom := INF
+	var cabinet_bounds := AABB()
+	var first := true
 	for node in scene.find_children("*", "MeshInstance3D", true, false):
+		if not node.visible: continue
 		var local: Transform3D = parent.global_transform.affine_inverse() * node.global_transform
 		var part: AABB = local * node.get_aabb()
 		bottom = minf(bottom, part.position.y)
+		cabinet_bounds = part if first else cabinet_bounds.merge(part)
+		first = false
 	return {"arrays": arrays, "width": bounds.size.x, "height": bounds.size.y,
-		"depth": bounds.size.z, "bottom": bottom}
+		"depth": bounds.size.z, "bottom": bottom, "cabinet_bounds": cabinet_bounds}
 
 static func filter_cabinet_materials(scene: Node) -> void:
 	# Embedded images from the runtime GLB loader do not have mipmaps. Merely
@@ -99,3 +108,22 @@ static func screen_mesh(template: Dictionary, curvature: float) -> ArrayMesh:
 		surface.add_vertex(p)
 	surface.generate_normals()
 	return surface.commit()
+
+static func safe_picture_rect(template: Dictionary) -> Rect2:
+	# The rounded aperture does not cover every corner of its bounding box.
+	# Find an inscribed rectangle in its convex outline, then allow bezel margin.
+	var points := PackedVector2Array()
+	for vertex in template.arrays[Mesh.ARRAY_VERTEX]:
+		points.append(Vector2(vertex.x / float(template.width) + 0.5, 0.5 - vertex.y / float(template.height)))
+	var outline := Geometry2D.convex_hull(points)
+	var inset := 0.20
+	for step in range(81):
+		var trial := float(step) / 400.0
+		var fits := true
+		for corner in [Vector2(trial, trial), Vector2(1.0-trial, trial), Vector2(trial, 1.0-trial), Vector2(1.0-trial, 1.0-trial)]:
+			if not Geometry2D.is_point_in_polygon(corner, outline): fits = false
+		if fits:
+			inset = trial
+			break
+	inset = minf(inset + 0.025, 0.25)
+	return Rect2(Vector2.ONE * inset, Vector2.ONE * (1.0 - 2.0 * inset))

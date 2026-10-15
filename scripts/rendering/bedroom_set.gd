@@ -42,30 +42,39 @@ static func matte(color: Color) -> StandardMaterial3D:
 	material.roughness = 0.88
 	return material
 
-static func build_stand(parent: Node3D, top: float) -> Node3D:
+static func build_stand(parent: Node3D, top: float, cabinet_bounds := AABB()) -> Node3D:
 	var stand := Node3D.new()
 	stand.name = "TelevisionSupport"
 	parent.add_child(stand)
+	# Centre the shelf on the actual casing footprint, including its deep tube.
+	# Leave 10 cm of support in front and behind; avoid the old rear overhang.
+	var depth := 1.02
+	if cabinet_bounds.has_volume():
+		depth = maxf(depth, cabinet_bounds.size.z + 0.20)
+		stand.position = Vector3(cabinet_bounds.get_center().x, 0, cabinet_bounds.get_center().z)
+	else:
+		stand.position.z = -0.30
 	var oak := ShaderMaterial.new()
 	oak.shader = load("res://shaders/oak.gdshader")
 	var floor_y := -1.25
 	var bottom := floor_y + 0.10
 	var inside_top := top - 0.075
 	var height := maxf(inside_top - bottom, 0.12)
-	soft_box(stand, Vector3(2.02, 0.075, 1.02), Vector3(0, top - 0.0375, -0.30), oak, 0.02)
-	soft_box(stand, Vector3(1.88, 0.055, 0.90), Vector3(0, bottom + 0.0275, -0.30), oak)
+	var shelf := soft_box(stand, Vector3(2.02, 0.075, depth), Vector3(0, top - 0.0375, 0), oak, 0.02)
+	shelf.name = "TopShelf"
+	soft_box(stand, Vector3(1.88, 0.055, depth - 0.12), Vector3(0, bottom + 0.0275, 0), oak)
 	for side in [-1, 1]:
-		soft_box(stand, Vector3(0.065, height, 0.90), Vector3(side * 0.91, bottom + height * 0.5, -0.30), oak)
-		for z in [-0.66, 0.06]:
+		soft_box(stand, Vector3(0.065, height, depth - 0.12), Vector3(side * 0.91, bottom + height * 0.5, 0), oak)
+		for z in [-depth * 0.5 + 0.15, depth * 0.5 - 0.15]:
 			soft_box(stand, Vector3(0.11, 0.10, 0.11), Vector3(side * 0.81, floor_y + 0.05, z), matte(Color("4c3527")))
-	soft_box(stand, Vector3(1.79, height, 0.025), Vector3(0, bottom + height * 0.5, -0.735), matte(Color("66503a")))
-	soft_box(stand, Vector3(0.05, height - 0.055, 0.84), Vector3(0.30, bottom + 0.055 + (height - 0.055) * 0.5, -0.28), oak)
+	soft_box(stand, Vector3(1.79, height, 0.025), Vector3(0, bottom + height * 0.5, -depth * 0.5 + 0.075), matte(Color("66503a")))
+	soft_box(stand, Vector3(0.05, height - 0.055, depth - 0.18), Vector3(0.30, bottom + 0.055 + (height - 0.055) * 0.5, 0.02), oak)
 	# A few unbranded cases/books give the shelf a lived-in scale without a room.
 	var colors := [Color("963f35"), Color("436171"), Color("c1a16c"), Color("536445")]
 	for i in range(4):
 		var book := soft_box(stand, Vector3(0.075, minf(0.22, height - 0.07), 0.25),
-			Vector3(0.48 + i * 0.09, bottom + 0.055 + minf(0.22, height - 0.07) * 0.5, 0.015), matte(colors[i]), 0.006)
+			Vector3(0.48 + i * 0.09, bottom + 0.055 + minf(0.22, height - 0.07) * 0.5, depth * 0.5 - 0.195), matte(colors[i]), 0.006)
 		book.rotation.z = -0.025 if i == 3 else 0.0
-	soft_box(stand, Vector3(0.42, 0.055, 0.25), Vector3(-0.38, bottom + 0.0825, -0.03), matte(Color("8a8a83")), 0.012)
-	soft_box(stand, Vector3(0.15, 0.012, 0.075), Vector3(-0.38, bottom + 0.116, 0.0), matte(Color("3a3a3e")), 0.004)
+	soft_box(stand, Vector3(0.42, 0.055, 0.25), Vector3(-0.38, bottom + 0.0825, depth * 0.5 - 0.24), matte(Color("8a8a83")), 0.012)
+	soft_box(stand, Vector3(0.15, 0.012, 0.075), Vector3(-0.38, bottom + 0.116, depth * 0.5 - 0.21), matte(Color("3a3a3e")), 0.004)
 	return stand

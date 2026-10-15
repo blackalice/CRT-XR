@@ -18,6 +18,7 @@ func run() -> void:
 	var rom := ProjectSettings.globalize_path("res://build/retrocrt-probe.sfc")
 	var app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	app.close_settings()
 	app.use_tracking(false)
 	await process_frame
 	await process_frame
@@ -30,6 +31,7 @@ func run() -> void:
 	check(session.texture != null, "Running core framebuffer becomes a Godot texture")
 	check(session.texture.get_width() == 256, "Game source retains native pixel dimensions")
 	check(app.world.screen_material.get_shader_parameter("signal_texture") == session.texture, "Live game texture is bound to the curved CRT screen")
+	check(app.world.screen_light.source != null and app.world.screen_light.source.get_width() == 256, "Screen light receives the existing CPU presentation frame")
 	check(not app.pattern.visible, "Test signal is replaced during gameplay")
 	check(session.fps > 60.0 and session.fps < 61.0, "Runtime uses the core's console frame rate")
 	check(int(session.core.info().audio_frames) > 0, "Real core produces audio frames")

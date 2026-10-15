@@ -2,6 +2,8 @@ extends Control
 
 const READY_EXIT_CODE := 10
 var manual_confirmation := false
+var waiting_time := 0.0
+var help: Label
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -27,6 +29,10 @@ func _ready() -> void:
 	instructions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	instructions.add_theme_font_size_override("font_size", 23)
 	column.add_child(instructions)
+	help = Label.new()
+	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	help.text = "Keep the glasses connected while changing mode. B / Escape returns to Steam."
+	column.add_child(help)
 	if manual_confirmation:
 		var next := Button.new()
 		next.text = "I switched to SBS — Continue  [A]"
@@ -39,7 +45,10 @@ func _ready() -> void:
 	column.add_child(cancel)
 	if not manual_confirmation: cancel.grab_focus()
 
-func _process(_delta: float) -> void:
+func _process(delta: float) -> void:
+	waiting_time += delta
+	if waiting_time > 20.0:
+		help.text = ("If SBS is active but the picture is wrong, set this game's\nSteam resolution to Native (3840 × 1080), then relaunch.\n" if manual_confirmation else "Still waiting for Full-SBS. Check the USB connection and use the glasses' SBS button.\n") + "B / Escape cancels safely; reconnect and launch again to retry."
 	# Native Gamescope resolution may update when the glasses reconnect in SBS.
 	if manual_confirmation and DisplayServer.screen_get_size(get_window().current_screen) == Vector2i(3840, 1080):
 		get_tree().quit(READY_EXIT_CODE)

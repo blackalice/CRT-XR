@@ -8,8 +8,11 @@ supports pause, states and SRAM. No commercial ROMs, BIOS or artwork are include
 
 On the configured Deck, use the **RetroCRT XR Tracking** desktop shortcut.
 See [head tracking setup and calibration](docs/head-tracking.md).
-The new emulation/soft-edge build is tested locally and has **not yet been
-transferred to the Deck**. See [playing and building](docs/emulation.md).
+The menu, saved setups, per-game picture, CRT shader and startup updates are
+installed on the Deck. The current Steam entry uses `performance2-crt-20261014`,
+including the two measured [CRT performance passes](docs/crt-performance.md).
+See [settings and startup](docs/settings-and-startup.md),
+[picture controls](docs/picture-controls.md) and [playing and building](docs/emulation.md).
 
 ## Run on Windows
 
@@ -38,17 +41,18 @@ also needs the [emulation build steps](docs/emulation.md#building-dependencies).
 | Move screen closer / farther | Page Up / Page Down | Right stick up / down (optional) |
 | Simulate roll | Q / E | Keyboard in this prototype |
 | Recenter | R | Right-stick click |
-| Settings | Escape; Tab when no game is loaded | Hold L1 + R1, then press Start |
+| Pause menu | Escape; Tab when no game is loaded | Hold L1 + R1, then press Start |
 | Mono / SBS preview | F2 | Menu |
 | Fullscreen | F11 | Settings button |
 | Pause test signal | Space | Keyboard in this prototype |
 | Pause/resume game | Space | Menu |
 | Quick save / load | F5 / F8 | Menu |
 | Hide diagnostic overlay | F1 | Keyboard in this prototype |
-| Navigate settings | Tab / arrows / Enter | D-pad / A |
-| Change settings tab | Click a tab | L1 / R1 |
-| Reset selected menu option | Reset option button | Y while a slider or switch is selected |
-| Clean screenshot | F6 | Game tab → Save clean screenshot |
+| Navigate / adjust | Arrows / Enter / Backspace | D-pad / left stick; A select; B back |
+| Change category / subsection | Q/E or Tab; Z/C; pointer | L1/R1; L2/R2 |
+| Reset selected menu option | Y | Y |
+| Compact adjustment preview | X | X; B returns |
+| Clean screenshot | F6 | Pause menu → Screenshot |
 
 The TV stays fixed while cameras rotate. This is rotational tracking: it does
 not simulate walking around the TV. Settings pause simulated head movement.
@@ -56,15 +60,17 @@ Settings and the in-app ROM browser appear in both eyes without leaving SBS.
 Use the D-pad and A to navigate, B to cancel, and L1 + R1 + Start / Escape to open settings.
 The menu pauses a running game and restores its previous pause state on close.
 
-Settings are grouped into **Game**, **View**, **Picture**, **Room** and **Setup**
-tabs, with Save and Exit always available. Room contains live lighting controls,
-warm / bright / dim presets, lamp position, shadows and distance fade. The local
-bedroom update adds a rounded wooden stand, game shelf, carpet and woven rug in
-a compact patch that fades into black. See [room and view controls](docs/room-and-view.md).
+The pause menu offers Resume, Choose game, states, Screenshot, Settings and Exit.
+Settings use **View**, **Picture**, **Room**, **Controls & XR** and **Saved setups**,
+with subsections for fitting, colour, signal, materials and calibration. The selected
+row has a full amber border and arrow marker. Left/right adjusts immediately;
+Y resets just that option; X opens a compact strip for visual adjustments.
+Closing the pause menu saves preferences and restores the previous pause state.
+Exit, reset-all and overwriting a saved setup require confirmation.
+See [menu and startup controls](docs/settings-and-startup.md) and
+[room and view controls](docs/room-and-view.md).
 
-Settings expose TV distance, size, IPD, convergence, field of view, smoothing, axis
-inversion, scanlines, phosphor mask and soft black view edges. **Save settings &
-close** persists these options. Each eye gets its own adjustable edge fade; set
+Each eye gets its own adjustable edge fade; set
 **Soft view edges** to zero to disable it. Source pixels
 use filtered sampling on a 4:3 mesh; perspective and curved geometry
 prevent strict integer scaling across the whole screen.

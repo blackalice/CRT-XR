@@ -1,4 +1,19 @@
-# Native dependencies
+# Third-party components
+
+## CRT shaders
+
+* Timothy Lottes' `crt-lottes.glsl`, public domain. The tube shader adapts its
+  Gaussian beam reconstruction and neighbouring-row sampling. The shared
+  `crt_beam.gdshader` cache uses the same horizontal kernels.
+* Viacheslav Slavinsky's `pal-singlepass.glsl`, Copyright 2016, BSD 2-Clause.
+  The shared composite shader adapts its carrier modulation/demodulation,
+  20-tap FIR filter and colour matrices. NTSC uses the supplied YIQ matrices
+  with an NTSC carrier and line phase approximation.
+
+Original sources, full notices and pinned provenance are in `third_party/shaders/`.
+The export script copies them into `licenses/shaders/` alongside the application.
+
+## Native dependencies
 
 The app's emulator host dynamically loads an existing Libretro core. No console
 BIOS, commercial ROMs or third-party game artwork are supplied.

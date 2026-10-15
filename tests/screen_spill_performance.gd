@@ -1,45 +1,43 @@
 extends SceneTree
+# Measures real scene/stereo lighting cost locally without capturing the model.
+var app
 func _initialize(): call_deferred("run")
-func phase(world, strength: float):
-	world.set_spill_strength(strength)
+func phase(strength: float) -> Dictionary:
+	app.world.set_spill_strength(strength)
 	for i in range(45): await process_frame
-	var samples: Array[float] = []
+	var gpu: Array[float] = []
+	var wall: Array[float] = []
 	var last := Time.get_ticks_usec()
 	for i in range(180):
 		await process_frame
 		var now := Time.get_ticks_usec()
-		samples.append((now-last)/1000.0)
+		wall.append((now-last)/1000.0)
 		last = now
-	var mean := 0.0
-	for sample in samples: mean += sample/180.0
-	samples.sort()
-	return {"strength":strength, "mean_ms":mean, "p95_ms":samples[171]}
+		var total := 0.0
+		for view in app.views: total += RenderingServer.viewport_get_measured_render_time_gpu(view.get_viewport_rid())
+		gpu.append(total)
+	wall.sort()
+	gpu.sort()
+	return {"strength":strength,"gpu_ms":gpu[90],"gpu_p95_ms":gpu[171],"wall_ms":wall[90],"wall_p95_ms":wall[171]}
 func run():
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
-	var view := SubViewport.new()
-	view.size = Vector2i(3840,1080)
-	view.own_world_3d = true
-	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
-	root.add_child(view)
-	var app = load("res://scenes/main.tscn").instantiate()
-	view.add_child(app)
+	var stage := SubViewport.new()
+	stage.size = Vector2i(3840,1080)
+	stage.own_world_3d = true
+	stage.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	root.add_child(stage)
+	app = load("res://scenes/main.tscn").instantiate()
+	stage.add_child(app)
+	app.close_settings()
 	app.use_tracking(false)
-	if not app.world.SCREEN_SPILL_ENABLED:
-		print("Screen light spill is deferred; skipping its performance comparison.")
-		app.emulator.stop()
-		app.free()
-		view.free()
-		quit()
-		return
 	app.set_stereo(true)
+	app.vertical_fov = 24
+	app.distance = 1.2
 	for i in range(30): await process_frame
-	print("STEREO_SIZE ",app.views[0].size," / ",app.views[1].size)
-	print("SPILL_BASELINE ",JSON.stringify(await phase(app.world,0)))
-	print("SPILL_ENABLED ",JSON.stringify(await phase(app.world,.1)))
-	print("SPILL_BASELINE_REPEAT ",JSON.stringify(await phase(app.world,0)))
-	print("SPILL_ENABLED_REPEAT ",JSON.stringify(await phase(app.world,.1)))
-	app.emulator.stop()
-	app.queue_free()
-	view.queue_free()
-	await process_frame
+	for view in app.views: RenderingServer.viewport_set_measure_render_time(view.get_viewport_rid(),true)
+	print("SCREEN_LIGHT_BENCH eye_size=",app.views[0].size," distance=",app.distance)
+	for strength in [0.0,.1,0.0,.1]: print("SCREEN_LIGHT_BENCH ",JSON.stringify(await phase(strength)))
+	app.distance_save_delay = -1
+	app.free()
+	stage.free()
 	quit()

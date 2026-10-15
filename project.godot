@@ -17,4 +17,5 @@ window/stretch/mode="disabled"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
 textures/default_filters/use_nearest_mipmap_filter=false
+lights_and_shadows/positional_shadow/soft_shadow_filter_quality=4
 environment/defaults/default_clear_color=Color(0.018, 0.024, 0.04, 1)

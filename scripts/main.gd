@@ -5,24 +5,30 @@ const LinuxTracking = preload("res://scripts/tracking/xr_linux_tracking.gd")
 const CRTWorld = preload("res://scripts/rendering/crt_world.gd")
 const Pattern = preload("res://scripts/content/test_pattern.gd")
 const Emulation = preload("res://scripts/emulation/emulation_session.gd")
-const ROMBrowser = preload("res://scripts/ui/rom_browser.gd")
+const Menu = preload("res://scripts/ui/menu_controller.gd")
+var menu: PanelContainer
 const SettingsDefaults = preload("res://scripts/ui/settings_defaults.gd")
+const SettingsStore = preload("res://scripts/ui/settings_store.gd")
+const StartupStatus = preload("res://scripts/ui/startup_status.gd")
+const PICTURE_SECTIONS := ["crt", "picture"]
+const PROFILE_NAMES := ["Everyday", "Evening", "Showcase"]
+var settings_store := SettingsStore.new()
+var picture_baseline := ConfigFile.new()
+var active_game_key := ""
+var remember_game_picture := true
+var selected_profile := 0
+var profile_undo: ConfigFile
+var settings_dirty := false
+var startup_message := ""
+var recovery_elapsed := 0.0
+var diagnostics_elapsed := 0.0
 signal screenshot_saved(path: String)
 var taking_screenshot := false
 var last_screenshot_path := ""
 var notices: Array[Label] = []
 var notice_time := 0.0
-var reset_target: Control
-var menu_direction := Vector2i.ZERO
-var menu_dpad: Dictionary = {}
-var menu_stick := Vector2.ZERO
-var menu_repeat_remaining := 0.0
-var menu_pad_id := -1
 var emulator: Node
 var signal_view: SubViewport
-var rom_dialog: PanelContainer
-var game_status: Label
-var controller_status: Label
 var was_paused_before_menu := false
 var provider: TrackingProvider = Simulated.new()
 var needs_center := false
@@ -33,17 +39,18 @@ var displayed := Quaternion.IDENTITY
 var stereo := false
 var distance := 3.4
 var height_offset := 0.0
-var height_slider: HSlider
 var right_stick_distance := true
 var distance_speed := 1.0
 var distance_save_delay := -1.0
-var distance_slider: HSlider
-var room_sliders: Dictionary = {}
 const ROOM_FIELDS := [
+	["spill_strength", "Screen light spill (0 = off)", 0.0, 0.4, 0.02],
 	["ambient", "Ambient fill", 0.0, 1.5, 0.05],
 	["key_energy", "Warm lamp brightness", 0.0, 8.0, 0.1],
 	["fill_energy", "Front fill brightness", 0.0, 4.0, 0.1],
 	["warmth", "Light warmth", 0.0, 1.0, 0.05],
+	["shadow_strength", "Shadow darkness", 0.0, 1.0, 0.05],
+	["cabinet_ao_strength", "Casing recess shading", 0.0, 1.0, 0.05],
+	["cabinet_grain_strength", "Plastic grain", 0.0, 1.0, 0.05],
 	["lamp_height", "Lamp height", 0.5, 4.0, 0.1],
 	["lamp_side", "Lamp side", -3.0, 3.0, 0.1],
 	["floor_brightness", "Carpet / rug brightness", 0.0, 2.0, 0.05],
@@ -68,7 +75,6 @@ var views: Array[SubViewport] = []
 var panels: Array[SubViewportContainer] = []
 var diagnostics: Array[Label] = []
 var settings_panel: PanelContainer
-var settings_tabs: TabContainer
 var row: HBoxContainer
 var screenshot_pending := false
 var menu_view: SubViewport
@@ -108,6 +114,13 @@ func _ready() -> void:
 		row.add_child(panel)
 		panels.append(panel)
 		var view := SubViewport.new()
+		# One shadow-casting lamp: give it a full quadrant instead of reserving
+		# tiny slots for dozens of lights. Same total atlas size, finer edges.
+		view.positional_shadow_atlas_size = 2048
+		view.positional_shadow_atlas_quad_0 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_1
+		view.positional_shadow_atlas_quad_1 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_DISABLED
+		view.positional_shadow_atlas_quad_2 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_DISABLED
+		view.positional_shadow_atlas_quad_3 = Viewport.SHADOW_ATLAS_QUADRANT_SUBDIV_DISABLED
 		view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 		panel.add_child(view)
 		views.append(view)
@@ -154,59 +167,33 @@ func _ready() -> void:
 	Input.joy_connection_changed.connect(func(device, connected):
 		if not connected:
 			emulator.gamepad.disconnect_device(device)
-			if device == menu_pad_id: clear_menu_gamepad()
+			clear_menu_gamepad()
+			show_notice("Controller disconnected. Reconnect it to continue; Escape opens settings with a keyboard.")
 		print("Controller ", device, " connected: ", Input.get_joy_name(device) if connected else "disconnected"))
 	for device in Input.get_connected_joypads():
 		print("Controller ", device, ": ", Input.get_joy_name(device))
 	emulator.content_changed.connect(func(texture):
-		world.set_spill_texture(texture)
-		world.screen_material.set_shader_parameter("signal_texture", texture)
-		world.screen_material.set_shader_parameter("signal_size", Vector2(texture.get_width(), texture.get_height())))
+		world.picture.set_source(texture))
+	emulator.frame_presented.connect(world.screen_light.set_image)
 	emulator.game_changed.connect(func(active):
+		change_game_preferences(active)
 		pattern.visible = not active
+		pattern.set_process(not active)
+		signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active else SubViewport.UPDATE_ALWAYS
 		if active:
+			world.picture.source_rate = emulator.fps
+			world.picture.refresh()
 			last_game_path = emulator.rom_path
 			if save_library() != OK: show_notice("Could not save the recent game location")
 		if not active:
-			world.set_spill_texture(signal_view.get_texture())
-			world.screen_material.set_shader_parameter("signal_texture", signal_view.get_texture())
-			world.screen_material.set_shader_parameter("signal_size", Vector2(256, 240)))
-	emulator.status_changed.connect(func(message):
-		if is_instance_valid(game_status): game_status.text = message)
-	var config := ConfigFile.new()
-	if config.load("user://settings.cfg") == OK:
-		right_stick_distance = bool(config.get_value("view", "right_stick_distance", true))
-		distance_speed = clampf(config.get_value("view", "distance_speed", 1.0), 0.2, 2.0)
-		for setting in ROOM_FIELDS:
-			world.set(setting[0], clampf(config.get_value("room", setting[0], world.get(setting[0])), setting[2], setting[3]))
-		world.shadows = bool(config.get_value("room", "shadows", true))
-		world.show_rug = bool(config.get_value("room", "show_rug", true))
-		emulator.run_ahead = bool(config.get_value("emulation", "run_ahead", true))
-		distance = clampf(config.get_value("view", "distance", 3.4), 1.2, 5.0)
-		height_offset = clampf(config.get_value("view", "height_offset", 0.0), -1.5, 1.5)
-		tv_scale = clampf(config.get_value("view", "scale", 1.0), 0.5, 1.6)
-		ipd = clampf(config.get_value("view", "ipd", 0.064), 0.0, 0.080)
-		convergence = clampf(config.get_value("view", "convergence", 2.6), 1.0, 10.0)
-		edge_fade = clampf(config.get_value("view", "edge_fade", 0.075), 0.0, 0.2)
-		vertical_fov = clampf(config.get_value("view", "vertical_fov", vertical_fov), 18.0, 70.0)
-		smoothing = clampf(config.get_value("view", "smoothing", 0.0), 0.0, 0.15)
-		for axis in ["yaw", "pitch", "roll"]:
-			provider.set("invert_" + axis, bool(config.get_value("tracking", "invert_" + axis, false)))
-		scanlines = clampf(config.get_value("crt", "scanlines", 0.22), 0.0, 0.7)
-		phosphor_mask = clampf(config.get_value("crt", "mask", 0.1), 0.0, 0.5)
-		phosphor_glow = clampf(config.get_value("crt", "glow", 0.12), 0.0, 0.4)
-		world.set_spill_strength(config.get_value("crt", "screen_spill", 0.10))
-		glass_reflections = clampf(config.get_value("crt", "glass", 0.12), 0.0, 0.4)
-		screen_curvature = clampf(config.get_value("crt", "curvature", 0.55), 0.0, 1.0)
-	world.apply_room_settings()
-	fade_material.set_shader_parameter("fade_width", edge_fade)
-	world.screen_material.set_shader_parameter("scanlines", scanlines)
-	world.screen_material.set_shader_parameter("mask_strength", phosphor_mask)
-	world.screen_material.set_shader_parameter("glow_strength", phosphor_glow)
-	world.glass_material.set_shader_parameter("reflection_strength", glass_reflections)
-	world.set_curvature(screen_curvature)
-	var recent := ConfigFile.new()
-	if recent.load("user://recent.cfg") == OK:
+			world.picture.source_rate = 60.0
+			world.screen_light.set_image(null)
+			world.picture.set_source(signal_view.get_texture()))
+	emulator.status_changed.connect(func(_message): refresh_startup_status())
+	apply_settings(settings_store.read("user://settings.cfg", capture_settings()))
+	picture_baseline = capture_settings()
+	var recent := settings_store.read("user://recent.cfg")
+	if recent.has_section("library"):
 		last_game_path = str(recent.get_value("library", "last_game", ""))
 		default_rom_dir = str(recent.get_value("library", "default_rom_dir", ""))
 	menu_view = SubViewport.new()
@@ -234,20 +221,61 @@ func _ready() -> void:
 	print("RetroCRT ready / Godot ", Engine.get_version_info().string, " / ", OS.get_name())
 	var arguments := OS.get_cmdline_user_args()
 	for index in range(arguments.size() - 1):
-		if arguments[index] == "--rom": emulator.load_rom(arguments[index + 1])
+		if arguments[index] == "--rom":
+			load_game(arguments[index + 1])
 	if "--last-game" in arguments and not "--rom" in arguments and not last_game_path.is_empty() and FileAccess.file_exists(last_game_path):
-		emulator.load_rom(last_game_path)
+		load_game(last_game_path)
+	startup_message = settings_store.warning if startup_message.is_empty() else startup_message
+	if not emulator.loaded and not settings_panel.visible and not "--capture" in arguments:
+		toggle_settings()
+	refresh_startup_status()
+
+func apply_settings(config: ConfigFile) -> void:
+	right_stick_distance = bool(config.get_value("view", "right_stick_distance", true))
+	distance_speed = clampf(config.get_value("view", "distance_speed", 1.0), 0.2, 2.0)
+	for setting in ROOM_FIELDS:
+		world.set(setting[0], clampf(config.get_value("room", setting[0], world.get(setting[0])), setting[2], setting[3]))
+	world.shadows = bool(config.get_value("room", "shadows", true))
+	world.show_rug = bool(config.get_value("room", "show_rug", true))
+	emulator.run_ahead = bool(config.get_value("emulation", "run_ahead", true))
+	distance = clampf(config.get_value("view", "distance", 3.4), 1.2, 5.0)
+	height_offset = clampf(config.get_value("view", "height_offset", 0.0), -1.5, 1.5)
+	tv_scale = clampf(config.get_value("view", "scale", 1.0), 0.5, 1.6)
+	ipd = clampf(config.get_value("view", "ipd", 0.064), 0.0, 0.080)
+	convergence = clampf(config.get_value("view", "convergence", 2.6), 1.0, 10.0)
+	edge_fade = clampf(config.get_value("view", "edge_fade", 0.075), 0.0, 0.2)
+	vertical_fov = clampf(config.get_value("view", "vertical_fov", vertical_fov), 18.0, 70.0)
+	smoothing = clampf(config.get_value("view", "smoothing", 0.0), 0.0, 0.15)
+	for axis in ["yaw", "pitch", "roll"]:
+		provider.set("invert_" + axis, bool(config.get_value("tracking", "invert_" + axis, false)))
+	scanlines = clampf(config.get_value("crt", "scanlines", 0.22), 0.0, 0.7)
+	phosphor_mask = clampf(config.get_value("crt", "mask", 0.1), 0.0, 0.5)
+	phosphor_glow = clampf(config.get_value("crt", "glow", 0.12), 0.0, 0.4)
+	glass_reflections = clampf(config.get_value("crt", "glass", 0.12), 0.0, 0.4)
+	screen_curvature = clampf(config.get_value("crt", "curvature", 0.55), 0.0, 1.0)
+	for field in world.picture.all_fields():
+		world.picture.values[field[0]] = clampf(config.get_value("picture", field[0], field[5]), field[2], field[3])
+	world.picture.mode = clampi(config.get_value("picture", "connection", 0), 0, 3)
+	world.picture.keep_aspect = bool(config.get_value("picture", "keep_aspect", true))
+	remember_game_picture = bool(config.get_value("preferences", "per_game_picture", true))
+	world.picture.refresh()
+	world.apply_room_settings()
+	fade_material.set_shader_parameter("fade_width", edge_fade)
+	world.screen_material.set_shader_parameter("scanlines", scanlines)
+	world.screen_material.set_shader_parameter("mask_strength", phosphor_mask)
+	world.screen_material.set_shader_parameter("glow_strength", phosphor_glow)
+	world.glass_material.set_shader_parameter("reflection_strength", glass_reflections)
+	world.set_curvature(screen_curvature)
 
 func _process(delta: float) -> void:
 	notice_time = maxf(0.0, notice_time - delta)
 	for notice in notices: notice.visible = notice_time > 0.0
-	var menu_open := settings_panel.visible or (is_instance_valid(rom_dialog) and rom_dialog.visible)
-	if settings_panel.visible and menu_direction != Vector2i.ZERO:
-		menu_repeat_remaining -= delta
-		if menu_repeat_remaining <= 0.0:
-			navigate_settings(menu_direction)
-			menu_repeat_remaining = 0.10
-	elif not settings_panel.visible: clear_menu_gamepad()
+	var menu_open := settings_panel.visible
+	recovery_elapsed += delta
+	if recovery_elapsed >= 1.0:
+		recovery_elapsed = 0.0
+		refresh_startup_status()
+	world.picture.paused = menu_open or (emulator.paused if emulator.loaded else pattern.paused)
 	if right_stick_distance and not menu_open:
 		adjust_distance(emulator.gamepad.view_distance_axis() * distance_speed * delta)
 	if distance_save_delay >= 0.0:
@@ -255,9 +283,6 @@ func _process(delta: float) -> void:
 		if distance_save_delay < 0.0: save_settings()
 	for overlay in menu_overlays: overlay.visible = menu_open
 	for hud in diagnostics: hud.modulate.a = 0.0 if menu_open else 1.0
-	if is_instance_valid(controller_status) and menu_open:
-		var pads := Input.get_connected_joypads()
-		controller_status.text = "Controller: choose a Gamepad layout in Steam" if pads.is_empty() else "Controller: " + Input.get_joy_name(emulator.gamepad.active_device if emulator.gamepad.active_device in pads else pads[0])
 	menu_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if menu_open else SubViewport.UPDATE_DISABLED
 	provider.enabled = not menu_open and not emulator.loaded
 	display_report_elapsed += delta
@@ -270,7 +295,10 @@ func _process(delta: float) -> void:
 				report.store_string(JSON.stringify({"stereo": stereo, "width": get_window().size.x,
 					"height": get_window().size.y, "frames": Engine.get_process_frames()}))
 				report.close()
+	var previously_valid := tracking_was_valid
 	provider.update(delta)
+	if previously_valid and not provider.valid and provider is LinuxTracking:
+		show_notice("Tracking lost — holding the view steady. Open Game for Retry glasses tracking or Fixed view.")
 	if provider.valid and (needs_center or not tracking_was_valid):
 		# Keep the view continuous after a driver reconnect or local reference reset.
 		if provider is LinuxTracking:
@@ -284,14 +312,18 @@ func _process(delta: float) -> void:
 	displayed = displayed.slerp(target, 1.0 - exp(-delta / smoothing)) if smoothing > 0.001 else target
 	world.television.position = Vector3(0, 1.25 + height_offset, -distance)
 	world.television.scale = Vector3.ONE * tv_scale
+	diagnostics_elapsed += delta
+	var refresh_diagnostics := diagnostics_elapsed >= .1
+	if refresh_diagnostics: diagnostics_elapsed = 0.0
 	for i in range(2):
 		var offset := (-0.5 if i == 0 else 0.5) * ipd if stereo else 0.0
 		eyes[i].transform = Transform3D(Basis(displayed), Vector3(0, 1.25, 0) + displayed * Vector3(offset, 0, 0))
 		# Parallel axes, asymmetric frusta; no toe-in. Convergence is zero disparity distance.
 		var near_plane := 0.05
 		eyes[i].set_frustum(2.0 * near_plane * tan(deg_to_rad(vertical_fov) / 2.0), Vector2(-offset * near_plane / convergence, 0), near_plane, 50.0)
-		var a := displayed.get_euler() * 180.0 / PI
-		diagnostics[i].text = "RETROCRT XR   /   %s\n%s\nYaw %+.1f   Pitch %+.1f   Roll %+.1f\n%.2fm  /  IPD %.0fmm  /  %.0f fps\nL + R + Start / Esc: menu   R3 / R: recenter" % ["LEFT" if stereo and i == 0 else ("RIGHT" if stereo else "DESKTOP"), provider.status, a.y, a.x, a.z, distance, ipd * 1000, Engine.get_frames_per_second()]
+		if refresh_diagnostics and diagnostics[i].visible and not menu_open:
+			var a := displayed.get_euler() * 180.0 / PI
+			diagnostics[i].text = "RETROCRT XR   /   %s\n%s\nYaw %+.1f   Pitch %+.1f   Roll %+.1f\n%.2fm  /  IPD %.0fmm  /  %.0f fps\nL + R + Start / Esc: menu   R3 / R: recenter" % ["LEFT" if stereo and i == 0 else ("RIGHT" if stereo else "DESKTOP"), provider.status, a.y, a.x, a.z, distance, ipd * 1000, Engine.get_frames_per_second()]
 	if "--capture" in OS.get_cmdline_user_args() and Engine.get_process_frames() == 30 and not screenshot_pending:
 		screenshot_pending = true
 		capture.call_deferred()
@@ -321,54 +353,32 @@ func capture() -> void:
 	get_tree().quit(result)
 
 func _input(event: InputEvent) -> void:
+	if is_instance_valid(menu): menu.release_input(event)
 	if is_instance_valid(sbs_prompt): return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F6:
 		take_screenshot()
 		get_viewport().set_input_as_handled()
 		return
 	if emulator.gamepad.handle_event(event):
-		if is_instance_valid(rom_dialog) and rom_dialog.visible:
-			rom_dialog.hide()
-			emulator.set_paused(was_paused_before_menu)
-			emulator.gamepad.set_menu_active(false)
-		else: toggle_settings()
+		toggle_settings()
 		get_viewport().set_input_as_handled()
 		return
-	var menu_open := settings_panel.visible or (is_instance_valid(rom_dialog) and rom_dialog.visible)
-	if menu_open:
-		if settings_panel.visible and event is InputEventJoypadButton and event.button_index == JOY_BUTTON_Y:
-			if event.pressed: reset_selected_option.call_deferred()
-			get_viewport().set_input_as_handled()
-			return
-		if settings_panel.visible and event is InputEventJoypadButton and event.button_index in [JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER]:
-			if event.pressed:
-				clear_menu_gamepad()
-				var direction := -1 if event.button_index == JOY_BUTTON_LEFT_SHOULDER else 1
-				settings_tabs.current_tab = posmod(settings_tabs.current_tab + direction, settings_tabs.get_tab_count())
-			get_viewport().set_input_as_handled()
-			return
-		if settings_panel.visible and handle_settings_gamepad(event):
-			get_viewport().set_input_as_handled()
-			return
-		var cancel: bool = (event is InputEventKey and event.pressed and event.physical_keycode == KEY_ESCAPE) or (event is InputEventJoypadButton and event.pressed and event.button_index == JOY_BUTTON_B)
-		if cancel:
-			if is_instance_valid(rom_dialog) and rom_dialog.visible:
-				rom_dialog.hide()
-				emulator.set_paused(was_paused_before_menu)
-				emulator.gamepad.set_menu_active(false)
-			else: close_settings()
+	if settings_panel.visible:
+		if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
+			close_settings()
+		elif menu.handle(event): pass
 		elif event is InputEventMouse:
 			for panel in panels:
 				if panel.visible and panel.get_global_rect().has_point(event.position):
 					var factor := minf(panel.size.x / 960.0, panel.size.y / 720.0)
-					var origin := panel.global_position + (panel.size - Vector2(960, 720) * factor) * 0.5
+					var origin := panel.global_position + (panel.size - Vector2(960,720)*factor)*.5
 					var forwarded: InputEventMouse = event.duplicate()
-					forwarded.position = (event.position - origin) / factor
+					forwarded.position = (event.position-origin)/factor
 					forwarded.global_position = forwarded.position
 					if forwarded is InputEventMouseMotion: forwarded.relative /= factor
-					menu_view.push_input(forwarded, true)
+					menu_view.push_input(forwarded,true)
 					break
-		else: menu_view.push_input(event.duplicate(), true)
+		else: menu_view.push_input(event.duplicate(),true)
 		get_viewport().set_input_as_handled()
 		return
 	provider.handle_input(event)
@@ -421,7 +431,7 @@ func use_tracking(real_tracking: bool) -> void:
 	if changed: vertical_fov = 24.0 if real_tracking else 50.0
 
 func _exit_tree() -> void:
-	if distance_save_delay >= 0.0 and is_instance_valid(emulator): save_settings()
+	if is_instance_valid(emulator) and is_instance_valid(settings_panel): save_settings()
 	provider.close()
 
 func adjust_distance(amount: float) -> void:
@@ -444,221 +454,222 @@ func set_stereo(value: bool) -> void:
 		DisplayServer.window_set_size(Vector2i(1280, 360) if value else Vector2i(1280, 720))
 
 func toggle_settings() -> void:
-	clear_menu_gamepad()
-	settings_panel.visible = not settings_panel.visible
-	emulator.gamepad.set_menu_active(settings_panel.visible)
 	if settings_panel.visible:
-		sync_slider(distance_slider, distance)
-		sync_slider(height_slider, height_offset)
-		was_paused_before_menu = emulator.paused
-		if emulator.loaded: emulator.set_paused(true)
-		focus_settings_tab()
-	elif emulator.loaded:
-		emulator.set_paused(was_paused_before_menu)
-
-func close_settings() -> void:
-	clear_menu_gamepad()
-	if is_instance_valid(settings_panel) and settings_panel.visible:
-		settings_panel.hide()
-		emulator.gamepad.set_menu_active(false)
-		if emulator.loaded: emulator.set_paused(was_paused_before_menu)
-
-func choose_rom() -> void:
-	close_settings()
-	emulator.gamepad.set_menu_active(true)
+		close_settings()
+		return
+	settings_dirty = false
 	was_paused_before_menu = emulator.paused
 	if emulator.loaded: emulator.set_paused(true)
-	if rom_dialog == null:
-		rom_dialog = ROMBrowser.new()
-		rom_dialog.file_selected.connect(func(path):
-			emulator.load_rom(path)
-			emulator.gamepad.set_menu_active(false))
-		rom_dialog.canceled.connect(func():
-			emulator.set_paused(was_paused_before_menu)
-			emulator.gamepad.set_menu_active(false))
-		rom_dialog.default_folder_changed.connect(func(path):
-			default_rom_dir = path
-			if save_library() != OK: rom_dialog.message.text = "Could not save the default folder. Check that your user storage is writable.")
-		menu_view.add_child(rom_dialog)
-	rom_dialog.default_dir = default_rom_dir
-	if not last_game_path.is_empty(): rom_dialog.current_dir = last_game_path.get_base_dir()
-	rom_dialog.popup_centered(Vector2i(860, 600))
+	emulator.gamepad.set_menu_active(true)
+	settings_panel.show()
+	menu.open_pause()
+	refresh_startup_status()
+
+func close_settings() -> void:
+	if not is_instance_valid(settings_panel) or not settings_panel.visible: return
+	if not save_settings():
+		menu.show_error("Settings could not be saved. Check free space and user-folder permissions. Your changes are still here.")
+		return
+	menu.error_label.hide()
+	clear_menu_gamepad()
+	settings_panel.hide()
+	emulator.gamepad.set_menu_active(false)
+	if emulator.loaded: emulator.set_paused(was_paused_before_menu)
+
+func choose_rom() -> void:
+	if not settings_panel.visible: toggle_settings()
+	menu.open_library()
+
+func load_game(path: String) -> bool:
+	startup_message = ""
+	var restore_paused := was_paused_before_menu
+	var opened: bool = emulator.load_rom(path)
+	if not opened:
+		startup_message = "Could not open the game. Check the ROM location and emulator files. " + emulator.status
+		if not settings_panel.visible: toggle_settings()
+		if emulator.loaded: was_paused_before_menu = restore_paused
+		menu.show_error(startup_message)
+	elif settings_panel.visible:
+		emulator.set_paused(true)
+		was_paused_before_menu = false
+		menu.refresh()
+	refresh_startup_status()
+	return opened
 
 func save_library() -> Error:
-	var recent := ConfigFile.new()
-	recent.load("user://recent.cfg")
+	var recent := settings_store.read("user://recent.cfg")
 	recent.set_value("library", "last_game", last_game_path)
 	recent.set_value("library", "default_rom_dir", default_rom_dir)
-	return recent.save("user://recent.cfg")
+	return SettingsStore.write("user://recent.cfg", recent)
 
 func build_settings() -> void:
-	settings_panel = PanelContainer.new()
-	settings_panel.position = Vector2(180, 25)
-	settings_panel.custom_minimum_size.x = 370
-	var background := StyleBoxFlat.new()
-	background.bg_color = Color("151c29")
-	background.set_content_margin_all(14)
-	settings_panel.add_theme_stylebox_override("panel", background)
-	menu_view.add_child(settings_panel)
-	var layout := VBoxContainer.new()
-	layout.custom_minimum_size = Vector2(570, 630)
-	layout.add_theme_constant_override("separation", 10)
-	settings_panel.add_child(layout)
-	var title := Label.new()
-	title.text = "RETROCRT / SETTINGS"
-	layout.add_child(title)
-	settings_tabs = TabContainer.new()
-	settings_tabs.name = "Tabs"
-	settings_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	layout.add_child(settings_tabs)
-	var options := settings_page("Game")
-	game_status = Label.new()
-	game_status.text = emulator.status
-	game_status.custom_minimum_size.x = 370
-	game_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	options.add_child(game_status)
-	controller_status = Label.new()
-	options.add_child(controller_status)
-	button(options, "OpenROM", "Open SNES ROM…", choose_rom)
-	button(options, "LastROM", "Play last game", func():
-		if FileAccess.file_exists(last_game_path):
-			close_settings()
-			emulator.load_rom(last_game_path)
-		else: game_status.text = "Open a ROM first, or reconnect its folder.")
-	button(options, "Pause", "Pause / resume game  [Space]", func():
-		was_paused_before_menu = not was_paused_before_menu
-		emulator.set_paused(was_paused_before_menu)
-		close_settings())
-	button(options, "SaveState", "Save state / slot 0  [F5]", func(): emulator.save_state())
-	button(options, "LoadState", "Load state / slot 0  [F8]", func(): emulator.load_state())
-	button(options, "Screenshot", "Save clean screenshot  [F6]", func(): take_screenshot())
-	button(options, "TestSignal", "Stop game / return to test signal", func(): emulator.stop(); close_settings())
-	var responsive := CheckButton.new()
-	responsive.name = "InputPreview"
-	responsive.text = "Reduce input delay (1-frame preview)"
-	responsive.button_pressed = emulator.run_ahead
-	responsive.toggled.connect(func(v): emulator.run_ahead = v)
-	make_resettable(responsive, func(): responsive.button_pressed = true)
-	options.add_child(responsive)
-	options = settings_page("View")
-	button(options, "Recenter", "Recenter head  [R / R3]", recenter)
-	button(options, "Stereo", "Switch mono / SBS  [F2]", func(): set_stereo(not stereo))
-	button(options, "Fullscreen", "Toggle fullscreen  [F11]", toggle_fullscreen)
-	distance_slider = slider(options, "TV distance (m)", 1.2, 5.0, 0.1, distance, func(v): distance = v)
-	height_slider = slider(options, "Screen height offset (m)", -1.5, 1.5, 0.05, height_offset, func(v): height_offset = v)
-	var stick := CheckButton.new()
-	stick.text = "Right stick: screen closer / farther"
-	stick.button_pressed = right_stick_distance
-	stick.toggled.connect(func(v): right_stick_distance = v)
-	make_resettable(stick, func(): stick.button_pressed = true)
-	options.add_child(stick)
-	slider(options, "Distance adjustment speed", 0.2, 2.0, 0.1, distance_speed, func(v): distance_speed = v)
-	var pad_hint := Label.new()
-	pad_hint.text = "Stick up: closer · down: farther\nTrackpad layouts can map Page Up / Page Down."
-	options.add_child(pad_hint)
-	slider(options, "TV scale", 0.5, 1.6, 0.05, tv_scale, func(v): tv_scale = v)
-	slider(options, "IPD (m)", 0.0, 0.080, 0.001, ipd, func(v): ipd = v)
-	slider(options, "Convergence (m)", 1.0, 10.0, 0.1, convergence, func(v): convergence = v)
-	slider(options, "Vertical field of view", 18.0, 70.0, 0.5, vertical_fov, func(v): vertical_fov = v)
-	slider(options, "Soft view edges", 0.0, 0.2, 0.005, edge_fade, func(v): edge_fade = v; fade_material.set_shader_parameter("fade_width", v))
-	slider(options, "Smoothing (seconds)", 0.0, 0.15, 0.01, smoothing, func(v): smoothing = v)
-	options = settings_page("Picture")
-	slider(options, "Scanlines", 0.0, 0.7, 0.05, scanlines, func(v): scanlines = v; world.screen_material.set_shader_parameter("scanlines", v))
-	slider(options, "Phosphor mask", 0.0, 0.5, 0.05, phosphor_mask, func(v): phosphor_mask = v; world.screen_material.set_shader_parameter("mask_strength", v))
-	slider(options, "Phosphor glow", 0.0, 0.4, 0.02, phosphor_glow, func(v): phosphor_glow = v; world.screen_material.set_shader_parameter("glow_strength", v))
-	# Screen light spill is deferred; its code is retained behind the world feature flag.
-	slider(options, "Glass reflections", 0.0, 0.4, 0.02, glass_reflections, func(v): glass_reflections = v; world.glass_material.set_shader_parameter("reflection_strength", v))
-	slider(options, "Screen curvature (0 = flat)", 0.0, 1.0, 0.05, screen_curvature, func(v): screen_curvature = v; world.set_curvature(v))
-	options = settings_page("Room")
-	var presets := HBoxContainer.new()
-	options.add_child(presets)
-	button(presets, "Warm", "Warm bedroom", func(): room_preset("warm"))
-	button(presets, "Bright", "Bright inspection", func(): room_preset("bright"))
-	button(presets, "Dim", "Dim XR", func(): room_preset("dim"))
-	for setting in ROOM_FIELDS:
-		var property: String = setting[0]
-		room_sliders[property] = slider(options, setting[1], setting[2], setting[3], setting[4], world.get(property),
-			func(v): set_room_value(property, v))
-	var shadow_toggle := CheckButton.new()
-	shadow_toggle.text = "Lamp shadows"
-	shadow_toggle.button_pressed = world.shadows
-	shadow_toggle.toggled.connect(func(v): world.shadows = v; world.apply_room_settings())
-	make_resettable(shadow_toggle, func(): shadow_toggle.button_pressed = true)
-	options.add_child(shadow_toggle)
-	var rug_toggle := CheckButton.new()
-	rug_toggle.text = "Bedroom rug"
-	rug_toggle.button_pressed = world.show_rug
-	rug_toggle.toggled.connect(func(v): world.show_rug = v; world.apply_room_settings())
-	make_resettable(rug_toggle, func(): rug_toggle.button_pressed = true)
-	options.add_child(rug_toggle)
-	options = settings_page("Setup")
-	button(options, "RealTracking", "Use glasses tracking / retry", func(): use_tracking(true); close_settings())
-	button(options, "Simulation", "Use simulated tracking", func(): use_tracking(false); close_settings())
-	button(options, "Diagnostics", "Show / hide orientation diagnostics", func():
-		for label in diagnostics: label.visible = not label.visible)
-	button(options, "ResetAll", "Reset all settings to defaults", func(): reset_all_options.call_deferred())
-	var invert := CheckButton.new()
-	invert.text = "Invert tracking yaw"
-	invert.button_pressed = provider.invert_yaw
-	invert.toggled.connect(func(v): provider.invert_yaw = v)
-	make_resettable(invert, func(): invert.button_pressed = false)
-	options.add_child(invert)
-	for axis in ["pitch", "roll"]:
-		var check := CheckButton.new()
-		check.text = "Invert tracking " + axis
-		check.button_pressed = provider.get("invert_" + axis)
-		check.toggled.connect(func(v): provider.set("invert_" + axis, v))
-		make_resettable(check, func(): check.button_pressed = false)
-		options.add_child(check)
-	var footer := HBoxContainer.new()
-	footer.name = "Footer"
-	layout.add_child(footer)
-	button(footer, "Close", "Save settings & close", func(): save_settings(); close_settings())
-	button(footer, "ResetOption", "Reset option  [Y]", func(): reset_selected_option.call_deferred())
-	button(footer, "Quit", "Exit RetroCRT", func(): get_tree().quit())
-	var hint := Label.new()
-	hint.text = "L1/R1: tabs   ·   A: select   ·   B: back   ·   Y: reset option"
-	layout.add_child(hint)
-	settings_tabs.tab_changed.connect(func(_index): focus_settings_tab.call_deferred())
-	settings_panel.hide()
+	menu = Menu.new()
+	menu.host = self
+	settings_panel = menu
+	menu_view.add_child(menu)
+	refresh_startup_status()
 
-func make_resettable(control: Control, action: Callable) -> void:
-	control.set_meta("reset_default", action)
-	control.focus_entered.connect(func(): reset_target = control)
+func profile_path() -> String:
+	return "user://presets/slot-%d.cfg" % selected_profile
+
+func save_profile(title: String) -> bool:
+	var config := ConfigFile.new()
+	SettingsStore.copy_sections(capture_settings(), config, PackedStringArray(["view","room","crt","picture","emulation"]))
+	config.set_value("meta","name",title.strip_edges().left(32) if not title.strip_edges().is_empty() else PROFILE_NAMES[selected_profile])
+	if SettingsStore.write(profile_path(),config) == OK:
+		show_notice("Setup saved: " + str(config.get_value("meta","name")))
+		return true
+	show_notice("Setup could not be saved. Check free space and user-folder permissions.")
+	return false
+
+func load_profile() -> void:
+	if not FileAccess.file_exists(profile_path()) and not FileAccess.file_exists(profile_path()+".bak"):
+		show_notice("This setup slot is empty. Save a setup here first.")
+		return
+	var reader := SettingsStore.new()
+	var saved := reader.read(profile_path())
+	if not saved.has_section("view"):
+		show_notice("Setup could not be read. Current settings are unchanged.")
+		return
+	profile_undo = capture_settings()
+	var merged := capture_settings()
+	SettingsStore.copy_sections(saved,merged,PackedStringArray(["view","room","crt","picture","emulation"]))
+	# Validate against live types before applying user-editable files.
+	var validator := ConfigFile.new()
+	validator.parse(merged.encode_to_text())
+	apply_settings(validated_settings(validator,profile_undo))
+	if active_game_key.is_empty(): picture_baseline = capture_settings()
+	rebuild_settings()
+	show_notice("Setup loaded. Undo is available in Saved setups." + (" " + reader.warning if not reader.warning.is_empty() else ""))
+
+func validated_settings(config: ConfigFile, fallback: ConfigFile) -> ConfigFile:
+	for section in fallback.get_sections():
+		for key in fallback.get_section_keys(section):
+			var old = fallback.get_value(section,key)
+			var value = config.get_value(section,key,old)
+			var valid := typeof(value) == typeof(old)
+			if typeof(old) in [TYPE_INT,TYPE_FLOAT]: valid = typeof(value) in [TYPE_INT,TYPE_FLOAT] and is_finite(float(value))
+			if not valid: config.set_value(section,key,old)
+	return config
+
+func undo_profile() -> void:
+	if profile_undo == null:
+		show_notice("Load a saved setup first; then you can undo it here.")
+		return
+	apply_settings(profile_undo)
+	profile_undo = null
+	if active_game_key.is_empty(): picture_baseline = capture_settings()
+	rebuild_settings()
+	show_notice("Previous setup restored")
+
+func save_game_preferences() -> bool:
+	if active_game_key.is_empty(): return true
+	var config := ConfigFile.new()
+	SettingsStore.copy_sections(capture_settings(),config,PICTURE_SECTIONS)
+	var path := "user://games/"+active_game_key+".cfg"
+	var baseline := ConfigFile.new()
+	SettingsStore.copy_sections(picture_baseline,baseline,PICTURE_SECTIONS)
+	if config.encode_to_text() == baseline.encode_to_text():
+		# No override means future global changes also apply to this game.
+		for suffix in ["", ".bak"]:
+			if FileAccess.file_exists(path+suffix) and DirAccess.remove_absolute(ProjectSettings.globalize_path(path+suffix)) != OK:
+				show_notice("Could not clear the game's picture override. Check user-folder permissions.")
+				return false
+		return true
+	var error := SettingsStore.write(path,config)
+	if error != OK: show_notice("Game picture settings could not be saved. Check free space.")
+	return error == OK
+
+func change_game_preferences(active: bool) -> void:
+	if not active_game_key.is_empty():
+		save_game_preferences()
+		var restore := capture_settings()
+		SettingsStore.copy_sections(picture_baseline,restore,PICTURE_SECTIONS)
+		apply_settings(restore)
+	active_game_key = emulator.rom_hash if active and remember_game_picture else ""
+	if not active_game_key.is_empty():
+		var path := "user://games/"+active_game_key+".cfg"
+		var defaults := capture_settings()
+		var reader := SettingsStore.new()
+		var saved := reader.read(path,defaults)
+		var merged := capture_settings()
+		SettingsStore.copy_sections(saved,merged,PICTURE_SECTIONS)
+		apply_settings(merged)
+		if not reader.warning.is_empty(): startup_message = reader.warning
+	settings_dirty = true
+
+func set_remember_game_picture(enabled: bool) -> void:
+	if enabled == remember_game_picture: return
+	if not enabled: change_game_preferences(false)
+	remember_game_picture = enabled
+	if enabled and emulator.loaded: change_game_preferences(true)
+	settings_dirty = true
+
+func forget_game_picture() -> void:
+	if active_game_key.is_empty():
+		show_notice("Load a game with per-game picture enabled first.")
+		return
+	var merged := capture_settings()
+	SettingsStore.copy_sections(picture_baseline,merged,PICTURE_SECTIONS)
+	apply_settings(merged)
+	save_game_preferences()
+	rebuild_settings()
+	show_notice("This game now uses the global picture settings")
+
+func refresh_startup_status() -> void:
+	if not is_instance_valid(menu): return
+	var gaming_mode := not OS.get_environment("GAMESCOPE_WAYLAND_DISPLAY").is_empty()
+	for key in ["XDG_CURRENT_DESKTOP","XDG_SESSION_DESKTOP","DESKTOP_SESSION"]:
+		gaming_mode = gaming_mode or OS.get_environment(key).to_lower().contains("gamescope")
+	var state := StartupStatus.describe(emulator.loaded,default_rom_dir,last_game_path,
+		provider is LinuxTracking,provider.valid,provider.status,stereo,get_window().size,gaming_mode)
+	menu.status_title = state.title
+	menu.status_detail = state.detail + (" " + startup_message if not startup_message.is_empty() else "")
+	if menu.visible: menu.refresh_labels()
 
 func reset_selected_option() -> void:
-	if not settings_panel.visible: return
-	var focused := menu_view.gui_get_focus_owner()
-	# The footer button uses the last selected option on this tab.
-	if is_instance_valid(focused) and focused.has_meta("reset_default"): reset_target = focused
-	elif not is_instance_valid(focused) or focused.name != "ResetOption":
-		show_notice("Select a slider or switch, then press Y to reset it")
-		return
-	if not is_instance_valid(reset_target) or not settings_tabs.get_current_tab_control().is_ancestor_of(reset_target):
-		show_notice("Select a slider or switch, then press Y to reset it")
-		return
-	reset_target.get_meta("reset_default").call()
-	reset_target.grab_focus()
-	show_notice("Selected option restored to its default")
+	menu.reset_option()
 
 func reset_all_options() -> void:
 	if not settings_panel.visible: return
-	var tab := settings_tabs.current_tab
-	for index in range(5): SettingsDefaults.apply(self, index)
-	# Rebuild from live values so every slider, toggle and label matches the reset.
-	settings_panel.hide()
-	settings_panel.queue_free()
-	room_sliders.clear()
-	build_settings()
-	settings_tabs.current_tab = tab
-	settings_panel.show()
-	focus_settings_tab.call_deferred()
+	for index in range(5): SettingsDefaults.apply(self,index)
+	rebuild_settings()
 	show_notice("All settings reset to defaults")
+
+func rebuild_settings() -> void:
+	settings_dirty = false
+	if is_instance_valid(menu): menu.refresh()
+
+func apply_picture_preset(name: String) -> void:
+	world.picture.preset(name)
+	scanlines = 0.0 if name == "clean" else 0.35
+	phosphor_mask = 0.0 if name == "clean" else (0.12 if name == "rgb" else 0.08)
+	phosphor_glow = 0.0 if name == "clean" else 0.10
+	world.screen_material.set_shader_parameter("scanlines", scanlines)
+	world.screen_material.set_shader_parameter("mask_strength", phosphor_mask)
+	world.screen_material.set_shader_parameter("glow_strength", phosphor_glow)
+	rebuild_settings()
+	show_notice("%s picture preset" % name.capitalize())
+
+func fit_tv_to_view() -> void:
+	var aspect := float(maxi(views[0].size.x, 1))/float(maxi(views[0].size.y, 1))
+	var vertical := tan(deg_to_rad(vertical_fov)*0.5)*0.85
+	var horizontal := vertical*aspect
+	var eye_margin := ipd*0.5*(1.0+5.0/convergence)
+	var scale_limit := minf((4.8*vertical-absf(height_offset))/0.65, (4.8*horizontal-eye_margin)/0.9)
+	if scale_limit < 0.5:
+		height_offset = 0.0
+		scale_limit = minf(4.8*vertical/0.65, (4.8*horizontal-eye_margin)/0.9)
+	tv_scale = clampf(minf(tv_scale, scale_limit), 0.5, 1.6)
+	distance = clampf(maxf((0.65*tv_scale+absf(height_offset))/vertical, (0.9*tv_scale+eye_margin)/horizontal)+0.2, 1.2, 5.0)
+	recenter()
+	rebuild_settings.call_deferred()
+	show_notice("TV fitted to neutral view")
 
 func show_notice(message: String) -> void:
 	for notice in notices: notice.text = message
 	notice_time = 4.0
-	if is_instance_valid(game_status): game_status.text = message
+	if is_instance_valid(menu): menu.notify(message)
 
 func screenshot_directory() -> String:
 	var override := OS.get_environment("RETROCRT_SCREENSHOT_DIR")
@@ -694,131 +705,19 @@ func take_screenshot() -> String:
 	screenshot_saved.emit(path)
 	return path
 
-func settings_page(title: String) -> VBoxContainer:
-	var scroll := ScrollContainer.new()
-	scroll.name = title
-	scroll.custom_minimum_size = Vector2(570, 480)
-	scroll.follow_focus = true
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	settings_tabs.add_child(scroll)
-	var options := VBoxContainer.new()
-	options.name = "Options"
-	options.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	options.add_theme_constant_override("separation", 10)
-	scroll.add_child(options)
-	return options
-
-func focus_settings_tab() -> void:
-	if not settings_panel.visible: return
-	var page := settings_tabs.get_current_tab_control()
-	for control in page.find_children("*", "Control", true, false):
-		if control.focus_mode == Control.FOCUS_ALL and control.is_visible_in_tree():
-			control.grab_focus()
-			return
-
 func clear_menu_gamepad() -> void:
-	menu_direction = Vector2i.ZERO
-	menu_dpad.clear()
-	menu_stick = Vector2.ZERO
-	menu_repeat_remaining = 0.0
-	menu_pad_id = -1
+	if is_instance_valid(menu): menu.clear_input()
 
 func handle_settings_gamepad(event: InputEvent) -> bool:
-	# Controller UI is explicit: no platform ui_accept mapping, pointer emulation,
-	# or mouse hover is required to activate the selected control.
-	if not (event is InputEventJoypadButton or event is InputEventJoypadMotion): return false
-	if event.device != menu_pad_id:
-		clear_menu_gamepad()
-		menu_pad_id = event.device
-	if event is InputEventJoypadButton:
-		if event.button_index == JOY_BUTTON_A:
-			if event.pressed:
-				var focused := menu_view.gui_get_focus_owner()
-				if focused is BaseButton and not focused.disabled:
-					if focused.toggle_mode: focused.button_pressed = not focused.button_pressed
-					focused.pressed.emit()
-			return true
-		if not event.button_index in [JOY_BUTTON_DPAD_UP, JOY_BUTTON_DPAD_DOWN, JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT]: return false
-		menu_dpad[event.button_index] = event.pressed
-	elif event.axis == JOY_AXIS_LEFT_X: menu_stick.x = event.axis_value
-	elif event.axis == JOY_AXIS_LEFT_Y: menu_stick.y = event.axis_value
-	else: return false
-	var next := Vector2i(int(menu_dpad.get(JOY_BUTTON_DPAD_RIGHT, false)) - int(menu_dpad.get(JOY_BUTTON_DPAD_LEFT, false)),
-		int(menu_dpad.get(JOY_BUTTON_DPAD_DOWN, false)) - int(menu_dpad.get(JOY_BUTTON_DPAD_UP, false)))
-	if next == Vector2i.ZERO and menu_stick.length() > 0.55:
-		next = Vector2i(int(signf(menu_stick.x)), 0) if absf(menu_stick.x) > absf(menu_stick.y) else Vector2i(0, int(signf(menu_stick.y)))
-	if next != menu_direction:
-		menu_direction = next
-		menu_repeat_remaining = 0.35
-		if next != Vector2i.ZERO: navigate_settings(next)
-	return true
-
-func settings_focusables() -> Array[Control]:
-	var controls: Array[Control] = []
-	for control in settings_tabs.get_current_tab_control().find_children("*", "Control", true, false):
-		if control.focus_mode == Control.FOCUS_ALL and control.is_visible_in_tree(): controls.append(control)
-	for control in settings_panel.find_child("Footer", true, false).get_children():
-		if control.focus_mode == Control.FOCUS_ALL: controls.append(control)
-	return controls
+	return menu.handle(event)
 
 func navigate_settings(direction: Vector2i) -> void:
-	var controls := settings_focusables()
-	if controls.is_empty(): return
-	var focused := menu_view.gui_get_focus_owner()
-	var index := controls.find(focused)
-	if index == -1:
-		controls[0].grab_focus()
-		return
-	if direction.y != 0:
-		controls[posmod(index + direction.y, controls.size())].grab_focus()
-	elif focused is Range:
-		focused.value += direction.x * maxf(focused.step, 0.01)
-	elif focused is BaseButton and focused.toggle_mode:
-		focused.button_pressed = direction.x > 0
-	else:
-		var candidate := controls[posmod(index + direction.x, controls.size())]
-		if candidate.get_parent() == focused.get_parent(): candidate.grab_focus()
-
-func button(parent: Control, node_name: String, text: String, action: Callable) -> void:
-	var control := Button.new()
-	control.name = node_name
-	control.text = text
-	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	control.pressed.connect(action)
-	parent.add_child(control)
-
-func slider(parent: Control, text: String, low: float, high: float, step: float, initial: float, action: Callable) -> HSlider:
-	var line := HBoxContainer.new()
-	parent.add_child(line)
-	var label := Label.new()
-	label.custom_minimum_size.x = 300
-	label.text = "%s: %.3f" % [text, initial]
-	line.add_child(label)
-	var control := HSlider.new()
-	control.custom_minimum_size.x = 150
-	control.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	control.min_value = low
-	control.max_value = high
-	control.step = step
-	control.value = initial
-	control.value_changed.connect(func(v): label.text = "%s: %.3f" % [text, v]; action.call(v))
-	line.add_child(control)
-	control.set_meta("caption", text)
-	control.set_meta("value_label", label)
-	if SettingsDefaults.slider_default(text, self) != null:
-		make_resettable(control, func(): control.value = SettingsDefaults.slider_default(text, self))
-	return control
-
-func sync_slider(control: HSlider, value: float) -> void:
-	if not is_instance_valid(control): return
-	control.set_value_no_signal(value)
-	control.get_meta("value_label").text = "%s: %.3f" % [control.get_meta("caption"), value]
+	menu.navigate(direction)
 
 func set_room_value(property: String, value: float) -> void:
 	world.set(property, value)
 	if property == "fade_end": world.fade_begin = minf(world.fade_begin, value - 0.5)
 	world.apply_room_settings()
-	for key in room_sliders: sync_slider(room_sliders[key], world.get(key))
 
 func room_preset(preset: String) -> void:
 	var values: Array = [0.45, 4.5, 1.6, 0.70, 1.15, 4.5, 9.0]
@@ -827,10 +726,10 @@ func room_preset(preset: String) -> void:
 	var keys := ["ambient", "key_energy", "fill_energy", "warmth", "floor_brightness", "fade_begin", "fade_end"]
 	for i in keys.size(): world.set(keys[i], values[i])
 	world.apply_room_settings()
-	for key in room_sliders: sync_slider(room_sliders[key], world.get(key))
 
-func save_settings() -> void:
+func capture_settings() -> ConfigFile:
 	var config := ConfigFile.new()
+	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
 	config.set_value("view", "right_stick_distance", right_stick_distance)
 	config.set_value("view", "distance_speed", distance_speed)
@@ -844,8 +743,21 @@ func save_settings() -> void:
 	config.set_value("crt", "scanlines", scanlines)
 	config.set_value("crt", "mask", phosphor_mask)
 	config.set_value("crt", "glow", phosphor_glow)
-	config.set_value("crt", "screen_spill", world.spill_strength)
+	for field in world.picture.all_fields(): config.set_value("picture", field[0], world.picture.values[field[0]])
+	config.set_value("picture", "connection", world.picture.mode)
+	config.set_value("picture", "keep_aspect", world.picture.keep_aspect)
 	config.set_value("crt", "glass", glass_reflections)
 	config.set_value("crt", "curvature", screen_curvature)
-	var error := config.save("user://settings.cfg")
-	if error != OK: push_error("Unable to save settings: %s" % error_string(error))
+	return config
+
+func save_settings() -> bool:
+	var config := capture_settings()
+	if remember_game_picture and not active_game_key.is_empty():
+		if not save_game_preferences(): return false
+		SettingsStore.copy_sections(picture_baseline, config, PICTURE_SECTIONS)
+	else: picture_baseline = config
+	var error := SettingsStore.write("user://settings.cfg", config)
+	if error != OK:
+		show_notice("Settings could not be saved. Check free space and user-folder permissions.")
+		return false
+	return true

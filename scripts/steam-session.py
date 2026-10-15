@@ -72,7 +72,12 @@ def show_sbs_prompt(here, env):
             except (RuntimeError, OSError, ValueError, subprocess.SubprocessError):
                 return False
 
-        return wait_for_sbs(process, ready)
+        # Keep the recovery instructions visible until SBS appears or the user
+        # cancels. A slow reconnect must not silently dismiss the prompt.
+        while process.poll() is None:
+            if wait_for_sbs(process, ready):
+                return True
+        return False
     finally:
         if process.poll() is None:
             process.terminate()
