@@ -80,11 +80,11 @@ func run():
  await press(JOY_BUTTON_B)
  check(not menu.preview and menu.selected_id==preview_id,"Back restores the current preview option in settings")
  UI.select(app,"controls.preview")
- var enabled:bool=app.emulator.run_ahead
+ var depth:int=app.emulator.run_ahead
  await press(JOY_BUTTON_A)
- check(app.emulator.run_ahead!=enabled,"A toggles a switch exactly once")
+ check(app.emulator.run_ahead==posmod(depth+1,3),"A cycles the preview depth exactly one step")
  await press(JOY_BUTTON_Y)
- check(app.emulator.run_ahead,"Y resets the selected switch")
+ check(app.emulator.run_ahead==1,"Y resets the selected choice to its default")
  axis(JOY_AXIS_LEFT_Y,1);await settle()
  check(menu.direction!=Vector2i.ZERO,"Left stick navigates")
  app._notification(Node.NOTIFICATION_APPLICATION_FOCUS_OUT)

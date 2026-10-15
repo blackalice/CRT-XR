@@ -50,6 +50,21 @@ func run() -> void:
 	if not custom_rom or "--probe" in args:
 		check(normal_response > 1 and preview_response == normal_response - 1,
 			"Diagnostic input becomes visible one game frame earlier (%d -> %d)" % [normal_response, preview_response])
+	var two_ok := true
+	var picture_matches := true
+	for frame in range(30):
+		session.core.run_frame(0)
+		var at_frame: PackedByteArray = session.core.save_state()
+		var at_frame_ram: PackedByteArray = session.core.save_ram()
+		var two: Dictionary = session.preview_frame(0, 2)
+		two_ok = two_ok and not two.is_empty()
+		two_ok = two_ok and session.core.save_state() == at_frame
+		two_ok = two_ok and session.core.save_ram() == at_frame_ram
+		session.core.run_frame(0)
+		session.core.run_frame(0)
+		picture_matches = picture_matches and session.core.frame() == two.bytes
+	check(two_ok, "2-frame preview preserves the exact committed state and SRAM")
+	check(picture_matches, "2-frame preview shows exactly the picture two game frames later")
 	print("Preview cost: ", float(session.preview_time_usec) / max(1, session.preview_count) / 1000.0,
 		" ms average; game-frame period: ", 1000.0 / session.fps, " ms")
 	session.stop()

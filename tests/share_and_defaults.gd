@@ -39,9 +39,9 @@ func run():
 	UI.set_value(app,"room.lamp_height",1.4)
 	await y_button()
 	check(is_equal_approx(app.world.lamp_height,2.6) and is_equal_approx(app.world.ambient,.9),"Y resets just the selected room control")
-	UI.set_value(app,"controls.preview",false)
+	UI.set_value(app,"controls.preview",0)
 	await y_button()
-	check(app.emulator.run_ahead,"Y resets a selected switch")
+	check(app.emulator.run_ahead==1,"Y resets a selected choice to its default")
 	await settle()
 	var eye_size: Vector2i = app.views[0].size
 	var path: String = await app.take_screenshot()

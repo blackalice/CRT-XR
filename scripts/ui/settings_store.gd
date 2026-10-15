@@ -19,6 +19,10 @@ func read(path: String, defaults: ConfigFile = null) -> ConfigFile:
 	# Preserve the old global Off choice while migrating the retired overlay key.
 	if path == "user://settings.cfg" and config.has_section_key("crt","screen_spill") and not config.has_section_key("room","spill_strength"):
 		config.set_value("room","spill_strength",config.get_value("crt","screen_spill"))
+	# "Reduce input delay" became an Off/1-frame/2-frame choice; keep the
+	# previous enabled state instead of falling back to the default.
+	if path == "user://settings.cfg" and config.has_section_key("emulation","run_ahead") and config.get_value("emulation","run_ahead") is bool:
+		config.set_value("emulation","run_ahead", 1 if config.get_value("emulation","run_ahead") else 0)
 	if defaults == null: return config
 	var result := ConfigFile.new()
 	for section in defaults.get_sections():

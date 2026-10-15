@@ -87,6 +87,16 @@ forward +X, left +Y, up +Z look vector supports this mapping. Local recentering
 and optional smoothing apply afterward. No global driver recenter is sent.
 A reconnect rebases the local reference to keep the view continuous.
 
+The bridge also forwards the driver's own timestamp. The app estimates
+body-frame angular velocity from consecutive driver-timed poses, low-passes
+and clamps it to 8 rad/s, and extrapolates the camera target toward the
+frame being drawn by the **Motion prediction** delay (default 30 ms,
+range 0-80 ms) in Controls & XR settings. The reported orientation itself is
+never modified, so recentering and reconnect rebasing remain exact; only the
+view target is extrapolated. Zero keeps raw driver timing. The estimator and
+extrapolation are checked by `tests/pose_prediction.gd`; the live chain
+check runs with prediction disabled.
+
 ## Verified and remaining
 
 The Deck probe received 999 valid, distinct sequences over five seconds. The
@@ -95,5 +105,6 @@ poses reach the camera while the television remains fixed. The normal 13 scene
 checks and 19 isolated native safety checks pass.
 
 The user subsequently confirmed the tracking build looks great in SBS.
-Long-session drift, precise optical calibration, disconnect/reconnect and
-Gaming Mode compositor behavior still need on-device acceptance testing.
+Long-session drift, precise optical calibration, disconnect/reconnect, the
+default motion-prediction feel and Gaming Mode compositor behavior still need
+on-device acceptance testing.

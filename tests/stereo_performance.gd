@@ -4,7 +4,7 @@ func _initialize() -> void:
 	call_deferred("run")
 
 func phase(session: Node, enabled: bool) -> Dictionary:
-	session.run_ahead = enabled
+	session.run_ahead = 1 if enabled else 0
 	for i in range(30): await process_frame
 	var slow: int = session.slow_frames
 	var overflow: int = session.audio_overflows

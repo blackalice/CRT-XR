@@ -1,11 +1,14 @@
 extends TrackingProvider
 ## Native helper keeps driver synchronization outside Godot's rendering process.
+const Predictor = preload("res://scripts/tracking/pose_prediction.gd")
 
 const VERIFIED_DRIVER_SHA256 := "bb14df734f6fb81fb22d584e9954a843acb4dda68c841bab176053e0371479ed"
 var socket := PacketPeerUDP.new()
 var helper_pid := -1
 var sequence := -1
 var raw_orientation := Quaternion.IDENTITY
+
+var predictor := Predictor.new()
 
 func _init() -> void:
 	valid = false
@@ -28,7 +31,8 @@ func _init() -> void:
 	helper_pid = OS.create_process(helper, [str(socket.get_local_port()), str(OS.get_process_id())])
 	status = "Waiting for driver / calibration" if helper_pid > 0 else "Unable to start tracking helper"
 
-func update(_delta: float) -> void:
+func update(delta: float) -> void:
+	var newest_stamp_usec := -1
 	for i in range(mini(socket.get_available_packet_count(), 512)):
 		var packet := socket.get_packet()
 		if socket.get_packet_ip() != "127.0.0.1" or packet.size() > 512:
@@ -56,6 +60,10 @@ func update(_delta: float) -> void:
 		sequence = next_sequence
 		raw_orientation = pose.normalized()
 		sample_time_usec = Time.get_ticks_usec()
+		# The bridge forwards the driver's own timestamp; use it so velocity
+		# follows real pose timing rather than delivery jitter.
+		var driver_ms = message.get("driver_ms", -1.0)
+		newest_stamp_usec = int(round(float(driver_ms) * 1000.0)) if float(driver_ms) >= 0.0 else sample_time_usec
 		valid = true
 		status = "XRLinuxDriver / LIVE 3DoF"
 	if valid and Time.get_ticks_usec() - sample_time_usec > 300000:
@@ -67,6 +75,15 @@ func update(_delta: float) -> void:
 	var angles := raw_orientation.get_euler()
 	angles *= Vector3(-1.0 if invert_pitch else 1.0, -1.0 if invert_yaw else 1.0, -1.0 if invert_roll else 1.0)
 	orientation = Basis.from_euler(angles).get_rotation_quaternion()
+	# One velocity update per frame, from the newest accepted pose; the
+	# 2 ms bridge cadence arrives in one burst.
+	if not valid:
+		predictor.reset()
+	elif newest_stamp_usec >= 0:
+		predictor.sample(orientation, newest_stamp_usec)
+	else:
+		predictor.decay(delta)
+	angular_velocity = predictor.angular_velocity
 
 func close() -> void:
 	if helper_pid > 0 and OS.is_process_running(helper_pid):

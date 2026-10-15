@@ -4,6 +4,11 @@ extends RefCounted
 ## +X right, +Y up, forward -Z. No translation in the 3DoF contract.
 ## Native providers must reject stale/nonfinite samples before returning valid=true.
 
+## Body-frame angular velocity in rad/s, or zero when the provider has no
+## velocity source. Consumers extrapolate with pose_prediction.extrapolate();
+## orientation itself is never extrapolated, so recentering stays exact.
+var angular_velocity := Vector3.ZERO
+
 var orientation := Quaternion.IDENTITY
 var valid := true
 var status := "Ready"

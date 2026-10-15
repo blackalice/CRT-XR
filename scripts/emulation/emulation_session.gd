@@ -21,7 +21,7 @@ var audio_overflows := 0
 var slow_frames := 0
 var sram_timer := 0.0
 var skip_delta := true
-var run_ahead := true
+var run_ahead := 1
 var preview_time_usec := 0
 var preview_count := 0
 var gamepad := preload("res://scripts/emulation/gamepad_input.gd").new()
@@ -125,38 +125,44 @@ func _process(delta: float) -> void:
 		if slow_frames == 1 or slow_frames % 300 == 0:
 			push_warning("Emulator cannot keep up with real time; reduce rendering load")
 	if rendered:
-		var preview := preview_frame(buttons) if run_ahead else {}
+		var preview := preview_frame(buttons, run_ahead) if run_ahead > 0 else {}
 		if not paused: update_texture(true, preview)
 	sram_timer += delta
 	if sram_timer >= 10.0:
 		sram_timer = 0.0
 		flush_sram()
 
-func preview_frame(buttons: int) -> Dictionary:
-	# Advance a disposable frame for presentation only. Audio was already queued
-	# from the real frames above; never enqueue the preview's audio.
+func preview_frame(buttons: int, frames := 1) -> Dictionary:
+	# Advance disposable frames for presentation only. Audio was already queued
+	# from the real frames above; never enqueue preview audio.
 	var started := Time.get_ticks_usec()
 	var state: PackedByteArray = core.save_state()
 	if state.is_empty():
-		run_ahead = false
+		run_ahead = 0
 		push_warning("Input preview unavailable for this core; using normal presentation.")
 		return {}
 	var ram: PackedByteArray = core.save_ram()
-	var ok: bool = core.run_frame(buttons)
-	var info: Dictionary = core.info()
-	var bytes: PackedByteArray = core.frame() if ok else PackedByteArray()
+	var ok := false
+	var info: Dictionary = {}
+	var bytes: PackedByteArray = PackedByteArray()
+	for frame in range(maxi(frames, 1)):
+		ok = core.run_frame(buttons)
+		if not ok:
+			break
+		info = core.info()
+		bytes = core.frame()
 	# Restore SRAM explicitly as well: not every core includes it in save states.
 	var restored: bool = core.load_state(state)
 	var ram_restored: bool = ram.is_empty() or core.load_ram(ram)
 	if not restored or not ram_restored:
 		set_paused(true)
 		report("Input preview could not restore game state. Reload the game with preview disabled.", true)
-		run_ahead = false
+		run_ahead = 0
 		return {}
 	preview_time_usec += Time.get_ticks_usec() - started
 	preview_count += 1
 	if not ok:
-		run_ahead = false
+		run_ahead = 0
 		push_warning("Input preview failed; using normal presentation.")
 		return {}
 	return {"bytes": bytes, "width": info.width, "height": info.height}

@@ -2,7 +2,7 @@ extends RefCounted
 const LinuxTracking = preload("res://scripts/tracking/xr_linux_tracking.gd")
 
 const VIEW := {"distance": 3.4, "height_offset": 0.0, "tv_scale": 1.0,
-	"ipd": 0.064, "convergence": 2.6, "smoothing": 0.0, "edge_fade": 0.075,
+	"ipd": 0.064, "convergence": 2.6, "smoothing": 0.0, "motion_predict": 0.03, "edge_fade": 0.075,
 	"right_stick_distance": true, "distance_speed": 1.0}
 const PICTURE := {"scanlines": 0.22, "phosphor_mask": 0.10,
 	"phosphor_glow": 0.12, "glass_reflections": 0.12, "screen_curvature": 0.55}
@@ -14,6 +14,7 @@ const ROOM := {"spill_strength": 0.10, "ambient": 0.45, "key_energy": 4.5, "fill
 const SLIDERS := {"TV distance (m)": "distance", "Screen height offset (m)": "height_offset",
 	"Distance adjustment speed": "distance_speed", "TV scale": "tv_scale", "IPD (m)": "ipd",
 	"Convergence (m)": "convergence", "Soft view edges": "edge_fade", "Smoothing (seconds)": "smoothing",
+	"Motion prediction (seconds)": "motion_predict",
 	"Scanlines": "scanlines", "Phosphor mask": "phosphor_mask", "Phosphor glow": "phosphor_glow",
 	"Glass reflections": "glass_reflections", "Screen curvature (0 = flat)": "screen_curvature"}
 
@@ -31,7 +32,7 @@ static func slider_default(caption: String, app: Node) -> Variant:
 static func apply(app: Node, tab: int) -> void:
 	match tab:
 		0:
-			app.emulator.run_ahead = true
+			app.emulator.run_ahead = 1
 			app.set_remember_game_picture(true)
 		1:
 			for key in VIEW: app.set(key, VIEW[key])

@@ -9,8 +9,9 @@ supports pause, states and SRAM. No commercial ROMs, BIOS or artwork are include
 On the configured Deck, use the **RetroCRT XR Tracking** desktop shortcut.
 See [head tracking setup and calibration](docs/head-tracking.md).
 The menu, saved setups, per-game picture, CRT shader and startup updates are
-installed on the Deck. The current Steam entry uses `performance2-crt-20261014`,
-including the two measured [CRT performance passes](docs/crt-performance.md).
+The current Steam entry uses `prediction-20261015`,
+including pose prediction and the 0/1/2-frame input preview; the two measured
+[CRT performance passes](docs/crt-performance.md) remain in effect.
 See [settings and startup](docs/settings-and-startup.md),
 [picture controls](docs/picture-controls.md) and [playing and building](docs/emulation.md).
 

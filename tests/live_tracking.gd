@@ -7,6 +7,9 @@ func run() -> void:
 	var app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
 	app.close_settings()
+	# The prediction path is unit-tested in pose_prediction.gd; this check
+	# verifies the raw driver -> camera chain, so disable extrapolation.
+	app.motion_predict = 0.0
 	# process_frame fires before Node._process; let initial scene placement settle.
 	await process_frame
 	await process_frame

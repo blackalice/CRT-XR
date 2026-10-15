@@ -117,12 +117,13 @@ func pages(category: int) -> Array:
 			return [page("Controller",[
 				toggle("controls.distance","Right stick adjusts distance",h,"right_stick_distance",true,"Stick up brings the TV closer; stick down moves it farther away.",unchanged,false),
 				property_row("distance_speed","Distance adjustment speed",.2,2,.1,"m/s","Speed of the right-stick distance control, in metres per second.",false),
-				toggle("controls.preview","Reduce input delay",h.emulator,"run_ahead",true,"Uses the existing one-frame presentation preview. Does not change console timing.",unchanged,false)]),
+				{"id":"controls.preview","label":"Reduce input delay","kind":"choice","choices":["Off","1 frame","2 frames"],"default":1,"visual":false,"getter":func(): return h.emulator.run_ahead,"setter":func(value): h.emulator.run_ahead=value,"help":"Runs extra presentation-only game frames from a snapshot that is then restored. Two frames costs about twice the preview work."}]),
 				page("Tracking",tracking),page("Calibration",[
 				property_row("ipd","IPD (m)",0,.08,.001,"mm","Virtual eye separation; match your interpupillary distance."),
 				property_row("convergence","Convergence (m)",1,10,.1,"m","Depth at which the stereo views have zero horizontal disparity."),
 				property_row("vertical_fov","Vertical field of view",18,70,.5,"degrees","Advanced camera calibration. The glasses normally use 24 degrees."),
 				property_row("smoothing","Smoothing (seconds)",0,.15,.01,"ms","Tracking smoothing; higher values can feel less immediate."),
+				property_row("motion_predict","Motion prediction (seconds)",0,.08,.005,"ms","Extrapolates recent head rotation toward the frame being drawn, reducing perceived lag while moving. Zero keeps raw driver timing."),
 				action("system.signal","Stop game / test signal",func(): h.emulator.stop(); menu.open_pause(),"Stops emulation and restores the calibration pattern.",not h.emulator.loaded),
 				action("system.reset","Reset all settings",func(): menu.confirm_reset(),"Restores all option defaults, without deleting ROMs, save states or SRAM.")])]
 		4:

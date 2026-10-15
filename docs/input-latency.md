@@ -5,13 +5,15 @@ immediately before executing the emulated frames and runs emulation after the
 ordinary scene/UI callbacks. These changes avoid an unnecessary input queue;
 they do not measure physical controller or display latency.
 
-**Reduce input delay (1-frame preview)** is enabled by default and can be
-toggled in settings for comparison. After the real game frames and their audio
-have been processed, the emulator snapshots its state and SRAM, executes one
-additional frame for the picture, and restores the snapshot and SRAM. The
-preview's audio is discarded. Game time and saves advance only through real
-frames. No preview snapshots are written to disk. This is a one-frame
-[run-ahead technique](https://docs.libretro.com/guides/runahead/).
+**Reduce input delay** offers **Off, 1 frame (default) or 2 frames** in
+settings. After the real game frames and their audio have been processed, the
+emulator snapshots its state and SRAM, executes the selected number of
+additional frames for the picture, and restores the snapshot and SRAM. The
+preview audio is discarded. Game time and saves advance only through real
+frames. No preview snapshots are written to disk. This is the
+[run-ahead technique](https://docs.libretro.com/guides/runahead/); two frames
+costs about twice the preview work. A saved boolean setting migrates to
+Off or 1 frame on first start.
 
 A core that cannot serialize disables preview. A failed restoration pauses
 emulation and reports that the game needs reloading with preview disabled.

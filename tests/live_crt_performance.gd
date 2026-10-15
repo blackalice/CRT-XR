@@ -48,9 +48,9 @@ func run():
 	print("LIVE_CONFIG eye=",app.views[0].size," game=",app.emulator.loaded," tracking=",app.provider.status)
 	for distance_value in [2.64,1.2]:
 		print("LIVE_BENCH ",JSON.stringify(await measure("current",distance_value)))
-		app.emulator.run_ahead=false
+		app.emulator.run_ahead=0
 		print("LIVE_BENCH ",JSON.stringify(await measure("no_preview",distance_value)))
-		app.emulator.run_ahead=true
+		app.emulator.run_ahead=1
 		app.world.screen_material.set_shader_parameter("glow_strength",0)
 		print("LIVE_BENCH ",JSON.stringify(await measure("no_glow",distance_value)))
 		app.world.screen_material.set_shader_parameter("glow_strength",app.phosphor_glow)

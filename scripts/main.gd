@@ -2,6 +2,7 @@ extends Control
 
 const Simulated = preload("res://scripts/tracking/simulated_tracking.gd")
 const LinuxTracking = preload("res://scripts/tracking/xr_linux_tracking.gd")
+const PosePrediction = preload("res://scripts/tracking/pose_prediction.gd")
 const CRTWorld = preload("res://scripts/rendering/crt_world.gd")
 const Pattern = preload("res://scripts/content/test_pattern.gd")
 const Emulation = preload("res://scripts/emulation/emulation_session.gd")
@@ -60,6 +61,7 @@ var tv_scale := 1.0
 var ipd := 0.064
 var convergence := 2.6
 var smoothing := 0.0
+var motion_predict := 0.03
 var vertical_fov := 50.0
 var edge_fade := 0.075
 var scanlines := 0.22
@@ -237,7 +239,8 @@ func apply_settings(config: ConfigFile) -> void:
 		world.set(setting[0], clampf(config.get_value("room", setting[0], world.get(setting[0])), setting[2], setting[3]))
 	world.shadows = bool(config.get_value("room", "shadows", true))
 	world.show_rug = bool(config.get_value("room", "show_rug", true))
-	emulator.run_ahead = bool(config.get_value("emulation", "run_ahead", true))
+	var preview_depth = config.get_value("emulation", "run_ahead", 1)
+	emulator.run_ahead = clampi(int(preview_depth), 0, 2)
 	distance = clampf(config.get_value("view", "distance", 3.4), 1.2, 5.0)
 	height_offset = clampf(config.get_value("view", "height_offset", 0.0), -1.5, 1.5)
 	tv_scale = clampf(config.get_value("view", "scale", 1.0), 0.5, 1.6)
@@ -246,6 +249,7 @@ func apply_settings(config: ConfigFile) -> void:
 	edge_fade = clampf(config.get_value("view", "edge_fade", 0.075), 0.0, 0.2)
 	vertical_fov = clampf(config.get_value("view", "vertical_fov", vertical_fov), 18.0, 70.0)
 	smoothing = clampf(config.get_value("view", "smoothing", 0.0), 0.0, 0.15)
+	motion_predict = clampf(config.get_value("view", "motion_predict", 0.03), 0.0, 0.08)
 	for axis in ["yaw", "pitch", "roll"]:
 		provider.set("invert_" + axis, bool(config.get_value("tracking", "invert_" + axis, false)))
 	scanlines = clampf(config.get_value("crt", "scanlines", 0.22), 0.0, 0.7)
@@ -309,6 +313,11 @@ func _process(delta: float) -> void:
 		print("Tracking: ", provider.status)
 		previous_tracking_status = provider.status
 	var target: Quaternion = center.inverse() * provider.orientation if provider.valid else displayed
+	# Extrapolate the recent head rotation toward the frame that will reach
+	# the eyes. Body-frame velocity is unchanged by the center rotation, so
+	# it applies directly; the raw pose still drives recentering above.
+	if motion_predict > 0.001 and provider.valid:
+		target = PosePrediction.extrapolate(target, provider.angular_velocity, motion_predict)
 	displayed = displayed.slerp(target, 1.0 - exp(-delta / smoothing)) if smoothing > 0.001 else target
 	world.television.position = Vector3(0, 1.25 + height_offset, -distance)
 	world.television.scale = Vector3.ONE * tv_scale
@@ -736,7 +745,7 @@ func capture_settings() -> ConfigFile:
 	for setting in ROOM_FIELDS: config.set_value("room", setting[0], world.get(setting[0]))
 	config.set_value("room", "shadows", world.shadows)
 	config.set_value("room", "show_rug", world.show_rug)
-	for pair in [["distance", distance], ["height_offset", height_offset], ["scale", tv_scale], ["ipd", ipd], ["convergence", convergence], ["edge_fade", edge_fade], ["vertical_fov", vertical_fov], ["smoothing", smoothing]]:
+	for pair in [["distance", distance], ["height_offset", height_offset], ["scale", tv_scale], ["ipd", ipd], ["convergence", convergence], ["edge_fade", edge_fade], ["vertical_fov", vertical_fov], ["smoothing", smoothing], ["motion_predict", motion_predict]]:
 		config.set_value("view", pair[0], pair[1])
 	for axis in ["yaw", "pitch", "roll"]:
 		config.set_value("tracking", "invert_" + axis, provider.get("invert_" + axis))
