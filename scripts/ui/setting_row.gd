@@ -8,6 +8,8 @@ var value_label: Label
 var marker: Label
 var track: ProgressBar
 var selected_now := false
+var editing_now := false
+var adjust_buttons: Array[Button] = []
 
 func configure(definition: Dictionary) -> void:
 	item = definition
@@ -58,14 +60,15 @@ func configure(definition: Dictionary) -> void:
 			for style_name in ["normal","hover","pressed"]:
 				arrow.add_theme_stylebox_override(style_name,MenuSkin.box(Color("2d323a") if style_name=="hover" else Color("23272d"),Color.TRANSPARENT,0,4))
 			arrow.pressed.connect(func(): selected.emit(item.id); adjust_requested.emit(item.id,direction))
-			line.add_child(arrow)
+			line.add_child(arrow); adjust_buttons.append(arrow)
 	pressed.connect(func(): selected.emit(item.id))
 	focus_entered.connect(func(): selected.emit(item.id))
 	refresh()
 
 func refresh() -> void:
 	disabled = item.get("disabled",false)
-	value_label.text = formatted_value()
+	value_label.text = "‹ %s ›" % formatted_value() if editing_now and adjust_buttons.is_empty() else formatted_value()
+	for button in adjust_buttons: button.visible=editing_now
 	track.visible = item.kind == "number"
 	if track.visible:
 		track.value = inverse_lerp(float(item.min),float(item.max),float(item.getter.call()))
@@ -89,6 +92,14 @@ func formatted_value() -> String:
 
 func set_selected(value: bool) -> void:
 	selected_now = value
-	marker.text = "▸" if value else " "
-	add_theme_stylebox_override("normal",MenuSkin.box(Color("3b3022"),MenuSkin.AMBER,2) if value else MenuSkin.box(Color("23272d")))
-	add_theme_stylebox_override("hover",MenuSkin.box(Color("3b3022"),MenuSkin.AMBER,2) if value else MenuSkin.box(Color("2d323a"),Color("65666a"),1))
+	update_selection_style()
+
+func set_editing(value: bool) -> void:
+	editing_now=value
+	refresh(); update_selection_style()
+
+func update_selection_style() -> void:
+	marker.text = "◆" if editing_now else ("▸" if selected_now else " ")
+	var selected_style := MenuSkin.box(Color("514027") if editing_now else Color("3b3022"),MenuSkin.AMBER,3 if editing_now else 2)
+	add_theme_stylebox_override("normal",selected_style if selected_now else MenuSkin.box(Color("23272d")))
+	add_theme_stylebox_override("hover",selected_style if selected_now else MenuSkin.box(Color("2d323a"),Color("65666a"),1))

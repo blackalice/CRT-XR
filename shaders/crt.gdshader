@@ -15,6 +15,7 @@ uniform float vignette = .06;
 uniform sampler2D beam_texture : source_color, filter_linear, repeat_disable;
 uniform bool use_shared_beam = false;
 uniform bool fitting_guides = false;
+uniform float power_progress : hint_range(0.0,1.0) = 1.0;
 vec3 linear_signal(vec2 uv) {
  vec3 c = texture(signal_texture,clamp(uv,vec2(.5)/signal_size,vec2(1)-vec2(.5)/signal_size)).rgb;
  if (!OUTPUT_IS_SRGB) c = pow(max(c,vec3(0)),vec3(1.0/2.2));
@@ -80,6 +81,18 @@ void fragment() {
    float circle = length((uv-.5)*vec2(4.0/3.0,1.0));
    if(abs(circle-.3)<max(fwidth(circle),.002)) color = vec3(.8);
   }
+ }
+ // Brief deflection warm-up: a dim centre line opens into the full picture.
+ // Reveal existing pixels rather than squeezing/cropping the game image.
+ if(power_progress<1.0) {
+  float t = clamp(power_progress,0.0,1.0);
+  float half_height = mix(.0015,.505,smoothstep(.10,.48,t));
+  float edge = max(fwidth(uv.y)*1.5,.002);
+  float aperture = 1.0-smoothstep(half_height-edge,half_height+edge,abs(uv.y-.5));
+  float power_brightness = smoothstep(.12,1.0,t);
+  float line = exp(-abs(uv.y-.5)*320.0)*smoothstep(.02,.10,t)*(1.0-smoothstep(.18,.40,t));
+  float inside = step(0.0,uv.x)*step(uv.x,1.0)*step(0.0,uv.y)*step(uv.y,1.0);
+  color = color*aperture*power_brightness + vec3(.10,.115,.12)*line*inside;
  }
  ALBEDO = OUTPUT_IS_SRGB ? pow(color,vec3(1.0/2.2)) : color;
 }

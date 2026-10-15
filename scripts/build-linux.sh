@@ -13,6 +13,9 @@ if [[ "${1:-}" == "--export" ]]; then
     godot="${GODOT_BIN:-godot}"
     "$godot" --headless --path "$root" --editor --import
     "$godot" --headless --path "$root" --export-release 'Linux x86_64' "$root/dist/linux/retrocrt.x86_64"
+    mv "$root/dist/linux/retrocrt.x86_64" "$root/dist/linux/retrocrt-engine.x86_64"
+    cp "$root/scripts/linux-runtime.sh" "$root/dist/linux/retrocrt.x86_64"
+    chmod +x "$root/dist/linux/retrocrt.x86_64" "$root/dist/linux/retrocrt-engine.x86_64"
     cp "$root/scripts/launch-deck.sh" "$root/dist/linux/"
     if [[ -f "$root/cores/snes9x_libretro.so" ]]; then
         mkdir -p "$root/dist/linux/cores"

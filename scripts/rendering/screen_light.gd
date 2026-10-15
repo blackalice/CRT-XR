@@ -8,6 +8,7 @@ const SAMPLE_PERIOD := 1.0 / 20.0
 const RESPONSE_SECONDS := 0.055
 var lights: Array[OmniLight3D] = []
 var strength := 0.10
+var power_level := 1.0
 var grading: Dictionary = {}
 var picture_area := 0.8
 var calibration: Image
@@ -95,5 +96,5 @@ func _process(delta: float) -> void:
 	for light in lights:
 		light.visible = peak > .0001
 		light.light_color = colour.linear_to_srgb()
-		light.light_energy = peak * strength * 8.0
+		light.light_energy = peak * strength * 8.0 * power_level
 		light.omni_range = 1.65 * range_scale

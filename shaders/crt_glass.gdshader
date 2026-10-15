@@ -18,6 +18,12 @@ void fragment() {
 	float panel = (1.0 - smoothstep(0.15, 0.23, abs(reflected.x + 0.42)))
 		* (1.0 - smoothstep(0.20, 0.30, abs(reflected.y - 0.38)))
 		* smoothstep(0.2, 0.7, reflected.z);
+	// Window mullions remove reflected light, never darken the game underneath.
+	// Soft, pixel-filtered gaps remain stable as the head moves or the TV shrinks.
+	vec2 window_offset = reflected.xy - vec2(-0.42, 0.38);
+	vec2 gap_softness = max(fwidth(window_offset), vec2(0.006));
+	vec2 panes = smoothstep(vec2(0.009), vec2(0.009) + gap_softness * 2.0, abs(window_offset));
+	panel *= panes.x * panes.y;
 	float ceiling = pow(max(dot(reflected, normalize(vec3(0.3, 0.8, 0.5))), 0.0), 32.0);
 	float fresnel = 0.04 + 0.96 * pow(1.0 - max(dot(view, normal), 0.0), 5.0);
 	float rim = smoothstep(0.87, 1.0, max(abs(UV.x * 2.0 - 1.0), abs(UV.y * 2.0 - 1.0)));

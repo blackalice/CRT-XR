@@ -14,8 +14,9 @@ focus also work. Both eyes show the same menu in SBS. Save and Exit remain below
 the tab content.
 
 Settings work directly with the controller in gamepad mode: D-pad or left stick
-up/down moves between controls, left/right changes sliders, and A activates
-buttons or toggles switches. Holding a direction repeats after a short delay.
+up/down moves between controls and left/right changes category. A selects an
+option for editing; left/right then changes it and A/B finishes the edit.
+Buttons activate immediately with A. Holding a direction repeats after a short delay.
 L1/R1 switches tabs. No desktop pointer mode is required. Focus loss, disconnect
 and closing the menu cancel held movement. Ten regression checks remove the
 platform's default UI joypad bindings to verify that these actions still work.
@@ -82,8 +83,9 @@ not loaded into generative image tools or visually inspected by the assistant.
 
 ## Lighting and furniture
 
-The default Warm bedroom preset uses more ambient and front fill than the old
-scene. Bright inspection makes the cabinet easier to inspect; Dim XR keeps a
+The default Deck Showcase uses a dark room with stronger screen spill and no rug.
+Warm bedroom remains available with more ambient/front fill. Bright inspection
+makes the cabinet easier to inspect; Dim XR keeps a
 small pool of light around it. Sliders update immediately. Save settings & close
 persists changes. Fade start/end always retain at least a 0.5 m transition.
 

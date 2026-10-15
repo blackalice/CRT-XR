@@ -30,10 +30,11 @@ func run():
  app.use_tracking(false);app.set_stereo(true);app.choose_rom()
  var menu=app.menu
  if OS.get_name()=="Windows":
+  menu.open_library_tools()
   menu.select("library.drives");await press(JOY_BUTTON_A)
   check(menu.mode=="drives" and not menu.rows.is_empty(),"Windows drive chooser exposes all local drives")
   await press(JOY_BUTTON_B)
-  check(menu.mode=="library" and menu.selected_id=="library.drives","Drive chooser restores its library selection")
+  check(menu.mode=="library_tools" and menu.selected_id=="library.drives","Drive chooser restores its library selection")
  menu.open_folder(folder_a);await settle()
  check(menu.library.entries.size()==16,"Folder browser filters unsupported files")
  await press(JOY_BUTTON_RIGHT_SHOULDER)

@@ -64,7 +64,9 @@ The menu pauses a running game and restores its previous pause state on close.
 The pause menu offers Resume, Choose game, states, Screenshot, Settings and Exit.
 Settings use **View**, **Picture**, **Room**, **Controls & XR** and **Saved setups**,
 with subsections for fitting, colour, signal, materials and calibration. The selected
-row has a full amber border and arrow marker. Left/right adjusts immediately;
+row has a full amber border and arrow marker. Left/right changes category;
+press A to edit the selected value, then left/right adjusts and A/B finishes.
+Named subsection tabs and a page count show every available section.
 Y resets just that option; X opens a compact strip for visual adjustments.
 Closing the pause menu saves preferences and restores the previous pause state.
 Exit, reset-all and overwriting a saved setup require confirmation.

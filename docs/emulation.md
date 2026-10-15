@@ -1,10 +1,73 @@
 # Emulation and soft view edges
 
-The current build includes an in-process Snes9x Libretro host and an adjustable
-fade to black around each eye's view. It is deployed on the Deck under
-`~/Applications/RetroCRT/scene-lighting-20261014/`; the main desktop shortcut
-targets that build. Physical controller mappings and sustained stereo
-performance still need checking through the glasses.
+The local multi-system build uses an in-process Libretro host. Choose a game
+in the pause menu; the file determines the core automatically. The new cores
+have been tested locally on Windows with original diagnostic cartridges;
+Steam Deck deployment and hardware validation follow separately.
+
+| System | Core | Uncompressed cartridge extensions |
+|---|---|---|
+| SNES | Snes9x | `.sfc`, `.smc`, `.swc`, `.fig` |
+| NES | Nestopia | `.nes`, `.unf`, `.unif` |
+| Mega Drive / Genesis | Genesis Plus GX | `.md`, `.gen`, `.smd`, `.bin` |
+| Master System | Genesis Plus GX | `.sms` |
+| Game Gear | Genesis Plus GX | `.gg` |
+
+`.md` and `.bin` require the standard SEGA cartridge header to avoid treating
+documents and unrelated binary files as games. Archives, Famicom Disk System,
+Sega CD, 32X, light guns, paddles and multiplayer are outside this first pass.
+Ordinary supported cartridges need no BIOS. The browser retains SD-card,
+default-folder and recent-game behaviour. Game Gear is fitted at 10:9;
+the TV consoles retain the existing 4:3 presentation.
+
+## System library
+
+Browse to the main ROM root (for example `Emulation/roms`, containing `snes`,
+`megadrive`, `nes`, etc.) and press R1 to save it. **Choose game** then scans
+subfolders automatically and shows a system selector with game counts. Empty
+or unsupported systems are hidden. Files are classified by supported cartridge
+format, so both `genesis` and `megadrive` folders work without renaming anything.
+
+The scan is incremental to keep the menu responsive, handles linked folders
+without following cycles, and skips hidden files and common artwork/BIOS/save
+directories. Opening Choose game rescans; **Refresh library** picks up changes
+while it is open. Missing cards retain the saved root and show reconnect guidance.
+Very large roots stop at 200,000 entries with a visible request to choose a more
+specific folder. No ROMs are copied, renamed or moved.
+
+Select a system with A, then a game with A. B returns to systems. Lists are
+naturally sorted and paged in groups of 50; L1/R1 or Left/Right changes pages.
+Each system remembers its current page, selected game and scroll position during
+the session. Manual browsing, recent game, SD-card and default-folder shortcuts
+remain available. Compressed archives are not indexed in this version.
+
+On Deck/Xbox controllers, NES B/A use the bottom/right buttons; left/top are
+turbo B/A. Mega Drive A/B/C use left/bottom/right; X/Y/Z use L1/top/R1 when
+the core selects a six-button pad. Back is Mode. Master System/Game Gear
+buttons 1/2 use bottom/right, with Start for Pause/Start. All systems keep
+the same menu chord and recenter shortcut. Settings → Controls & XR →
+Controller shows the current system's layout. Keyboard Z/X/A/S/Q/W retain
+the corresponding bottom/right/left/top/L1/R1 positions.
+
+Existing SNES SRAM and states retain their original paths. New systems use
+`user://saves/<system>/<core>/`, with SHA-256 ROM names and the same atomic
+save/state envelope behaviour. Per-game picture settings remain keyed by ROM
+hash. Switching games fully unloads and deinitialises the previous core.
+
+Local dependency setup: run `scripts/setup-emulation.ps1`, followed by
+`scripts/fetch-cartridge-cores.ps1` for verified official builds. The hashes in
+`third_party/cores/builds.json` deliberately reject changed nightly downloads.
+`scripts/build-cartridge-cores.sh all` is an alternative source-build route in
+the compiler container; it has not yet been validated because Docker failed
+to start during this pass. Exports include core notices, provenance and source
+snapshots. Genesis Plus GX prohibits commercial use; see `THIRD_PARTY.md`.
+
+The Linux `retrocrt.x86_64` entry point keeps the system C++ runtime loaded
+throughout core switches and starts `retrocrt-engine.x86_64` with the packed
+project. This avoids a SteamOS locale-facet crash when returning to Snes9x
+after another core. Use the entry point or normal Steam/glasses launchers;
+do not launch the engine binary directly. The preload is scoped to this process,
+preserves other preload entries, and does not change the emulator cores or saves.
 
 ## Run a game on Windows
 
@@ -12,12 +75,12 @@ The native modules and core are already built in this workspace:
 
 ```powershell
 ./scripts/dev.ps1
-# Escape or Tab opens settings; choose Open SNES ROM.
+# Escape opens the menu; choose Choose game.
 ./scripts/dev.ps1 -Rom 'D:\your-rom-folder\game.sfc'
 ./scripts/dev.ps1 -Stereo -Rom 'D:\your-rom-folder\game.sfc'
 ```
 
-Only use ROM files you supply. Uncompressed `.sfc`, `.smc`, `.swc` and `.fig` files
+Only use ROM files you supply. The cartridge formats above
 are selectable; archives and patch application are not implemented. The native
 host limits cartridge input to 32 MiB. No console BIOS is needed for ordinary
 SNES cartridges; special peripherals and enhancement variants are not tested.

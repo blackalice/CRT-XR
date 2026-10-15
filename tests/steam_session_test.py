@@ -2,7 +2,7 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import Mock
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("steam_session", ROOT / "scripts/steam-session.py")
@@ -13,7 +13,8 @@ spec.loader.exec_module(session)
 class SteamSessionTests(unittest.TestCase):
     def test_gamescope_owns_display(self):
         command = session.launch_command(ROOT, {"XDG_CURRENT_DESKTOP": "gamescope"}, True, [])
-        self.assertIn("--full-sbs", command)
+        self.assertIn("--sbs-session-manual", command)
+        self.assertIn("--fullscreen", command)
         self.assertIn("x11", command)
         self.assertFalse(any("kscreen" in x or "glasses-session" in x for x in command))
 
@@ -41,21 +42,15 @@ class SteamSessionTests(unittest.TestCase):
             (connector / "edid").write_bytes(b"Another monitor")
             self.assertFalse(session.glasses_connected(drm))
 
-    def test_switch_waits_for_hardware_and_can_cancel(self):
-        process = Mock()
-        process.poll.return_value = None
-        ready = Mock(side_effect=[False, False, True])
-        sleep = Mock()
-        self.assertTrue(session.wait_for_sbs(process, ready, clock=lambda: 0, sleep=sleep))
-        self.assertEqual(sleep.call_count, 2)
-        process.poll.return_value = 0
-        self.assertFalse(session.wait_for_sbs(process, lambda: True, clock=lambda: 0, sleep=sleep))
-
-    def test_switch_timeout_does_not_launch(self):
-        process = Mock()
-        process.poll.return_value = None
-        ticks = iter([0, 0, 91])
-        self.assertFalse(session.wait_for_sbs(process, lambda: False, clock=lambda: next(ticks), sleep=lambda _: None))
+    def test_gaming_prompt_and_game_share_one_exec(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:
+            with patch.dict(session.os.environ, {"XDG_STATE_HOME": directory,"XDG_CURRENT_DESKTOP":"gamescope"}), patch.object(session.sys,"argv",["steam-session.py","--glasses"]), patch.object(session.os,"chdir"), patch.object(session.os,"execvpe") as execute:
+                session.main()
+            execute.assert_called_once()
+            command=execute.call_args.args[1]
+            self.assertIn("--sbs-session-manual",command)
+            self.assertIn("--last-game",command)
+            self.assertNotIn("--sbs-prompt",command)
 
 
 if __name__ == "__main__":

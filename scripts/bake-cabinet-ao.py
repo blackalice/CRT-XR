@@ -7,6 +7,7 @@ from pathlib import Path
 import hashlib
 import json
 import time
+import sys
 
 import bpy
 import numpy as np
@@ -28,6 +29,12 @@ def run():
     bpy.ops.import_scene.gltf(filepath=str(SOURCE))
     scene = bpy.context.scene
     meshes = [obj for obj in scene.objects if obj.type == "MESH"]
+    if "--omit-logo" in sys.argv:
+        # The app replaces this raised badge with the user's printed artwork.
+        # Avoid retaining the original wordmark's shadow beneath the new logo.
+        for obj in meshes:
+            if obj.parent and obj.parent.name == "Logo":
+                obj.hide_render = True
     screen = next(obj for obj in meshes if obj.parent and obj.parent.name == "Screen")
     corners = [screen.matrix_world @ Vector(v) for v in screen.bound_box]
     width = max(v.x for v in corners) - min(v.x for v in corners)
@@ -127,7 +134,7 @@ def run():
     if hashlib.sha256(SOURCE.read_bytes()).hexdigest() != original_hash:
         raise RuntimeError("Source GLB changed unexpectedly")
     bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT / "crt-ao-bake.blend"))
-    manifest = {"blender": bpy.app.version_string, "source_sha256": original_hash,
+    manifest = {"blender": bpy.app.version_string, "original_logo_excluded": "--omit-logo" in sys.argv, "source_sha256": original_hash,
                 "resolution": SIZE, "cycles_samples": SAMPLES, "ao_node_samples": 32,
                 "distance_at_virtual_scale_m": DISTANCE, "device": device,
                 "duration_seconds": time.monotonic() - started, "maps": records}

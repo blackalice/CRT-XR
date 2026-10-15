@@ -1,4 +1,5 @@
 extends Node3D
+const Showcase = preload("res://scripts/presets/showcase.gd")
 
 var television := Node3D.new()
 var screen_material := ShaderMaterial.new()
@@ -6,24 +7,24 @@ var glass_material := ShaderMaterial.new()
 var curvature := 0.066
 var imported_screen: Dictionary = {}
 var distance_fade := ShaderMaterial.new()
-var spill_strength := 0.10
+var spill_strength: float = Showcase.ROOM.spill_strength
 var screen_light := preload("res://scripts/rendering/screen_light.gd").new()
 const ImportedCRT = preload("res://scripts/rendering/imported_crt.gd")
 const BedroomSet = preload("res://scripts/rendering/bedroom_set.gd")
-var ambient := 0.45
-var key_energy := 4.5
-var fill_energy := 1.6
-var warmth := 0.70
-var lamp_height := 2.6
-var lamp_side := -1.8
-var fade_begin := 4.5
-var fade_end := 9.0
-var floor_brightness := 1.15
-var shadows := true
-var shadow_strength := 0.60
-var cabinet_ao_strength := 0.70
-var cabinet_grain_strength := 0.55
-var show_rug := true
+var ambient: float = Showcase.ROOM.ambient
+var key_energy: float = Showcase.ROOM.key_energy
+var fill_energy: float = Showcase.ROOM.fill_energy
+var warmth: float = Showcase.ROOM.warmth
+var lamp_height: float = Showcase.ROOM.lamp_height
+var lamp_side: float = Showcase.ROOM.lamp_side
+var fade_begin: float = Showcase.ROOM.fade_begin
+var fade_end: float = Showcase.ROOM.fade_end
+var floor_brightness: float = Showcase.ROOM.floor_brightness
+var shadows: bool = Showcase.ROOM.shadows
+var shadow_strength: float = Showcase.ROOM.shadow_strength
+var cabinet_ao_strength: float = Showcase.ROOM.cabinet_ao_strength
+var cabinet_grain_strength: float = Showcase.ROOM.cabinet_grain_strength
+var show_rug: bool = Showcase.ROOM.show_rug
 var room_environment: Environment
 var key_light: SpotLight3D
 var fill_light: OmniLight3D

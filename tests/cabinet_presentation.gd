@@ -45,10 +45,10 @@ func run():
 			var baked: Texture2D = actual.get_shader_parameter("baked_ao_map")
 			check(actual.get_shader_parameter("has_baked_ao") and baked != null and baked.get_width()==2048 and baked.get_image().get_format()==Image.FORMAT_L8 and baked.get_image().has_mipmaps(),"Blender bake loads as filtered single-channel data on "+str(part.get_parent().name))
 			check(actual.get_shader_parameter("surface_map")==original.roughness_texture and original.roughness_texture.get_image().has_mipmaps(),"Casing retains packed surface detail and mip filtering on "+str(part.get_parent().name))
-		elif str(part.get_parent().name) in ["AV_front","AV_back","Screw","Coax_connector","Logo"]:
+		elif str(part.get_parent().name) in ["AV_front","AV_back","Screw","Coax_connector"]:
 			metal_count += 1
 			check(actual==original and actual is StandardMaterial3D,"Hardware keeps its original material: "+str(part.get_parent().name))
-	check(casing_count==3 and metal_count==5,"All intended casing parts and separate hardware were checked")
+	check(casing_count==3 and metal_count==1,"Casing and retained front hardware were checked")
 	check(FileAccess.get_sha256(model)==before,"Original GLB remains byte-for-byte unchanged")
 	app.distance_save_delay = -1
 	app.free()

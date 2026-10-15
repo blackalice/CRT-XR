@@ -1,0 +1,38 @@
+{
+  "downloaded_utc": "2026-10-15",
+  "origin": "Official Libretro buildbot; pinned archive hashes; upstream source snapshots included. Windows core identity contains matching revision prefix; Linux binaries await runtime validation.",
+  "builds": [
+    {
+      "core": "nestopia",
+      "platform": "windows",
+      "url": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/nestopia_libretro.dll.zip",
+      "sha256": "17288d79e2a5e76dc839ea68d1092fb84d0de9b9cfb693489f128cdb05be1358",
+      "source_commit": "06a8949e0b3cf60e3a38a374b1426bf40fccb9a0",
+      "reported_windows_version": "Nestopia 2.0.0 06a8949"
+    },
+    {
+      "core": "nestopia",
+      "platform": "linux",
+      "url": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/nestopia_libretro.so.zip",
+      "sha256": "b0eaf0f8646bdc7745648b51276052b1d30de716107cb1dd379f5d3f7c53f751",
+      "source_commit": "06a8949e0b3cf60e3a38a374b1426bf40fccb9a0",
+      "reported_windows_version": "Nestopia 2.0.0 06a8949"
+    },
+    {
+      "core": "genesis_plus_gx",
+      "platform": "windows",
+      "url": "https://buildbot.libretro.com/nightly/windows/x86_64/latest/genesis_plus_gx_libretro.dll.zip",
+      "sha256": "21b4a484a4e90f784d53252d01972988dbfd3a5f3a482c70ccc5cd769b16a2a3",
+      "source_commit": "393f70cd64c7334564c19a424c383f53986c13f4",
+      "reported_windows_version": "Genesis Plus GX v1.7.4 393f70c"
+    },
+    {
+      "core": "genesis_plus_gx",
+      "platform": "linux",
+      "url": "https://buildbot.libretro.com/nightly/linux/x86_64/latest/genesis_plus_gx_libretro.so.zip",
+      "sha256": "e08b3fa462dc52728c0feafd6a444a59dba45b92a6840d2c3ac1f0ef524f6f38",
+      "source_commit": "393f70cd64c7334564c19a424c383f53986c13f4",
+      "reported_windows_version": "Genesis Plus GX v1.7.4 393f70c"
+    }
+  ]
+}

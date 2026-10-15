@@ -18,7 +18,8 @@ func run():
   for section in range(app.menu.catalog.pages(category).size()):
    app.menu.subsection=section;app.menu.render()
    await capture("category-%d-page-%d"%[category,section])
- app.menu.category=0;app.menu.subsection=0;app.menu.render();app.menu.select("view.distance");app.menu.toggle_preview()
+ app.menu.category=0;app.menu.subsection=0;app.menu.render();app.menu.select("view.distance")
+ app.menu.begin_edit();await capture("editing");app.menu.finish_edit();app.menu.toggle_preview()
  await capture("compact")
  app.menu.back();app.menu.open_slot(0);await capture("setup")
  app.menu.ask("Overwrite this setup?","Replace your named setup with the current view, room and picture settings?",func():pass)

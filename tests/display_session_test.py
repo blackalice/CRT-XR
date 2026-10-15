@@ -6,7 +6,7 @@ from pathlib import Path
 import tempfile
 import types
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 spec = importlib.util.spec_from_file_location("glasses_session", Path(__file__).resolve().parents[1] / "scripts/glasses-session.py")
 session = importlib.util.module_from_spec(spec)
@@ -26,6 +26,43 @@ def fixture():
 
 
 class DisplayTests(unittest.TestCase):
+    def test_cancel_during_instructions_restores_without_a_second_launch(self):
+        screens=Mock();screens.read.return_value=fixture()
+        child=Mock();child.poll.return_value=0;child.returncode=0
+        args=types.SimpleNamespace(output='DP-1',restore=False,wait=90,manual_sbs=True)
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]/'build') as directory:
+            with patch.object(session,'Screens',return_value=screens),patch.object(session,'activate') as activate,patch.object(session,'restore') as restore,patch.object(session,'notice'),patch.object(session.signal,'signal'),patch.object(session.subprocess,'Popen',return_value=child) as popen:
+                self.assertEqual(session.run_session(args,[],Path(directory)),0)
+                self.assertEqual(activate.call_count,1)
+                popen.assert_called_once();restore.assert_called_once()
+            self.assertFalse((Path(directory)/'display-before.json').exists())
+
+    def test_one_fullscreen_process_spans_prompt_and_display_change(self):
+        config=fixture()
+        screens=Mock();screens.read.side_effect=lambda:copy.deepcopy(config)
+        child=Mock();child.poll.side_effect=[None,None,0,0];child.returncode=0
+        order=[];launch_env={}
+        def activate(_screens,target,mode):
+            order.append(mode['id'])
+            config['outputs'][1]['currentModeId']=mode['id']
+            config['outputs'][0]['enabled']=False
+            if launch_env: self.assertFalse(Path(launch_env['RETROCRT_STARTUP_GATE']).exists())
+        def spawn(command,**kwargs):
+            order.append('spawn');launch_env.update(kwargs['env'])
+            self.assertIn('--fullscreen',command)
+            self.assertIn('--sbs-session',command)
+            return child
+        def healthy(path):
+            self.assertEqual(json.loads(Path(launch_env['RETROCRT_STARTUP_GATE']).read_text()),{'start':True})
+            return True
+        args=types.SimpleNamespace(output='DP-1',restore=False,wait=90,manual_sbs=True)
+        with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]/'build') as directory:
+            with patch.object(session,'Screens',return_value=screens),patch.object(session,'activate',side_effect=activate),patch.object(session,'restore') as restore,patch.object(session,'notice'),patch.object(session.signal,'signal'),patch.object(session.subprocess,'Popen',side_effect=spawn) as popen,patch.object(session,'healthy_status',side_effect=healthy),patch.object(session.time,'sleep'):
+                self.assertEqual(session.run_session(args,[],Path(directory)),0)
+                self.assertEqual(order,['mono','spawn','sbs60'])
+                popen.assert_called_once();restore.assert_called_once()
+            self.assertFalse(Path(launch_env['RETROCRT_STARTUP_GATE']).exists())
+
     def test_refuses_unidentified_ultrawide(self):
         with self.assertRaises(RuntimeError):
             session.select_output(fixture(), identify=lambda _: False)

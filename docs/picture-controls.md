@@ -1,7 +1,8 @@
 # Picture fitting and CRT controls
 
 Open settings with **L1 + R1 + Start**. Use L1/R1 to change tabs, D-pad or left
-stick to select, left/right to adjust and A to activate. **Y resets only the
+stick to select. Press A to edit, left/right to adjust, then A/B to finish.
+Left/right changes category while browsing. **Y resets only the
 selected option**. Save and close persists the new controls.
 
 ## Picture → Screen fit
@@ -27,14 +28,16 @@ Head tracking still lets you look away from the anchored television.
 
 Signal offers Clean, RGB CRT, PAL composite, NTSC composite and Auto composite
 presets. Auto chooses PAL below 55 Hz and NTSC otherwise, using the core's game
-rate. RGB remains the default and bypasses the extra composite pass. Presets
-preserve fitting, glass, room and view preferences.
+rate. Deck Showcase uses PAL by default. RGB bypasses the extra composite pass.
+Picture presets preserve fitting, room and view; Deck Showcase also restores its
+recorded glass and tube-curvature settings.
 
 Display gamma controls the tube response: **lower gamma lightens midtones**.
 Brightness, contrast, saturation, warmth and hue allow further adjustment.
 Composite strength blends colour bleed into the clean signal; composite
 artifacts adds luma/chroma interference. Phase noise and moving signal artifacts
-are optional and default to zero to keep the XR picture stable. They stop while
+default to 38% and 95% in Deck Showcase, matching the saved Deck setup. Set them
+to zero for a steady signal. They stop while
 paused or in settings. Composite controls have no visible effect in RGB mode.
 
 Picture retains scanline, mask, phosphor glow, glass and physical curvature

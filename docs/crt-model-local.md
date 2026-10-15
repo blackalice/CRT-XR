@@ -3,19 +3,31 @@
 The optional cabinet is **CRT TV by Timothy Ahene**:
 https://sketchfab.com/3d-models/crt-tv-9ba4baa106e64319a0b540cf0af5aa9e
 
-Downloaded by the user under Sketchfab Free Standard, with the NoAI tag.
-Keep the original download and applicable license record. See:
-https://sketchfab.com/licenses
-https://sketchfab.com/blogs/community/restricting-generative-ai-use-of-free-models/
+The recent user download was labelled Sketchfab Free Standard + NoAI. The user
+has since supplied stronger historical evidence: the creator's own listing,
+archived on 29 September 2022, shows **CC Attribution** for the exact model ID:
+https://web.archive.org/web/20220929230421/https://sketchfab.com/3d-models/crt-tv-9ba4baa106e64319a0b540cf0af5aa9e
 
-The third-party asset is not covered by the application's source license.
-Do not publish the GLB as a standalone asset or commit it to the source repository.
-Do not supply the model or its textures to generative AI tools.
+The evidence and modification credit are recorded in `THIRD_PARTY.md`; the
+screenshot is retained locally in `build/license-evidence/`. Its licence-link
+destination/version has not yet been independently retrieved. This supports an
+earlier CC grant; do not describe it as a newly granted or verified CC0 licence.
+The current file/revision and separately accepted download terms must be
+considered when documenting the source for release. Earlier guidance against
+standalone redistribution applied to the Standard licence, not to a valid CC BY
+grant, which permits redistribution subject to its conditions.
+
+The asset is separate from the application's source-code licence. Original and
+prepared model files remain ignored by project policy. Keep source and licence
+evidence; preserve notices, credit Timothy Ahene, link the applicable licence,
+and identify modifications when redistributing under a verified CC grant.
+The project continues to keep model/textures/renders out of generative AI tools.
 
 For development, place the user-supplied GLB at:
 `build/crt-model/crt_tv.glb` (ignored by Git and Godot's editor importer).
-The application loads it locally using Godot's glTF runtime loader. Without
-the file it uses the existing procedural cabinet.
+The application prefers the prepared `build/crt-model/optimised/cabinet.scn`
+when present. Otherwise it uses Godot's glTF runtime loader. Without either
+asset it uses the existing procedural cabinet.
 
 Integration uses the cabinet's separate Screen node to locate its aperture.
 The source screen is hidden; its outline is used for the live game surface and
@@ -89,8 +101,9 @@ its textures/renders were not supplied for AI image inspection. Final sheen
 and the appearance of baked wear still need human judgement in the glasses;
 an artist would be useful if those source textures need repainting.
 
-The Linux export script copies the local model to `assets/crt_tv.glb` beside
-the executable, along with this credit. This is a local development package;
+The export scripts copy the prepared model to `assets/optimised/cabinet.scn`
+beside the executable, along with this credit. If no prepared asset exists,
+they copy the original GLB to `assets/crt_tv.glb` instead. This is a local development package;
 review the asset's distribution terms before publishing a release. The raw
 model remains separate from the application PCK and source repository.
 
@@ -120,3 +133,89 @@ sharing, close-up detail, static behaviour and stability during minified
 subpixel motion. Desktop measured sample variance was 0.0000278 close up and
 zero at the tested minified distance. This is a sampling check, not a headset
 performance or appearance guarantee.
+
+## Prepared cabinet and Phonysonic badge
+
+Run `Godot_v4.5.1-stable_win64_console.exe --headless --path . --script scripts/optimise-cabinet.gd`
+with the local original GLB present to rebuild the ignored prepared asset.
+The converter uses the existing opaque cabinet meshes and UVs, reduces TVfront
+maps to 2048 square and TVback maps to 1024 square, generates normal-aware
+mipmaps, then encodes BC7. Front/rear maps remain shared across hardware and
+casing. The unused Screen material becomes texture-free; its mesh remains the
+live picture's aperture template. No casing geometry is decimated.
+
+The separate original Logo mesh is replaced using the user's `Phony.svg`
+artwork. The replacement is a small two-triangle, alpha-tested satin badge,
+with its position, width and orientation derived from the old badge bounds.
+It uses a 1024×160 BC7 texture with mipmaps and ordinary lighting; it adds no
+screen-space effect or full-screen pass. The original SVG remains untouched.
+The prepared scene stores the replacement, avoiding SVG processing at launch.
+When falling back to the original GLB, the runtime still substitutes the badge.
+
+The prepared asset is about 20.4 MiB on disk versus 30.1 MiB for the original.
+Measured image payload with mipmaps falls from 576 MiB for nine original maps
+to 20 MiB for six shared compressed maps, plus about 0.21 MiB for the new badge.
+This excludes the unchanged 10.7 MiB of baked AO maps and small shared grain
+texture, and is not a measurement of total application VRAM. The cabinet has
+14,000 triangles versus 15,937 previously; the reduction comes from the badge.
+Frame-rate improvement has not yet been profiled on the Deck.
+
+The packed scene loads precomputed mesh/texture resources instead of parsing
+the GLB and generating its mipmaps on each launch. It depends only on the small
+badge shader in the application. Exported optimised builds do not also include
+the original GLB. Keep the original and earlier asset packages for comparison.
+All prepared model resources remain licensed derivatives under the original
+terms and stay outside source control and AI image inspection.
+
+The AO bake was repeated with `--omit-logo`, excluding the old raised lettering
+so it does not cast its wordmark onto the casing. Previous bakes are retained
+locally in `build/crt-model/ao-before-phony`. AO/grain defaults remain 0.70/0.55.
+
+`tests/cabinet_optimisation.gd` checks component/geometry preservation, removed
+screen textures, six shared compressed maps, mipmaps, size budget, numeric
+compression error, badge geometry, and original-file integrity. The sampled
+mean RGB compression error is below 0.0024 across all maps (0–1 scale).
+`tests/cabinet_presentation.gd`, smoke and picture-fitting checks also pass.
+A standalone render of the user's SVG on a synthetic plate was used for badge
+checks; no licensed cabinet images were inspected. Fine lettering and grille
+appearance still need the user's local/through-glasses visual judgement.
+
+## Hidden rear detail reduction
+
+The prepared cabinet now has **8,208 triangles**, down from 14,000 after badge
+replacement (41.4% fewer), or 15,937 in the untouched download. The reduction
+removes the hidden coax connector (3,304 triangles), rear AV sockets (1,104)
+and rear screw (592), and simplifies only the rear-facing panel from 4,524 to
+3,732 triangles. Three MeshInstance3D submissions are removed. The front ports,
+buttons, badge, screen template and front shell are retained.
+
+Build the geometry-only intermediate before running the Godot converter:
+
+```powershell
+& 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe' --background --factory-startup --python-exit-code 1 --python scripts/simplify-cabinet-rear.py
+```
+
+It writes ignored `build/crt-model/rear-detail/rear.glb` and a manifest. The
+original GLB is never overwritten. A separate Blender process is used, leaving
+any interactive Blender session alone. The Godot converter verifies the source
+and intermediate hashes and rejects intermediates without boundary validation.
+
+The simplifier welds exact seam duplicates, protects every vertex belonging to
+side/top/bottom/front-facing shell triangles, preserves boundary loops and
+extreme points, and limits collapse to the rear-facing region. UV/normal splits
+are restored through export. The converter copies all 3,317 protected triangles
+from the original with their original UVs and normal directions, then combines
+them with the reduced rear-facing region and regenerates tangents offline.
+
+Geometry tests verify those retained attributes, the identical cabinet bounds,
+unchanged front meshes/aperture, and identical panel boundary edges (no new
+holes). The rear remains a solid shadow-casting surface; the visible vents and
+outer silhouette remain intact. Textures, baked AO and material settings are
+unchanged by this pass. Existing baked rear hardware marks are harmless on the
+unseen rear; the front bake is retained. This optimisation assumes the current
+fixed-position 3DoF use; restore the original hardware for a future walk-around
+or rotatable-TV mode.
+
+This is a reduction in geometry and submissions, not a measured Deck frame-rate
+claim. Windows graphics startup, stereo/picture fitting and geometry checks are
+used for local review before any separate Steam Deck transfer/profiling.

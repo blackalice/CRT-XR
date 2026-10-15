@@ -1,4 +1,5 @@
 extends Node
+const Showcase = preload("res://scripts/presets/showcase.gd")
 ## Safe tube fitting + one shared analog decode pass. RGB bypasses the pass.
 const FIT_FIELDS := [
 	["width", "Picture width limit", 0.5, 1.0, 0.01, 1.0],
@@ -15,8 +16,8 @@ const COLOR_FIELDS := [
 	["hue", "Hue adjustment (degrees)", -30.0, 30.0, 1.0, 0.0],
 	["composite_strength", "Composite strength", 0.0, 1.0, 0.05, 0.65],
 	["artifact_strength", "Composite artifacts", 0.0, 1.0, 0.05, 0.35],
-	["phase_noise", "Chroma phase noise", 0.0, 0.5, 0.01, 0.0],
-	["signal_motion", "Moving signal artifacts", 0.0, 1.0, 0.05, 0.0]]
+	["phase_noise", "Chroma phase noise", 0.0, 0.5, 0.01, Showcase.PICTURE.phase_noise],
+	["signal_motion", "Moving signal artifacts", 0.0, 1.0, 0.05, Showcase.PICTURE.signal_motion]]
 const BEAM_FIELDS := [
 	["beam_softness", "Beam sharpness", 1.0, 8.0, 0.25, 3.0],
 	["vignette", "Tube edge shading", 0.0, 0.2, 0.01, 0.06]]
@@ -24,12 +25,13 @@ const MODES := ["RGB / component", "NTSC composite", "PAL composite", "Auto comp
 var values: Dictionary = {}
 var keep_aspect := true
 var guides := false
-var mode := 0
+var mode := Showcase.CONNECTION
 var source_rate := 60.0
 var paused := false
 var elapsed := 0.0
 var safe_rect := Rect2(0.03, 0.03, 0.94, 0.94)
 var tube_aspect := 4.0 / 3.0
+var source_aspect := 4.0 / 3.0
 var source_size := Vector2(256, 240)
 var source_texture: Texture2D
 var screen: ShaderMaterial
@@ -98,8 +100,8 @@ func picture_rect() -> Rect2:
 	var size := area.size * Vector2(values.width, values.height)
 	if keep_aspect:
 		var available_aspect := tube_aspect * size.x / size.y
-		if available_aspect > 4.0/3.0: size.x *= (4.0/3.0)/available_aspect
-		else: size.y *= available_aspect/(4.0/3.0)
+		if available_aspect > source_aspect: size.x *= source_aspect/available_aspect
+		else: size.y *= available_aspect/source_aspect
 	var slack := area.size - size
 	var offset := Vector2(values.shift_x, values.shift_y).clamp(Vector2(-1,-1), Vector2.ONE)
 	return Rect2(area.position + slack * (Vector2.ONE + offset) * 0.5, size)
@@ -168,6 +170,7 @@ func preset(name: String) -> void:
 	reset_fields(COLOR_FIELDS)
 	reset_fields(BEAM_FIELDS)
 	mode = 0
+	values.phase_noise=0.0; values.signal_motion=0.0
 	if name == "pal": mode = 2
 	elif name == "ntsc": mode = 1
 	elif name == "auto": mode = 3
@@ -178,4 +181,6 @@ func preset(name: String) -> void:
 		values.gamma = 2.35
 		values.saturation = 0.95
 		values.temperature = 0.15
+		values.phase_noise = 0.25
+		values.signal_motion = 0.60
 	refresh()

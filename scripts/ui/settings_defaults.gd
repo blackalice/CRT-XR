@@ -1,16 +1,10 @@
 extends RefCounted
 const LinuxTracking = preload("res://scripts/tracking/xr_linux_tracking.gd")
 
-const VIEW := {"distance": 3.4, "height_offset": 0.0, "tv_scale": 1.0,
-	"ipd": 0.064, "convergence": 2.6, "smoothing": 0.0, "motion_predict": 0.03, "edge_fade": 0.075,
-	"right_stick_distance": true, "distance_speed": 1.0}
-const PICTURE := {"scanlines": 0.22, "phosphor_mask": 0.10,
-	"phosphor_glow": 0.12, "glass_reflections": 0.12, "screen_curvature": 0.55}
-const ROOM := {"spill_strength": 0.10, "ambient": 0.45, "key_energy": 4.5, "fill_energy": 1.6,
-	"warmth": 0.70, "lamp_height": 2.6, "lamp_side": -1.8,
-	"fade_begin": 4.5, "fade_end": 9.0, "floor_brightness": 1.15,
-	"shadows": true, "shadow_strength": 0.60, "cabinet_ao_strength": 0.70,
-	"cabinet_grain_strength": 0.55, "show_rug": true}
+const Showcase = preload("res://scripts/presets/showcase.gd")
+const VIEW := Showcase.VIEW
+const PICTURE := Showcase.CRT
+const ROOM := Showcase.ROOM
 const SLIDERS := {"TV distance (m)": "distance", "Screen height offset (m)": "height_offset",
 	"Distance adjustment speed": "distance_speed", "TV scale": "tv_scale", "IPD (m)": "ipd",
 	"Convergence (m)": "convergence", "Soft view edges": "edge_fade", "Smoothing (seconds)": "smoothing",
@@ -33,7 +27,7 @@ static func apply(app: Node, tab: int) -> void:
 	match tab:
 		0:
 			app.emulator.run_ahead = 1
-			app.set_remember_game_picture(true)
+			app.set_remember_game_picture(Showcase.PER_GAME_PICTURE)
 		1:
 			for key in VIEW: app.set(key, VIEW[key])
 			app.vertical_fov = 24.0 if app.provider is LinuxTracking else 50.0
@@ -51,11 +45,11 @@ static func apply(app: Node, tab: int) -> void:
 			app.world.picture.reset_fields(app.world.picture.COLOR_FIELDS)
 			app.world.picture.keep_aspect = true
 			app.world.picture.guides = false
-			app.world.picture.mode = 0
+			app.world.picture.mode = Showcase.CONNECTION
 			app.world.picture.refresh()
 		3:
 			for key in ROOM: app.world.set(key, ROOM[key])
 			app.world.apply_room_settings()
 		4:
 			for axis in ["yaw", "pitch", "roll"]: app.provider.set("invert_" + axis, false)
-			for label in app.diagnostics: label.visible = true
+			app.metrics_visible = false

@@ -28,7 +28,61 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   script; it is not copied into the application source tree.
 * Libretro API header, MIT license, Copyright 2010–2018 The RetroArch team.
   Its full header notice is copied into `cores/libretro-header-LICENSE.txt`.
+* Nestopia Libretro, GPL-2.0, Martin Freij, Nestopia UE contributors and
+  Rupert Carmichael. Upstream source revision:
+  https://github.com/libretro/nestopia/tree/06a8949e0b3cf60e3a38a374b1426bf40fccb9a0
+  Full licence: `cores/Nestopia-LICENSE.txt`.
+* Genesis Plus GX, Charles MacDonald, Eke-Eke and other credited contributors.
+  Its custom licence prohibits sale and commercial use; bundled components
+  have additional terms reproduced in `cores/Genesis-Plus-GX-LICENSE.txt`.
+  Upstream source revision:
+  https://github.com/libretro/Genesis-Plus-GX/tree/393f70cd64c7334564c19a424c383f53986c13f4
 
-The generated diagnostic cartridge is an original, asset-free test program.
-Its source generator, `tests/make_probe_rom.py`, is provided under CC0-1.0.
-It is generated under ignored `build/` and is not automatically included in exports.
+The new cores in this local review build are official Libretro buildbot binaries.
+`cores/core-builds.json` records download URLs, archive hashes and source revisions;
+complete upstream source snapshots are included under `cores/sources/`.
+Windows core version strings contain the recorded upstream revision prefixes.
+Compiler flags/toolchain details for the official binaries are not independently
+reproduced here. `scripts/build-cartridge-cores.sh` provides a source-build route
+for the existing compiler container, pending validation after Docker is available.
+Retain these sources and notices with the binaries. Review the combined app/core
+licensing before a public release; these core licences do not imply that every
+component of the application is permissively licensed or commercially usable.
+
+The generated diagnostic cartridges are original, asset-free test programs.
+Their source generators, `tests/make_probe_rom.py` and
+`tests/make_multicore_probes.py`, are provided under CC0-1.0.
+They are generated under ignored `build/` and are not automatically included in exports.
+
+## Optional CRT cabinet
+
+**CRT TV**, by **Timothy Ahene**.
+Original model: https://sketchfab.com/3d-models/crt-tv-9ba4baa106e64319a0b540cf0af5aa9e
+
+Historical licence evidence: the creator's listing archived on **29 September
+2022 at 23:04:21 UTC** displays **CC Attribution** for that same model ID:
+https://web.archive.org/web/20220929230421/https://sketchfab.com/3d-models/crt-tv-9ba4baa106e64319a0b540cf0af5aa9e
+
+The user supplied a screenshot of that archive on 15 October 2026; a local
+copy is retained at `build/license-evidence/crt-tv-2022-09-29-listing.png`.
+The archive could not be independently fetched by the research tool. The
+screenshot does not expose the destination of its licence link, so the exact
+CC version remains to be recorded. An older third-party derivative explicitly
+credits Timothy Ahene's model as CC BY 4.0:
+https://blendswap.com/blend/31310
+
+Modifications in RetroCRT: rescaling/alignment, replacement live screen/glass,
+material adjustments, new baked occlusion and grain, reduced and GPU-compressed
+textures, prepared Godot resources, hidden rear hardware removal and constrained rear-panel simplification, and
+replacement badge using the user's
+Phonysonic SVG. No endorsement by the original creator is implied.
+
+This record documents historical licensing evidence; it does not relicense the
+asset or assert that later revisions or separately accepted download terms are
+covered. Preserve applicable creator notices and identify the licence/version
+for the source used in a public release. The model is separate from the app's
+source-code licence. See `docs/crt-model-local.md` for asset handling.
+
+## CRT power-on sound
+
+`assets/audio/crt-power-on.wav` is a short edited excerpt from **TV, CRT, turning on off, static, click (2012).wav** by **TRP**, published on [Freesound](https://freesound.org/people/TRP/sounds/616850/) under **CC0 1.0 Universal**. Modification and redistribution, including commercial use, are permitted. Details, source-preview and asset hashes, editing notes, and the licence text are in `third_party/audio/` and included with exported builds under `licenses/audio/`.

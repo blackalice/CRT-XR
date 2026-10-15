@@ -1,5 +1,6 @@
 extends RefCounted
 const Locations = preload("res://scripts/content/rom_locations.gd")
+const Registry = preload("res://scripts/emulation/core_registry.gd")
 var current_dir := ""
 var default_dir := ""
 var entries: Array[Dictionary] = []
@@ -22,9 +23,10 @@ func show_folder(path: String) -> bool:
 		if not folder.begins_with("."):
 			entries.append({"path":current_dir.path_join(folder),"folder":true,"label":folder+" /"})
 	for file in files:
-		if file.get_extension().to_lower() in ["sfc","smc","swc","fig"]:
-			entries.append({"path":current_dir.path_join(file),"folder":false,"label":file})
-	message = "No SNES games here. Open a folder or go up with L1." if entries.is_empty() else "Choose a folder or SNES game. R1 saves this folder as your default."
+		var system := Registry.identify(current_dir.path_join(file))
+		if not system.is_empty():
+			entries.append({"path":current_dir.path_join(file),"folder":false,"label":file,"system":Registry.SYSTEMS[system].name})
+	message = "No supported cartridges here. Open a folder or go up with L1." if entries.is_empty() else "Choose a SNES, NES or Sega cartridge. R1 saves this folder as your default."
 	return true
 
 func cards() -> Array:

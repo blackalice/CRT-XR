@@ -15,3 +15,5 @@ function Fetch-Pinned([string]$Name, [string]$Repository, [string]$Commit) {
 }
 Fetch-Pinned 'godot-cpp' 'https://github.com/godotengine/godot-cpp.git' 'e83fd0904c13356ed1d4c3d09f8bb9132bdc6b77'
 Fetch-Pinned 'snes9x' 'https://github.com/snes9xgit/snes9x.git' '1bcc369e89f08243e0a462882fb1f3e42e51de3a'
+Fetch-Pinned 'nestopia' 'https://github.com/libretro/nestopia.git' '06a8949e0b3cf60e3a38a374b1426bf40fccb9a0'
+Fetch-Pinned 'genesis-plus-gx' 'https://github.com/libretro/Genesis-Plus-GX.git' '393f70cd64c7334564c19a424c383f53986c13f4'

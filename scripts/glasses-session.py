@@ -151,7 +151,7 @@ def activate(screens, target, mode):
             break
         time.sleep(0.25)
     else:
-        raise RuntimeError("The glasses did not accept Full-SBS. The internal screen remains on.")
+        raise RuntimeError("The glasses did not accept the requested display mode. The internal screen remains on.")
     screens.apply([command(o, "disable") for o in config["outputs"] if internal(o) and o.get("enabled")])
 
 
@@ -227,11 +227,28 @@ def run_session(args, app_args, state):
         os.replace(temporary, backup)
     save_backup()
     child = None
+    temporary = tempfile.TemporaryDirectory(prefix="retrocrt-display-", dir=state)
+    status = Path(temporary.name) / "status.json"
+    gate = Path(temporary.name) / "start.json"
     def interrupted(_signum, _frame):
         raise KeyboardInterrupt
     signal.signal(signal.SIGTERM, interrupted)
     signal.signal(signal.SIGINT, interrupted)
     try:
+        # Keep one fullscreen Godot window alive from instructions through
+        # display reconfiguration and scene loading. No desktop relaunch gap.
+        initial_mode = next((m for m in target.get("modes", []) if m["id"] == target.get("currentModeId")), None)
+        if initial_mode is None: initial_mode = sbs_mode(target)
+        if initial_mode is None: raise RuntimeError("No usable glasses display mode found.")
+        activate(screens, target, initial_mode)
+        here = Path(__file__).resolve().parent
+        env = dict(os.environ, RETROCRT_DISPLAY_STATUS=str(status), RETROCRT_STARTUP_GATE=str(gate))
+        display_args = ["--display-driver", "wayland"] if os.environ.get("WAYLAND_DISPLAY") else ["--display-driver", "x11"]
+        initial_size = "%sx%s" % mode_size(initial_mode)
+        child = subprocess.Popen([str(here / "retrocrt.x86_64"), *display_args,
+                                  "--rendering-method", "gl_compatibility", "--fullscreen", "--resolution", initial_size,
+                                  "--log-file", str(state / "godot.log"), "--", "--sbs-session",
+                                  *(["--startup-black"] if mode_size(initial_mode)==(3840,1080) else []), *app_args], env=env, cwd=here)
         manual = args.manual_sbs
         if not args.manual_sbs:
             try:
@@ -248,6 +265,7 @@ def run_session(args, app_args, state):
                 notice("Automatic SBS unavailable: " + str(error) + " Switch the glasses to SBS manually.")
         deadline = time.monotonic() + args.wait
         while time.monotonic() < deadline:
+            if child.poll() is not None: return child.returncode
             config = screens.read()
             target = next((o for o in config["outputs"] if o["name"] == target["name"] and o.get("connected")), target)
             if target.get("connected") and sbs_mode(target):
@@ -262,29 +280,24 @@ def run_session(args, app_args, state):
                      "outputs": [o for o in config["outputs"] if internal(o) or o["name"] == target["name"]]}
             save_backup()
         activate(screens, target, sbs_mode(target))
-        here = Path(__file__).resolve().parent
-        with tempfile.TemporaryDirectory(prefix="retrocrt-display-", dir=state) as session_dir:
-            status = Path(session_dir) / "status.json"
-            env = dict(os.environ, RETROCRT_DISPLAY_STATUS=str(status))
-            display_args = ["--display-driver", "wayland"] if os.environ.get("WAYLAND_DISPLAY") else []
-            child = subprocess.Popen([str(here / "retrocrt.x86_64"), *display_args, "--rendering-method", "gl_compatibility",
-                                      "--log-file", str(state / "godot.log"), "--", "--full-sbs", *app_args], env=env, cwd=here)
-            deadline = time.monotonic() + 20
-            acknowledged = False
-            last_healthy = time.monotonic()
-            while child.poll() is None:
-                config = screens.read()
-                live = next((o for o in config["outputs"] if o["name"] == target["name"]), {})
-                if not live.get("connected") or not matches_mode(live, sbs_mode(target)):
-                    raise RuntimeError("Glasses disconnected or left SBS mode; restoring the Deck screen.")
-                healthy = healthy_status(status)
-                acknowledged = acknowledged or healthy
-                if healthy:
-                    last_healthy = time.monotonic()
-                if (acknowledged and time.monotonic() - last_healthy > 6) or (not acknowledged and time.monotonic() > deadline):
-                    raise RuntimeError("The app did not maintain a Full-SBS window; restoring the Deck screen.")
-                time.sleep(1)
-            return child.returncode
+        pending = gate.with_suffix(".tmp")
+        pending.write_text(json.dumps({"start": True}))
+        os.replace(pending, gate)
+        deadline = time.monotonic() + 20
+        acknowledged = False
+        last_healthy = time.monotonic()
+        while child.poll() is None:
+            config = screens.read()
+            live = next((o for o in config["outputs"] if o["name"] == target["name"]), {})
+            if not live.get("connected") or not matches_mode(live, sbs_mode(target)):
+                raise RuntimeError("Glasses disconnected or left SBS mode; restoring the Deck screen.")
+            healthy = healthy_status(status)
+            acknowledged = acknowledged or healthy
+            if healthy: last_healthy = time.monotonic()
+            if (acknowledged and time.monotonic() - last_healthy > 6) or (not acknowledged and time.monotonic() > deadline):
+                raise RuntimeError("The app did not maintain a Full-SBS window; restoring the Deck screen.")
+            time.sleep(1)
+        return child.returncode
     finally:
         if child is not None and child.poll() is None:
             child.terminate()
@@ -295,6 +308,7 @@ def run_session(args, app_args, state):
                 child.wait()
         restore(screens, saved)
         backup.unlink(missing_ok=True)
+        temporary.cleanup()
 
 
 if __name__ == "__main__":

@@ -8,6 +8,7 @@ const Pattern = preload("res://scripts/content/test_pattern.gd")
 const Emulation = preload("res://scripts/emulation/emulation_session.gd")
 const Menu = preload("res://scripts/ui/menu_controller.gd")
 var menu: PanelContainer
+const Showcase = preload("res://scripts/presets/showcase.gd")
 const SettingsDefaults = preload("res://scripts/ui/settings_defaults.gd")
 const SettingsStore = preload("res://scripts/ui/settings_store.gd")
 const StartupStatus = preload("res://scripts/ui/startup_status.gd")
@@ -16,7 +17,7 @@ const PROFILE_NAMES := ["Everyday", "Evening", "Showcase"]
 var settings_store := SettingsStore.new()
 var picture_baseline := ConfigFile.new()
 var active_game_key := ""
-var remember_game_picture := true
+var remember_game_picture := Showcase.PER_GAME_PICTURE
 var selected_profile := 0
 var profile_undo: ConfigFile
 var settings_dirty := false
@@ -29,6 +30,7 @@ var last_screenshot_path := ""
 var notices: Array[Label] = []
 var notice_time := 0.0
 var emulator: Node
+var power_on: Node
 var signal_view: SubViewport
 var was_paused_before_menu := false
 var provider: TrackingProvider = Simulated.new()
@@ -38,10 +40,10 @@ var previous_tracking_status := ""
 var center := Quaternion.IDENTITY
 var displayed := Quaternion.IDENTITY
 var stereo := false
-var distance := 3.4
-var height_offset := 0.0
-var right_stick_distance := true
-var distance_speed := 1.0
+var distance: float = Showcase.VIEW.distance
+var height_offset: float = Showcase.VIEW.height_offset
+var right_stick_distance: bool = Showcase.VIEW.right_stick_distance
+var distance_speed: float = Showcase.VIEW.distance_speed
 var distance_save_delay := -1.0
 const ROOM_FIELDS := [
 	["spill_strength", "Screen light spill (0 = off)", 0.0, 0.4, 0.02],
@@ -57,18 +59,18 @@ const ROOM_FIELDS := [
 	["floor_brightness", "Carpet / rug brightness", 0.0, 2.0, 0.05],
 	["fade_begin", "Room fade begins (m)", 2.0, 10.0, 0.25],
 	["fade_end", "Room fades to black (m)", 3.0, 16.0, 0.25]]
-var tv_scale := 1.0
-var ipd := 0.064
-var convergence := 2.6
-var smoothing := 0.0
-var motion_predict := 0.03
+var tv_scale: float = Showcase.VIEW.tv_scale
+var ipd: float = Showcase.VIEW.ipd
+var convergence: float = Showcase.VIEW.convergence
+var smoothing: float = Showcase.VIEW.smoothing
+var motion_predict: float = Showcase.VIEW.motion_predict
 var vertical_fov := 50.0
-var edge_fade := 0.075
-var scanlines := 0.22
-var phosphor_mask := 0.10
-var phosphor_glow := 0.12
-var glass_reflections := 0.12
-var screen_curvature := 0.55
+var edge_fade: float = Showcase.VIEW.edge_fade
+var scanlines: float = Showcase.CRT.scanlines
+var phosphor_mask: float = Showcase.CRT.phosphor_mask
+var phosphor_glow: float = Showcase.CRT.phosphor_glow
+var glass_reflections: float = Showcase.CRT.glass_reflections
+var screen_curvature: float = Showcase.CRT.screen_curvature
 var fade_material := ShaderMaterial.new()
 var world: Node3D
 var pattern: Node2D
@@ -76,25 +78,67 @@ var eyes: Array[Camera3D] = []
 var views: Array[SubViewport] = []
 var panels: Array[SubViewportContainer] = []
 var diagnostics: Array[Label] = []
+var metrics_visible := false:
+	set(value):
+		metrics_visible=value
+		for label in diagnostics: label.visible=value
 var settings_panel: PanelContainer
 var row: HBoxContainer
 var screenshot_pending := false
 var menu_view: SubViewport
 var menu_overlays: Array[TextureRect] = []
+var play_history := preload("res://scripts/content/play_history.gd").new()
 var last_game_path := ""
 var default_rom_dir := ""
 var display_report_elapsed := 0.0
 var view_diagnosed := false
 var sbs_prompt: Control
+var sbs_startup := false
+var sbs_starting := false
 
 func _ready() -> void:
 	Input.use_accumulated_input = false
-	if "--sbs-prompt" in OS.get_cmdline_user_args():
+	var startup_args := OS.get_cmdline_user_args()
+	for arg in startup_args:
+		if arg in ["--sbs","--full-sbs","--sbs-session","--sbs-session-manual","--sbs-prompt"]:
+			Input.mouse_mode=Input.MOUSE_MODE_HIDDEN
+	sbs_startup = "--sbs-session" in startup_args or "--sbs-session-manual" in startup_args
+	if "--sbs-prompt" in startup_args or sbs_startup:
 		sbs_prompt = load("res://scripts/ui/sbs_prompt.gd").new()
-		sbs_prompt.manual_confirmation = "--sbs-prompt-manual" in OS.get_cmdline_user_args()
+		sbs_prompt.manual_confirmation = "--sbs-prompt-manual" in startup_args or "--sbs-session-manual" in startup_args
+		sbs_prompt.in_place = sbs_startup
+		sbs_prompt.z_index = 4096
+		if sbs_startup: sbs_prompt.proceed_requested.connect(start_sbs_session)
 		add_child(sbs_prompt)
+		if "--startup-black" in startup_args: sbs_prompt.darken()
 		set_process(false)
 		return
+	start_application()
+
+func start_sbs_session() -> void:
+	if sbs_starting: return
+	sbs_starting = true
+	sbs_prompt.darken()
+	# Submit black before synchronous asset/core loading, keeping this window.
+	await get_tree().process_frame
+	if DisplayServer.get_name()!="headless": await RenderingServer.frame_post_draw
+	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
+	DisplayServer.window_set_size(Vector2i(3840,1080))
+	start_application()
+	var resume_game: bool = emulator.loaded and not emulator.paused
+	if resume_game: emulator.set_paused(true)
+	set_process(true)
+	# Keep the curtain until both eye viewports have actually been drawn.
+	for i in range(3): await get_tree().process_frame
+	if DisplayServer.get_name()!="headless": await RenderingServer.frame_post_draw
+	sbs_prompt.queue_free()
+	sbs_prompt = null
+	if not settings_panel.visible: power_on.begin()
+	if resume_game: emulator.set_paused(false)
+	get_window().grab_focus()
+	print("SBS startup: same-window handover complete")
+
+func start_application() -> void:
 	fade_material.shader = load("res://shaders/eye_fade.gdshader")
 	if OS.get_name() == "Linux" and not "--simulate" in OS.get_cmdline_user_args():
 		use_tracking(true)
@@ -137,6 +181,7 @@ func _ready() -> void:
 		camera.current = true
 		eyes.append(camera)
 		var hud := Label.new()
+		hud.visible=metrics_visible
 		hud.position = Vector2(22, 18)
 		hud.add_theme_font_size_override("font_size", 16)
 		hud.add_theme_color_override("font_shadow_color", Color.BLACK)
@@ -166,6 +211,9 @@ func _ready() -> void:
 		notices.append(notice)
 	emulator = Emulation.new()
 	add_child(emulator)
+	power_on=preload("res://scripts/rendering/tv_power_on.gd").new()
+	add_child(power_on)
+	power_on.setup(world.screen_material,world.screen_light,emulator.tv_audio)
 	Input.joy_connection_changed.connect(func(device, connected):
 		if not connected:
 			emulator.gamepad.disconnect_device(device)
@@ -184,20 +232,29 @@ func _ready() -> void:
 		signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active else SubViewport.UPDATE_ALWAYS
 		if active:
 			world.picture.source_rate = emulator.fps
+			world.picture.source_aspect = emulator.display_aspect
 			world.picture.refresh()
 			last_game_path = emulator.rom_path
+			if not play_history.played(last_game_path): show_notice("Could not save recently played games")
 			if save_library() != OK: show_notice("Could not save the recent game location")
 		if not active:
 			world.picture.source_rate = 60.0
+			world.picture.source_aspect = 4.0 / 3.0
 			world.screen_light.set_image(null)
 			world.picture.set_source(signal_view.get_texture()))
 	emulator.status_changed.connect(func(_message): refresh_startup_status())
-	apply_settings(settings_store.read("user://settings.cfg", capture_settings()))
+	var defaults := capture_settings()
+	var showcase_defaults := Showcase.config()
+	SettingsStore.copy_sections(showcase_defaults,defaults,showcase_defaults.get_sections())
+	apply_settings(settings_store.read("user://settings.cfg", defaults))
 	picture_baseline = capture_settings()
 	var recent := settings_store.read("user://recent.cfg")
 	if recent.has_section("library"):
 		last_game_path = str(recent.get_value("library", "last_game", ""))
 		default_rom_dir = str(recent.get_value("library", "default_rom_dir", ""))
+	play_history.read(last_game_path)
+	get_tree().auto_accept_quit = false
+	get_window().close_requested.connect(request_exit)
 	menu_view = SubViewport.new()
 	menu_view.name = "SharedMenu"
 	menu_view.size = Vector2i(960, 720)
@@ -215,8 +272,8 @@ func _ready() -> void:
 		overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		panel.add_child(overlay)
 		menu_overlays.append(overlay)
-	set_stereo("--sbs" in OS.get_cmdline_user_args())
-	if "--full-sbs" in OS.get_cmdline_user_args():
+	set_stereo(sbs_startup or "--sbs" in OS.get_cmdline_user_args() or "--full-sbs" in OS.get_cmdline_user_args())
+	if "--full-sbs" in OS.get_cmdline_user_args() or sbs_startup:
 		set_stereo(true)
 		DisplayServer.window_set_size(Vector2i(3840, 1080))
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
@@ -226,42 +283,53 @@ func _ready() -> void:
 		if arguments[index] == "--rom":
 			load_game(arguments[index + 1])
 	if "--last-game" in arguments and not "--rom" in arguments and not last_game_path.is_empty() and FileAccess.file_exists(last_game_path):
-		load_game(last_game_path)
+		if not settings_panel.visible: toggle_settings()
+		menu.select_file(last_game_path)
 	startup_message = settings_store.warning if startup_message.is_empty() else startup_message
 	if not emulator.loaded and not settings_panel.visible and not "--capture" in arguments:
 		toggle_settings()
 	refresh_startup_status()
+	if "--capture" in arguments:
+		power_on.started=true; power_on.set_progress(1.0)
+	elif not settings_panel.visible and not is_instance_valid(sbs_prompt): power_on.begin()
 
 func apply_settings(config: ConfigFile) -> void:
-	right_stick_distance = bool(config.get_value("view", "right_stick_distance", true))
-	distance_speed = clampf(config.get_value("view", "distance_speed", 1.0), 0.2, 2.0)
+	metrics_visible=bool(config.get_value("preferences","metrics_visible",false))
+	power_on.enabled=bool(config.get_value("atmosphere","power_on",true))
+	power_on.sound_level=float(config.get_value("atmosphere","power_sound",0.60))
+	power_on.apply()
+	for key in emulator.tv_audio.DEFAULTS:
+		emulator.tv_audio.set(key,config.get_value("audio",key,emulator.tv_audio.DEFAULTS[key]))
+	emulator.tv_audio.apply()
+	right_stick_distance = bool(config.get_value("view", "right_stick_distance", Showcase.VIEW.right_stick_distance))
+	distance_speed = clampf(config.get_value("view", "distance_speed", Showcase.VIEW.distance_speed), 0.2, 2.0)
 	for setting in ROOM_FIELDS:
 		world.set(setting[0], clampf(config.get_value("room", setting[0], world.get(setting[0])), setting[2], setting[3]))
 	world.shadows = bool(config.get_value("room", "shadows", true))
 	world.show_rug = bool(config.get_value("room", "show_rug", true))
 	var preview_depth = config.get_value("emulation", "run_ahead", 1)
 	emulator.run_ahead = clampi(int(preview_depth), 0, 2)
-	distance = clampf(config.get_value("view", "distance", 3.4), 1.2, 5.0)
-	height_offset = clampf(config.get_value("view", "height_offset", 0.0), -1.5, 1.5)
-	tv_scale = clampf(config.get_value("view", "scale", 1.0), 0.5, 1.6)
-	ipd = clampf(config.get_value("view", "ipd", 0.064), 0.0, 0.080)
-	convergence = clampf(config.get_value("view", "convergence", 2.6), 1.0, 10.0)
-	edge_fade = clampf(config.get_value("view", "edge_fade", 0.075), 0.0, 0.2)
+	distance = clampf(config.get_value("view", "distance", Showcase.VIEW.distance), 1.2, 5.0)
+	height_offset = clampf(config.get_value("view", "height_offset", Showcase.VIEW.height_offset), -1.5, 1.5)
+	tv_scale = clampf(config.get_value("view", "scale", Showcase.VIEW.tv_scale), 0.5, 1.6)
+	ipd = clampf(config.get_value("view", "ipd", Showcase.VIEW.ipd), 0.0, 0.080)
+	convergence = clampf(config.get_value("view", "convergence", Showcase.VIEW.convergence), 1.0, 10.0)
+	edge_fade = clampf(config.get_value("view", "edge_fade", Showcase.VIEW.edge_fade), 0.0, 0.2)
 	vertical_fov = clampf(config.get_value("view", "vertical_fov", vertical_fov), 18.0, 70.0)
-	smoothing = clampf(config.get_value("view", "smoothing", 0.0), 0.0, 0.15)
-	motion_predict = clampf(config.get_value("view", "motion_predict", 0.03), 0.0, 0.08)
+	smoothing = clampf(config.get_value("view", "smoothing", Showcase.VIEW.smoothing), 0.0, 0.15)
+	motion_predict = clampf(config.get_value("view", "motion_predict", Showcase.VIEW.motion_predict), 0.0, 0.08)
 	for axis in ["yaw", "pitch", "roll"]:
 		provider.set("invert_" + axis, bool(config.get_value("tracking", "invert_" + axis, false)))
-	scanlines = clampf(config.get_value("crt", "scanlines", 0.22), 0.0, 0.7)
-	phosphor_mask = clampf(config.get_value("crt", "mask", 0.1), 0.0, 0.5)
-	phosphor_glow = clampf(config.get_value("crt", "glow", 0.12), 0.0, 0.4)
-	glass_reflections = clampf(config.get_value("crt", "glass", 0.12), 0.0, 0.4)
-	screen_curvature = clampf(config.get_value("crt", "curvature", 0.55), 0.0, 1.0)
+	scanlines = clampf(config.get_value("crt", "scanlines", Showcase.CRT.scanlines), 0.0, 0.7)
+	phosphor_mask = clampf(config.get_value("crt", "mask", Showcase.CRT.phosphor_mask), 0.0, 0.5)
+	phosphor_glow = clampf(config.get_value("crt", "glow", Showcase.CRT.phosphor_glow), 0.0, 0.4)
+	glass_reflections = clampf(config.get_value("crt", "glass", Showcase.CRT.glass_reflections), 0.0, 0.4)
+	screen_curvature = clampf(config.get_value("crt", "curvature", Showcase.CRT.screen_curvature), 0.0, 1.0)
 	for field in world.picture.all_fields():
 		world.picture.values[field[0]] = clampf(config.get_value("picture", field[0], field[5]), field[2], field[3])
-	world.picture.mode = clampi(config.get_value("picture", "connection", 0), 0, 3)
+	world.picture.mode = clampi(config.get_value("picture", "connection", Showcase.CONNECTION), 0, 3)
 	world.picture.keep_aspect = bool(config.get_value("picture", "keep_aspect", true))
-	remember_game_picture = bool(config.get_value("preferences", "per_game_picture", true))
+	remember_game_picture = bool(config.get_value("preferences", "per_game_picture", Showcase.PER_GAME_PICTURE))
 	world.picture.refresh()
 	world.apply_room_settings()
 	fade_material.set_shader_parameter("fade_width", edge_fade)
@@ -321,6 +389,7 @@ func _process(delta: float) -> void:
 	displayed = displayed.slerp(target, 1.0 - exp(-delta / smoothing)) if smoothing > 0.001 else target
 	world.television.position = Vector3(0, 1.25 + height_offset, -distance)
 	world.television.scale = Vector3.ONE * tv_scale
+	emulator.tv_audio.update_pose(displayed,Vector3(0,1.25,0),world.television.position,delta)
 	diagnostics_elapsed += delta
 	var refresh_diagnostics := diagnostics_elapsed >= .1
 	if refresh_diagnostics: diagnostics_elapsed = 0.0
@@ -403,12 +472,18 @@ func _input(event: InputEvent) -> void:
 			KEY_SPACE:
 				if emulator.loaded: emulator.set_paused(not emulator.paused)
 				else: pattern.paused = not pattern.paused
-			KEY_F5: emulator.save_state()
-			KEY_F8: emulator.load_state()
+			KEY_F5:
+				if emulator.loaded:
+					emulator.save_state()
+					show_notice(emulator.status)
+			KEY_F8:
+				if emulator.loaded:
+					toggle_settings()
+					menu.state_action(false)
 			KEY_ESCAPE:
 				toggle_settings()
 			KEY_F1:
-				for label in diagnostics: label.visible = not label.visible
+				metrics_visible=not metrics_visible
 	if event is InputEventJoypadButton and event.pressed:
 		match event.button_index:
 			JOY_BUTTON_RIGHT_STICK: recenter()
@@ -439,7 +514,15 @@ func use_tracking(real_tracking: bool) -> void:
 	tracking_was_valid = false
 	if changed: vertical_fov = 24.0 if real_tracking else 50.0
 
+func request_exit() -> void:
+	if not emulator.save_auto() or not save_settings():
+		if not settings_panel.visible: toggle_settings()
+		menu.show_error("Could not save before exiting. Check free space and save-folder permissions, then try Exit again.")
+		return
+	get_tree().quit()
+
 func _exit_tree() -> void:
+	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 	if is_instance_valid(emulator) and is_instance_valid(settings_panel): save_settings()
 	provider.close()
 
@@ -456,6 +539,7 @@ func set_stereo(value: bool) -> void:
 	if not value and not OS.get_environment("RETROCRT_DISPLAY_STATUS").is_empty():
 		return # The managed glasses session keeps its physical and rendered modes aligned.
 	stereo = value
+	Input.mouse_mode=Input.MOUSE_MODE_HIDDEN if value else Input.MOUSE_MODE_VISIBLE
 	panels[1].visible = value
 	views[1].render_target_update_mode = SubViewport.UPDATE_ALWAYS if value else SubViewport.UPDATE_DISABLED
 	close_settings()
@@ -484,6 +568,12 @@ func close_settings() -> void:
 	settings_panel.hide()
 	emulator.gamepad.set_menu_active(false)
 	if emulator.loaded: emulator.set_paused(was_paused_before_menu)
+	if not is_instance_valid(sbs_prompt): power_on.begin()
+
+func preview_power_on() -> void:
+	var already_started: bool = power_on.started
+	close_settings()
+	if not settings_panel.visible and already_started: power_on.begin(true)
 
 func choose_rom() -> void:
 	if not settings_panel.visible: toggle_settings()
@@ -642,6 +732,8 @@ func reset_selected_option() -> void:
 func reset_all_options() -> void:
 	if not settings_panel.visible: return
 	for index in range(5): SettingsDefaults.apply(self,index)
+	emulator.tv_audio.reset_defaults()
+	power_on.enabled=true; power_on.sound_level=.60; power_on.apply()
 	rebuild_settings()
 	show_notice("All settings reset to defaults")
 
@@ -649,11 +741,28 @@ func rebuild_settings() -> void:
 	settings_dirty = false
 	if is_instance_valid(menu): menu.refresh()
 
+func load_showcase_setup() -> void:
+	profile_undo=capture_settings()
+	var merged := capture_settings()
+	SettingsStore.copy_sections(Showcase.config(),merged,PackedStringArray(["view","room","crt","picture","audio","atmosphere","emulation"]))
+	merged.set_value("preferences","metrics_visible",false)
+	apply_settings(merged)
+	if active_game_key.is_empty(): picture_baseline=capture_settings()
+	rebuild_settings()
+	show_notice("Deck Showcase loaded. Undo is available in Saved setups.")
+
 func apply_picture_preset(name: String) -> void:
+	if name=="showcase":
+		var merged := capture_settings()
+		SettingsStore.copy_sections(Showcase.config(),merged,PICTURE_SECTIONS)
+		# Picture presets retain this game's carefully adjusted fitting.
+		for field in world.picture.FIT_FIELDS: merged.set_value("picture",field[0],world.picture.values[field[0]])
+		apply_settings(merged)
+		rebuild_settings(); show_notice("Deck Showcase (PAL) picture preset"); return
 	world.picture.preset(name)
-	scanlines = 0.0 if name == "clean" else 0.35
-	phosphor_mask = 0.0 if name == "clean" else (0.12 if name == "rgb" else 0.08)
-	phosphor_glow = 0.0 if name == "clean" else 0.10
+	scanlines = 0.0 if name == "clean" else 0.70
+	phosphor_mask = 0.0 if name == "clean" else (0.50 if name == "rgb" else 0.40)
+	phosphor_glow = 0.0 if name == "clean" else 0.25
 	world.screen_material.set_shader_parameter("scanlines", scanlines)
 	world.screen_material.set_shader_parameter("mask_strength", phosphor_mask)
 	world.screen_material.set_shader_parameter("glow_strength", phosphor_glow)
@@ -738,7 +847,11 @@ func room_preset(preset: String) -> void:
 
 func capture_settings() -> ConfigFile:
 	var config := ConfigFile.new()
+	config.set_value("atmosphere","power_on",power_on.enabled)
+	config.set_value("atmosphere","power_sound",power_on.sound_level)
+	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
+	config.set_value("preferences","metrics_visible",metrics_visible)
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
 	config.set_value("view", "right_stick_distance", right_stick_distance)
 	config.set_value("view", "distance_speed", distance_speed)

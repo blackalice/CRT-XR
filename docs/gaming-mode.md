@@ -1,5 +1,11 @@
 # Steam launch and controls
 
+The local startup update keeps the SBS instructions and game inside one
+fullscreen app window. After confirmation, the display stays black while the
+stereo scene loads; there is no windowed Godot-logo relaunch. This change still
+needs validation on the Deck. The existing Native/3840×1080 resolution setup in
+Gaming Mode remains necessary; this update does not take over Gamescope outputs.
+
 Launch **RetroCRT XR** from Steam's Non-Steam library. Holding the three-lines
 button on the desktop switches the desktop controller layout; it does not
 enter the separate SteamOS Gaming Mode session. Desktop keyboard/mouse mappings

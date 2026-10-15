@@ -27,10 +27,18 @@ mono_crash.*.json
 *.smc
 *.swc
 *.fig
+*.nes
+*.unf
+*.unif
+*.gen
+*.smd
+*.sms
+*.gg
 *.srm
 *.sav
 *.slot*.rst
 /saves/
+/roms/
 /userdata/
 
 # Logs, Python caches, local environments and credentials.

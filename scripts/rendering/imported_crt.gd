@@ -2,23 +2,31 @@ extends RefCounted
 
 const SCREEN_ANCHOR := Vector3(0.0, 0.035, 0.06)
 const Plastic = preload("res://scripts/rendering/cabinet_plastic.gd")
+const Brand = preload("res://scripts/rendering/cabinet_brand.gd")
 
 # Load a user-supplied GLB locally; no model data is embedded in source control.
 static func load_cabinet(parent: Node3D) -> Dictionary:
 	var path := ProjectSettings.globalize_path("res://build/crt-model/crt_tv.glb")
 	if not OS.has_feature("editor"):
 		path = OS.get_executable_path().get_base_dir().path_join("assets/crt_tv.glb")
-	if not FileAccess.file_exists(path):
+	var prepared := ProjectSettings.globalize_path("res://build/crt-model/optimised/cabinet.scn") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir().path_join("assets/optimised/cabinet.scn")
+	if not FileAccess.file_exists(path) and not FileAccess.file_exists(prepared):
 		return {}
-	var document := GLTFDocument.new()
-	var state := GLTFState.new()
-	if document.append_from_file(path, state) != OK:
-		push_warning("Local CRT model could not be loaded; using the procedural cabinet.")
-		return {}
-	var scene := document.generate_scene(state)
+	var scene: Node
+	if FileAccess.file_exists(prepared):
+		var packed := load(prepared) as PackedScene
+		if packed != null: scene = packed.instantiate()
+	if scene == null and FileAccess.file_exists(path):
+		var document := GLTFDocument.new()
+		var state := GLTFState.new()
+		if document.append_from_file(path, state) != OK:
+			push_warning("Local CRT model could not be loaded; using the procedural cabinet.")
+			return {}
+		scene = document.generate_scene(state)
 	if scene == null:
 		return {}
 	filter_cabinet_materials(scene)
+	Brand.apply(scene)
 	Plastic.apply(scene)
 	var holder := Node3D.new()
 	holder.name = "ImportedCabinet"

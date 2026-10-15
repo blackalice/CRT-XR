@@ -1,17 +1,21 @@
 # Glasses launch flow
 
-Updated 14 October 2026. KDE display setup and supervised-exit recovery have
-been tested on the Deck. Hardware SBS switching was tested and rejected by the
-installed SDK; the installed desktop shortcut uses the physical-button fallback.
+Local startup update, 15 October 2026: prompt, blackout and game now share one
+fullscreen window. The new handover has passed local tests; validation through
+the glasses is pending. Previous KDE display setup and supervised-exit recovery
+were tested on the Deck. Hardware SBS switching was rejected by the installed
+SDK, so the physical-button fallback remains the default.
 
 ## Intended everyday use
 
 1. In KDE Desktop Mode, launch the **glasses launcher**.
-2. Connect the glasses and use their physical SBS switch. The launcher waits up
+2. The launcher shows fullscreen instructions on the glasses. Optionally press A
+   to darken the display before using their physical SBS switch. The launcher waits up
    to 90 seconds for the identified glasses to advertise a Full-SBS mode.
 3. It saves the display layout, enables 3840x1080 at 100% scaling, verifies the
-   accepted mode, disables the built-in panel, and launches RetroCRT fullscreen
-   with SBS already enabled. It prefers a supported rate nearest 60 Hz.
+   accepted mode and continues the same app window into stereo. The window stays
+   black during scene loading, then reveals the two eye views. The internal panel
+   is disabled while using the glasses. A supported rate nearest 60 Hz is preferred.
 4. Open settings with L1 + R1 + Start / Escape. The menu and ROM browser appear in both eyes.
    Use the D-pad and A; B cancels. **Play last game** remembers the last loaded
    ROM path. It loads the game normally; it does not automatically load a state.
@@ -22,6 +26,16 @@ The default launcher leaves the physical SBS switch manual. It does not change
 XR Gaming settings. Layout recovery does not switch the
 glasses back to mono; use the physical button when returning to an ordinary desktop.
 The saved layout is taken after SBS has appeared, before RetroCRT changes it.
+
+There is no second Godot launch after the prompt, and the logo splash has been
+disabled in favour of a plain black boot screen. Desktop sessions start fullscreen
+from the launch command instead of waiting for scene setup. A per-session gate
+lets the display supervisor approve Full-SBS before scene loading begins. The
+black curtain is removed only after the eye viewports have drawn; an automatically
+loaded game waits until then before gameplay/audio resumes. It adds no ongoing
+3D pass once startup finishes. Cancel, process failure and display disconnect
+retain the existing recovery path. Hardware re-enumeration/compositor behaviour
+can still briefly blank or expose an output and requires a through-glasses check.
 
 ### Hardware SBS test result
 
