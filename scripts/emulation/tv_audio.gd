@@ -8,6 +8,7 @@ var mode: int = DEFAULTS.mode
 var room_amount: float = DEFAULTS.room_amount
 var speaker_character: float = DEFAULTS.speaker_character
 var directional_strength: float = DEFAULTS.directional_strength
+var preview_player: AudioStreamPlayer
 var player: AudioStreamPlayer
 var bus_name := ""
 var eq := AudioEffectEQ6.new()
@@ -19,6 +20,9 @@ var room_active := false
 
 func setup(source: AudioStreamPlayer) -> void:
 	player=source
+	preview_player=AudioStreamPlayer.new(); preview_player.name="SoundPreview"
+	preview_player.stream=preload("res://assets/audio/crt-power-on.wav")
+	preview_player.volume_db=-6.0; add_child(preview_player)
 	bus_name="RetroCRT TV "+str(get_instance_id())
 	AudioServer.add_bus()
 	var index := AudioServer.bus_count-1
@@ -58,6 +62,7 @@ func apply() -> void:
 		elif mode==2: enabled=directional_strength>0.0 if effect==2 else room_amount>0.0
 		AudioServer.set_bus_effect_enabled(index,effect,enabled)
 	player.bus="Master" if mode==0 else bus_name
+	preview_player.bus=player.bus
 	if mode!=2 or directional_strength==0.0:
 		current_pan=0.0; panner.pan=0.0
 
@@ -88,3 +93,7 @@ func _exit_tree() -> void:
 	if is_instance_valid(player): player.bus="Master"
 	var index := AudioServer.get_bus_index(bus_name)
 	if index>0: AudioServer.remove_bus(index)
+
+func preview_sample() -> void:
+	if preview_player==null or DisplayServer.get_name()=="headless": return
+	preview_player.stop(); preview_player.bus=player.bus; preview_player.play()

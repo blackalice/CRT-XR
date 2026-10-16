@@ -33,7 +33,7 @@ func run():
 	var config: ConfigFile=app.capture_settings()
 	effect.sound_level=.6; effect.enabled=false; app.apply_settings(config)
 	check(effect.enabled and effect.sound_level==.25,"Power-on preferences persist independently of per-game picture")
-	app.toggle_settings(); app.menu.open_settings(); app.menu.category=2; app.menu.subsection=3; app.menu.render()
+	app.toggle_settings(); app.menu.open_settings(); app.menu.category=2; app.menu.subsection=0; app.menu.render()
 	app.menu.select("atmosphere.power_sound"); app.menu.reset_option()
 	check(is_equal_approx(effect.sound_level,.6),"Y resets only startup sound volume")
 	app.free()

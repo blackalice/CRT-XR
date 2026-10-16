@@ -8,7 +8,7 @@ const Catalog = preload("res://scripts/ui/menu_catalog.gd")
 const Library = preload("res://scripts/ui/rom_library.gd")
 const RomIndex = preload("res://scripts/content/rom_index.gd")
 const Confirmation = preload("res://scripts/ui/confirmation_panel.gd")
-const CATEGORIES := ["View","Picture","Room","Controls & XR","Saved setups"]
+const CATEGORIES := ["View","Picture","Audio & Room","Controls & XR","Saved setups","General"]
 var host
 var catalog := Catalog.new()
 var library := Library.new()
@@ -28,7 +28,13 @@ var selected_id := ""
 var items: Array = []
 var rows: Array = []
 var preview := false
-var editing := false
+var input_kind := "keyboard"
+var search_query := ""
+var alphabet_origin := "games"
+var search_field: LineEdit
+var back_button: Button
+var preview_button: Button
+var section_hint: Label
 var heading: Label
 var subtitle: Label
 var help_label: Label
@@ -36,8 +42,7 @@ var hints: Label
 var error_label: Label
 var body: HBoxContainer
 var sidebar: VBoxContainer
-var section_bar: VBoxContainer
-var section_title: Label
+var section_bar: HBoxContainer
 var section_tabs: HFlowContainer
 var scroll: ScrollContainer
 var column: VBoxContainer
@@ -84,7 +89,7 @@ func _ready() -> void:
 	heading.add_theme_font_size_override("font_size",32)
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(heading)
-	var back_button := Button.new(); back_button.text = "Back  [B]"
+	back_button = Button.new(); back_button.text = "Back  [B]"
 	back_button.focus_mode = Control.FOCUS_NONE
 	back_button.pressed.connect(back)
 	top.add_child(back_button)
@@ -127,39 +132,34 @@ func _ready() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation",8)
 	body.add_child(content)
-	section_bar = VBoxContainer.new()
+	section_bar = HBoxContainer.new()
 	section_bar.add_theme_constant_override("separation",6)
 	content.add_child(section_bar)
-	var section_navigation := HBoxContainer.new()
-	section_bar.add_child(section_navigation)
-	for dir in [-1,1]:
-		var button := Button.new()
-		button.text = "‹ LT" if dir<0 else "RT ›"
-		button.focus_mode = Control.FOCUS_NONE
-		button.pressed.connect(func(): switch_section(dir))
-		if dir==1:
-			section_title = Label.new()
-			section_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-			section_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			section_title.add_theme_color_override("font_color",MenuSkin.AMBER)
-			section_navigation.add_child(section_title)
-		section_navigation.add_child(button)
 	section_tabs = HFlowContainer.new()
+	section_tabs.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	section_tabs.add_theme_constant_override("h_separation",5)
 	section_tabs.add_theme_constant_override("v_separation",5)
 	section_bar.add_child(section_tabs)
+	section_hint=Label.new(); section_hint.add_theme_font_size_override("font_size",16)
+	section_hint.add_theme_color_override("font_color",MenuSkin.MUTED)
+	section_bar.add_child(section_hint)
 	scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
 	scroll.follow_focus = false
+	search_field=LineEdit.new()
+	search_field.placeholder_text="Search games…  (Ctrl+F)"
+	search_field.text_changed.connect(update_search)
+	content.add_child(search_field); search_field.hide()
 	content.add_child(scroll)
 	column = VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.add_theme_constant_override("separation",6)
 	scroll.add_child(column)
 	compact = Label.new()
-	compact.add_theme_font_size_override("font_size",26)
+	compact.add_theme_font_size_override("font_size",24)
+	compact.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	compact.add_theme_color_override("font_color",MenuSkin.AMBER)
 	layout.add_child(compact); compact.hide()
 	help_label = Label.new()
@@ -171,7 +171,13 @@ func _ready() -> void:
 	hints = Label.new()
 	hints.add_theme_font_size_override("font_size",18)
 	hints.add_theme_color_override("font_color",MenuSkin.MUTED)
+	hints.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	hints.custom_minimum_size.y=48
 	layout.add_child(hints)
+	preview_button=Button.new(); preview_button.text="Adjust with preview"
+	preview_button.focus_mode=Control.FOCUS_NONE
+	preview_button.pressed.connect(toggle_preview)
+	top.add_child(preview_button)
 	visibility_changed.connect(func(): set_process(visible))
 	open_pause()
 	hide()
@@ -195,7 +201,7 @@ func refresh() -> void:
 func open_pause() -> void:
 	remember(); clear_input()
 	mode = "pause"; preview = false
-	selected_id = "resume" if host.emulator.loaded else "games"
+	selected_id = "resume" if host.emulator.loaded else "home.library"
 	memory[state_key()] = {"id":selected_id,"scroll":0}
 	render()
 
@@ -228,8 +234,6 @@ func restore(state: Dictionary) -> void:
 	clear_input(); render()
 
 func back() -> void:
-	if editing:
-		finish_edit(); return
 	if preview:
 		remember(); preview = false; clear_input(); render(); return
 	remember(); clear_input()
@@ -239,6 +243,7 @@ func back() -> void:
 		"library_tools": mode="library"; render()
 		"browser", "volumes", "drives": mode="library_tools"; render()
 		"games", "recent", "favourites": mode="library"; render()
+		"alphabet": mode=alphabet_origin; render()
 		"launch": restore(launch_origin)
 		"slot", "room_presets": mode="settings"; render()
 		"rename": mode="slot"; render()
@@ -285,6 +290,7 @@ func save_draft_name() -> void:
 
 func open_library() -> void:
 	remember(); clear_input(); mode="library"; preview=false
+	search_query=""; search_field.text=""
 	scan_preferred_id=""
 	library.default_dir = host.default_rom_dir
 	rom_index.start(host.default_rom_dir)
@@ -320,14 +326,14 @@ func refresh_library() -> void:
 	render()
 
 func open_system(system: String) -> void:
-	remember(); clear_input()
+	remember(); clear_input(); search_query=""; search_field.text=""
 	library_system=system; game_page=int(system_pages.get(system,0))
 	var count: int = rom_index.games.get(system,[]).size()
 	game_page=clampi(game_page,0,maxi(0,(count-1)/GAMES_PER_PAGE))
 	mode="games"; render()
 
 func change_game_page(delta: int) -> void:
-	var count: int = rom_index.games.get(library_system,[]).size()
+	var count: int = game_entries().size()
 	var next := clampi(game_page+delta,0,maxi(0,(count-1)/GAMES_PER_PAGE))
 	if next==game_page: return
 	remember(); clear_input(); game_page=next; system_pages[library_system]=game_page
@@ -347,7 +353,7 @@ func browse_folders() -> void:
 	show_error("No available folder could be opened.")
 
 func open_default() -> void:
-	if host.default_rom_dir.is_empty(): show_error("No default folder yet. Browse to your ROM folder and press R1.")
+	if host.default_rom_dir.is_empty(): show_error("No default folder yet. Browse to your ROM folder and press RB.")
 	else: open_folder(host.default_rom_dir)
 
 func open_cards() -> void:
@@ -388,10 +394,10 @@ func launch_game(path: String, continuing: bool) -> void:
 	if continuing: host.show_notice(feedback)
 
 func open_history(which: String) -> void:
-	remember(); clear_input(); mode=which; render()
+	remember(); clear_input(); search_query=""; search_field.text=""; mode=which; render()
 
 func game_item(path: String, label: String) -> Dictionary:
-	var item: Dictionary = catalog.action("game:"+path,label,func(): select_file(path),"A opens this cartridge. X adds or removes it from Favourites.",false,"★" if path in host.play_history.favourites else "›")
+	var item: Dictionary = catalog.action("game:"+path,label,func(): select_file(path),"Open this cartridge or mark it as a favourite.",false,"★" if path in host.play_history.favourites else "›")
 	item["rom_path"]=path
 	item["layout"]="game"
 	var system: String=library.Registry.identify(path)
@@ -426,7 +432,13 @@ func perform_state_action(saving: bool) -> void:
 func get_items() -> Array:
 	var h = host
 	match mode:
-		"pause": return [
+		"pause":
+			if not h.emulator.loaded:
+				return [catalog.action("home.continue","Continue last game",func(): select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",h.last_game_path.is_empty() or not FileAccess.file_exists(h.last_game_path),h.last_game_path.get_file().get_basename() if not h.last_game_path.is_empty() else "No recent game"),
+					catalog.action("home.library","Game library",open_library,"Recent, Favourites and supported consoles."),
+					catalog.action("home.settings","Settings",open_settings,"Adjust the view, picture, audio and room."),
+					catalog.action("home.exit","Exit",func(): ask("Exit RetroCRT?","Your settings will be saved.",h.request_exit),"Close RetroCRT.")]
+			return [
 			catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded),
 			catalog.action("games","Choose game",open_library,"Open your recent game, default ROM folder or SD card."),
 			catalog.action("save_state","Save state",func(): state_action(true),"Saves the current game to state slot 0.",not h.emulator.loaded),
@@ -439,8 +451,8 @@ func get_items() -> Array:
 			catalog.action("launch.fresh","Start fresh",func(): launch_game(launch_path,false),"Start from the title screen. Cartridge battery saves and manual states are kept."),
 			catalog.action("launch.cancel","Back",back,"Return without starting this game.")]
 		"recent", "favourites":
-			var result: Array = []
-			var paths: Array = h.play_history.recent if mode=="recent" else h.play_history.favourites
+			var result: Array = [catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",history_paths().is_empty())]
+			var paths: Array = history_paths()
 			for path in paths: result.append(game_item(path,path.get_file().get_basename()))
 			return result
 		"settings": return catalog.pages(category)[subsection].rows
@@ -448,20 +460,29 @@ func get_items() -> Array:
 		"library_tools":
 			return [
 			catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the saved ROM folder for added or removed cartridges.",h.default_rom_dir.is_empty()),
-			catalog.action("library.default","ROM library folder",open_default,h.default_rom_dir if not h.default_rom_dir.is_empty() else "Browse to the main roms folder (containing snes, nes, megadrive, etc.), then press R1."),
+			catalog.action("library.default","ROM library folder",open_default,h.default_rom_dir if not h.default_rom_dir.is_empty() else "Browse to the main roms folder (containing snes, nes, megadrive, etc.), then press RB."),
 			catalog.action("library.sd","SD card",open_cards,"Browse a mounted Steam Deck SD card."),
 			catalog.action("library.browse","Browse folders",browse_folders,"Browse folders on this computer."),
 			catalog.action("library.drives","Computer drives",func(): remember(); clear_input(); mode="drives"; render(),"Choose a drive, then browse to your ROM folder.",OS.get_name()!="Windows"),
 			catalog.action("library.clear","Clear default folder",func(): set_default(""),"Forget the default folder without changing any files.",h.default_rom_dir.is_empty())]
 		"games":
-			var result: Array = []
-			var games: Array = rom_index.games.get(library_system,[])
+			var result: Array = [catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",game_entries().is_empty())]
+			var games: Array = game_entries()
 			for game in games.slice(game_page*GAMES_PER_PAGE,(game_page+1)*GAMES_PER_PAGE):
 				var path: String = game.path
 				result.append(game_item(path,game.label))
 			if games.size()>GAMES_PER_PAGE:
-				result.append(catalog.action("games.previous","Previous page",func(): change_game_page(-1),"Also available with L1 or Left.",game_page==0))
-				result.append(catalog.action("games.next","Next page",func(): change_game_page(1),"Also available with R1 or Right.",(game_page+1)*GAMES_PER_PAGE>=games.size()))
+				result.append(catalog.action("games.previous","Previous page",func(): change_game_page(-1),"Also available with LB or Left.",game_page==0))
+				result.append(catalog.action("games.next","Next page",func(): change_game_page(1),"Also available with RB or Right.",(game_page+1)*GAMES_PER_PAGE>=games.size()))
+			return result
+		"alphabet":
+			var result: Array=[]
+			var available: Dictionary={}
+			for entry in alphabet_entries(): available[letter_for(str(entry.label))]=true
+			for letter in ["#","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"]:
+				var chosen: String=letter
+				var item=catalog.action("letter."+chosen,chosen,func(): jump_to_letter(chosen),"Jump to the first matching game.",not available.has(chosen))
+				item.layout="letter"; result.append(item)
 			return result
 		"browser":
 			var result: Array = []
@@ -472,7 +493,7 @@ func get_items() -> Array:
 					if folder: open_folder(path)
 					else: select_file(path),path,false,"Folder" if folder else entry.get("system","Game")))
 			result.append(catalog.action("folder.home","Home folder",func(): open_folder(library.home_folder()),"Browse your home folder."))
-			result.append(catalog.action("folder.remember","Set as default",func(): set_default(library.current_dir),"Remember this folder as the default ROM location. Also available on R1."))
+			result.append(catalog.action("folder.remember","Set as default",func(): set_default(library.current_dir),"Remember this folder as the default ROM location. Also available on RB."))
 			return result
 		"drives":
 			var result: Array = []
@@ -504,7 +525,6 @@ func get_items() -> Array:
 
 func render() -> void:
 	if not is_instance_valid(column) or not visible: return
-	editing=false
 	rendering = true
 	items = get_items()
 	if preview:
@@ -526,22 +546,31 @@ func render() -> void:
 				grid=GridContainer.new();grid.columns=2;grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);column.add_child(grid)
 			parent=grid
 			item["nav_row"]=group_row+group_index/2; item["nav_col"]=group_index%2; group_index+=1
-		if item.id=="exit":
+		if item.get("layout","")=="letter":
+			if grid==null:
+				grid=GridContainer.new(); grid.columns=6; grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); column.add_child(grid)
+			parent=grid
+			item["nav_row"]=group_index/6; item["nav_col"]=group_index%6; group_index+=1
+		if item.id in ["exit","home.exit"]:
 			var divider := HSeparator.new()
 			column.add_child(divider)
 		var row = LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))
 		parent.add_child(row); row.configure(item)
 		row.selected.connect(select)
-		row.adjust_requested.connect(func(id,delta): select(id); begin_edit(); adjust(delta))
-		row.pressed.connect(func(): select(item.id); activate())
+		row.adjust_requested.connect(func(id,delta):
+			select(id,false)
+			if selected_id==id: adjust(delta))
+		row.pressed.connect(func(): select(item.id,false); activate())
+		if item.get("layout","")=="letter":
+			row.custom_minimum_size=Vector2(84,46); row.value_label.hide()
 		rows.append(row)
 	sidebar.visible = mode=="settings" and not preview
 	section_bar.visible = mode=="settings" and not preview
 	for i in range(sidebar_buttons.size()):
-		sidebar_buttons[i].add_theme_stylebox_override("normal",MenuSkin.box(Color("3b3022"),MenuSkin.AMBER,2) if i==category else MenuSkin.box(Color("23272d")))
+		sidebar_buttons[i].add_theme_stylebox_override("normal",MenuSkin.box(Color("332e27"),Color.TRANSPARENT,0) if i==category else MenuSkin.box(Color("23272d")))
 	if mode=="settings":
 		var pages: Array = catalog.pages(category)
-		section_title.text = "%s  ·  %d of %d" % [pages[subsection].title,subsection+1,pages.size()]
+		section_hint.text="LT / RT · Sections" if input_kind=="controller" else "Z / C · Sections"
 		for child in section_tabs.get_children(): section_tabs.remove_child(child);child.queue_free()
 		for i in range(pages.size()):
 			var index: int = i
@@ -549,15 +578,17 @@ func render() -> void:
 			tab.text = ("▸ " if i==subsection else "")+str(pages[i].title)
 			tab.focus_mode=Control.FOCUS_NONE
 			tab.add_theme_font_size_override("font_size",18)
-			tab.add_theme_stylebox_override("normal",MenuSkin.box(Color("3b3022"),MenuSkin.AMBER,2,8) if i==subsection else MenuSkin.box(Color("23272d"),Color("52565c"),1,8))
+			tab.add_theme_stylebox_override("normal",MenuSkin.box(Color("39342d"),Color.TRANSPARENT,0,8) if i==subsection else MenuSkin.box(Color("23272d"),Color("52565c"),1,8))
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","pause":"RetroCRT XR","library":"Your game library","library_tools":"Library locations","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"RetroCRT XR")
+	else: heading.text = {"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","pause":"RetroCRT XR" if host.emulator.loaded else "Welcome to RetroCRT XR","library":"Your game library","library_tools":"Library locations","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"RetroCRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm": confirm_panel.describe(confirmation.title,confirmation.detail)
 	rename_field.visible = mode=="rename"
 	if mode=="rename": rename_field.text = str(draft_names.get(host.selected_profile,setup_name()))
+	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites"] and not preview
+	if not search_field.visible and search_field.has_focus(): search_field.release_focus()
 	body.visible = not preview
 	compact.visible = preview
 	subtitle.visible = not preview
@@ -601,11 +632,10 @@ func select(id: String, user_action := true) -> void:
 	for row in rows:
 		if row.item.id==id and not row.disabled: candidate=row
 	if candidate==null: return
-	if editing and id!=selected_id: clear_input()
 	selecting = true
 	selected_id = id
 	for row in rows: row.set_selected(row==candidate)
-	if not preview and get_viewport().gui_get_focus_owner()!=candidate: candidate.grab_focus()
+	if not preview and not search_field.has_focus() and get_viewport().gui_get_focus_owner()!=candidate: candidate.grab_focus()
 	selecting = false
 	reveal_selected.call_deferred()
 	refresh_labels()
@@ -622,15 +652,16 @@ func refresh_labels() -> void:
 	elif mode=="library":
 		subtitle.text = ("Finding your games… %d found · You can browse while we look" % rom_index.total()) if rom_index.scanning else ("%d games · %d consoles · Ready to play" % [rom_index.total(),rom_index.games.values().filter(func(games): return not games.is_empty()).size()] if rom_index.total()>0 else "SNES · NES · Mega Drive · Master System · Game Gear")
 	elif mode=="games":
-		var count: int = rom_index.games.get(library_system,[]).size()
-		subtitle.text = "%d games · Page %d of %d · L1/R1 pages" % [count,game_page+1,maxi(1,ceili(float(count)/GAMES_PER_PAGE))]
+		var count: int = game_entries().size()
+		subtitle.text = "%d games · Page %d of %d" % [count,game_page+1,maxi(1,ceili(float(count)/GAMES_PER_PAGE))]
 	elif mode in ["recent","favourites"]:
-		subtitle.text = "%d games · X adds or removes a favourite" % items.size()
+		subtitle.text = "%d games" % history_paths().size()
 	elif mode=="launch": subtitle.text = launch_path.get_file().get_basename()
 	elif mode=="library_tools": subtitle.text = host.default_rom_dir if not host.default_rom_dir.is_empty() else "Choose the main roms folder, once"
-	elif mode=="settings": subtitle.text = ("Editing · " if editing else "")+(context if category==1 else "Global settings")+(" · changes apply live" if editing else "  ·  ←→ Categories")
+	elif mode=="settings": subtitle.text = context if category==1 else "Global settings"
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
 	else: subtitle.text = "RetroCRT XR"
+	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0: help_label.text = notification
 	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in Recently played or a system list and press X. B returns."
 	elif mode=="pause" and not host.emulator.loaded: help_label.text = status_detail
@@ -640,14 +671,37 @@ func refresh_labels() -> void:
 	elif row!=null: help_label.text = str(row.item.label)+" — "+str(row.item.get("help",""))
 	else: help_label.text = library.message if mode=="browser" else "Nothing to select. B returns."
 	if preview and row!=null: compact.text = "▸  %s    ‹  %s  ›" % [row.item.label,row.formatted_value()]
-	if mode=="library": hints.text = "D-pad Select   A Open   B Back   R1 Refresh"
-	elif mode=="browser": hints.text = "A Open   B Back   L1 Up   X SD card   Y Default   R1 Save default"
-	elif mode in ["games","recent","favourites"]: hints.text = "↑↓ Select   A Play   X Favourite   B Systems"+("   L1/R1 Pages" if mode=="games" else "")
-	elif preview: hints.text = "↑↓ Option   ←→ Adjust   Y Reset   X / B Settings"
-	elif mode=="settings":
-		hints.text = "←→ Adjust   A / B Done   Y Reset   X Preview" if editing else "↑↓ Option   ←→ Category   A Edit / Open   B Back   Y Reset   LT/RT Section"
-	elif mode=="rename": hints.text = "Keyboard: type a name / Enter   ↓ Save   B Cancel"
-	else: hints.text = "↑↓ Select   A Select   B Back   R3 Recenter"
+	refresh_hints(row)
+
+func preview_available() -> bool:
+	if mode!="settings": return false
+	return items.any(func(item): return item.get("visual",false) and not item.get("disabled",false) and item.kind!="action")
+
+func refresh_hints(row) -> void:
+	var pad := input_kind=="controller"
+	back_button.text="Back  [B]" if pad else "Back  [Backspace]"
+	preview_button.visible=preview_available() and not preview
+	if mode=="settings":
+		var parts: Array[String]=["↑↓ Select"]
+		if row!=null and not row.disabled:
+			if row.item.kind!="action": parts.append("←→ Adjust")
+			parts.append(("A " if pad else "Enter ")+("Toggle" if row.item.kind=="toggle" else ("Open" if row.item.kind=="action" else "Preview" if row.item.get("visual",false) else "Change")))
+			if row.item.has("default"): parts.append("Y Reset")
+		if preview: parts.append("X / B Settings" if pad else "X / Backspace Settings")
+		else:
+			parts.append("B Back" if pad else "Backspace Back")
+			parts.append("LB/RB Category · LT/RT Section" if pad else "Q/E Category · Z/C Section")
+			if preview_available(): parts.append("X Preview")
+		hints.text="   ".join(parts)
+	elif mode in ["games","recent","favourites"]:
+		hints.text="↑↓ Select   "+("A Open · B Back" if pad else "Enter Open · Backspace Back · Ctrl+F Search")
+		if row!=null and row.item.has("rom_path"): hints.text+="   X Favourite"
+		if pad and not search_query.is_empty(): hints.text+="   Y Clear search"
+		if mode=="games" and game_entries().size()>GAMES_PER_PAGE: hints.text+="   LB/RB Page" if pad else "   ←/→ Page"
+	elif mode=="browser": hints.text="A Open · B Back · LB Up · X SD · Y Default · RB Save default" if pad else "↑↓ Select · Enter Open · Backspace Back"
+	elif mode=="library": hints.text="D-pad Select · A Open · B Back · RB Refresh" if pad else "Arrows Select · Enter Open · Backspace Back · R Refresh"
+	elif mode=="rename": hints.text="Type a name · Enter Save · ↓ Select button"
+	else: hints.text="D-pad Select · A Open · B Back" if pad else "Arrows Select · Enter Open · Backspace Back"
 
 func navigate_library(next: Vector2i) -> void:
 	var row=selected_row()
@@ -655,9 +709,13 @@ func navigate_library(next: Vector2i) -> void:
 	var x: int=row.item.nav_col
 	var y: int=row.item.nav_row
 	if next.x!=0:
+		var closest=null
 		for candidate in rows:
-			if not candidate.disabled and candidate.item.nav_row==y and candidate.item.nav_col==x+next.x:
-				select(candidate.item.id); return
+			if candidate.disabled or candidate.item.nav_row!=y: continue
+			var dx:int=candidate.item.nav_col-x
+			if signi(dx)!=next.x: continue
+			if closest==null or absi(dx)<absi(int(closest.item.nav_col)-x): closest=candidate
+		if closest!=null: select(closest.item.id)
 	elif next.y!=0:
 		var target := y+next.y
 		var last_row := 0
@@ -671,13 +729,7 @@ func navigate_library(next: Vector2i) -> void:
 			target+=next.y
 
 func navigate(next: Vector2i) -> void:
-	if mode=="library": navigate_library(next); return
-	if mode=="settings" and not preview:
-		if editing:
-			if next.x!=0: adjust(next.x)
-			return
-		if next.x!=0:
-			switch_category(next.x); return
+	if mode in ["library","alphabet"]: navigate_library(next); return
 	var index := -1
 	for i in range(rows.size()):
 		if rows[i].item.id==selected_id: index=i
@@ -692,9 +744,9 @@ func navigate(next: Vector2i) -> void:
 		else: adjust(next.x)
 
 func adjust(delta: int) -> void:
-	if mode=="settings" and not editing and not preview: return
+	if mode!="settings": return
 	var row = selected_row()
-	if row==null: return
+	if row==null or row.disabled: return
 	var item: Dictionary = row.item
 	match item.kind:
 		"number": item.setter.call(clampf(snappedf(float(item.getter.call())+delta*float(item.step),float(item.step)),item.min,item.max))
@@ -703,36 +755,31 @@ func adjust(delta: int) -> void:
 	row.refresh(); refresh_labels()
 
 func activate() -> void:
-	var row = selected_row()
+	var row=selected_row()
 	if row==null or row.disabled: return
-	if editing: finish_edit()
-	elif row.item.kind=="action": row.item.action.call()
-	elif preview: adjust(1)
-	else: begin_edit()
-	refresh_labels()
-
-func begin_edit() -> void:
-	var row = selected_row()
-	if row==null or row.item.kind=="action" or preview: return
-	clear_input(); editing=true
-	row.set_editing(true)
-	refresh_labels()
-
-func finish_edit() -> void:
-	clear_input()
+	if row.item.kind=="action": row.item.action.call()
+	elif row.item.kind=="toggle": adjust(-1 if bool(row.item.getter.call()) else 1)
+	elif row.item.get("visual",false) and not preview: toggle_preview()
+	else: adjust(1)
 	refresh_labels()
 
 func reset_option() -> void:
 	var row = selected_row()
-	if row==null or not row.item.has("default"): return
+	if row==null or row.disabled or not row.item.has("default"): return
 	row.item.setter.call(row.item.default)
 	row.refresh(); notify("Selected option restored to its default")
 
 func toggle_preview() -> void:
 	if mode!="settings": return
-	var row = selected_row()
-	if row==null or not row.item.get("visual",false): return
-	remember(); preview=not preview; clear_input(); render()
+	if preview:
+		remember(); preview=false; clear_input(); render(); return
+	if not preview_available(): return
+	var row=selected_row()
+	if row==null or row.disabled or not row.item.get("visual",false):
+		for candidate in rows:
+			if not candidate.disabled and candidate.item.get("visual",false):
+				select(candidate.item.id,false); break
+	remember(); preview=true; clear_input(); render()
 
 func notify(message: String) -> void:
 	notification = message; notification_time=4.0
@@ -742,9 +789,6 @@ func show_error(message: String) -> void:
 	error_label.text=message; error_label.show()
 
 func clear_input() -> void:
-	editing=false
-	for row in rows:
-		if is_instance_valid(row): row.set_editing(false)
 	direction=Vector2i.ZERO; repeat_remaining=0
 	dpad.clear()
 	for button in held:
@@ -765,6 +809,10 @@ func release_input(event: InputEvent) -> void:
 		if event.axis==JOY_AXIS_LEFT_Y: stick.y=event.axis_value
 
 func handle(event: InputEvent) -> bool:
+	if (event is InputEventJoypadButton and event.pressed) or (event is InputEventJoypadMotion and absf(event.axis_value)>.55):
+		set_input_kind("controller")
+	if event is InputEventMouse:
+		set_input_kind("keyboard"); return false
 	if event is InputEventJoypadButton or event is InputEventJoypadMotion:
 		if device!=event.device:
 			clear_input(); held.clear(); blocked.clear(); stick=Vector2.ZERO; stick_blocked=false; triggers.clear()
@@ -785,6 +833,7 @@ func handle(event: InputEvent) -> bool:
 			JOY_BUTTON_B: back()
 			JOY_BUTTON_Y:
 				if mode=="browser": open_default()
+				elif mode in ["games","recent","favourites"] and not search_query.is_empty(): search_field.text=""; update_search("")
 				else: reset_option()
 			JOY_BUTTON_X:
 				if mode=="browser": open_cards()
@@ -794,19 +843,19 @@ func handle(event: InputEvent) -> bool:
 			JOY_BUTTON_LEFT_SHOULDER:
 				if mode=="browser": default_armed=false; open_folder(library.current_dir.get_base_dir())
 				elif mode=="games": change_game_page(-1)
-				elif not editing: switch_category(-1)
+				else: switch_category(-1)
 			JOY_BUTTON_RIGHT_SHOULDER:
 				if mode=="browser": default_armed=not held.get(JOY_BUTTON_LEFT_SHOULDER,false)
 				elif mode=="games": change_game_page(1)
 				elif mode=="library": refresh_library()
-				elif not editing: switch_category(1)
+				else: switch_category(1)
 		return true
 	if event is InputEventJoypadMotion:
 		if event.axis in [JOY_AXIS_TRIGGER_LEFT,JOY_AXIS_TRIGGER_RIGHT]:
 			if event.axis_value<.25: triggers[event.axis]=false
 			elif event.axis_value>.65 and not triggers.get(event.axis,false):
 				triggers[event.axis]=true
-				if not editing: switch_section(-1 if event.axis==JOY_AXIS_TRIGGER_LEFT else 1)
+				switch_section(-1 if event.axis==JOY_AXIS_TRIGGER_LEFT else 1)
 		elif event.axis in [JOY_AXIS_LEFT_X,JOY_AXIS_LEFT_Y]:
 			if event.axis==JOY_AXIS_LEFT_X: stick.x=event.axis_value
 			else: stick.y=event.axis_value
@@ -814,6 +863,14 @@ func handle(event: InputEvent) -> bool:
 			update_direction()
 		return true
 	if event is InputEventKey:
+		set_input_kind("keyboard")
+		if mode in ["games","recent","favourites"]:
+			if event.pressed and not event.echo and event.ctrl_pressed and event.physical_keycode==KEY_F:
+				clear_input(); search_field.grab_focus(); return true
+			if search_field.has_focus():
+				if event.pressed and event.physical_keycode in [KEY_DOWN,KEY_UP,KEY_ENTER,KEY_KP_ENTER]:
+					search_field.release_focus(); select(selected_id,false); return true
+				return false
 		if mode=="rename" and get_viewport().gui_get_focus_owner()==rename_field:
 			if event.pressed and event.physical_keycode==KEY_DOWN:
 				select("rename.save"); return true
@@ -831,16 +888,20 @@ func handle(event: InputEvent) -> bool:
 				KEY_X:
 					if mode in ["games","recent","favourites"]: toggle_favourite()
 					else: toggle_preview()
+				KEY_J:
+					if mode in ["games","recent","favourites"]: open_alphabet()
+				KEY_R:
+					if mode=="library": refresh_library()
 				KEY_TAB:
-					if not editing: switch_category(-1 if event.shift_pressed else 1)
+					switch_category(-1 if event.shift_pressed else 1)
 				KEY_Q:
-					if not editing: switch_category(-1)
+					switch_category(-1)
 				KEY_E:
-					if not editing: switch_category(1)
+					switch_category(1)
 				KEY_Z:
-					if not editing: switch_section(-1)
+					switch_section(-1)
 				KEY_C:
-					if not editing: switch_section(1)
+					switch_section(1)
 		return true
 	return false
 
@@ -869,3 +930,51 @@ func _process(delta: float) -> void:
 		refresh_elapsed=0
 		for row in rows: row.refresh()
 		refresh_labels()
+
+func set_input_kind(kind: String) -> void:
+	if kind==input_kind: return
+	input_kind=kind
+	search_field.visible=kind=="keyboard" and mode in ["games","recent","favourites"]
+	if kind=="controller" and search_field.has_focus():
+		search_field.release_focus(); select(selected_id,false)
+	if mode=="settings": section_hint.text="LT / RT · Sections" if kind=="controller" else "Z / C · Sections"
+	refresh_labels()
+
+func update_search(value: String) -> void:
+	remember(); clear_input(); search_query=value; game_page=0; render()
+
+func game_entries() -> Array:
+	var games: Array=rom_index.games.get(library_system,[])
+	if search_query.is_empty(): return games
+	return games.filter(func(game): return str(game.label).to_lower().contains(search_query.to_lower()))
+
+func history_paths() -> Array:
+	var paths: Array=host.play_history.recent if mode=="recent" else host.play_history.favourites
+	return paths.filter(func(path): return str(path).get_file().get_basename().to_lower().contains(search_query.to_lower()))
+
+func open_alphabet() -> void:
+	if mode not in ["games","recent","favourites"]: return
+	remember(); clear_input(); alphabet_origin=mode; mode="alphabet"; render()
+
+func alphabet_entries() -> Array:
+	if alphabet_origin=="games": return game_entries()
+	var paths: Array=host.play_history.recent if alphabet_origin=="recent" else host.play_history.favourites
+	var result: Array=[]
+	for path in paths:
+		var label: String=str(path).get_file().get_basename()
+		if label.to_lower().contains(search_query.to_lower()): result.append({"path":path,"label":label})
+	return result
+
+func letter_for(label: String) -> String:
+	var letter:=label.left(1).to_upper()
+	return letter if letter>="A" and letter<="Z" else "#"
+
+func jump_to_letter(letter: String) -> void:
+	var entries:=alphabet_entries()
+	for i in range(entries.size()):
+		if letter_for(str(entries[i].label))!=letter: continue
+		remember(); clear_input(); mode=alphabet_origin
+		if mode=="games": game_page=i/GAMES_PER_PAGE; system_pages[library_system]=game_page
+		selected_id="game:"+str(entries[i].path)
+		memory[state_key()]={"id":selected_id,"scroll":0}
+		render(); return

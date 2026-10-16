@@ -42,6 +42,9 @@ func picture_fields(fields: Array) -> Array:
 		var item := {"id":"picture."+key,"label":str(field[1]).replace(" (lower = lighter)","").replace(" (0 = off)",""),"kind":"number","min":field[2],"max":field[3],"step":field[4],"default":field[5],"visual":true,
 			"getter":func(): return host.world.picture.values[key],"setter":func(value): host.world.picture.set_value(key,value),
 			"help":tips.get(key,"Adjusts the picture immediately. Y restores this option's default.")}
+		if key in ["composite_strength","artifact_strength","phase_noise","signal_motion"] and host.world.picture.mode==0:
+			item.disabled=true; item.disabled_reason="Available in composite signal mode."
+			item.help += " " + item.disabled_reason
 		item.unit = "degrees" if key=="hue" else ("x" if key in ["brightness","contrast"] else ("" if key in ["gamma","beam_softness"] else "percent"))
 		result.append(item)
 	return result
@@ -83,9 +86,9 @@ func pages(category: int) -> Array:
 			for pair in [["showcase","Deck Showcase (PAL)"],["clean","Clean source"],["rgb","RGB CRT"],["auto","Auto composite"],["pal","PAL composite"],["ntsc","NTSC composite"]]:
 				var preset: String = pair[0]
 				presets.append(action("preset."+preset,pair[1],func(): h.apply_picture_preset(preset),"Applies a starting point for CRT, colour and signal settings."))
-			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(),"help":"RGB is clean. Composite modes add colour decoding and interference; Auto uses the game rate."}]
+			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference; Auto uses the game rate."}]
 			signal_rows.append_array(picture_fields(w.picture.COLOR_FIELDS.slice(6)))
-			return [page("CRT",crt),page("Screen fit",fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows),page("Presets",presets)]
+			return [page("Presets",presets),page("CRT",crt),page("Screen fit",fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
 		2:
 			var groups := {"Lighting":[],"Materials":[],"Placement & fade":[]}
 			var tips := {
@@ -106,14 +109,25 @@ func pages(category: int) -> Array:
 			groups.Lighting.append(action("room.presets","Lighting presets",func(): menu.open_room_presets(),"Choose Warm bedroom, Bright inspection or Dim XR."))
 			groups.Materials.append(toggle("room.rug","Bedroom rug",w,"show_rug",true,"Shows or hides the rug without changing the rest of the set.",w.apply_room_settings))
 			var audio = h.emulator.tv_audio
-			return [page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Placement & fade",groups["Placement & fade"]),page("Audio",[
-				{"id":"audio.mode","label":"Sound mode","kind":"choice","choices":["Original","TV speakers","TV in room"],"default":2,"visual":false,"getter":func(): return audio.mode,"setter":func(value): audio.mode=value; audio.apply(),"help":"Original bypasses processing. TV speakers adds cabinet character. TV in room adds quiet reflections and head-relative panning. Resume the game to listen."},
-				number("audio.room_amount","Room amount",audio,"room_amount",0,.25,.01,audio.DEFAULTS.room_amount,"percent","Quiet, short bedroom reflections. Applies in TV in room mode; the direct game sound stays immediate.",audio.apply,false),
-				number("audio.speaker_character","Speaker character",audio,"speaker_character",0,1,.05,audio.DEFAULTS.speaker_character,"percent","Narrows the game's stereo image and gently reduces bass and treble, suggesting small TV speakers. Original bypasses this.",audio.apply,false),
-				number("audio.directional_strength","Directional strength",audio,"directional_strength",0,1,.05,audio.DEFAULTS.directional_strength,"percent","In TV in room mode, sound stays towards the TV as you turn your head. Zero disables movement. Stereo panning, without binaural filtering.",audio.apply,false),
-				toggle("atmosphere.power_on","TV power-on effect",h.power_on,"enabled",true,"A brief tube warm-up and quiet switch sound when the TV is first revealed. Does not pause or delay the game.",h.power_on.apply,false),
-				number("atmosphere.power_sound","Power-on sound volume",h.power_on,"sound_level",0,1,.05,.60,"percent","Volume of the recorded CRT switch sound. Zero keeps the picture effect silent.",h.power_on.apply,false),
-				action("atmosphere.preview","Preview TV power-on",h.preview_power_on,"Closes this menu and replays the short picture and sound effect.",not h.power_on.enabled)])]
+			var audio_rows: Array=[
+				{"id":"audio.mode","label":"Sound mode","kind":"choice","choices":["Original","TV speakers","TV in room"],"default":2,"visual":false,"getter":func(): return audio.mode,"setter":func(value): audio.mode=value; audio.apply(); menu.refresh(),"help":"Original bypasses processing. TV speakers adds cabinet character. TV in room adds reflections and head-relative panning."},
+				number("audio.room_amount","Room amount",audio,"room_amount",0,.25,.01,audio.DEFAULTS.room_amount,"percent","Quiet, short room reflections.",audio.apply,false),
+				number("audio.speaker_character","Speaker character",audio,"speaker_character",0,1,.05,audio.DEFAULTS.speaker_character,"percent","Narrows stereo and softens bass and treble.",audio.apply,false),
+				number("audio.directional_strength","Directional strength",audio,"directional_strength",0,1,.05,audio.DEFAULTS.directional_strength,"percent","Keeps the sound towards the TV as your head turns.",audio.apply,false)]
+			for index in [1,2,3]:
+				if (index==2 and audio.mode==0) or (index!=2 and audio.mode!=2):
+					audio_rows[index].disabled=true
+					audio_rows[index].disabled_reason="Available with TV speakers or TV in room mode." if index==2 else "Available in TV in room mode."
+					audio_rows[index].help += " " + audio_rows[index].disabled_reason
+			audio_rows.append(action("audio.preview","Preview sound",audio.preview_sample,"Plays a short sample through the selected sound mode while the game stays paused."))
+			audio_rows.append(toggle("atmosphere.power_on","TV power-on effect",h.power_on,"enabled",true,"Brief tube warm-up and switch sound when first revealed.",func(): h.power_on.apply(); menu.refresh(),false))
+			var volume=number("atmosphere.power_sound","Power-on sound volume",h.power_on,"sound_level",0,1,.05,.60,"percent","Zero keeps the startup effect silent.",h.power_on.apply,false)
+			if not h.power_on.enabled:
+				volume.disabled=true; volume.disabled_reason="Enable the TV power-on effect first."; volume.help += " " + volume.disabled_reason
+			audio_rows.append(volume)
+			audio_rows.append(action("atmosphere.preview","Preview TV power-on",h.preview_power_on,"Closes settings and replays the picture and sound effect.",not h.power_on.enabled))
+			return [page("Audio",audio_rows),page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Placement & fade",groups["Placement & fade"])]
+
 		3:
 			var tracking: Array = [
 				action("tracking.real","Use glasses / retry",func(): h.use_tracking(true); menu.refresh(),"Connects or retries the glasses' tracking driver."),
@@ -126,14 +140,13 @@ func pages(category: int) -> Array:
 				toggle("controls.distance","Right stick adjusts distance",h,"right_stick_distance",true,"Stick up brings the TV closer; stick down moves it farther away.",unchanged,false),
 				property_row("distance_speed","Distance adjustment speed",.2,2,.1,"m/s","Speed of the right-stick distance control, in metres per second.",false),
 				{"id":"controls.preview","label":"Reduce input delay","kind":"choice","choices":["Off","1 frame","2 frames"],"default":1,"visual":false,"getter":func(): return h.emulator.run_ahead,"setter":func(value): h.emulator.run_ahead=value,"help":"Runs extra presentation-only game frames from a snapshot that is then restored. Two frames costs about twice the preview work."}]),
-				page("Tracking",tracking),page("Calibration",[
+				page("Tracking",tracking),page("Advanced calibration",[
 				property_row("ipd","IPD (m)",0,.08,.001,"mm","Virtual eye separation; match your interpupillary distance."),
 				property_row("convergence","Convergence (m)",1,10,.1,"m","Depth at which the stereo views have zero horizontal disparity."),
 				property_row("vertical_fov","Vertical field of view",18,70,.5,"degrees","Advanced camera calibration. The glasses normally use 24 degrees."),
 				property_row("smoothing","Smoothing (seconds)",0,.15,.01,"ms","Tracking smoothing; higher values can feel less immediate."),
 				property_row("motion_predict","Motion prediction (seconds)",0,.08,.005,"ms","Extrapolates recent head rotation toward the frame being drawn, reducing perceived lag while moving. Zero keeps raw driver timing."),
-				action("system.signal","Stop game / test signal",func(): h.emulator.stop(); menu.open_pause(),"Stops emulation and restores the calibration pattern.",not h.emulator.loaded),
-				action("system.reset","Reset all settings",func(): menu.confirm_reset(),"Restores all option defaults, without deleting ROMs, save states or SRAM.")])]
+				action("system.signal","Stop game / test signal",func(): h.emulator.stop(); menu.open_pause(),"Stops emulation and restores the calibration pattern.",not h.emulator.loaded)])]
 		4:
 			var slots: Array = [action("slot.showcase","Deck Showcase",h.load_showcase_setup,"Your tuned picture, placement, dark room and TV audio. Keeps display mode, platform FOV, tracking axes and per-game preference; hides metrics. Undo is available after loading.",false,"Built-in")]
 			for i in range(3):
@@ -145,4 +158,6 @@ func pages(category: int) -> Array:
 			return [page("Setup slots",slots),page("Per-game picture",[
 				{"id":"setups.pergame","label":"Remember picture per game","kind":"toggle","default":h.Showcase.PER_GAME_PICTURE,"visual":false,"getter":func(): return h.remember_game_picture,"setter":h.set_remember_game_picture,"help":"Fitting, CRT and colour belong to the game; room and view stay global."},
 				action("setups.global","Use global picture for this game",h.forget_game_picture,"Removes this game's picture override; future global picture changes apply.",h.active_game_key.is_empty())])]
+		5:
+			return [page("General",[action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")])]
 	return []

@@ -4,43 +4,36 @@ This update is local only. The installed Steam Deck build has not changed.
 
 ## Pause menu and settings
 
-L1 + R1 + Start or Escape opens the pause menu: Resume, Choose game, Save state,
-Load state, Screenshot, Settings and Exit. Unavailable actions are disabled and
-skipped. Opening with a game selects Resume; without a game it selects Choose game.
-R3 remains the recenter shortcut. B returns one level; B at the pause menu saves
-preferences and resumes the previous game state. The menu chord / Escape closes
-from any page. If saving fails, the menu stays open with its selection and an error.
-
-Settings have five categories, with separate subsection pages:
+LB + RB + Start or Escape opens the menu. Without a game, Home shows Continue last game,
+Game library, Settings and Exit. Continue is disabled when its cartridge is unavailable.
+With a game loaded, the pause menu provides Resume, Choose game, Save state, Load state,
+Screenshot, Settings and Exit. R3 recentres. B returns one level; at the root it saves
+and restores the previous pause state. Failed saves keep the menu open with an error.
 
 | Category | Subsections |
 |---|---|
 | View | Placement; Display |
-| Picture | CRT; Screen fit; Colour; Signal; Presets |
-| Room | Lighting; Materials; Placement & fade |
-| Controls & XR | Controller; Tracking; Calibration |
+| Picture | Presets; CRT; Screen fit; Colour; Signal |
+| Audio & Room | Audio; Lighting; Materials; Placement & fade |
+| Controls & XR | Controller; Tracking; Advanced calibration |
 | Saved setups | Setup slots; Per-game picture |
+| General | General (reset all settings) |
 
-Up/down or left-stick selects rows and stops at list ends. While browsing,
-Left/right changes the category in the sidebar. **A selects an option for editing**;
-its marker becomes a diamond, its border strengthens and adjustment arrows appear.
-Left/right then changes that value, with live updates. **A or B finishes editing**
-and keeps the value; B returns to the previous page only when not editing.
-Numbers, choices and switches share this interaction. Actions still run with A.
-Y resets only the selected editable option, in either browsing or editing mode.
-L1/R1 also changes category; L2/R2 changes subsection once per trigger press.
-Shoulders/triggers and row navigation are ignored while editing. All subsection
-names appear as clickable tabs, with a marker for the active one and an explicit
-position/count such as “Screen fit · 2 of 5”. Category, subsection, selected row and scroll
-position are remembered for the session. Child pages restore their originating
-selection. Pointer hover is visually distinct and does not move controller focus.
+Up/down selects, left/right adjusts immediately, A toggles switches or opens actions,
+and Y resets only the selected option. There is no edit lock. LB/RB changes category;
+LT/RT changes subsection once per trigger press. Category and subsection selection use
+quiet fills; the focused setting gets the strongest amber border and arrow marker.
+Subsections appear in one compact tab area with input-specific navigation hints.
 
-Keyboard: Up/down selects; Left/right changes category until Enter or Space
-starts editing, then adjusts the value. Enter/Space finishes editing; Backspace
-finishes editing or returns one level;
-Y resets; X previews; Q/E or Tab changes category; Z/C changes subsection.
-The sidebar, subsection arrows, setting arrows and rows also support the pointer.
-Clicking another row/category finishes the current edit without undoing its changes.
+For keyboard users, arrows select/adjust, Enter activates, Backspace returns, Q/E or
+Tab changes category, and Z/C changes subsection. Hints follow the last-used input
+method. Pointer hover does not steal selection. Disabled sound and composite options
+show a reason and cannot be changed using their arrows.
+
+Audio includes Preview sound, which plays the existing licensed CRT sample through
+the selected sound mode while emulation remains paused. Original bypasses the effects;
+TV speakers enables speaker character; TV in room additionally enables room amount
+and directional strength.
 
 The selected row has a contrasting background, amber border and arrow marker.
 The fixed help area explains it; values show suitable units. Picture pages state
@@ -50,7 +43,8 @@ and UI processing stop while closed.
 
 ## Compact adjustment preview
 
-X on a visual setting replaces the page with a bottom strip. Left/right adjusts,
+The visible Adjust with preview button, X, or A on a visual value opens a bottom strip.
+Moving between settings does not automatically hide the full panel. Left/right adjusts,
 up/down selects adjacent visual settings in that subsection, Y resets and X/B
 returns. Category/subsection inputs are ignored. The game remains paused, while
 picture, lighting and real head tracking continue updating immediately.
@@ -62,7 +56,11 @@ plus recent game, default folder, SD cards and manual browsing. Select the main
 ROM folder containing `snes`, `megadrive`, etc. with R1, rather than a single
 system folder. System lists include subfolders, use natural title sorting, and
 remember page/selection/scroll. Left/right or L1/R1 changes pages of 50 games;
-B returns to the system selector. Refresh library rescans additions/removals.
+B returns to the system selector. Jump to letter opens a controller-friendly A–Z/# grid
+and jumps across pages; missing letters are disabled. Ctrl+F focuses keyboard search;
+Down or Enter returns to the list. X remains Favourite and J opens the alphabet when
+search is not focused. Search includes Recent and Favourites.
+Refresh library rescans additions/removals.
 In a folder: A opens, B returns to the library, L1 goes up, X opens SD cards,
 Y opens the default folder and R1 saves the current folder as default. Returning
 from a child folder restores selection and scroll position. Missing folders,

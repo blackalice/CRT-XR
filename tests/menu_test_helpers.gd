@@ -5,7 +5,7 @@ static func page(app, category: int, subsection := 0) -> void:
 	app.menu.category=category; app.menu.subsection=subsection; app.menu.render()
 
 static func select(app, id: String) -> Dictionary:
-	for category in range(5):
+	for category in range(app.menu.CATEGORIES.size()):
 		var pages: Array = app.menu.catalog.pages(category)
 		for section in range(pages.size()):
 			for item in pages[section].rows:

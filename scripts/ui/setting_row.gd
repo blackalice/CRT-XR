@@ -4,11 +4,11 @@ signal adjust_requested(id: String, direction: int)
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 var item: Dictionary
 var title_label: Label
+var unavailable_label: Label
 var value_label: Label
 var marker: Label
 var track: ProgressBar
 var selected_now := false
-var editing_now := false
 var adjust_buttons: Array[Button] = []
 
 func configure(definition: Dictionary) -> void:
@@ -37,6 +37,10 @@ func configure(definition: Dictionary) -> void:
 	title_label.add_theme_font_size_override("font_size",24)
 	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	words.add_child(title_label)
+	unavailable_label=Label.new(); unavailable_label.add_theme_font_size_override("font_size",16)
+	unavailable_label.add_theme_color_override("font_color",MenuSkin.MUTED)
+	unavailable_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+	words.add_child(unavailable_label)
 	track = ProgressBar.new()
 	track.custom_minimum_size.y = 3
 	track.max_value = 1
@@ -46,6 +50,7 @@ func configure(definition: Dictionary) -> void:
 	track.add_theme_stylebox_override("fill",MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0))
 	words.add_child(track)
 	value_label = Label.new()
+	value_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	value_label.custom_minimum_size.x = 118
 	value_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
@@ -59,7 +64,8 @@ func configure(definition: Dictionary) -> void:
 			arrow.focus_mode = Control.FOCUS_NONE
 			for style_name in ["normal","hover","pressed"]:
 				arrow.add_theme_stylebox_override(style_name,MenuSkin.box(Color("2d323a") if style_name=="hover" else Color("23272d"),Color.TRANSPARENT,0,4))
-			arrow.pressed.connect(func(): selected.emit(item.id); adjust_requested.emit(item.id,direction))
+			arrow.pressed.connect(func():
+				if not disabled: adjust_requested.emit(item.id,direction))
 			line.add_child(arrow); adjust_buttons.append(arrow)
 	pressed.connect(func(): selected.emit(item.id))
 	focus_entered.connect(func(): selected.emit(item.id))
@@ -67,11 +73,17 @@ func configure(definition: Dictionary) -> void:
 
 func refresh() -> void:
 	disabled = item.get("disabled",false)
-	value_label.text = "‹ %s ›" % formatted_value() if editing_now and adjust_buttons.is_empty() else formatted_value()
-	for button in adjust_buttons: button.visible=editing_now
+	value_label.text = formatted_value()
+	for button in adjust_buttons:
+		button.visible=selected_now; button.disabled=disabled
 	track.visible = item.kind == "number"
 	if track.visible:
 		track.value = inverse_lerp(float(item.min),float(item.max),float(item.getter.call()))
+	if unavailable_label!=null:
+		unavailable_label.text=str(item.get("disabled_reason",""))
+		unavailable_label.visible=disabled and not unavailable_label.text.is_empty()
+		custom_minimum_size.y=64 if unavailable_label.visible else (62 if item.get("layout","")=="game" else 46)
+	tooltip_text=str(item.get("disabled_reason",item.get("help","")))
 	title_label.modulate = Color("85878b") if disabled else MenuSkin.TEXT
 	value_label.modulate = title_label.modulate
 
@@ -92,14 +104,11 @@ func formatted_value() -> String:
 
 func set_selected(value: bool) -> void:
 	selected_now = value
-	update_selection_style()
-
-func set_editing(value: bool) -> void:
-	editing_now=value
 	refresh(); update_selection_style()
 
 func update_selection_style() -> void:
-	marker.text = "◆" if editing_now else ("▸" if selected_now else " ")
-	var selected_style := MenuSkin.box(Color("514027") if editing_now else Color("3b3022"),MenuSkin.AMBER,3 if editing_now else 2)
+	marker.text = "▸" if selected_now else " "
+	var selected_style := MenuSkin.box(Color("3b3022"),MenuSkin.AMBER,2)
 	add_theme_stylebox_override("normal",selected_style if selected_now else MenuSkin.box(Color("23272d")))
 	add_theme_stylebox_override("hover",selected_style if selected_now else MenuSkin.box(Color("2d323a"),Color("65666a"),1))
+	add_theme_stylebox_override("focus",selected_style if selected_now else MenuSkin.box(Color("23272d")))

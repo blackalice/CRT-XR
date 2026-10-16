@@ -1,6 +1,6 @@
 # TV audio
 
-Settings → Room → Audio contains four global options. A starts editing, left/right changes a value, A/B finishes, and Y restores only that option's default. The game remains paused in the menu; resume to listen.
+Settings → Audio & Room → Audio contains four global options. A starts editing, left/right changes a value, A/B finishes, and Y restores only that option's default. The game remains paused in the menu; resume to listen.
 
 | Option | Default | Behaviour |
 |---|---|---|
@@ -13,13 +13,13 @@ The TV's position and the view orientation drive stereo panning. Turning right p
 
 One existing emulator stream feeds one application-specific audio bus, shared by both eyes. Native Godot EQ6, StereoEnhance (without its delay/surround features), Panner and Reverb run on existing audio blocks. Original mode routes straight to Master. Effects at zero are disabled. The direct signal stays undelayed; only quiet reflections use a 12 ms predelay. Existing generator size, input preview and emulation timing remain unchanged. Reverb memory is cleared on pause/audio restart/game switch and when enabling/disabling the room effect so old sound cannot reappear.
 
-Audio options are stored in the global `audio` settings section. Per-game picture changes and existing named view/picture setups leave them alone. Reset all settings also resets audio. No extra 3D passes, room meshes, plugins or additional audio streams are required.
+Audio options are stored in the global `audio` settings section. Per-game picture changes and existing named view/picture setups leave them alone. Reset all settings also resets audio. Preview sound plays the existing CC0 CRT clip through a separate short-lived playback source on the same selected bus, while the game remains paused. Bypassed controls are disabled with explanations. No extra 3D passes, room meshes or plugins are required.
 
 The mouse cursor is hidden throughout SBS playback and menus, including the SBS startup prompt. Returning to mono restores it.
 
 ## TV power-on
 
-Room → Audio also includes **TV power-on effect** (On by default), **Power-on sound volume** (60%), and **Preview TV power-on**. Preview closes the menu and replays the effect. Zero volume keeps the animation silent; switching the effect Off bypasses both picture and sound.
+Audio & Room → Audio also includes **TV power-on effect** (On by default), **Power-on sound volume** (60%), and **Preview TV power-on**. Preview closes the menu and replays the effect. Zero volume keeps the animation silent; switching the effect Off bypasses both picture and sound.
 
 The first unobstructed view of the TV in each application session gets a 0.70-second tube warm-up: a dim centre line opens into the full picture. It waits until the startup menu and SBS curtain have closed. Ordinary menu visits, game changes and recentering do not replay it. The game begins/resumes immediately; animation never stalls the core or queues additional game audio. The effect uses the existing CRT shader and screen lights, then stops its controller processing. The `--capture` tooling option bypasses startup for stable comparisons.
 

@@ -13,13 +13,13 @@ func run():
  app=load("res://scenes/main.tscn").instantiate();root.add_child(app)
  DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(directory))
  await capture("pause")
- for category in range(5):
+ for category in range(app.menu.CATEGORIES.size()):
   app.menu.open_settings();app.menu.category=category
   for section in range(app.menu.catalog.pages(category).size()):
    app.menu.subsection=section;app.menu.render()
    await capture("category-%d-page-%d"%[category,section])
  app.menu.category=0;app.menu.subsection=0;app.menu.render();app.menu.select("view.distance")
- app.menu.begin_edit();await capture("editing");app.menu.finish_edit();app.menu.toggle_preview()
+ await capture("selected");app.menu.toggle_preview()
  await capture("compact")
  app.menu.back();app.menu.open_slot(0);await capture("setup")
  app.menu.ask("Overwrite this setup?","Replace your named setup with the current view, room and picture settings?",func():pass)
