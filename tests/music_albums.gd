@@ -1,0 +1,53 @@
+extends SceneTree
+var failures := 0
+var folder := "res://build/album-fixture"
+func _initialize(): call_deferred("run")
+func check(ok: bool,label: String):
+ print("PASS: " if ok else "FAIL: ",label)
+ if not ok: failures+=1
+func run():
+ var app=load("res://scenes/main.tscn").instantiate();root.add_child(app);app.use_tracking(false)
+ var music=app.music; music.reset_defaults()
+ var tags=music.Tags
+ check(music.MAX_FILE_BYTES==268435456,"File limit is 256 MiB")
+ var first: Dictionary=tags.read(folder.path_join("z.mp3"))
+ check(first.title=="First café" and first.artist=="An Artist" and first.track==1 and first.disc==1,"ID3v2.3 UTF-16 title, artist and disc/track totals")
+ var second: Dictionary=tags.read(folder.path_join("a.mp3"))
+ check(second.title=="Second song" and second.track==2,"ID3v2.4 UTF-8 and synchsafe frame sizes")
+ var legacy: Dictionary=tags.read(folder.path_join("legacy.mp3"))
+ check(legacy.title=="Legacy title" and legacy.artist=="Legacy artist" and legacy.track==3,"ID3v1.1 title, artist and track fallback")
+ check(tags.read(folder.path_join("broken.mp3")).title=="broken","Malformed oversized tags fall back safely")
+ var queue: Array=music.album_tracks(ProjectSettings.globalize_path(folder))
+ check(queue.map(func(t):return t.path.get_file())==["z.mp3","a.mp3","legacy.mp3","2.mp3","10.mp3","broken.mp3","b.mp3"],"Album order follows disc, track and natural filename fallback")
+ check(music.play_album(ProjectSettings.globalize_path(folder)) and music.track_index==0 and music.metadata.title=="First café","Folder starts as an album with metadata")
+ music.player.seek(maxf(0,music.player.stream.get_length()-.08))
+ await create_timer(.5).timeout
+ check(music.track_index==1,"Real mixer finished signal advances to the next track")
+ music.start_track(0)
+ check(not music.player.stream.loop,"Individual tracks do not loop before advancing")
+ music.toggle_playback();check(music.player.stream_paused and music.playback_caption()=="Play","Pause preserves the current local stream")
+ music.toggle_playback();check(not music.player.stream_paused,"Play resumes the paused track")
+ music.track_finished();check(music.metadata.title=="Second song" and music.track_index==1,"Track end advances to the next album song")
+ music.skip(-1);check(music.track_index==0,"Previous selects the previous track")
+ music.loop=false;check(not music.can_skip(-1),"Previous is disabled at the first track when repeat is off")
+ music.start_track(queue.size()-1); music.track_finished()
+ check(music.track_index==queue.size()-1 and "finished" in music.status,"Repeat off finishes the album")
+ music.loop=true;music.track_finished();check(music.track_index==0,"Repeat restarts at the first album track")
+ music.stop();music.toggle_playback();check(music.player.playing and music.track_index==0,"Play after Stop restarts the selected track")
+ app.menu.open_pause(); app.menu.render()
+ for i in range(4): await process_frame
+ check(app.menu.items.any(func(i):return i.id=="transport.play") and is_instance_valid(app.menu.music_heading),"Main menu exposes transport controls and now-playing metadata")
+ app.menu.select("transport.play"); app.menu.activate()
+ for i in range(4): await process_frame
+ check(music.player.stream_paused,"Controller activation pauses music from the main menu")
+ app.menu.navigate(Vector2i.RIGHT)
+ check(app.menu.selected_id=="transport.next","Left/right traverses the visible playback buttons")
+ app.menu.activate()
+ for i in range(4): await process_frame
+ check(music.track_index==1 and "Second song" in app.menu.music_heading.text,"Next updates the track and now-playing display")
+ app.menu.open_music_browser(ProjectSettings.globalize_path(folder))
+ check(app.menu.items[0].id=="music.album" and app.menu.items.any(func(i):return "First café" in i.label),"Folder browser has Play album and readable ID3 titles")
+ app.free()
+ for i in range(3): await process_frame
+ await create_timer(.15).timeout
+ print("ALBUM CHECKS COMPLETE: ",failures," failures");quit.call_deferred(1 if failures else 0)

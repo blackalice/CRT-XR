@@ -69,7 +69,7 @@ func run():
 	UI.set_value(app,"room.cabinet_grain_strength",.8)
 	check(is_equal_approx(app.world.cabinet_grain_strength,.8), "Plastic grain strength is adjustable")
 	UI.reset(app,"room.cabinet_grain_strength")
-	check(is_equal_approx(app.world.cabinet_grain_strength,.55), "Per-option reset restores subtle plastic grain")
+	check(is_equal_approx(app.world.cabinet_grain_strength,app.Showcase.ROOM.cabinet_grain_strength), "Per-option reset restores subtle plastic grain")
 	UI.set_value(app,"room.cabinet_ao_strength",.4)
 	check(is_equal_approx(app.world.cabinet_ao_strength,.4), "Casing bake strength is adjustable")
 	UI.reset(app,"room.cabinet_ao_strength")
@@ -83,7 +83,7 @@ func run():
 	check(is_equal_approx(app.world.screen_light.strength,.28), "Room slider changes the native light strength")
 	var previous_ambient: float = app.world.ambient
 	UI.reset(app,"room.spill_strength")
-	check(is_equal_approx(app.world.spill_strength,.10) and app.world.ambient == previous_ambient, "Per-option default resets screen light without changing room ambience")
+	check(is_equal_approx(app.world.spill_strength,app.Showcase.ROOM.spill_strength) and app.world.ambient == previous_ambient, "Per-option default resets screen light without changing room ambience")
 	UI.set_value(app,"room.spill_strength",.24)
 	check(app.capture_settings().has_section_key("room","spill_strength") and not app.capture_settings().has_section_key("crt","screen_spill"), "Screen light saves globally with room preferences")
 	check(is_equal_approx(app.world.spill_strength,.24) and app.world.screen_light.lights.size() == 2, "Screen spill controls two native lights")
@@ -95,7 +95,7 @@ func run():
 	app.world._process(0)
 	check(is_equal_approx(app.world.television.position.y, 1.65), "Height slider raises the virtual screen")
 	check(is_equal_approx(app.eyes[0].position.y, eye_y) and app.distance == original_distance, "Height adjustment leaves eye position and distance unchanged")
-	check(is_equal_approx(app.world.floor_node.position.y, 1.65 - 1.26 * app.tv_scale), "Floor and furniture remain together when height changes")
+	check(is_equal_approx(app.world.floor_node.position.y, 1.65 + (app.world.support_floor_y-.01) * app.tv_scale), "Floor and furniture remain together when height changes")
 	app.distance_save_delay = -1
 	app.save_settings()
 	app.free()

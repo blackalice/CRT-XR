@@ -40,4 +40,19 @@ Copy-Item -LiteralPath (Join-Path $root 'docs/settings-and-startup.md') -Destina
 Copy-Item -LiteralPath (Join-Path $root 'docs/audio.md') -Destination (Join-Path $out 'AUDIO.md')
 New-Item -ItemType Directory -Force (Join-Path $out 'licenses/audio') | Out-Null
 Copy-Item -Path (Join-Path $root 'third_party/audio/*') -Destination (Join-Path $out 'licenses/audio')
+$table = Join-Path $root 'build/wood-table'
+if (Test-Path -LiteralPath (Join-Path $table 'table.scn')) {
+    New-Item -ItemType Directory -Force (Join-Path $out 'assets') | Out-Null
+    Copy-Item -LiteralPath $table -Destination (Join-Path $out 'assets') -Recurse -Force
+    Copy-Item -LiteralPath (Join-Path $root 'docs/wood-table.md') -Destination (Join-Path $out 'assets/WOOD-TABLE.md')
+}
+$roomBake = Join-Path $root 'build/room-bake'
+if (Test-Path -LiteralPath (Join-Path $roomBake 'bake.json')) {
+    $bakeOut = Join-Path $out 'assets/room-bake'
+    New-Item -ItemType Directory -Force $bakeOut | Out-Null
+    foreach ($name in @('table_ao.png','floor_ao.png','table_contact_albedo.res','bake.json')) {
+        Copy-Item -LiteralPath (Join-Path $roomBake $name) -Destination $bakeOut
+    }
+    Copy-Item -LiteralPath (Join-Path $root 'docs/room-contact-bake.md') -Destination (Join-Path $out 'assets/ROOM-CONTACT-BAKE.md')
+}
 Write-Host "Windows build: $out/RetroCRT.exe"

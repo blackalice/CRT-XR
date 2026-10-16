@@ -1,10 +1,11 @@
 #include "retro_core.h"
+#include "radio_mp3.h"
 #include <godot_cpp/godot.hpp>
 #include <godot_cpp/core/class_db.hpp>
 
 using namespace godot;
 void initialize_retrocrt(ModuleInitializationLevel level) {
-    if (level == MODULE_INITIALIZATION_LEVEL_SCENE) ClassDB::register_class<RetroCore>();
+    if (level == MODULE_INITIALIZATION_LEVEL_SCENE) { ClassDB::register_class<RetroCore>(); ClassDB::register_class<RadioMP3Decoder>(); }
 }
 void uninitialize_retrocrt(ModuleInitializationLevel) {}
 extern "C" GDExtensionBool GDE_EXPORT retrocrt_library_init(

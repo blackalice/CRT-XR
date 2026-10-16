@@ -43,7 +43,7 @@ func run():
 	check(app.world.picture.mode==1 and app.scanlines>=.6 and app.world.picture.values.phase_noise>=.2,"Other composite presets are visibly stronger")
 	app.apply_picture_preset("clean")
 	check(app.scanlines==0 and app.phosphor_mask==0 and app.phosphor_glow==0 and app.world.picture.values.signal_motion==0,"Clean source remains an unprocessed reference")
-	app.menu.open_settings(); app.menu.category=4; app.menu.subsection=0; app.menu.render()
+	app.menu.open_settings(); app.menu.category=5; app.menu.subsection=0; app.menu.render()
 	check(app.menu.items.size()==4 and app.menu.items[0].id=="slot.showcase","Built-in setup leaves all three writable slots available")
 	app.metrics_visible=true; app.reset_all_options()
 	check(not app.metrics_visible and is_equal_approx(app.height_offset,-.15) and app.world.picture.mode==2 and is_equal_approx(app.world.picture.values.phase_noise,.38),"Reset all uses the same Showcase defaults and clean HUD")

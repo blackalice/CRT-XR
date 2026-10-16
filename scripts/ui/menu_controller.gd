@@ -8,7 +8,7 @@ const Catalog = preload("res://scripts/ui/menu_catalog.gd")
 const Library = preload("res://scripts/ui/rom_library.gd")
 const RomIndex = preload("res://scripts/content/rom_index.gd")
 const Confirmation = preload("res://scripts/ui/confirmation_panel.gd")
-const CATEGORIES := ["View","Picture","Audio & Room","Controls & XR","Saved setups","General"]
+const CATEGORIES := ["View","Picture","Audio","Room","Controls & XR","Saved setups","General"]
 var host
 var catalog := Catalog.new()
 var library := Library.new()
@@ -48,6 +48,10 @@ var scroll: ScrollContainer
 var column: VBoxContainer
 var compact: Label
 var confirm_panel: PanelContainer
+var music_dir := ""
+var music_page := 0
+var music_origin: Dictionary = {}
+var music_heading: Label
 var rename_field: LineEdit
 var sidebar_buttons: Array[Button] = []
 var direction := Vector2i.ZERO
@@ -109,7 +113,9 @@ func _ready() -> void:
 	rename_field = LineEdit.new()
 	rename_field.max_length = 32
 	rename_field.placeholder_text = "Optional name; keyboard entry"
-	rename_field.text_submitted.connect(func(_text): save_draft_name())
+	rename_field.text_submitted.connect(func(_text):
+		if mode=="radio_url": save_radio_url()
+		else: save_draft_name())
 	layout.add_child(rename_field); rename_field.hide()
 	body = HBoxContainer.new()
 	body.add_theme_constant_override("separation",16)
@@ -185,6 +191,7 @@ func _ready() -> void:
 func state_key() -> String:
 	match mode:
 		"settings": return "settings:%d:%d" % [category,subsection]
+		"music_browser": return "music:%s:%d" % [music_dir,music_page]
 		"browser": return "browser:"+library.current_dir
 		"games": return "games:%s:%s:%d" % [host.default_rom_dir,library_system,game_page]
 		"slot": return "slot:%d" % host.selected_profile
@@ -247,6 +254,8 @@ func back() -> void:
 		"launch": restore(launch_origin)
 		"slot", "room_presets": mode="settings"; render()
 		"rename": mode="slot"; render()
+		"music_browser": restore(music_origin)
+		"radio_url": mode="settings"; render()
 		"confirm": restore(return_state)
 
 func ask(title: String, detail: String, callback: Callable) -> void:
@@ -429,16 +438,87 @@ func perform_state_action(saving: bool) -> void:
 	else: show_error(host.emulator.status+". Check the save folder and available storage.")
 	refresh()
 
+func open_music_browser(path := "") -> void:
+	if mode!="music_browser": music_origin=snapshot()
+	remember(); clear_input()
+	if path.is_empty():
+		path=music_dir if not music_dir.is_empty() else host.music.last_file.get_base_dir()
+		if path.is_empty(): path=OS.get_system_dir(OS.SYSTEM_DIR_MUSIC)
+		if DirAccess.open(path)==null: path=library.home_folder()
+	if DirAccess.open(path)==null: show_error("Folder unavailable. Reconnect its drive."); return
+	music_dir=path; music_page=0; mode="music_browser"; render()
+
+func edit_radio_url() -> void:
+	remember(); clear_input(); mode="radio_url"; render()
+	rename_field.text=host.music.station_url; rename_field.grab_focus()
+
+func save_radio_url() -> void:
+	var url := rename_field.text.strip_edges()
+	if not url.is_empty() and host.music.parse_url(url).is_empty():
+		show_error("Use a direct http:// or https:// MP3 stream URL."); return
+	host.music.station_url=url
+	mode="settings"; clear_input(); render(); notify("Radio URL ready. Choose Play radio to listen.")
+
+func music_browser_items() -> Array:
+	var result: Array=[catalog.action("music.up","Parent folder",func(): open_music_browser(music_dir.get_base_dir()))]
+	var locations: Array=[catalog.action("music.home","Music folder",func(): open_music_browser(OS.get_system_dir(OS.SYSTEM_DIR_MUSIC)))]
+	for mount in library.cards():
+		var path: String=mount
+		locations.append(catalog.action("music.sd."+path,"SD card",func(): open_music_browser(path)))
+	if OS.get_name()=="Windows":
+		for index in range(DirAccess.get_drive_count()):
+			var drive := DirAccess.get_drive_name(index)
+			locations.append(catalog.action("music.drive."+drive,drive,func(): open_music_browser(drive)))
+	var entries: Array=[]
+	var album: Array=host.music.album_tracks(music_dir)
+	if not album.is_empty():
+		result.push_front(catalog.action("music.album","Play this album",func():
+			if host.music.play_album(music_dir): mode="pause"; clear_input(); render()
+			else: show_error(host.music.status),"Play this folder in disc/track order, falling back to natural filenames.",false,"%d tracks" % album.size()))
+	for name in DirAccess.get_directories_at(music_dir):
+		if name.begins_with("."): continue
+		var path := music_dir.path_join(name)
+		entries.append(catalog.action("music.folder."+path,name+" /",func(): open_music_browser(path)))
+	for tag in album:
+		var path: String=tag.path
+		var label: String=str(tag.title)
+		if not str(tag.artist).is_empty(): label+=" — "+str(tag.artist)
+		entries.append(catalog.action("music.track."+path,label,func():
+			if host.music.play_file(path): mode="pause"; clear_input(); render()
+			else: show_error(host.music.status),"Play from this track, then continue through the folder. "+str(tag.album)))
+	music_page=clampi(music_page,0,maxi(0,(entries.size()-1)/50))
+	if music_page>0: result.append(catalog.action("music.previous","Previous page",func(): music_page-=1; clear_input(); render()))
+	result.append_array(entries.slice(music_page*50,(music_page+1)*50))
+	if (music_page+1)*50<entries.size(): result.append(catalog.action("music.next","Next page",func(): music_page+=1; clear_input(); render()))
+	result.append_array(locations)
+	return result
+
+func music_actions() -> Array:
+	var result: Array=[]
+	var music=host.music
+	if not music.kind.is_empty():
+		for item in [catalog.action("transport.previous","Previous",func(): music.skip(-1); refresh(),"Previous album track.",not music.can_skip(-1),""),
+			catalog.action("transport.play",music.playback_caption(),func(): music.toggle_playback(); refresh(),"Pause/resume local music; reconnect live radio.",false,""),
+			catalog.action("transport.next","Next",func(): music.skip(1); refresh(),"Next album track.",not music.can_skip(1),""),
+			catalog.action("transport.stop","Stop",func(): music.stop(); refresh(),"Stop music. Play restarts the current track.",false,"")]:
+			item.layout="transport"; result.append(item)
+	result.append(catalog.action("transport.choose","Music & albums",open_music_browser,"Choose an album or MP3 from local storage or SD card."))
+	return result
+
 func get_items() -> Array:
 	var h = host
 	match mode:
+		"music_browser": return music_browser_items()
+		"radio_url": return [catalog.action("radio.save","Use this URL",save_radio_url),catalog.action("radio.cancel","Cancel",back)]
 		"pause":
 			if not h.emulator.loaded:
-				return [catalog.action("home.continue","Continue last game",func(): select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",h.last_game_path.is_empty() or not FileAccess.file_exists(h.last_game_path),h.last_game_path.get_file().get_basename() if not h.last_game_path.is_empty() else "No recent game"),
+				var home: Array = [catalog.action("home.continue","Continue last game",func(): select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",h.last_game_path.is_empty() or not FileAccess.file_exists(h.last_game_path),h.last_game_path.get_file().get_basename() if not h.last_game_path.is_empty() else "No recent game"),
 					catalog.action("home.library","Game library",open_library,"Recent, Favourites and supported consoles."),
 					catalog.action("home.settings","Settings",open_settings,"Adjust the view, picture, audio and room."),
 					catalog.action("home.exit","Exit",func(): ask("Exit RetroCRT?","Your settings will be saved.",h.request_exit),"Close RetroCRT.")]
-			return [
+				home=home.slice(0,1)+music_actions()+home.slice(1)
+				return home
+			var pause_items: Array = [
 			catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded),
 			catalog.action("games","Choose game",open_library,"Open your recent game, default ROM folder or SD card."),
 			catalog.action("save_state","Save state",func(): state_action(true),"Saves the current game to state slot 0.",not h.emulator.loaded),
@@ -446,6 +526,8 @@ func get_items() -> Array:
 			catalog.action("screenshot","Screenshot",h.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),
 			catalog.action("settings","Settings",open_settings,"Adjust the view, picture, room, controls and saved setups."),
 			catalog.action("exit","Exit RetroCRT",func(): ask("Exit RetroCRT?","An automatic resume point, settings and cartridge SRAM will be saved.",h.request_exit),"Close the application.")]
+			pause_items=pause_items.slice(0,1)+music_actions()+pause_items.slice(1)
+			return pause_items
 		"launch": return [
 			catalog.action("launch.continue","Continue",func(): launch_game(launch_path,true),launch_path.get_file()+" • Automatic save • "+h.emulator.state_time(h.emulator.auto_path_for(launch_path))),
 			catalog.action("launch.fresh","Start fresh",func(): launch_game(launch_path,false),"Start from the title screen. Cartridge battery saves and manual states are kept."),
@@ -533,10 +615,19 @@ func render() -> void:
 	rows.clear()
 	var group := ""
 	var grid: GridContainer
+	music_heading=null
+	var transport_grid: GridContainer
 	var group_row := -1
 	var group_index := 0
 	for item in items:
 		var parent: Container=column
+		if item.get("layout","")=="transport":
+			if transport_grid==null:
+				music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20)
+				music_heading.autowrap_mode=TextServer.AUTOWRAP_OFF; music_heading.max_lines_visible=2; music_heading.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+				column.add_child(music_heading)
+				transport_grid=GridContainer.new(); transport_grid.columns=4; transport_grid.add_theme_constant_override("h_separation",8); column.add_child(transport_grid)
+			parent=transport_grid
 		if item.get("layout","")=="card":
 			if item.group!=group:
 				if grid!=null: group_row+=ceili(float(group_index)/2.0)
@@ -556,6 +647,9 @@ func render() -> void:
 			column.add_child(divider)
 		var row = LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))
 		parent.add_child(row); row.configure(item)
+		if item.get("layout","")=="transport":
+			row.custom_minimum_size.x=200; row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+			row.value_label.hide(); row.title_label.add_theme_font_size_override("font_size",22)
 		row.selected.connect(select)
 		row.adjust_requested.connect(func(id,delta):
 			select(id,false)
@@ -582,10 +676,12 @@ func render() -> void:
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","pause":"RetroCRT XR" if host.emulator.loaded else "Welcome to RetroCRT XR","library":"Your game library","library_tools":"Library locations","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"RetroCRT XR")
+	else: heading.text = {"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"RetroCRT XR" if host.emulator.loaded else "Welcome to RetroCRT XR","library":"Your game library","library_tools":"Library locations","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"RetroCRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm": confirm_panel.describe(confirmation.title,confirmation.detail)
-	rename_field.visible = mode=="rename"
+	rename_field.visible = mode in ["rename","radio_url"]
+	rename_field.max_length=2048 if mode=="radio_url" else 32
+	rename_field.placeholder_text="Direct MP3 stream URL; keyboard entry" if mode=="radio_url" else "Optional name; keyboard entry"
 	if mode=="rename": rename_field.text = str(draft_names.get(host.selected_profile,setup_name()))
 	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites"] and not preview
 	if not search_field.visible and search_field.has_focus(): search_field.release_focus()
@@ -645,9 +741,12 @@ func reveal_selected() -> void:
 	if row!=null and not preview: scroll.ensure_control_visible(row)
 
 func refresh_labels() -> void:
+	if is_instance_valid(music_heading): music_heading.text=host.music.now_playing()+"  "+host.music.progress_text()
 	var row = selected_row()
 	var context: String = "Picture for "+host.emulator.rom_path.get_file() if not host.active_game_key.is_empty() else "Global picture"
 	if mode=="pause": subtitle.text = host.emulator.rom_path.get_file() if host.emulator.loaded else status_title
+	elif mode=="music_browser": subtitle.text=music_dir+" · Page %d" % [music_page+1]
+	elif mode=="radio_url": subtitle.text="Direct MP3 streams · Keyboard entry"
 	elif mode=="browser": subtitle.text = library.current_dir
 	elif mode=="library":
 		subtitle.text = ("Finding your games… %d found · You can browse while we look" % rom_index.total()) if rom_index.scanning else ("%d games · %d consoles · Ready to play" % [rom_index.total(),rom_index.games.values().filter(func(games): return not games.is_empty()).size()] if rom_index.total()>0 else "SNES · NES · Mega Drive · Master System · Game Gear")
@@ -658,13 +757,13 @@ func refresh_labels() -> void:
 		subtitle.text = "%d games" % history_paths().size()
 	elif mode=="launch": subtitle.text = launch_path.get_file().get_basename()
 	elif mode=="library_tools": subtitle.text = host.default_rom_dir if not host.default_rom_dir.is_empty() else "Choose the main roms folder, once"
-	elif mode=="settings": subtitle.text = context if category==1 else "Global settings"
+	elif mode=="settings": subtitle.text = context if category==1 else (host.music.status if category==2 else "Global settings")
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
 	else: subtitle.text = "RetroCRT XR"
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0: help_label.text = notification
 	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in Recently played or a system list and press X. B returns."
-	elif mode=="pause" and not host.emulator.loaded: help_label.text = status_detail
+	elif mode=="pause" and not host.emulator.loaded and selected_id.begins_with("home."): help_label.text = status_detail
 	elif mode=="library" and not rom_index.message.is_empty(): help_label.text=rom_index.message
 	elif mode=="library" and host.default_rom_dir.is_empty(): help_label.text="Open Library locations and choose your main ROM folder. Your supported consoles appear here automatically."
 	elif mode=="library" and not rom_index.scanning and rom_index.total()==0: help_label.text="No supported cartridges here yet. Check Library locations. Use uncompressed SNES, NES or Sega cartridges; archives and discs are not supported."
@@ -700,6 +799,7 @@ func refresh_hints(row) -> void:
 		if mode=="games" and game_entries().size()>GAMES_PER_PAGE: hints.text+="   LB/RB Page" if pad else "   ←/→ Page"
 	elif mode=="browser": hints.text="A Open · B Back · LB Up · X SD · Y Default · RB Save default" if pad else "↑↓ Select · Enter Open · Backspace Back"
 	elif mode=="library": hints.text="D-pad Select · A Open · B Back · RB Refresh" if pad else "Arrows Select · Enter Open · Backspace Back · R Refresh"
+	elif mode=="pause" and row!=null and row.item.get("layout","")=="transport": hints.text="←/→ Playback controls · ↑↓ Menu · "+("A Activate · B Resume" if pad else "Enter Activate · Backspace Resume")
 	elif mode=="rename": hints.text="Type a name · Enter Save · ↓ Select button"
 	else: hints.text="D-pad Select · A Open · B Back" if pad else "Arrows Select · Enter Open · Backspace Back"
 
@@ -740,7 +840,12 @@ func navigate(next: Vector2i) -> void:
 			if not rows[candidate].disabled: select(rows[candidate].item.id); return
 			candidate+=next.y
 	elif next.x!=0:
-		if mode=="games": change_game_page(next.x)
+		if mode=="pause" and rows[index].item.get("layout","")=="transport":
+			var candidate := index+next.x
+			while candidate>=0 and candidate<rows.size() and rows[candidate].item.get("layout","")=="transport":
+				if not rows[candidate].disabled: select(rows[candidate].item.id); return
+				candidate+=next.x
+		elif mode=="games": change_game_page(next.x)
 		else: adjust(next.x)
 
 func adjust(delta: int) -> void:
@@ -871,9 +976,9 @@ func handle(event: InputEvent) -> bool:
 				if event.pressed and event.physical_keycode in [KEY_DOWN,KEY_UP,KEY_ENTER,KEY_KP_ENTER]:
 					search_field.release_focus(); select(selected_id,false); return true
 				return false
-		if mode=="rename" and get_viewport().gui_get_focus_owner()==rename_field:
+		if mode in ["rename","radio_url"] and get_viewport().gui_get_focus_owner()==rename_field:
 			if event.pressed and event.physical_keycode==KEY_DOWN:
-				select("rename.save"); return true
+				select("radio.save" if mode=="radio_url" else "rename.save"); return true
 			return false
 		var moves := {KEY_UP:Vector2i.UP,KEY_DOWN:Vector2i.DOWN,KEY_LEFT:Vector2i.LEFT,KEY_RIGHT:Vector2i.RIGHT}
 		if moves.has(event.physical_keycode):

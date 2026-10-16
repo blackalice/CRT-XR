@@ -30,6 +30,7 @@ var last_screenshot_path := ""
 var notices: Array[Label] = []
 var notice_time := 0.0
 var emulator: Node
+var music: Node
 var power_on: Node
 var signal_view: SubViewport
 var was_paused_before_menu := false
@@ -211,6 +212,9 @@ func start_application() -> void:
 		notices.append(notice)
 	emulator = Emulation.new()
 	add_child(emulator)
+	music=preload("res://scripts/audio/music_player.gd").new()
+	add_child(music)
+	music.game_player=emulator.player
 	power_on=preload("res://scripts/rendering/tv_power_on.gd").new()
 	add_child(power_on)
 	power_on.setup(world.screen_material,world.screen_light,emulator.tv_audio)
@@ -294,6 +298,8 @@ func start_application() -> void:
 	elif not settings_panel.visible and not is_instance_valid(sbs_prompt): power_on.begin()
 
 func apply_settings(config: ConfigFile) -> void:
+	for key in music.DEFAULTS: music.set(key,config.get_value("music",key,music.DEFAULTS[key]))
+	music.apply()
 	metrics_visible=bool(config.get_value("preferences","metrics_visible",false))
 	power_on.enabled=bool(config.get_value("atmosphere","power_on",true))
 	power_on.sound_level=float(config.get_value("atmosphere","power_sound",0.60))
@@ -390,6 +396,7 @@ func _process(delta: float) -> void:
 	world.television.position = Vector3(0, 1.25 + height_offset, -distance)
 	world.television.scale = Vector3.ONE * tv_scale
 	emulator.tv_audio.update_pose(displayed,Vector3(0,1.25,0),world.television.position,delta)
+	music.update_pose(displayed,Vector3(0,1.25,0),world.television.position,delta)
 	diagnostics_elapsed += delta
 	var refresh_diagnostics := diagnostics_elapsed >= .1
 	if refresh_diagnostics: diagnostics_elapsed = 0.0
@@ -604,6 +611,13 @@ func save_library() -> Error:
 func build_settings() -> void:
 	menu = Menu.new()
 	menu.host = self
+	music.playback_error.connect(func(message):
+		if is_instance_valid(menu) and menu.visible: menu.show_error(message)
+		else: show_notice(message))
+	music.transport_changed.connect(func():
+		if is_instance_valid(menu) and menu.visible and menu.mode=="pause": menu.refresh())
+	music.status_changed.connect(func():
+		if is_instance_valid(menu) and menu.visible: menu.refresh_labels())
 	settings_panel = menu
 	menu_view.add_child(menu)
 	refresh_startup_status()
@@ -733,6 +747,7 @@ func reset_all_options() -> void:
 	if not settings_panel.visible: return
 	for index in range(5): SettingsDefaults.apply(self,index)
 	emulator.tv_audio.reset_defaults()
+	music.reset_defaults()
 	power_on.enabled=true; power_on.sound_level=.60; power_on.apply()
 	rebuild_settings()
 	show_notice("All settings reset to defaults")
@@ -847,6 +862,7 @@ func room_preset(preset: String) -> void:
 
 func capture_settings() -> ConfigFile:
 	var config := ConfigFile.new()
+	for key in music.DEFAULTS: config.set_value("music",key,music.get(key))
 	config.set_value("atmosphere","power_on",power_on.enabled)
 	config.set_value("atmosphere","power_sound",power_on.sound_level)
 	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))

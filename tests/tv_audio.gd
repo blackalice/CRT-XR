@@ -9,7 +9,7 @@ func run():
 	var app=load("res://scenes/main.tscn").instantiate(); root.add_child(app); app.use_tracking(false)
 	var audio=app.emulator.tv_audio
 	var index := AudioServer.get_bus_index(audio.bus_name)
-	check(AudioServer.bus_count==baseline+1 and AudioServer.get_bus_effect_count(index)==4,"One audio bus and stream shared between both eyes")
+	check(AudioServer.bus_count==baseline+2 and AudioServer.get_bus_effect_count(index)==4,"One audio bus and stream shared between both eyes")
 	check(audio.room.dry==1.0 and audio.width.time_pullout_ms==0.0 and audio.room.predelay_msec==12.0,"Direct path retains full dry signal and adds no stereo delay")
 	audio.mode=0; audio.apply()
 	check(app.emulator.player.bus=="Master" and not AudioServer.is_bus_effect_enabled(index,0),"Original mode bypasses every effect")
@@ -33,7 +33,7 @@ func run():
 	audio.reset_defaults(); app.apply_settings(config)
 	check(audio.room_amount==.12 and audio.speaker_character==.55 and audio.directional_strength==.8,"Global audio controls round-trip through preferences")
 	app.menu.open_settings(); app.menu.category=2; app.menu.subsection=0; app.menu.render()
-	check(app.menu.items.size()==8,"Audio page exposes audio and power-on controls")
+	check(app.menu.items.size()==9,"Audio page exposes audio and power-on controls")
 	app.menu.select("audio.room_amount"); app.menu.reset_option()
 	check(is_equal_approx(audio.room_amount,.18),"Y resets only the selected audio setting")
 	app.set_stereo(true)

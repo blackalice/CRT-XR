@@ -2,6 +2,7 @@ extends Node3D
 const Showcase = preload("res://scripts/presets/showcase.gd")
 
 var television := Node3D.new()
+var support_floor_y := -1.25
 var screen_material := ShaderMaterial.new()
 var glass_material := ShaderMaterial.new()
 var curvature := 0.066
@@ -54,6 +55,9 @@ func build(signal_texture: Texture2D) -> void:
 	floor_node.mesh = floor_mesh
 	floor_node.position = Vector3(0, -0.01, -3)
 	floor_material.shader = load("res://shaders/room_floor.gdshader")
+	floor_material.set_shader_parameter("carpet_colour",load("res://assets/carpet/colour.jpg"))
+	floor_material.set_shader_parameter("carpet_normal",load("res://assets/carpet/normal.jpg"))
+	floor_material.set_shader_parameter("carpet_roughness",load("res://assets/carpet/roughness.jpg"))
 	floor_node.material_override = floor_material
 	add_child(floor_node)
 	rug_node = MeshInstance3D.new()
@@ -70,10 +74,12 @@ func build(signal_texture: Texture2D) -> void:
 	imported_screen = ImportedCRT.load_cabinet(television)
 	if imported_screen.is_empty():
 		_build_procedural_cabinet()
-	BedroomSet.build_stand(television,
+	var support := BedroomSet.build_stand(television,
 		float(imported_screen.bottom) if not imported_screen.is_empty() else -0.635,
 		imported_screen.cabinet_bounds if not imported_screen.is_empty()
 		else AABB(Vector3(-0.85, -0.635, -0.78), Vector3(1.70, 1.27, 0.8325)))
+	support_floor_y=float(support.get_meta("floor_y",-1.25))
+	preload("res://scripts/rendering/room_contacts.gd").apply(self,support)
 	# A black overlay fades the cabinet and furniture without changing their PBR maps.
 	# The self-lit picture and glass are created afterwards and retain their contrast.
 	for part in television.find_children("*", "GeometryInstance3D", true, false):
@@ -95,6 +101,7 @@ func build(signal_texture: Texture2D) -> void:
 		float(imported_screen.width)/float(imported_screen.height) if not imported_screen.is_empty() else 4.0/3.0)
 	var screen := MeshInstance3D.new()
 	screen.name = "PhosphorSurface"
+	screen.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	screen.mesh = curved_screen()
 	screen.material_override = screen_material
 	screen.position = ImportedCRT.SCREEN_ANCHOR
@@ -113,7 +120,7 @@ func build(signal_texture: Texture2D) -> void:
 func _process(_delta: float) -> void:
 	# A small floor island follows the virtual set, including its scale control.
 	floor_node.scale = television.scale
-	floor_node.position = television.position - Vector3(0, 1.26 * television.scale.y, 0)
+	floor_node.position = television.position + Vector3(0, (support_floor_y-.01) * television.scale.y, 0)
 	screen_light.grading = picture.values
 	screen_light.picture_area = picture.picture_rect().get_area()
 

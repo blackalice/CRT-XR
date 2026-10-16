@@ -118,7 +118,11 @@ head or lamps move; room and screen light still affect the plastic normally.
 It uses one extra single-channel texture sample, with no extra rendering pass.
 See [the local cabinet documentation](crt-model-local.md#blender-ao-bake).
 
-A rounded oak-style shelf unit replaces the box stand. Its open shelves contain
+The prepared wide wooden table from brandon_grey’s Wood Drawer & Tables Set now
+replaces the stand when installed (see [wood-table.md](wood-table.md)). It keeps
+its proportions, supports the full CRT depth, and moves the floor island down
+to its feet without moving the viewing position. The original rounded oak-style
+shelf unit remains as a fallback. Its open shelves contain
 four unbranded game cases and a small console-shaped prop. Sage carpet and a
 muted teal/terracotta woven rug provide colour without surrounding the viewer
 with walls. The floor patch has soft black edges as well as distance fading.
@@ -231,3 +235,10 @@ diagnostic cleanup investigation.
 
 Physical appearance and feel of the new room/menu controls through the glasses
 still need the user's next check.
+
+## Baked grounding and soft carpet
+
+The table and floor now use static contact AO, and the floor uses a filtered
+CC0 carpet surface. Room and screen lighting remain adjustable. See
+[room-contact-bake.md](room-contact-bake.md) for the repeatable Blender bake,
+receiver setup, export details and when added props require a rebake.

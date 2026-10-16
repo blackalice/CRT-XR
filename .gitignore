@@ -58,3 +58,8 @@ __pycache__/
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+# Original user-supplied furniture set; exports contain only the prepared table.
+/wood_drawer__tables_set.glb
+/wood_drawer__tables_set.glb.import
+/wood_drawer__tables_set_*.png*

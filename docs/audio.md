@@ -1,6 +1,6 @@
 # TV audio
 
-Settings → Audio & Room → Audio contains four global options. A starts editing, left/right changes a value, A/B finishes, and Y restores only that option's default. The game remains paused in the menu; resume to listen.
+Settings → Audio → TV sound contains the game sound controls. Up/down selects, left/right adjusts, A toggles, and Y resets the selected option. Preview sound works while the game stays paused.
 
 | Option | Default | Behaviour |
 |---|---|---|
@@ -19,7 +19,7 @@ The mouse cursor is hidden throughout SBS playback and menus, including the SBS 
 
 ## TV power-on
 
-Audio & Room → Audio also includes **TV power-on effect** (On by default), **Power-on sound volume** (60%), and **Preview TV power-on**. Preview closes the menu and replays the effect. Zero volume keeps the animation silent; switching the effect Off bypasses both picture and sound.
+Audio → TV sound also includes **TV power-on effect** (On by default), **Power-on sound volume** (60%), and **Preview TV power-on**. Preview closes the menu and replays the effect. Zero volume keeps the animation silent; switching the effect Off bypasses both picture and sound.
 
 The first unobstructed view of the TV in each application session gets a 0.70-second tube warm-up: a dim centre line opens into the full picture. It waits until the startup menu and SBS curtain have closed. Ordinary menu visits, game changes and recentering do not replay it. The game begins/resumes immediately; animation never stalls the core or queues additional game audio. The effect uses the existing CRT shader and screen lights, then stops its controller processing. The `--capture` tooling option bypasses startup for stable comparisons.
 
@@ -30,3 +30,23 @@ The sound is a quiet 0.640-second, 48 kHz mono PCM excerpt of TRP's real CRT rec
 Validation: `tests/tv_audio.gd` checks routing, pose direction, bypass, defaults, persistence, UI and bus cleanup. Run it with a real display driver to check cursor hiding; the headless display cannot change cursor visibility. `tests/tv_audio_mixer.gd` uses a real audio driver, captures a diagnostic impulse after effects and mutes that process's Master output. It checks panning, reflection tails and bypass without emitting the diagnostic through speakers. Listening through the glasses remains necessary to tune subjective room strength.
 
 Built-in effect documentation: [Reverb](https://docs.godotengine.org/en/4.5/classes/class_audioeffectreverb.html), [StereoEnhance](https://docs.godotengine.org/en/4.5/classes/class_audioeffectstereoenhance.html), [Panner](https://docs.godotengine.org/en/4.5/classes/class_audioeffectpanner.html).
+
+## Music and web radio
+
+Audio now has its own category, separate from Room lighting/materials. Music & radio offers a controller-friendly local MP3 browser (Music folder, drives and mounted SD cards), Play last MP3, radio URL entry, Play radio, Stop music, volume and album repeat. Music atmosphere controls reverb, direction and source position beside the TV. Radio URL entry currently requires a keyboard; ordinary playback and browsing work with a controller.
+
+Music continues through pause/settings, game changes and stop-game actions. Game volume is independent (100% retains the existing -6 dB headroom); music defaults to 45%, 12% room reflections, 80% direction and 1.1 m left of the TV. Zero reverb/direction disables those effects. Position uses head-relative stereo panning, not HRTF. There is no added game audio buffering or rendering pass.
+
+Local MP3 files up to 256 MiB load as compressed audio once. Only the current track is loaded; the previous stream is released before opening the next. Large files use additional memory and can take longer to open. Radio supports direct HTTP/HTTPS MP3 streams, up to five redirects, ICY metadata removal and a maximum 256 KiB encoded queue plus 0.75-second decoded mixer buffer. The decoder retains lookahead for fragmented MP3 frames and limits work per frame. Radio format changes, unavailable stations, unsupported AAC/HLS/playlists and disconnections stop cleanly with an explanation; Play radio retries. Radio never downloads an endless stream into memory. Station selection and local file path persist globally in the `music` section, along with levels/effects, but playback never starts automatically on application launch. Setup/picture presets leave music alone. Reset all stops music and restores defaults.
+
+`tests/music.gd` checks pause independence, volumes, persistence, positioning, UI, decoder PCM quality, fragmented MP3s, bounded buffering, redirects, ICY metadata, invalid formats and disconnects against `tests/music_http_fixture.py` on localhost:18764. The fixture uses the existing ignored CC0 power-on preview MP3, never bundled user music. Run it with network access allowed for localhost. Subjective listening and real station compatibility still need review on the Deck.
+
+## Albums and pause-menu playback
+
+Folders are albums (MP3 files directly inside that folder; subfolders remain separately browsable). Play this album starts at its first track; selecting an individual song starts there and continues through the folder. Disc and track tags determine ordering, with natural filename ordering for untagged tracks. Tracks without a disc number are treated as disc 1; unnumbered tracks follow numbered tracks on the same disc. Repeat album replays the folder after its last track; Off stops at the end. Previous/Next stop at album boundaries unless repeat is enabled. A missing or invalid next file stops advancement with an error rather than looping silently.
+
+The main home/pause menu offers Music & albums. While a source is selected it also shows title, artist, album, track count and elapsed/total time, plus Previous, Play/Pause, Next and Stop. Left/right moves between transport buttons; A activates; up/down returns to the regular menu actions. Local pause retains the current position. Stop followed by Play restarts the current song. Live radio has stop/reconnect rather than a buffered time-shift pause, and disables track skipping.
+
+Read-only ID3v2.2/2.3/2.4 text frames and ID3v1.1 fallback cover title, artist, album, track and disc. Latin-1, UTF-8 and UTF-16 text are supported, including basic unsynchronisation handling. Parsing is bounded to 4 MiB tags, 256 frames and 4 KiB per text frame, and caches only small metadata dictionaries. Encrypted/compressed frames and artwork are ignored; unavailable metadata falls back to filename/folder. No files are retagged. Format references: [ID3v2.3](https://id3.org/id3v2.3.0), [ID3v2.4](https://id3.org/id3v2.4.0-structure).
+
+`tests/music_albums.gd` covers metadata encodings/fallback, ordering, pause/resume, next/previous, end/repeat, menu controller transport and album browsing. `tests/music_album_visual.gd` captures only the menu viewport, excluding the licensed scene.

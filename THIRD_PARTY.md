@@ -86,3 +86,26 @@ source-code licence. See `docs/crt-model-local.md` for asset handling.
 ## CRT power-on sound
 
 `assets/audio/crt-power-on.wav` is a short edited excerpt from **TV, CRT, turning on off, static, click (2012).wav** by **TRP**, published on [Freesound](https://freesound.org/people/TRP/sounds/616850/) under **CC0 1.0 Universal**. Modification and redistribution, including commercial use, are permitted. Details, source-preview and asset hashes, editing notes, and the licence text are in `third_party/audio/` and included with exported builds under `licenses/audio/`.
+
+## Wide wooden table
+
+"Wood Drawer & Tables Set" by brandon_grey (https://sketchfab.com/brandondmc10),
+https://sketchfab.com/3d-models/wood-drawer-tables-set-958db224ef514b2eabd69ac0a4e59ca0
+Licensed under Creative Commons Attribution 4.0 International:
+https://creativecommons.org/licenses/by/4.0/ .
+The supplied GLB embeds this author, source and licence in its asset metadata.
+Changes: extracted the fourth, wide table; flattened transforms, regenerated tangents,
+prepared mipmapped BC7 textures, and fitted proportions to the application's CRT.
+Other pieces from the set are not included. Source and preparation details: docs/wood-table.md.
+
+## Carpet surface
+
+Carpet 012 by ambientCG, https://ambientcg.com/view?id=Carpet012 .
+CC0 1.0 Universal: https://creativecommons.org/publicdomain/zero/1.0/ .
+Uses the original 1K colour, OpenGL normal and roughness maps. Runtime shading
+uses a warm neutral tint, softened normal strength, mip filtering and no displacement.
+Download archive SHA-256: f5c459f278a3b50dc5c2bf535b8c3b6fd4bb6fc458c836b64023961b167fe4f6.
+
+## Streaming MP3 decoder
+
+[dr_mp3 0.7.4](https://github.com/mackron/dr_libs/blob/master/dr_mp3.h), David Reid, used under MIT-0 (the selected dual-license option). Vendored source and SHA256 are recorded in `third_party/audio/dr_mp3-LICENSE.txt`; exported builds include the notice in `licenses/audio/`. Based on minimp3 (CC0). No music or station recordings are bundled.

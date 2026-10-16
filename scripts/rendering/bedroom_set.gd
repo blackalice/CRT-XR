@@ -43,6 +43,11 @@ static func matte(color: Color) -> StandardMaterial3D:
 	return material
 
 static func build_stand(parent: Node3D, top: float, cabinet_bounds := AABB()) -> Node3D:
+	var imported := preload("res://scripts/rendering/imported_table.gd").build(parent,top,cabinet_bounds)
+	if imported!=null: return imported
+	return build_procedural_stand(parent,top,cabinet_bounds)
+
+static func build_procedural_stand(parent: Node3D, top: float, cabinet_bounds := AABB()) -> Node3D:
 	var stand := Node3D.new()
 	stand.name = "TelevisionSupport"
 	parent.add_child(stand)
