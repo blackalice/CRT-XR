@@ -54,7 +54,7 @@ func run() -> void:
 	button(JOY_BUTTON_DPAD_RIGHT, false)
 	axis(JOY_AXIS_LEFT_X, 0.0)
 	axis(JOY_AXIS_LEFT_Y, 0.0)
-	check(session.load_rom(ProjectSettings.globalize_path("res://build/retrocrt-probe.sfc")), "Diagnostic cartridge loads for gamepad integration")
+	check(session.load_rom(ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")), "Diagnostic cartridge loads for gamepad integration")
 	await create_timer(0.15).timeout
 	button(JOY_BUTTON_A, true, 42)
 	await create_timer(0.15).timeout

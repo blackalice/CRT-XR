@@ -98,6 +98,8 @@ var sbs_startup := false
 var sbs_starting := false
 
 func _ready() -> void:
+	var migration := preload("res://scripts/content/user_data_migration.gd").migrate()
+	if migration.error!=OK: startup_message="Previous settings could not be fully copied. Original data is safe; check storage permissions."
 	Input.use_accumulated_input = false
 	var startup_args := OS.get_cmdline_user_args()
 	for arg in startup_args:
@@ -116,6 +118,15 @@ func _ready() -> void:
 		return
 	start_application()
 
+func sbs_target_size() -> Vector2i:
+	# The probe profile is explicit; never infer optical SBS from aspect ratio alone.
+	if not OS.get_environment("CRT_XR_DISPLAY_PROBE").is_empty():
+		var parts := OS.get_environment("CRT_XR_SBS_SIZE").split("x")
+		if parts.size()==2:
+			var size := Vector2i(int(parts[0]),int(parts[1]))
+			if size.x>=640 and size.x<=16384 and size.x%2==0 and size.y>=480 and size.y<=8192: return size
+	return Vector2i(3840,1080)
+
 func start_sbs_session() -> void:
 	if sbs_starting: return
 	sbs_starting = true
@@ -124,7 +135,7 @@ func start_sbs_session() -> void:
 	await get_tree().process_frame
 	if DisplayServer.get_name()!="headless": await RenderingServer.frame_post_draw
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	DisplayServer.window_set_size(Vector2i(3840,1080))
+	DisplayServer.window_set_size(sbs_target_size())
 	start_application()
 	var resume_game: bool = emulator.loaded and not emulator.paused
 	if resume_game: emulator.set_paused(true)
@@ -267,6 +278,7 @@ func start_application() -> void:
 	menu_view.gui_embed_subwindows = true
 	add_child(menu_view)
 	build_settings()
+	music.restore_resume()
 	for panel in panels:
 		var overlay := TextureRect.new()
 		overlay.texture = menu_view.get_texture()
@@ -279,9 +291,9 @@ func start_application() -> void:
 	set_stereo(sbs_startup or "--sbs" in OS.get_cmdline_user_args() or "--full-sbs" in OS.get_cmdline_user_args())
 	if "--full-sbs" in OS.get_cmdline_user_args() or sbs_startup:
 		set_stereo(true)
-		DisplayServer.window_set_size(Vector2i(3840, 1080))
+		DisplayServer.window_set_size(sbs_target_size())
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	print("RetroCRT ready / Godot ", Engine.get_version_info().string, " / ", OS.get_name())
+	print("CRT XR ready / Godot ", Engine.get_version_info().string, " / ", OS.get_name())
 	var arguments := OS.get_cmdline_user_args()
 	for index in range(arguments.size() - 1):
 		if arguments[index] == "--rom":
@@ -366,7 +378,7 @@ func _process(delta: float) -> void:
 	display_report_elapsed += delta
 	if display_report_elapsed >= 1.0:
 		display_report_elapsed = 0.0
-		var report_path := OS.get_environment("RETROCRT_DISPLAY_STATUS")
+		var report_path := OS.get_environment("CRT_XR_DISPLAY_STATUS")
 		if not report_path.is_empty():
 			var report := FileAccess.open(report_path, FileAccess.WRITE)
 			if report:
@@ -499,6 +511,7 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(emulator):
 		emulator.gamepad.clear()
 		clear_menu_gamepad()
+		if is_instance_valid(music): music.save_resume()
 
 func recenter() -> void:
 	if not provider.valid:
@@ -543,7 +556,7 @@ func toggle_fullscreen() -> void:
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
 
 func set_stereo(value: bool) -> void:
-	if not value and not OS.get_environment("RETROCRT_DISPLAY_STATUS").is_empty():
+	if not value and not OS.get_environment("CRT_XR_DISPLAY_STATUS").is_empty():
 		return # The managed glasses session keeps its physical and rendered modes aligned.
 	stereo = value
 	Input.mouse_mode=Input.MOUSE_MODE_HIDDEN if value else Input.MOUSE_MODE_VISIBLE
@@ -551,7 +564,7 @@ func set_stereo(value: bool) -> void:
 	views[1].render_target_update_mode = SubViewport.UPDATE_ALWAYS if value else SubViewport.UPDATE_DISABLED
 	close_settings()
 	if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_WINDOWED:
-		DisplayServer.window_set_size(Vector2i(1280, 360) if value else Vector2i(1280, 720))
+		DisplayServer.window_set_size(Vector2i(1280, 360) if value else (Vector2i(1280,800) if "--deck-mono" in OS.get_cmdline_user_args() else Vector2i(1280,720)))
 
 func toggle_settings() -> void:
 	if settings_panel.visible:
@@ -805,11 +818,11 @@ func show_notice(message: String) -> void:
 	if is_instance_valid(menu): menu.notify(message)
 
 func screenshot_directory() -> String:
-	var override := OS.get_environment("RETROCRT_SCREENSHOT_DIR")
+	var override := OS.get_environment("CRT_XR_SCREENSHOT_DIR")
 	if not override.is_empty(): return override
 	var pictures := OS.get_system_dir(OS.SYSTEM_DIR_PICTURES)
 	if pictures.is_empty(): return ProjectSettings.globalize_path("user://Screenshots")
-	return pictures.path_join("RetroCRT XR")
+	return pictures.path_join("CRT XR")
 
 func take_screenshot() -> String:
 	if taking_screenshot: return ""
@@ -821,7 +834,7 @@ func take_screenshot() -> String:
 	var folder := screenshot_directory()
 	var error := DirAccess.make_dir_recursive_absolute(folder)
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
-	var stem := "RetroCRT-%s-%03d" % [stamp, Time.get_ticks_msec() % 1000]
+	var stem := "CRT XR-%s-%03d" % [stamp, Time.get_ticks_msec() % 1000]
 	var path := folder.path_join(stem + ".png")
 	var suffix := 2
 	while FileAccess.file_exists(path):
@@ -889,6 +902,7 @@ func capture_settings() -> ConfigFile:
 	return config
 
 func save_settings() -> bool:
+	if is_instance_valid(music) and music.save_resume()!=OK: return false
 	var config := capture_settings()
 	if remember_game_picture and not active_game_key.is_empty():
 		if not save_game_preferences(): return false

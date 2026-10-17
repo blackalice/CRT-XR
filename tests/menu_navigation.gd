@@ -27,7 +27,7 @@ func run():
             if e is InputEventJoypadButton or e is InputEventJoypadMotion:InputMap.action_erase_event(action,e)
     app=load("res://scenes/main.tscn").instantiate();root.add_child(app);app.use_tracking(false);await settle()
     var m=app.menu
-    check(m.items.map(func(i):return i.id)==["home.continue","transport.choose","home.library","home.settings","home.exit"],"Startup has its own home menu")
+    check(m.items.map(func(i):return i.id)==["transport.choose","home.continue","home.library","home.settings","home.exit"],"Startup has its own home menu")
     check(m.selected_id=="home.library" and row("home.continue").disabled,"No-game startup selects Library and disables unavailable Continue")
     m.open_settings();page(0,0);m.select("view.distance",false);app.distance=3.0
     await button(JOY_BUTTON_DPAD_RIGHT)
@@ -127,7 +127,7 @@ func run():
     check(m.visible and m.error_label.visible,"Failed save keeps the menu open and error visible")
     DirAccess.remove_absolute(ProjectSettings.globalize_path("user://settings.cfg.tmp"));app.close_settings()
     check(not m.visible,"Closing retries after storage recovers")
-    app.load_game(ProjectSettings.globalize_path("res://build/retrocrt-probe.sfc"));await settle()
+    app.load_game(ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc"));await settle()
     app.close_settings();app.toggle_settings();await settle()
     check(app.emulator.paused and m.selected_id=="resume","Menu pauses a running game and selects Resume")
     var load_row=m.rows.filter(func(row):return row.item.id=="load_state")[0]

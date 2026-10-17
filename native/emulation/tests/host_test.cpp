@@ -10,8 +10,8 @@ void check(bool value, const char* message) {
 int main(int argc, char** argv) {
     if (argc != 5) return 2;
     try {
-        retrocrt::LibretroHost host;
-        check(!host.load_core("/missing/retrocrt-core"), "Missing core fails cleanly");
+        crt_xr::LibretroHost host;
+        check(!host.load_core("/missing/crt_xr-core"), "Missing core fails cleanly");
         check(host.load_core(argv[1]), "Fixture core dynamically loads");
         check(host.load_game(argv[3], argv[4]), "Legacy core option default and ROM loading work");
         check(host.step(0) && host.width == 2 && host.height == 2, "Core framebuffer dimensions captured");

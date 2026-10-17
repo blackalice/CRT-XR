@@ -58,7 +58,9 @@ func run():
 	var global := ConfigFile.new()
 	global.load("user://settings.cfg")
 	check(is_equal_approx(global.get_value("picture","gamma"),2.1),"Closing settings automatically persists adjustments")
-	var probe := ProjectSettings.globalize_path("res://build/retrocrt-probe.sfc")
+	var global_width: float=app.world.picture.values.width
+	app.set_remember_game_picture(true)
+	var probe := ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")
 	check(app.load_game(probe),"Original diagnostic game loads through the startup flow")
 	app.world.picture.set_value("gamma",1.75)
 	app.world.picture.set_value("width",.7)
@@ -68,7 +70,7 @@ func run():
 	global.load("user://settings.cfg")
 	check(is_equal_approx(global.get_value("picture","gamma"),2.1) and is_equal_approx(global.get_value("view","distance"),3.8),"Game-specific picture stays separate while view remains global")
 	app.emulator.stop()
-	check(is_equal_approx(app.world.picture.values.gamma,2.1) and is_equal_approx(app.world.picture.values.width,1),"Stopping a game restores the global picture baseline")
+	check(is_equal_approx(app.world.picture.values.gamma,2.1) and is_equal_approx(app.world.picture.values.width,global_width),"Stopping a game restores the global picture baseline")
 	var moved := "user://renamed-probe.sfc"
 	var file := FileAccess.open(moved,FileAccess.WRITE)
 	file.store_buffer(FileAccess.get_file_as_bytes(probe))

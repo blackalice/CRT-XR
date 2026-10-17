@@ -22,7 +22,7 @@ class DriverSBS:
         api = Path.home() / "homebrew/plugins/decky-XRGaming/PyXRLinuxDriverIPC/xrdriveripc.py"
         if hashlib.sha256(api.read_bytes()).hexdigest() != API_SHA256:
             raise RuntimeError("Unverified XR Gaming control API; use the physical SBS switch.")
-        spec = importlib.util.spec_from_file_location("retrocrt_installed_xr_api", api)
+        spec = importlib.util.spec_from_file_location("crt_xr_installed_xr_api", api)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         self.ipc = module.XRDriverIPC()

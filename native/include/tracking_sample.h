@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-namespace retrocrt {
+namespace crt_xr {
 // Application contract, NOT the driver's shared-memory layout.
 enum class TrackingStatus { ready, unavailable, abi_unverified, stale, invalid, lock_timeout };
 struct TrackingSample {
@@ -19,4 +19,4 @@ public:
     virtual TrackingSample poll() = 0;
     virtual void detach() = 0;
 };
-} // namespace retrocrt
+} // namespace crt_xr

@@ -170,7 +170,7 @@ func run() -> void:
 	for record in records: total+=record.gpu_bytes_with_mips
 	var report := {"source_sha256":original_hash,"brand":Brand.TEXT,
 		"geometry":geometry,
-		"badge_svg_sha256":FileAccess.get_sha256("res://Phony.svg"),
+		"badge_svg_sha256":FileAccess.get_sha256("res://assets/branding/Phony.svg"),
 		"texture_count":records.size(),"gpu_texture_bytes_with_mips":total,
 		"textures":records,"elapsed_ms":Time.get_ticks_msec()-start}
 	var file := FileAccess.open(OUTPUT+"/manifest.json",FileAccess.WRITE)

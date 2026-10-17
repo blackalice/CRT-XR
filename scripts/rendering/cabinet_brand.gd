@@ -9,7 +9,7 @@ static func apply(scene: Node) -> void:
 	for part in scene.find_children("*", "MeshInstance3D", true, false):
 		if str(part.get_parent().name) != "Logo": continue
 		var original: AABB = part.mesh.get_aabb()
-		var artwork := load("res://Phony.svg") as Texture2D
+		var artwork := load("res://assets/branding/Phony.svg") as Texture2D
 		if artwork==null: continue
 		var image := artwork.get_image()
 		if image.is_compressed(): image.decompress()

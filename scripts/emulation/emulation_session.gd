@@ -273,7 +273,7 @@ static func auto_path_for(path: String) -> String:
 
 static func state_details(path: String) -> Dictionary:
 	var file := FileAccess.open(path,FileAccess.READ)
-	if file==null or file.get_length()>64*1024*1024: return {}
+	if file==null or file.get_length()<4 or file.get_length()>64*1024*1024: return {}
 	var value = bytes_to_var(file.get_buffer(file.get_length()))
 	if not value is Dictionary or value.get("format")!=1 or not value.get("state") is PackedByteArray: return {}
 	return value

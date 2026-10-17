@@ -46,7 +46,7 @@ exactly in their respective comparisons.
 ## Reproduce
 
 Generate the intentionally delayed fixture:
-`python tests/make_probe_rom.py build/retrocrt-latency-probe.sfc --input-delay`.
+`python tests/make_probe_rom.py build/crt_xr-latency-probe.sfc --input-delay`.
 Then run `tests/input_latency.gd` with Godot. For a supplied ROM, use
 `-- --rom /absolute/path/game.sfc`; add `--probe` only for the delayed fixture.
 
@@ -57,5 +57,5 @@ Use isolated `XDG_DATA_HOME` for Deck test runs so production saves are untouche
 `python tests/preview_audio_test.py CORE_LIBRARY ROM SAVE_DIRECTORY` checks
 committed audio through the actual Libretro API without external Python packages.
 
-The Steam entry now targets `~/Applications/RetroCRT/latency-20261014/`.
+The Steam entry now targets `~/Applications/CRT-XR/latency-20261014/`.
 The prior `scene-lighting-20261014` build remains available for rollback.

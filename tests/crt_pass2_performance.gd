@@ -48,8 +48,8 @@ func run():
 	var screen:ShaderMaterial=app.world.screen_material
 	var current_shader:=screen.shader
 	var current_decoder:Shader=picture.decoder.shader
-	var reference:Shader=load("/home/deck/Applications/RetroCRT/crt_reference_pass1.gdshader")
-	var reference_decoder:Shader=load("/home/deck/Applications/RetroCRT/analog_reference.gdshader")
+	var reference:Shader=load("/home/deck/Applications/CRT XR/crt_reference_pass1.gdshader")
+	var reference_decoder:Shader=load("/home/deck/Applications/CRT XR/analog_reference.gdshader")
 	for distance_value in [2.64,1.2]:
 		for index in range(4):
 			var optimized:=index%2==1

@@ -110,7 +110,7 @@ It has since been rebuilt locally; see [Screen light](screen-light.md) for
 its separate tests and desktop-only measurements.
 
 The second pass is installed as `performance2-crt-20261014` and selected by the
-existing RetroCRT XR Steam entry. Its package hash was verified and the user's
+existing CRT XR Steam entry. Its package hash was verified and the user's
 global and per-game preferences were unchanged after profiling. The previous
 `performance-crt-20261014` installation is retained. The final short live run
 again held 60 Hz with valid tracking and no measured-phase audio/catch-up events.

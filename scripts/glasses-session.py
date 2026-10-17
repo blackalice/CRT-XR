@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Temporary KDE display layout for RetroCRT; Python standard library only."""
+"""Temporary KDE display layout for CRT XR; Python standard library only."""
 import argparse
 import importlib.util
 import json
@@ -133,7 +133,7 @@ def restore(screens, saved):
 
 def load_driver():
     path = Path(__file__).resolve().with_name("driver-sbs.py")
-    spec = importlib.util.spec_from_file_location("retrocrt_driver_sbs", path)
+    spec = importlib.util.spec_from_file_location("crt_xr_driver_sbs", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module.DriverSBS()
@@ -167,7 +167,7 @@ def healthy_status(path):
 def notice(message):
     print(message, flush=True)
     try:
-        subprocess.Popen(["notify-send", "RetroCRT XR", message], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.Popen(["notify-send", "CRT XR", message], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         pass
 
@@ -184,7 +184,7 @@ def main():
     if "gamescope" in os.environ.get("XDG_CURRENT_DESKTOP", "").lower():
         raise RuntimeError("Use this launcher in KDE Desktop Mode. Gaming Mode has a different display manager.")
     import fcntl  # Linux only; keep the pure planning functions testable on Windows.
-    state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "retrocrt"
+    state = Path(os.environ.get("XDG_STATE_HOME", str(Path.home() / ".local/state"))) / "crt_xr"
     state.mkdir(parents=True, exist_ok=True)
     with (state / "display-session.lock").open("w") as lock:
         try:
@@ -204,7 +204,7 @@ def run_session(args, app_args, state):
         screens.apply([command(o, "enable") for o in screens.read()["outputs"] if o.get("connected") and internal(o)])
         return 0
     notice("Switch the glasses to SBS; display setup will follow automatically." if args.manual_sbs else
-           "Connect the glasses. RetroCRT will request SBS through the existing XR driver.")
+           "Connect the glasses. CRT XR will request SBS through the existing XR driver.")
     target = None
     deadline = time.monotonic() + args.wait
     while time.monotonic() < deadline:
@@ -227,7 +227,7 @@ def run_session(args, app_args, state):
         os.replace(temporary, backup)
     save_backup()
     child = None
-    temporary = tempfile.TemporaryDirectory(prefix="retrocrt-display-", dir=state)
+    temporary = tempfile.TemporaryDirectory(prefix="crt-xr-display-", dir=state)
     status = Path(temporary.name) / "status.json"
     gate = Path(temporary.name) / "start.json"
     def interrupted(_signum, _frame):
@@ -242,10 +242,10 @@ def run_session(args, app_args, state):
         if initial_mode is None: raise RuntimeError("No usable glasses display mode found.")
         activate(screens, target, initial_mode)
         here = Path(__file__).resolve().parent
-        env = dict(os.environ, RETROCRT_DISPLAY_STATUS=str(status), RETROCRT_STARTUP_GATE=str(gate))
+        env = dict(os.environ, CRT_XR_DISPLAY_STATUS=str(status), CRT_XR_STARTUP_GATE=str(gate))
         display_args = ["--display-driver", "wayland"] if os.environ.get("WAYLAND_DISPLAY") else ["--display-driver", "x11"]
         initial_size = "%sx%s" % mode_size(initial_mode)
-        child = subprocess.Popen([str(here / "retrocrt.x86_64"), *display_args,
+        child = subprocess.Popen([str(here / "crt-xr.x86_64"), *display_args,
                                   "--rendering-method", "gl_compatibility", "--fullscreen", "--resolution", initial_size,
                                   "--log-file", str(state / "godot.log"), "--", "--sbs-session",
                                   *(["--startup-black"] if mode_size(initial_mode)==(3840,1080) else []), *app_args], env=env, cwd=here)

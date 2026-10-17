@@ -62,8 +62,8 @@ the compiler container; it has not yet been validated because Docker failed
 to start during this pass. Exports include core notices, provenance and source
 snapshots. Genesis Plus GX prohibits commercial use; see `THIRD_PARTY.md`.
 
-The Linux `retrocrt.x86_64` entry point keeps the system C++ runtime loaded
-throughout core switches and starts `retrocrt-engine.x86_64` with the packed
+The Linux `crt-xr.x86_64` entry point keeps the system C++ runtime loaded
+throughout core switches and starts `crt-xr-engine.x86_64` with the packed
 project. This avoids a SteamOS locale-facet crash when returning to Snes9x
 after another core. Use the entry point or normal Steam/glasses launchers;
 do not launch the engine binary directly. The preload is scoped to this process,
@@ -157,13 +157,13 @@ by an explicit quick save, as expected.
 In scripted Windows development, this directory is:
 
 ```text
-tools/userdata/Godot/app_userdata/RetroCRT XR/saves/
+tools/userdata/Godot/app_userdata/CRT XR/saves/
 ```
 
 In a normal Linux export, Godot's user-data path is generally:
 
 ```text
-~/.local/share/godot/app_userdata/RetroCRT XR/saves/
+~/.local/share/godot/app_userdata/CRT XR/saves/
 ```
 
 ## Building dependencies
@@ -179,8 +179,8 @@ Then in WSL, with Docker running:
 
 ```bash
 cd /mnt/d/git/XR-CRT
-docker build -f Dockerfile.emulation -t retrocrt-emulation-build .
-docker run --rm -v "$PWD:/work" retrocrt-emulation-build
+docker build -f Dockerfile.emulation -t crt_xr-emulation-build .
+docker run --rm -v "$PWD:/work" crt_xr-emulation-build
 ```
 
 The container builds the Godot C++ extension and Snes9x core for Linux x86-64 and

@@ -57,8 +57,8 @@ saves, switches tracking provider or changes the physical mono/SBS display mode.
 ## Screenshots
 
 Press **F6**, or select **Game → Save clean screenshot**. A timestamped PNG is
-saved to **Pictures/RetroCRT XR** (on the Deck, normally
-`/home/deck/Pictures/RetroCRT XR`). A short on-screen message reports the folder.
+saved to **Pictures/CRT XR** (on the Deck, normally
+`/home/deck/Pictures/CRT XR`). A short on-screen message reports the folder.
 If the system has no Pictures directory, the app uses `user://Screenshots`.
 
 Captures contain the rendered 3D scene from the left eye as a normal single-view
@@ -66,7 +66,7 @@ image, even in SBS. Menus, diagnostics, notifications and the glasses' edge fade
 are outside the capture. Current viewpoint, lighting and picture settings are
 retained. Capturing from the menu keeps the game paused and the menu open. The
 one-time GPU readback and PNG save only run when requested; repeated captures use
-distinct names. `RETROCRT_SCREENSHOT_DIR` can override the destination for tests.
+distinct names. `CRT_XR_SCREENSHOT_DIR` can override the destination for tests.
 
 All 16 screenshot/reset checks pass locally and on the Deck. They verify option isolation, switches, live lighting,
 reset-all, gameplay Y mapping, SBS/pause preservation, distinct filenames, F6 and

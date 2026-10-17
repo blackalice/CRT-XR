@@ -141,7 +141,8 @@ func pages(category: int) -> Array:
 				{"id":"setups.pergame","label":"Remember picture per game","kind":"toggle","default":h.Showcase.PER_GAME_PICTURE,"visual":false,"getter":func(): return h.remember_game_picture,"setter":h.set_remember_game_picture,"help":"Fitting, CRT and colour belong to the game; room and view stay global."},
 				action("setups.global","Use global picture for this game",h.forget_game_picture,"Removes this game's picture override; future global picture changes apply.",h.active_game_key.is_empty())])]
 		6:
-			return [page("General",[action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")])]
+			return [page("General",[action("system.version","CRT XR",func(): menu.notify("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))),"First beta candidate. See BETA-REVIEW.md for validation and remaining release gates.",false,str(ProjectSettings.get_setting("application/config/version"))),action("system.diagnostics","Copy diagnostics",func():
+				DisplayServer.clipboard_set("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))+" | "+OS.get_name()+" | Godot "+str(Engine.get_version_info().string)+" | "+DisplayServer.get_name()); menu.notify("Version and platform details copied; no ROM or music paths included."),"Copies version/platform information for a bug report."),action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")])]
 		2:
 			var audio = h.emulator.tv_audio
 			var audio_rows: Array=[
@@ -163,9 +164,11 @@ func pages(category: int) -> Array:
 			audio_rows.append(action("atmosphere.preview","Preview TV power-on",h.preview_power_on,"Closes settings and replays the picture and sound effect.",not h.power_on.enabled))
 			var music = h.music
 			audio_rows.push_front(number("music.game_volume","Game volume",music,"game_volume",0,1,.05,1,"percent","Independent of music volume. Game sound pauses with emulation.",music.apply,false))
+			audio_rows.push_front(toggle("music.duck_game","Dip game during music",music,"duck_game",false,"Automatically lowers game audio while music is audible; restores it when paused or stopped.",music.apply,false))
+			audio_rows.insert(1,number("music.duck_amount","Game volume dip",music,"duck_amount",0,1,.05,.5,"percent","How much to reduce the chosen game volume while music plays. Fades smoothly.",music.apply,false))
 			return [page("TV sound",audio_rows),page("Music & radio",[
 				action("music.file","Choose music / album",menu.open_music_browser,"Browse local storage or an SD card. Music keeps playing in menus."),
-				action("music.replay","Play last MP3",func(): music.play_file(music.last_file); menu.notify(music.status),"Plays your last selected file without changing the game.",music.last_file.is_empty()),
+				action("music.replay","Play last MP3",func(): music.play_last_file(); menu.notify(music.status),"Continues the saved track and position without changing the game.",music.last_file.is_empty()),
 				action("music.url","Radio stream URL",menu.edit_radio_url,"Keyboard entry for a direct MP3 stream URL. Station webpages, AAC and HLS are not supported.",false,"Edit"),
 				action("music.radio","Play radio",func(): music.play_station(music.station_url); menu.notify(music.status),"Streams a direct MP3 radio station with a bounded audio buffer.",music.station_url.is_empty()),
 				action("music.stop","Stop music",func(): music.stop(); menu.notify(music.status),"Stops music or radio. Leaves game sound unchanged."),

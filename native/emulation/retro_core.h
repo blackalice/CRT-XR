@@ -7,7 +7,7 @@
 
 class RetroCore : public godot::RefCounted {
     GDCLASS(RetroCore, godot::RefCounted)
-    retrocrt::LibretroHost host;
+    crt_xr::LibretroHost host;
 protected:
     static void _bind_methods();
 public:

@@ -11,7 +11,7 @@
 namespace { volatile std::sig_atomic_t running = 1; void stop(int) { running = 0; } }
 int main(int argc, char** argv) {
     if (argc != 3) {
-        std::fputs("Usage: retrocrt-tracking-bridge LOOPBACK_UDP_PORT PARENT_PID\n", stderr);
+        std::fputs("Usage: crt-xr-tracking-bridge LOOPBACK_UDP_PORT PARENT_PID\n", stderr);
         return 2;
     }
     char* end = nullptr;
@@ -27,7 +27,7 @@ int main(int argc, char** argv) {
     destination.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     std::signal(SIGTERM, stop);
     std::signal(SIGINT, stop);
-    retrocrt::IpcReader reader;
+    crt_xr::IpcReader reader;
     unsigned long long sequence = 0;
     auto next_report = std::chrono::steady_clock::now();
     while (running && kill(static_cast<pid_t>(parent), 0) == 0) {

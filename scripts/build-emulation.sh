@@ -26,9 +26,9 @@ for platform in linux windows; do
         make --silent -C "$source/libretro" -j"$jobs" platform=win CC=x86_64-w64-mingw32-gcc-posix CXX='x86_64-w64-mingw32-g++-posix -std=c++17' LTO= LDFLAGS='-static -static-libgcc -static-libstdc++'
         cp "$source/libretro/snes9x_libretro.dll" "$root/cores/"
     fi
-    python3 "$root/tests/make_probe_rom.py" "$root/build/retrocrt-probe.sfc"
+    python3 "$root/tests/make_probe_rom.py" "$root/build/crt-xr-probe.sfc"
     if [[ "$platform" == linux ]]; then
-        "$root/build/emulation-linux/retrocrt-host-test" "$root/build/emulation-linux/libretrocrt_mock_core.so" "$root/cores/snes9x_libretro.so" "$root/build/retrocrt-probe.sfc" "$root/build"
+        "$root/build/emulation-linux/crt-xr-host-test" "$root/build/emulation-linux/libcrt_xr_mock_core.so" "$root/cores/snes9x_libretro.so" "$root/build/crt-xr-probe.sfc" "$root/build"
     fi
 done
 cp "$root/tools/snes9x/LICENSE" "$root/cores/Snes9x-LICENSE.txt"

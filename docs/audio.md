@@ -50,3 +50,17 @@ The main home/pause menu offers Music & albums. While a source is selected it al
 Read-only ID3v2.2/2.3/2.4 text frames and ID3v1.1 fallback cover title, artist, album, track and disc. Latin-1, UTF-8 and UTF-16 text are supported, including basic unsynchronisation handling. Parsing is bounded to 4 MiB tags, 256 frames and 4 KiB per text frame, and caches only small metadata dictionaries. Encrypted/compressed frames and artwork are ignored; unavailable metadata falls back to filename/folder. No files are retagged. Format references: [ID3v2.3](https://id3.org/id3v2.3.0), [ID3v2.4](https://id3.org/id3v2.4.0-structure).
 
 `tests/music_albums.gd` covers metadata encodings/fallback, ordering, pause/resume, next/previous, end/repeat, menu controller transport and album browsing. `tests/music_album_visual.gd` captures only the menu viewport, excluding the licensed scene.
+
+## Music panel, seeking and game-volume dip
+
+Music occupies a separate tinted player panel in the main menu, with vector Previous/Play-Pause/Next/Stop icons, track metadata, an adjustable local-MP3 timeline and an album browser link. Hover tooltips name icons; the selected icon has an amber focus ring. Left/right moves between icons, while down exits directly to the menu row below and up selects the timeline. Left/right on the timeline seeks in 10-second steps; pointer users can click or drag to any position. Seeking while paused is retained and applied on resume. Live radio has no seek bar.
+
+Audio → TV sound includes **Dip game during music** (Off by default) and **Game volume dip** (50% by default). This reduces the manually chosen game level multiplicatively while unpaused, non-muted music is playing. It uses a 150 ms fade down and 400 ms recovery, never changes the saved game volume, and adds no rendering passes or game-audio buffering. Stop, local pause, muted music or a radio disconnection restores the chosen game level. Preferences remain global and use the existing settings store.
+
+## Ready-to-resume music
+
+The last local track, its album queue and timeline position are restored on launch, with the compressed track prepared but its player stopped. Press Play to continue at that position; no sound is emitted during restoration, and game-volume dipping remains inactive. Radio restores its saved URL ready to connect, without connecting or starting audio automatically.
+
+An independent atomic `user://music-resume.cfg` bookmark saves every five seconds, on seeking/pause/source changes, on focus loss and during settings-save/exit. Picture presets and per-game settings do not replace it. Missing removable media keeps the bookmark and displays recovery guidance; Play last MP3 retries the saved position after reconnecting the drive. Invalid positions fall back to zero and out-of-range positions clamp to the track. Existing last-file preferences migrate as ready at zero when no bookmark exists. Reset all clears the bookmark. Abrupt termination may lose up to five seconds of progress.
+
+`tests/music_resume.gd` checks a fresh app restoration, silence, album identity, stored position, continuation, missing media, invalid data, reset and radio readiness.

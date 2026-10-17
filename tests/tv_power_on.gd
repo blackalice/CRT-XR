@@ -9,7 +9,7 @@ func run():
 	var effect=app.power_on
 	check(not effect.started and effect.progress==0 and not effect.is_processing(),"Waits behind the startup menu instead of wasting the effect")
 	check(is_equal_approx(effect.cue.stream.get_length(),.64),"Bundled CC0 startup excerpt is 0.640 seconds")
-	var rom := ProjectSettings.globalize_path("res://build/retrocrt-probe.sfc")
+	var rom := ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")
 	check(app.load_game(rom),"Diagnostic game loads")
 	app.close_settings()
 	check(effect.started and effect.progress==0 and not app.emulator.paused,"First reveal starts the effect without delaying gameplay")

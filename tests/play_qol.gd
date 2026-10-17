@@ -23,7 +23,7 @@ func run():
 	check(not history.toggle("unwritable.sfc") and history.favourites==before,"Failed favourite save rolls back")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(history.path+".tmp"))
 	var app=load("res://scenes/main.tscn").instantiate(); root.add_child(app); app.use_tracking(false)
-	var rom := ProjectSettings.globalize_path("res://build/retrocrt-probe.sfc")
+	var rom := ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")
 	check(app.load_game(rom),"Diagnostic cartridge loads")
 	app.close_settings(); await settle(); app.toggle_settings()
 	check(app.emulator.save_state(),"Manual state saved")

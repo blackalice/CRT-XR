@@ -14,7 +14,7 @@
 #include <dlfcn.h>
 #endif
 
-namespace retrocrt {
+namespace crt_xr {
 LibretroHost* LibretroHost::active = nullptr;
 LibretroHost::~LibretroHost() { close(); }
 void LibretroHost::close_game() {

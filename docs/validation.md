@@ -2,7 +2,7 @@
 
 ## Latest Deck deployment
 
-Current Steam target: `~/Applications/RetroCRT/latency-20261014/`. The user has
+Current Steam target: `~/Applications/CRT-XR/latency-20261014/`. The user has
 accepted the Desktop SBS setup flow and gameplay controls. Gaming Mode external
 resolution still requires its Steam UI setting. The latency build enables
 immediate input delivery and a switchable one-frame preview. CPU state and SRAM
@@ -13,7 +13,7 @@ slow-frame or audio-overflow events during either measured section. See
 [input latency](input-latency.md) for timings, warmup results and measurement
 limits. Physical button-to-photon latency has not been measured.
 
-The Steam-aware update adds a **RetroCRT XR** non-Steam library entry, Native
+The Steam-aware update adds a **CRT XR** non-Steam library entry, Native
 resolution and the built-in Deck gamepad template. Both main desktop icons
 launch that entry. The user confirms gameplay controls now work and the menu
 chord opens settings. A subsequent fix explicitly forwards A as UI accept;
@@ -26,12 +26,12 @@ confirmed the updated build boots and allows opening the menu and exiting.
 The new XR prompt and an actual Gaming Mode launch remain pending.
 
 Installed the current scene, gamepad mappings, 3.4 m distance default and
-adjustable curvature at `~/Applications/RetroCRT/scene-lighting-20261014/`.
+adjustable curvature at `~/Applications/CRT-XR/scene-lighting-20261014/`.
 The local Panasonic GLB is supplied beside the executable under `assets/`.
 The application PCK and GLB SHA-256 hashes matched the Windows source files.
 Headless startup and a bounded 180-frame Wayland/OpenGL run both completed
 without logged script/render errors on the Deck's AMD GPU (Mesa 26.1.2).
-The RetroCRT-XR and screen-recovery desktop shortcuts now target this build;
+The CRT XR-XR and screen-recovery desktop shortcuts now target this build;
 the previous application and shortcut backups were retained.
 
 Tracking reported `driver_disabled_or_disconnected` during this check. No
@@ -52,9 +52,9 @@ to previous checkpoints and are superseded by this transfer record.
   TV transform, rotated eye separation, recentering, centered mono camera,
   distance adjustment, scale adjustment and animated signal pause.
 * Exported a native Linux x86-64 release using official matching Godot templates.
-  Output: `dist/linux/retrocrt.x86_64`, `retrocrt.pck`, `launch-deck.sh`.
+  Output: `dist/linux/crt-xr.x86_64`, `crt-xr.pck`, `launch-deck.sh`.
 * Started that exported release headlessly in WSL Ubuntu; it reported
-  `RetroCRT ready / Godot 4.5.1-stable (official) / Linux` and exited successfully.
+  `CRT XR ready / Godot 4.5.1-stable (official) / Linux` and exited successfully.
 * Validated both Linux shell scripts with `bash -n`, confirmed the exported
   executable is an x86-64 Linux ELF, and started it through the packaged launcher.
 * Built the native inventory utility in the Ubuntu 22.04 Docker environment using

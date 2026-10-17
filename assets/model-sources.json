@@ -1,0 +1,29 @@
+[
+  {
+    "name": "TV",
+    "source": "build/crt-model/crt_tv.glb",
+    "source_sha256": "6342fcebb5faae40854d3639f97b386b302b11f99a0f2bb6857601b877b9dff5",
+    "prepared": "build/crt-model/optimised/cabinet.scn",
+    "source_url": "https://sketchfab.com/3d-models/crt-tv-9ba4baa106e64319a0b540cf0af5aa9e",
+    "author": "Timothy Ahene",
+    "license": "CC-BY-4.0"
+  },
+  {
+    "name": "Table",
+    "source": "build/wood-table-source/wood_drawer__tables_set.glb",
+    "source_sha256": "551d43371ad5e63815dc7426aa08352dffb829411a75f55904bea59d8a1851e1",
+    "prepared": "build/wood-table/table.scn",
+    "source_url": "https://sketchfab.com/3d-models/wood-drawer-tables-set-958db224ef514b2eabd69ac0a4e59ca0",
+    "author": "brandon_grey",
+    "license": "CC-BY-4.0"
+  },
+  {
+    "name": "Console",
+    "source": "build/console-source/console-1k.glb",
+    "source_sha256": "0f689933745989a3168999768db44358f7eba42c0070b2f44f970f52142c3e85",
+    "prepared": "build/console/console.scn",
+    "source_url": "https://sketchfab.com/3d-models/super-retro-game-console-d672d0ac1d6a4d238314d6675f8f92b2",
+    "author": "ELIZION",
+    "license": "CC-BY-4.0"
+  }
+]

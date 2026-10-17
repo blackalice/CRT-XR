@@ -3,6 +3,8 @@ const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const Row = preload("res://scripts/ui/setting_row.gd")
 const LibraryCard = preload("res://scripts/ui/library_card.gd")
 const GameRow = preload("res://scripts/ui/library_game_row.gd")
+const MusicIcon = preload("res://scripts/ui/music_transport_icon.gd")
+const MusicTimeline = preload("res://scripts/ui/music_timeline.gd")
 const ActionRow = preload("res://scripts/ui/action_row.gd")
 const Catalog = preload("res://scripts/ui/menu_catalog.gd")
 const Library = preload("res://scripts/ui/rom_library.gd")
@@ -89,7 +91,7 @@ func _ready() -> void:
 	add_child(layout)
 	var top := HBoxContainer.new()
 	layout.add_child(top)
-	heading = Label.new(); heading.text = "RetroCRT XR"
+	heading = Label.new(); heading.text = "CRT XR"
 	heading.add_theme_font_size_override("font_size",32)
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(heading)
@@ -324,7 +326,7 @@ func library_items() -> Array:
 		if count==0: continue
 		result.append(card(catalog.action("library.system."+id,library.Registry.SYSTEMS[id].name,func(): open_system(id),"Open all %s cartridges in your library. Folders for other consoles stay out of this view." % library.Registry.SYSTEMS[id].name,false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
 	var detail := "Choose your main ROM folder" if h.default_rom_dir.is_empty() else "Folders · SD cards · Refresh"
-	result.append(card(catalog.action("library.locations","Library locations",open_library_tools,"Set the main roms folder once. RetroCRT finds supported consoles and leaves the files where they are.",false,detail),"MAKE YOURSELF AT HOME","locations",Color("aeb6bf"),"YOUR CONSOLES" if rom_index.total()>0 else "LIBRARY"))
+	result.append(card(catalog.action("library.locations","Library locations",open_library_tools,"Set the main roms folder once. CRT XR finds supported consoles and leaves the files where they are.",false,detail),"MAKE YOURSELF AT HOME","locations",Color("aeb6bf"),"YOUR CONSOLES" if rom_index.total()>0 else "LIBRARY"))
 	return result
 
 func refresh_library() -> void:
@@ -501,8 +503,14 @@ func music_actions() -> Array:
 			catalog.action("transport.play",music.playback_caption(),func(): music.toggle_playback(); refresh(),"Pause/resume local music; reconnect live radio.",false,""),
 			catalog.action("transport.next","Next",func(): music.skip(1); refresh(),"Next album track.",not music.can_skip(1),""),
 			catalog.action("transport.stop","Stop",func(): music.stop(); refresh(),"Stop music. Play restarts the current track.",false,"")]:
-			item.layout="transport"; result.append(item)
-	result.append(catalog.action("transport.choose","Music & albums",open_music_browser,"Choose an album or MP3 from local storage or SD card."))
+			item.layout="transport"
+			item.icon=item.id.get_slice(".",1)
+			if item.id=="transport.play": item.icon="pause" if music.player.playing and not music.player.stream_paused else "play"
+			result.append(item)
+		if music.duration()>0:
+			result.push_front({"id":"transport.seek","label":"Track position","kind":"seek","layout":"music_seek","getter":music.position_seconds,"setter":music.seek,"duration":music.duration,"progress":music.progress_text,"help":"Left/right seeks by 10 seconds. Drag or click the timeline to jump through a long mix."})
+	var browse := catalog.action("transport.choose","Browse albums & music",open_music_browser,"Choose an album or MP3 from local storage or SD card.")
+	browse.layout="music_link"; result.append(browse)
 	return result
 
 func get_items() -> Array:
@@ -515,8 +523,8 @@ func get_items() -> Array:
 				var home: Array = [catalog.action("home.continue","Continue last game",func(): select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",h.last_game_path.is_empty() or not FileAccess.file_exists(h.last_game_path),h.last_game_path.get_file().get_basename() if not h.last_game_path.is_empty() else "No recent game"),
 					catalog.action("home.library","Game library",open_library,"Recent, Favourites and supported consoles."),
 					catalog.action("home.settings","Settings",open_settings,"Adjust the view, picture, audio and room."),
-					catalog.action("home.exit","Exit",func(): ask("Exit RetroCRT?","Your settings will be saved.",h.request_exit),"Close RetroCRT.")]
-				home=home.slice(0,1)+music_actions()+home.slice(1)
+					catalog.action("home.exit","Exit",func(): ask("Exit CRT XR?","Your settings will be saved.",h.request_exit),"Close CRT XR.")]
+				home=music_actions()+home
 				return home
 			var pause_items: Array = [
 			catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded),
@@ -525,8 +533,8 @@ func get_items() -> Array:
 			catalog.action("load_state","Load state",func(): state_action(false),"Restores state slot 0 for the current game.",not h.emulator.loaded or not FileAccess.file_exists(h.emulator.state_path())),
 			catalog.action("screenshot","Screenshot",h.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),
 			catalog.action("settings","Settings",open_settings,"Adjust the view, picture, room, controls and saved setups."),
-			catalog.action("exit","Exit RetroCRT",func(): ask("Exit RetroCRT?","An automatic resume point, settings and cartridge SRAM will be saved.",h.request_exit),"Close the application.")]
-			pause_items=pause_items.slice(0,1)+music_actions()+pause_items.slice(1)
+			catalog.action("exit","Exit CRT XR",func(): ask("Exit CRT XR?","An automatic resume point, settings and cartridge SRAM will be saved.",h.request_exit),"Close the application.")]
+			pause_items=music_actions()+pause_items
 			return pause_items
 		"launch": return [
 			catalog.action("launch.continue","Continue",func(): launch_game(launch_path,true),launch_path.get_file()+" • Automatic save • "+h.emulator.state_time(h.emulator.auto_path_for(launch_path))),
@@ -616,18 +624,28 @@ func render() -> void:
 	var group := ""
 	var grid: GridContainer
 	music_heading=null
-	var transport_grid: GridContainer
+	var music_layout: VBoxContainer
+	var transport_grid: HBoxContainer
 	var group_row := -1
 	var group_index := 0
 	for item in items:
 		var parent: Container=column
-		if item.get("layout","")=="transport":
-			if transport_grid==null:
-				music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20)
-				music_heading.autowrap_mode=TextServer.AUTOWRAP_OFF; music_heading.max_lines_visible=2; music_heading.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-				column.add_child(music_heading)
-				transport_grid=GridContainer.new(); transport_grid.columns=4; transport_grid.add_theme_constant_override("h_separation",8); column.add_child(transport_grid)
-			parent=transport_grid
+		if item.get("layout","") in ["transport","music_seek","music_link"]:
+			if music_layout==null:
+				var panel := PanelContainer.new()
+				panel.add_theme_stylebox_override("panel",MenuSkin.box(Color("222a30"),Color("47535b"),1,12))
+				column.add_child(panel)
+				music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",4); panel.add_child(music_layout)
+				var badge := Label.new(); badge.text="MUSIC PLAYER"; badge.add_theme_font_size_override("font_size",16); badge.add_theme_color_override("font_color",MenuSkin.AMBER); music_layout.add_child(badge)
+				if not host.music.kind.is_empty():
+					music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20)
+					music_heading.autowrap_mode=TextServer.AUTOWRAP_OFF; music_heading.max_lines_visible=2; music_heading.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+					music_layout.add_child(music_heading)
+			if item.layout=="transport":
+				if transport_grid==null:
+					transport_grid=HBoxContainer.new(); transport_grid.add_theme_constant_override("separation",12); transport_grid.alignment=BoxContainer.ALIGNMENT_CENTER; music_layout.add_child(transport_grid)
+				parent=transport_grid
+			else: parent=music_layout
 		if item.get("layout","")=="card":
 			if item.group!=group:
 				if grid!=null: group_row+=ceili(float(group_index)/2.0)
@@ -645,11 +663,8 @@ func render() -> void:
 		if item.id in ["exit","home.exit"]:
 			var divider := HSeparator.new()
 			column.add_child(divider)
-		var row = LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))
+		var row = MusicIcon.new() if item.get("layout","")=="transport" else (MusicTimeline.new() if item.kind=="seek" else (LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))))
 		parent.add_child(row); row.configure(item)
-		if item.get("layout","")=="transport":
-			row.custom_minimum_size.x=200; row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-			row.value_label.hide(); row.title_label.add_theme_font_size_override("font_size",22)
 		row.selected.connect(select)
 		row.adjust_requested.connect(func(id,delta):
 			select(id,false)
@@ -676,7 +691,7 @@ func render() -> void:
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"RetroCRT XR" if host.emulator.loaded else "Welcome to RetroCRT XR","library":"Your game library","library_tools":"Library locations","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"RetroCRT XR")
+	else: heading.text = {"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"CRT XR" if host.emulator.loaded else "Welcome to CRT XR","library":"Your game library","library_tools":"Library locations","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm": confirm_panel.describe(confirmation.title,confirmation.detail)
 	rename_field.visible = mode in ["rename","radio_url"]
@@ -741,7 +756,7 @@ func reveal_selected() -> void:
 	if row!=null and not preview: scroll.ensure_control_visible(row)
 
 func refresh_labels() -> void:
-	if is_instance_valid(music_heading): music_heading.text=host.music.now_playing()+"  "+host.music.progress_text()
+	if is_instance_valid(music_heading): music_heading.text=host.music.now_playing()
 	var row = selected_row()
 	var context: String = "Picture for "+host.emulator.rom_path.get_file() if not host.active_game_key.is_empty() else "Global picture"
 	if mode=="pause": subtitle.text = host.emulator.rom_path.get_file() if host.emulator.loaded else status_title
@@ -759,7 +774,7 @@ func refresh_labels() -> void:
 	elif mode=="library_tools": subtitle.text = host.default_rom_dir if not host.default_rom_dir.is_empty() else "Choose the main roms folder, once"
 	elif mode=="settings": subtitle.text = context if category==1 else (host.music.status if category==2 else "Global settings")
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
-	else: subtitle.text = "RetroCRT XR"
+	else: subtitle.text = "CRT XR"
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0: help_label.text = notification
 	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in Recently played or a system list and press X. B returns."
@@ -836,8 +851,13 @@ func navigate(next: Vector2i) -> void:
 	if index<0: return
 	if next.y!=0:
 		var candidate := index+next.y
+		if rows[index].item.get("layout","")=="transport":
+			while candidate>=0 and candidate<rows.size() and rows[candidate].item.get("layout","")=="transport": candidate+=next.y
 		while candidate>=0 and candidate<rows.size():
-			if not rows[candidate].disabled: select(rows[candidate].item.id); return
+			if not rows[candidate].disabled:
+				if rows[candidate].item.get("layout","")=="transport": select("transport.play")
+				else: select(rows[candidate].item.id)
+				return
 			candidate+=next.y
 	elif next.x!=0:
 		if mode=="pause" and rows[index].item.get("layout","")=="transport":
@@ -849,8 +869,10 @@ func navigate(next: Vector2i) -> void:
 		else: adjust(next.x)
 
 func adjust(delta: int) -> void:
-	if mode!="settings": return
 	var row = selected_row()
+	if row!=null and row.item.kind=="seek":
+		row.item.setter.call(float(row.item.getter.call())+10*delta); row.refresh(); return
+	if mode!="settings": return
 	if row==null or row.disabled: return
 	var item: Dictionary = row.item
 	match item.kind:
@@ -863,6 +885,7 @@ func activate() -> void:
 	var row=selected_row()
 	if row==null or row.disabled: return
 	if row.item.kind=="action": row.item.action.call()
+	elif row.item.kind=="seek": pass
 	elif row.item.kind=="toggle": adjust(-1 if bool(row.item.getter.call()) else 1)
 	elif row.item.get("visual",false) and not preview: toggle_preview()
 	else: adjust(1)
@@ -1055,6 +1078,7 @@ func game_entries() -> Array:
 
 func history_paths() -> Array:
 	var paths: Array=host.play_history.recent if mode=="recent" else host.play_history.favourites
+	if search_query.is_empty(): return paths
 	return paths.filter(func(path): return str(path).get_file().get_basename().to_lower().contains(search_query.to_lower()))
 
 func open_alphabet() -> void:

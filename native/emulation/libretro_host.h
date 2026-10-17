@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-namespace retrocrt {
+namespace crt_xr {
 // One Libretro instance, used only on the Godot main thread.
 class LibretroHost {
 public:

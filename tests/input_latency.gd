@@ -18,7 +18,7 @@ func run() -> void:
 	var session = load("res://scripts/emulation/emulation_session.gd").new()
 	root.add_child(session)
 	session.set_process(false)
-	var path := ProjectSettings.globalize_path("res://build/retrocrt-latency-probe.sfc")
+	var path := ProjectSettings.globalize_path("res://build/crt_xr-latency-probe.sfc")
 	var args := OS.get_cmdline_user_args()
 	var custom_rom := args.size() >= 2 and args[0] == "--rom"
 	if custom_rom: path = args[1]

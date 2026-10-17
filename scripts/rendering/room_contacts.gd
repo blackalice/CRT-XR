@@ -13,7 +13,7 @@ static func apply(world: Node3D, support: Node3D) -> void:
     var manifest_path:=folder.path_join("bake.json")
     if not FileAccess.file_exists(manifest_path):return
     var data=JSON.parse_string(FileAccess.get_file_as_string(manifest_path))
-    if not data is Dictionary or absf(float(data.get("floor_y",1000))-(world.support_floor_y-.01))>.001:
+    if not data is Dictionary or bool(data.get("console_present",false))!=world.television.has_node("ConsoleProp") or absf(float(data.get("floor_y",1000))-(world.support_floor_y-.01))>.001:
         push_warning("Room contact bake does not match this layout; run scripts/rebake-room.ps1.");return
     if not support.has_node("TopShelf"):return
     var table:=support.get_node("TopShelf") as MeshInstance3D

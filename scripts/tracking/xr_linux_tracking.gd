@@ -20,7 +20,7 @@ func _init() -> void:
 		status = "Driver version unverified; select simulation"
 		return
 	var base := ProjectSettings.globalize_path("res://dist/linux") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()
-	var helper := base.path_join("retrocrt-tracking-bridge")
+	var helper := base.path_join("crt-xr-tracking-bridge")
 	if not FileAccess.file_exists(helper):
 		status = "Tracking helper missing; select simulation"
 		return

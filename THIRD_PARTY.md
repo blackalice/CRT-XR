@@ -71,7 +71,7 @@ CC version remains to be recorded. An older third-party derivative explicitly
 credits Timothy Ahene's model as CC BY 4.0:
 https://blendswap.com/blend/31310
 
-Modifications in RetroCRT: rescaling/alignment, replacement live screen/glass,
+Modifications in CRT XR: rescaling/alignment, replacement live screen/glass,
 material adjustments, new baked occlusion and grain, reduced and GPU-compressed
 textures, prepared Godot resources, hidden rear hardware removal and constrained rear-panel simplification, and
 replacement badge using the user's
@@ -109,3 +109,13 @@ Download archive SHA-256: f5c459f278a3b50dc5c2bf535b8c3b6fd4bb6fc458c836b6402396
 ## Streaming MP3 decoder
 
 [dr_mp3 0.7.4](https://github.com/mackron/dr_libs/blob/master/dr_mp3.h), David Reid, used under MIT-0 (the selected dual-license option). Vendored source and SHA256 are recorded in `third_party/audio/dr_mp3-LICENSE.txt`; exported builds include the notice in `licenses/audio/`. Based on minimp3 (CC0). No music or station recordings are bundled.
+
+## Super Retro Game Console
+
+“Super Retro Game Console” by **ELIZION**, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). [Original model](https://sketchfab.com/3d-models/super-retro-game-console-d672d0ac1d6a4d238314d6675f8f92b2), [creator](https://sketchfab.com/ELIZION).
+
+Modified for CRT XR: controller/buttons and hidden underside fittings removed, remaining console meshes merged, 1K textures mipmapped and compressed, authored occlusion combined into base colour, placement and separate cable meshes added. Creator has not endorsed CRT XR. Original downloads remain unchanged; hashes and preparation details accompany the exported asset.
+
+## Godot engine
+
+Godot Engine 4.5.1, MIT licence, Godot Engine contributors. Official engine licence and third-party copyright notices accompany builds under `licenses/godot/`, copied from `third_party/godot/` (upstream tag 4.5.1-stable). Engine source: https://github.com/godotengine/godot/tree/4.5.1-stable .

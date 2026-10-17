@@ -15,7 +15,7 @@ func run() -> void:
 	if not ClassDB.class_exists("RetroCore"):
 		quit(1)
 		return
-	var rom := ProjectSettings.globalize_path("res://build/retrocrt-probe.sfc")
+	var rom := ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")
 	var app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
 	app.close_settings()
@@ -30,7 +30,7 @@ func run() -> void:
 	await create_timer(0.65).timeout
 	check(session.texture != null, "Running core framebuffer becomes a Godot texture")
 	check(session.texture.get_width() == 256, "Game source retains native pixel dimensions")
-	check(app.world.screen_material.get_shader_parameter("signal_texture") == session.texture, "Live game texture is bound to the curved CRT screen")
+	check(app.world.picture.source_texture == session.texture, "Live game texture is bound to the curved CRT screen")
 	check(app.world.screen_light.source != null and app.world.screen_light.source.get_width() == 256, "Screen light receives the existing CPU presentation frame")
 	check(not app.pattern.visible, "Test signal is replaced during gameplay")
 	check(session.fps > 60.0 and session.fps < 61.0, "Runtime uses the core's console frame rate")

@@ -33,7 +33,7 @@ func run():
 	audio.reset_defaults(); app.apply_settings(config)
 	check(audio.room_amount==.12 and audio.speaker_character==.55 and audio.directional_strength==.8,"Global audio controls round-trip through preferences")
 	app.menu.open_settings(); app.menu.category=2; app.menu.subsection=0; app.menu.render()
-	check(app.menu.items.size()==9,"Audio page exposes audio and power-on controls")
+	check(app.menu.items.size()==11,"Audio page exposes audio and power-on controls")
 	app.menu.select("audio.room_amount"); app.menu.reset_option()
 	check(is_equal_approx(audio.room_amount,.18),"Y resets only the selected audio setting")
 	app.set_stereo(true)

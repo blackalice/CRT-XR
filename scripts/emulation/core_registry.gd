@@ -21,7 +21,8 @@ static func identify(path: String) -> String:
 	return ""
 
 static func core_path(system: String) -> String:
-	var override := OS.get_environment("RETROCRT_CORE")
+	var override := OS.get_environment("CRT_XR_CORE")
+	if override.is_empty(): override=OS.get_environment("RETROCRT_CORE")
 	if not override.is_empty(): return override
 	var base := ProjectSettings.globalize_path("res://") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()
 	return base.path_join("cores/" + SYSTEMS[system].core + "_libretro." + ("dll" if OS.get_name()=="Windows" else "so"))

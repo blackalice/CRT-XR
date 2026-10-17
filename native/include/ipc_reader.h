@@ -3,7 +3,7 @@
 #include <chrono>
 #include <string>
 
-namespace retrocrt {
+namespace crt_xr {
 struct PoseResult {
     bool valid = false;
     bool changed = false;

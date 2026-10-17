@@ -25,7 +25,7 @@ RETRO_API void retro_init() {
     environment(RETRO_ENVIRONMENT_SET_VARIABLES, options);
 }
 RETRO_API void retro_deinit() {}
-RETRO_API void retro_get_system_info(retro_system_info* info) { *info = {"RetroCRT test fixture", "1", "sfc", false, false}; }
+RETRO_API void retro_get_system_info(retro_system_info* info) { *info = {"CRT XR test fixture", "1", "sfc", false, false}; }
 RETRO_API void retro_get_system_av_info(retro_system_av_info* info) { *info = {{2, 2, 2, 2, 1}, {60, 32000}}; }
 RETRO_API void retro_set_controller_port_device(unsigned, unsigned) {}
 RETRO_API bool retro_load_game(const retro_game_info* game) {

@@ -85,5 +85,5 @@ def make_rom(path: Path, input_delay: bool = False) -> None:
 
 
 if __name__ == "__main__":
-    make_rom(Path(sys.argv[1]) if len(sys.argv) > 1 else Path("build/retrocrt-probe.sfc"),
+    make_rom(Path(sys.argv[1]) if len(sys.argv) > 1 else Path("build/crt-xr-probe.sfc"),
              input_delay="--input-delay" in sys.argv[2:])

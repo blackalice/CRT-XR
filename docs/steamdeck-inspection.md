@@ -4,7 +4,7 @@ Connected through the user-authorized SSH session as `deck`. No password was
 stored in the project. Prototype files are installed at:
 
 ```text
-/home/deck/Applications/RetroCRT/prototype-20261014/
+/home/deck/Applications/CRT-XR/prototype-20261014/
 ```
 
 ## Observed environment

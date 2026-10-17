@@ -23,7 +23,7 @@ func setup(source: AudioStreamPlayer) -> void:
 	preview_player=AudioStreamPlayer.new(); preview_player.name="SoundPreview"
 	preview_player.stream=preload("res://assets/audio/crt-power-on.wav")
 	preview_player.volume_db=-6.0; add_child(preview_player)
-	bus_name="RetroCRT TV "+str(get_instance_id())
+	bus_name="CRT XR TV "+str(get_instance_id())
 	AudioServer.add_bus()
 	var index := AudioServer.bus_count-1
 	AudioServer.set_bus_name(index,bus_name)

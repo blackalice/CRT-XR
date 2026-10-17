@@ -24,7 +24,7 @@ def nes():
     emit(0x68,0x8D,7,0x20,0x4C,loop & 255,0x80+(loop >> 8))
     prg = bytearray(16384); prg[:len(code)] = code
     for offset in (0x3FFA,0x3FFC,0x3FFE): struct.pack_into('<H',prg,offset,0x8000)
-    (out/'retrocrt-probe.nes').write_bytes(b'NES\x1a'+bytes([1,1,2])+bytes(9)+prg+bytes(8192))
+    (out/'crt-xr-probe.nes').write_bytes(b'NES\x1a'+bytes([1,1,2])+bytes(9)+prg+bytes(8192))
 
 def megadrive():
     rom = bytearray(32768)
@@ -61,7 +61,7 @@ def megadrive():
     word(0x6000,displacement & 65535)
     rom[0x200:0x200+len(code)] = code
     struct.pack_into('>H',rom,0x18E,sum(struct.unpack('>'+str((len(rom)-0x200)//2)+'H',rom[0x200:])) & 65535)
-    (out/'retrocrt-probe.md').write_bytes(rom)
+    (out/'crt-xr-probe.md').write_bytes(rom)
 
 def sega8(gamegear=False):
     code = bytearray([0xF3,0x31,0xF0,0xDF]) # DI, stack
@@ -75,10 +75,10 @@ def sega8(gamegear=False):
     rom = bytearray(32768); rom[:len(code)] = code
     rom[0x7FF0:0x7FF8] = b'TMR SEGA'
     rom[0x7FFF] = 0x6C if gamegear else 0x4C
-    (out/('retrocrt-probe.gg' if gamegear else 'retrocrt-probe.sms')).write_bytes(rom)
+    (out/('crt-xr-probe.gg' if gamegear else 'crt-xr-probe.sms')).write_bytes(rom)
 
 nes(); megadrive(); sega8(); sega8(True)
-pal_nes = bytearray((out/'retrocrt-probe.nes').read_bytes()); pal_nes[9] = 1
-(out/'retrocrt-probe-pal.nes').write_bytes(pal_nes)
-pal_md = bytearray((out/'retrocrt-probe.md').read_bytes()); pal_md[0x1F0:0x200] = b'E'.ljust(16,b' ')
-(out/'retrocrt-probe-pal.md').write_bytes(pal_md)
+pal_nes = bytearray((out/'crt-xr-probe.nes').read_bytes()); pal_nes[9] = 1
+(out/'crt-xr-probe-pal.nes').write_bytes(pal_nes)
+pal_md = bytearray((out/'crt-xr-probe.md').read_bytes()); pal_md[0x1F0:0x200] = b'E'.ljust(16,b' ')
+(out/'crt-xr-probe-pal.md').write_bytes(pal_md)

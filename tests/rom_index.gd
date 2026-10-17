@@ -44,7 +44,7 @@ func run():
 	check(menu.items.any(func(item): return item.id=="library.system.snes") and menu.items.any(func(item): return item.id=="library.system.megadrive"),"System selector appears after scan")
 	check(not menu.items.any(func(item): return item.id=="library.system.gamegear"),"Empty systems stay hidden")
 	menu.select("library.system.snes");await press(JOY_BUTTON_A)
-	check(menu.mode=="games" and menu.items.size()==52,"Game list is paged rather than building thousands of rows")
+	check(menu.mode=="games" and menu.items.size()==53,"Game list is paged rather than building thousands of rows")
 	await press(JOY_BUTTON_RIGHT_SHOULDER)
 	check(menu.game_page==1 and menu.subtitle.text.contains("Page 2 of 2"),"Controller page navigation shows position")
 	var selected: String = menu.rows[2].item.id;menu.select(selected);await settle()

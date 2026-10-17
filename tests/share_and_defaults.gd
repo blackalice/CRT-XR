@@ -20,13 +20,13 @@ func y_button():
 		Input.flush_buffered_events()
 		await settle()
 func run():
-	OS.set_environment("RETROCRT_SCREENSHOT_DIR",ProjectSettings.globalize_path("user://test-screenshots"))
+	OS.set_environment("CRT_XR_SCREENSHOT_DIR",ProjectSettings.globalize_path("user://test-screenshots"))
 	app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
 	app.close_settings()
 	app.use_tracking(false)
 	if not app.emulator.loaded:
-		app.emulator.load_rom(ProjectSettings.globalize_path("res://build/retrocrt-probe.sfc"))
+		app.emulator.load_rom(ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc"))
 	app.set_stereo(true)
 	app.toggle_settings()
 	UI.set_value(app,"view.distance",2.2)

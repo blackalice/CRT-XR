@@ -7,7 +7,7 @@ New-Item -ItemType Directory -Force $out | Out-Null
 $env:APPDATA = Join-Path $root 'tools/userdata'
 & $godot --headless --path $root --editor --import --quit
 if ($LASTEXITCODE -ne 0) { throw 'Project import failed.' }
-& $godot --headless --path $root --export-release 'Windows Desktop' (Join-Path $out 'RetroCRT.exe')
+& $godot --headless --path $root --export-release 'Windows Desktop' (Join-Path $out 'CRT-XR.exe')
 if ($LASTEXITCODE -ne 0) { throw 'Windows export failed.' }
 New-Item -ItemType Directory -Force (Join-Path $out 'cores'), (Join-Path $out 'assets'), (Join-Path $out 'licenses/shaders') | Out-Null
 foreach ($core in @('snes9x','nestopia','genesis_plus_gx')) {
@@ -46,6 +46,22 @@ if (Test-Path -LiteralPath (Join-Path $table 'table.scn')) {
     Copy-Item -LiteralPath $table -Destination (Join-Path $out 'assets') -Recurse -Force
     Copy-Item -LiteralPath (Join-Path $root 'docs/wood-table.md') -Destination (Join-Path $out 'assets/WOOD-TABLE.md')
 }
+$godotNotices = Join-Path $out 'licenses/godot'
+New-Item -ItemType Directory -Force $godotNotices | Out-Null
+Copy-Item -Path (Join-Path $root 'third_party/godot/*') -Destination $godotNotices
+foreach ($document in @('BETA-REVIEW.md','BETA-QUICKSTART.md')) {
+    Copy-Item -LiteralPath (Join-Path $root "docs/$document") -Destination $out
+}
+Copy-Item -LiteralPath (Join-Path $root 'assets/model-sources.json') -Destination (Join-Path $out 'assets')
+$console = Join-Path $root 'build/console'
+if (Test-Path -LiteralPath (Join-Path $console 'console.scn')) {
+    $consoleOut = Join-Path $out 'assets/console'
+    New-Item -ItemType Directory -Force $consoleOut | Out-Null
+    foreach ($name in @('console.scn','manifest.json')) {
+        Copy-Item -LiteralPath (Join-Path $console $name) -Destination $consoleOut
+    }
+    Copy-Item -LiteralPath (Join-Path $root 'docs/console-prop.md') -Destination (Join-Path $consoleOut 'CREDITS-AND-PREPARATION.md')
+}
 $roomBake = Join-Path $root 'build/room-bake'
 if (Test-Path -LiteralPath (Join-Path $roomBake 'bake.json')) {
     $bakeOut = Join-Path $out 'assets/room-bake'
@@ -55,4 +71,4 @@ if (Test-Path -LiteralPath (Join-Path $roomBake 'bake.json')) {
     }
     Copy-Item -LiteralPath (Join-Path $root 'docs/room-contact-bake.md') -Destination (Join-Path $out 'assets/ROOM-CONTACT-BAKE.md')
 }
-Write-Host "Windows build: $out/RetroCRT.exe"
+Write-Host "Windows build: $out/CRT-XR.exe"

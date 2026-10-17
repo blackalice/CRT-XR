@@ -144,7 +144,7 @@ mipmaps, then encodes BC7. Front/rear maps remain shared across hardware and
 casing. The unused Screen material becomes texture-free; its mesh remains the
 live picture's aperture template. No casing geometry is decimated.
 
-The separate original Logo mesh is replaced using the user's `Phony.svg`
+The separate original Logo mesh is replaced using the user's `assets/branding/Phony.svg`
 artwork. The replacement is a small two-triangle, alpha-tested satin badge,
 with its position, width and orientation derived from the old badge bounds.
 It uses a 1024×160 BC7 texture with mipmaps and ordinary lighting; it adds no

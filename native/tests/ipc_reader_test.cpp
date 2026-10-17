@@ -30,7 +30,7 @@ struct Fixture {
     unsigned char* disabled = nullptr;
     pthread_mutex_t* mutex = nullptr;
     Fixture(std::size_t pose_size = 64) {
-        char pattern[] = "/tmp/retrocrt-ipc-test-XXXXXX";
+        char pattern[] = "/tmp/crt_xr-ipc-test-XXXXXX";
         const auto* made = mkdtemp(pattern);
         if (!made) throw std::runtime_error("mkdtemp");
         directory = made;
@@ -75,7 +75,7 @@ int main() {
     try {
         {
             Fixture f;
-            retrocrt::IpcReader reader(f.prefix);
+            crt_xr::IpcReader reader(f.prefix);
             check(!reader.poll().valid && !reader.poll().valid, "Frozen initial samples are not accepted as live");
             f.pose[12] += 1;
             auto pose = reader.poll();
@@ -117,7 +117,7 @@ int main() {
         }
         {
             Fixture f(128);
-            retrocrt::IpcReader reader(f.prefix);
+            crt_xr::IpcReader reader(f.prefix);
             check(!reader.poll().valid, "Incorrect segment size is rejected without resetting it");
             struct shmid_ds info {};
             check(shmctl(f.ids[0], IPC_STAT, &info) == 0 && info.shm_segsz == 128, "Reader preserves mismatched producer resources");
@@ -129,7 +129,7 @@ int main() {
             int status = 0;
             waitpid(child, &status, 0);
             const auto reader_child = fork();
-            if (reader_child == 0) { retrocrt::IpcReader reader(f.prefix); reader.poll(); _exit(1); }
+            if (reader_child == 0) { crt_xr::IpcReader reader(f.prefix); reader.poll(); _exit(1); }
             waitpid(reader_child, &status, 0);
             check(WIFEXITED(status) && WEXITSTATUS(status) == 75, "Bridge exits safely on robust mutex owner death");
             check(pthread_mutex_trylock(f.mutex) == EOWNERDEAD, "Owner-dead mutex remains recoverable for its producer");
@@ -140,7 +140,7 @@ int main() {
         {
             Fixture f;
             unlink(f.paths[0].c_str());
-            retrocrt::IpcReader reader(f.prefix);
+            crt_xr::IpcReader reader(f.prefix);
             check(!reader.poll().valid && access(f.paths[0].c_str(), F_OK) == -1, "Missing resource paths are never created");
         }
     } catch (const std::exception& error) { std::cerr << error.what() << '\n'; return 1; }

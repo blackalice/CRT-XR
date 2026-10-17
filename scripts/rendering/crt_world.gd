@@ -78,6 +78,7 @@ func build(signal_texture: Texture2D) -> void:
 		float(imported_screen.bottom) if not imported_screen.is_empty() else -0.635,
 		imported_screen.cabinet_bounds if not imported_screen.is_empty()
 		else AABB(Vector3(-0.85, -0.635, -0.78), Vector3(1.70, 1.27, 0.8325)))
+	preload("res://scripts/rendering/console_prop.gd").build(television,support,imported_screen.cabinet_bounds if not imported_screen.is_empty() else AABB(Vector3(-.85,-.635,-.78),Vector3(1.7,1.27,.8325)))
 	support_floor_y=float(support.get_meta("floor_y",-1.25))
 	preload("res://scripts/rendering/room_contacts.gd").apply(self,support)
 	# A black overlay fades the cabinet and furniture without changing their PBR maps.

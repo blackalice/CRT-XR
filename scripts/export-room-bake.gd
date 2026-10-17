@@ -31,7 +31,7 @@ func run():
         if not node.is_visible_in_tree() or node==receiver:continue
         if str(node.name) in ["PhosphorSurface","GlassFaceplate"] or not node.get_meta("bake_contact",true):continue
         casters.append(mesh_record(node,tv))
-    var data={"table":mesh_record(receiver,tv),"casters":casters,"floor_y":world.support_floor_y-.01,"floor_rect":[-3.0,-2.5,6.0,5.0],"table_source_sha256":FileAccess.get_sha256("res://build/wood-table-source/wood_drawer__tables_set.glb"),"cabinet_source_sha256":FileAccess.get_sha256("res://build/crt-model/crt_tv.glb")}
+    var data={"console_present":tv.has_node("ConsoleProp"),"table":mesh_record(receiver,tv),"casters":casters,"floor_y":world.support_floor_y-.01,"floor_rect":[-3.0,-2.5,6.0,5.0],"table_source_sha256":FileAccess.get_sha256("res://build/wood-table-source/wood_drawer__tables_set.glb"),"cabinet_source_sha256":FileAccess.get_sha256("res://build/crt-model/crt_tv.glb")}
     DirAccess.make_dir_recursive_absolute(OUT)
     var file:=FileAccess.open(OUT+"/geometry.json",FileAccess.WRITE);file.store_string(JSON.stringify(data));file.close()
     print("ROOM BAKE GEOMETRY EXPORTED: ",casters.size()," casters")

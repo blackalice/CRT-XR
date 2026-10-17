@@ -63,3 +63,11 @@ Desktop.ini
 /wood_drawer__tables_set.glb
 /wood_drawer__tables_set.glb.import
 /wood_drawer__tables_set_*.png*
+
+# Original console downloads; only prepared console resources are exported.
+/super_retro_game_console*.glb
+/super_retro_game_console*.glb.import
+/super_retro_game_console*.png*
+
+# Local source downloads and obsolete import files. Never ship or commit.
+/archive/

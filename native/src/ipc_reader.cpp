@@ -9,7 +9,7 @@
 #include <cstdio>
 #include <cstring>
 
-namespace retrocrt {
+namespace crt_xr {
 IpcReader::IpcReader(std::string prefix) : prefix_(std::move(prefix)) {}
 IpcReader::~IpcReader() { detach(); }
 void IpcReader::detach() {
@@ -75,7 +75,7 @@ PoseResult IpcReader::poll() {
         // Do not repair or unlock an inconsistent robust lock: unlocking makes
         // it unrecoverable. Exit this helper so the kernel marks owner death
         // again, preserving the producer's opportunity to recover its lock.
-        std::fputs("RetroCRT: driver mutex owner died; bridge exiting without repair\n", stderr);
+        std::fputs("CRT XR: driver mutex owner died; bridge exiting without repair\n", stderr);
         _exit(75);
     }
     if (error != 0) {

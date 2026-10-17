@@ -22,7 +22,7 @@ func run():
 	app.distance_save_delay=-1;app.free();await process_frame
 	var gate:="user://sbs-gate.json"
 	var gate_file:=FileAccess.open(gate,FileAccess.WRITE);gate_file.store_string("invalid");gate_file.close()
-	OS.set_environment("RETROCRT_STARTUP_GATE",gate)
+	OS.set_environment("CRT_XR_STARTUP_GATE",gate)
 	var desktop=load("res://scripts/ui/sbs_prompt.gd").new();desktop.in_place=true
 	var signalled: Array=[]
 	desktop.proceed_requested.connect(func(): signalled.append(true))
@@ -32,6 +32,6 @@ func run():
 	gate_file=FileAccess.open(gate,FileAccess.WRITE);gate_file.store_string('{"start":true}');gate_file.close()
 	desktop._process(.01);desktop._process(.01)
 	check(signalled.size()==1,"Valid supervisor gate starts once, malformed gate cannot start")
-	desktop.free();OS.set_environment("RETROCRT_STARTUP_GATE","")
+	desktop.free();OS.set_environment("CRT_XR_STARTUP_GATE","")
 	print("SBS startup checks complete: ",failures," failures")
 	quit(1 if failures else 0)

@@ -42,15 +42,40 @@ class SteamSessionTests(unittest.TestCase):
             (connector / "edid").write_bytes(b"Another monitor")
             self.assertFalse(session.glasses_connected(drm))
 
-    def test_gaming_prompt_and_game_share_one_exec(self):
+    def test_probe_supervises_both_processes_and_uses_unique_reports(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:
-            with patch.dict(session.os.environ, {"XDG_STATE_HOME": directory,"XDG_CURRENT_DESKTOP":"gamescope"}), patch.object(session.sys,"argv",["steam-session.py","--glasses"]), patch.object(session.os,"chdir"), patch.object(session.os,"execvpe") as execute:
+            from unittest.mock import MagicMock
+            watcher=MagicMock(); child=MagicMock(); child.wait.return_value=0; child.poll.return_value=0
+            with patch.dict(session.os.environ, {"XDG_STATE_HOME":directory,"XDG_CURRENT_DESKTOP":"gamescope"}), patch.object(session.sys,"argv",["steam-session.py","--glasses","--sbs-probe","--sbs-resolution","5120x1440","--xr-connector","card1-DP-1"]), patch.object(session.os,"chdir"), patch.object(session.subprocess,"Popen",side_effect=[watcher,child]) as spawn, patch.object(session.signal,"signal"):
+                self.assertEqual(session.main(),0)
+            self.assertEqual(spawn.call_count,2)
+            self.assertIn("5120x1440",spawn.call_args_list[0].args[0])
+            env=spawn.call_args_list[1].kwargs["env"]
+            self.assertEqual(env["CRT_XR_SBS_SIZE"],"5120x1440")
+            self.assertTrue(env["CRT_XR_DISPLAY_PROBE"].endswith("display.json"))
+            watcher.terminate.assert_called_once();watcher.wait.assert_called_once()
+
+    def test_default_gaming_glasses_launch_is_supervised(self):
+        from unittest.mock import MagicMock
+        with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:
+            watcher=MagicMock();child=MagicMock();child.wait.return_value=0;child.poll.return_value=0
+            with patch.dict(session.os.environ, {"XDG_STATE_HOME":directory,"XDG_CURRENT_DESKTOP":"gamescope"}), patch.object(session.sys,"argv",["steam-session.py"]), patch.object(session,"glasses_connected",return_value=True), patch.object(session.os,"chdir"), patch.object(session.subprocess,"Popen",side_effect=[watcher,child]) as spawn, patch.object(session.signal,"signal"):
                 session.main()
-            execute.assert_called_once()
-            command=execute.call_args.args[1]
+            command=spawn.call_args.args[0]
             self.assertIn("--sbs-session-manual",command)
             self.assertIn("--last-game",command)
             self.assertNotIn("--sbs-prompt",command)
+
+    def test_no_glasses_bypasses_sbs_and_preserves_mono_aspect(self):
+        with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:
+            with patch.dict(session.os.environ, {"XDG_STATE_HOME":directory,"XDG_CURRENT_DESKTOP":"gamescope"}), patch.object(session.sys,"argv",["steam-session.py"]), patch.object(session,"glasses_connected",return_value=False), patch.object(session.os,"chdir"), patch.object(session.os,"execvpe") as execute, patch.object(session.subprocess,"Popen") as spawn:
+                session.main()
+            command=execute.call_args.args[1]
+            self.assertIn("--windowed",command)
+            self.assertIn("1280x800",command)
+            self.assertNotIn("--sbs-session-manual",command)
+            spawn.assert_not_called()
+
 
 
 if __name__ == "__main__":

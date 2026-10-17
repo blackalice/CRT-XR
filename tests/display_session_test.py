@@ -46,14 +46,14 @@ class DisplayTests(unittest.TestCase):
             order.append(mode['id'])
             config['outputs'][1]['currentModeId']=mode['id']
             config['outputs'][0]['enabled']=False
-            if launch_env: self.assertFalse(Path(launch_env['RETROCRT_STARTUP_GATE']).exists())
+            if launch_env: self.assertFalse(Path(launch_env['CRT_XR_STARTUP_GATE']).exists())
         def spawn(command,**kwargs):
             order.append('spawn');launch_env.update(kwargs['env'])
             self.assertIn('--fullscreen',command)
             self.assertIn('--sbs-session',command)
             return child
         def healthy(path):
-            self.assertEqual(json.loads(Path(launch_env['RETROCRT_STARTUP_GATE']).read_text()),{'start':True})
+            self.assertEqual(json.loads(Path(launch_env['CRT_XR_STARTUP_GATE']).read_text()),{'start':True})
             return True
         args=types.SimpleNamespace(output='DP-1',restore=False,wait=90,manual_sbs=True)
         with tempfile.TemporaryDirectory(dir=Path(__file__).resolve().parents[1]/'build') as directory:
@@ -61,7 +61,7 @@ class DisplayTests(unittest.TestCase):
                 self.assertEqual(session.run_session(args,[],Path(directory)),0)
                 self.assertEqual(order,['mono','spawn','sbs60'])
                 popen.assert_called_once();restore.assert_called_once()
-            self.assertFalse(Path(launch_env['RETROCRT_STARTUP_GATE']).exists())
+            self.assertFalse(Path(launch_env['CRT_XR_STARTUP_GATE']).exists())
 
     def test_refuses_unidentified_ultrawide(self):
         with self.assertRaises(RuntimeError):
@@ -166,7 +166,7 @@ class DisplayTests(unittest.TestCase):
                 with self.assertRaises(FileNotFoundError): session.main()
             self.assertIn(["output.eDP-1.disable"], screens.calls)
             self.assertTrue(screens.config["outputs"][0]["enabled"])
-            self.assertFalse((Path(directory) / "retrocrt/display-before.json").exists())
+            self.assertFalse((Path(directory) / "crt_xr/display-before.json").exists())
 
 
 if __name__ == "__main__":

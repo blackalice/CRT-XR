@@ -1,0 +1,8 @@
+[configuration]
+entry_symbol = "crt_xr_library_init"
+compatibility_minimum = "4.5"
+reloadable = false
+
+[libraries]
+windows.x86_64 = "res://extensions/bin/crt_xr_libretro.windows.x86_64.dll"
+linux.x86_64 = "res://extensions/bin/crt_xr_libretro.linux.x86_64.so"

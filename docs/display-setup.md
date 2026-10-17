@@ -19,13 +19,13 @@ SDK, so the physical-button fallback remains the default.
 4. Open settings with L1 + R1 + Start / Escape. The menu and ROM browser appear in both eyes.
    Use the D-pad and A; B cancels. **Play last game** remembers the last loaded
    ROM path. It loads the game normally; it does not automatically load a state.
-5. Choose **Exit RetroCRT** to end the session, restore mode/placement/scaling and
+5. Choose **Exit CRT XR** to end the session, restore mode/placement/scaling and
    wake the Deck screen, including when it was already off before launch.
 
 The default launcher leaves the physical SBS switch manual. It does not change
 XR Gaming settings. Layout recovery does not switch the
 glasses back to mono; use the physical button when returning to an ordinary desktop.
-The saved layout is taken after SBS has appeared, before RetroCRT changes it.
+The saved layout is taken after SBS has appeared, before CRT XR changes it.
 
 There is no second Godot launch after the prompt, and the logo splash has been
 disabled in favour of a plain black boot screen. Desktop sessions start fullscreen
@@ -83,7 +83,7 @@ the Deck's existing Python, KScreen and session bus. It requires no root access.
 From the package directory:
 
 ```bash
-chmod +x retrocrt.x86_64 launch-deck.sh launch-glasses.sh
+chmod +x crt-xr.x86_64 launch-deck.sh launch-glasses.sh
 ./launch-glasses.sh
 ```
 
@@ -120,7 +120,7 @@ advertised mode IDs rather than assuming old IDs survived a reconnect. The backu
 contains only the glasses and internal display. If the glasses are disconnected,
 the internal panel is recovered even when it was disabled before launch.
 
-The backup stays in `~/.local/state/retrocrt/display-before.json` (or the equivalent
+The backup stays in `~/.local/state/crt_xr/display-before.json` (or the equivalent
 `XDG_STATE_HOME`) until restore succeeds. Another session is excluded by a lock.
 If the supervisor itself is forcibly killed or a restore fails, run:
 
@@ -159,8 +159,8 @@ panel and relaunched the game successfully. The user reported that Mario looked
 "amazing" through the glasses. Physical unplugging, abrupt supervisor kill,
 audible sound and sustained frame times remain unverified.
 
-Current build: `~/Applications/RetroCRT/scene-lighting-20261014/`, with the
-**RetroCRT XR** and **RetroCRT Restore Screen** desktop shortcuts updated.
+Current build: `~/Applications/CRT-XR/scene-lighting-20261014/`, with the
+**CRT XR** and **CRT XR Restore Screen** desktop shortcuts updated.
 Older builds, including `seamless-20261014`, and previous shortcut files were
 preserved. The 3.4 m default, adjustable curvature, gamepad mappings, local
 Panasonic cabinet and scene lighting are deployed. No settings.cfg existed at

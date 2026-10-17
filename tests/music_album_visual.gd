@@ -13,4 +13,5 @@ func run():
  app.menu_view.get_texture().get_image().save_png("res://build/album-browser.png")
  app.free()
  for i in range(3):await process_frame
+ await create_timer(.15).timeout
  quit.call_deferred()

@@ -6,19 +6,19 @@ stereo scene loads; there is no windowed Godot-logo relaunch. This change still
 needs validation on the Deck. The existing Native/3840×1080 resolution setup in
 Gaming Mode remains necessary; this update does not take over Gamescope outputs.
 
-Launch **RetroCRT XR** from Steam's Non-Steam library. Holding the three-lines
+Launch **CRT XR** from Steam's Non-Steam library. Holding the three-lines
 button on the desktop switches the desktop controller layout; it does not
 enter the separate SteamOS Gaming Mode session. Desktop keyboard/mouse mappings
 can arrive as pause, mouse clicks or other keyboard commands instead of SNES
 buttons. Adding the app to Steam gives it a dedicated controller layout.
 
 The Deck installation has a Steam shortcut targeting `launch-steam.sh` in
-`~/Applications/RetroCRT/latency-20261014/`. This entry uses Steam's
+`~/Applications/CRT-XR/latency-20261014/`. This entry uses Steam's
 **Gamepad With Joystick Trackpad** template and **Native** game resolution.
 The setup was performed through the running Steam client's own shortcut and
 controller interfaces, without editing live shortcuts.vdf or global layouts.
 
-In Gaming Mode, find **Library → Non-Steam → RetroCRT XR**. The launcher uses
+In Gaming Mode, find **Library → Non-Steam → CRT XR**. The launcher uses
 the Deck screen in mono when no identified VITURE glasses are connected. With
 the glasses connected it first shows **SWITCH TO SBS NOW**, without loading or
 playing the game. Switch the glasses with their button. Desktop Mode detects

@@ -61,5 +61,5 @@ for obj,size,distance,filename in [(table,2048,.30,'table_ao.png'),(floor,1024,.
     records.append({'file':filename,'size':size,'distance':distance,'statistics':stats,'sha256':hashlib.sha256((OUT/filename).read_bytes()).hexdigest()})
     print('CONTACT_BAKE_DONE',records[-1],flush=True)
 bpy.ops.wm.save_as_mainfile(filepath=str(OUT/'room-contact-bake.blend'))
-manifest={'geometry_sha256':hashlib.sha256((OUT/'geometry.json').read_bytes()).hexdigest(),'table_source_sha256':data['table_source_sha256'],'cabinet_source_sha256':data['cabinet_source_sha256'],'floor_rect':data['floor_rect'],'floor_y':y,'samples':32,'ao_samples':16,'seed':1989,'records':records,'seconds':time.monotonic()-START,'blender':bpy.app.version_string}
+manifest={'console_present':data.get('console_present',False),'geometry_sha256':hashlib.sha256((OUT/'geometry.json').read_bytes()).hexdigest(),'table_source_sha256':data['table_source_sha256'],'cabinet_source_sha256':data['cabinet_source_sha256'],'floor_rect':data['floor_rect'],'floor_y':y,'samples':32,'ao_samples':16,'seed':1989,'records':records,'seconds':time.monotonic()-START,'blender':bpy.app.version_string}
 (OUT/'bake.json').write_text(json.dumps(manifest,indent=2));print('CONTACT_BAKE_COMPLETE',json.dumps(manifest),flush=True)

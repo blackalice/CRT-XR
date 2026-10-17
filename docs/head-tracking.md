@@ -1,7 +1,7 @@
 # Head tracking — 14 October 2026
 
 The Deck build is installed separately at
-`~/Applications/RetroCRT/tracking-20261014/`, with a **RetroCRT XR Tracking**
+`~/Applications/CRT-XR/tracking-20261014/`, with a **CRT XR Tracking**
 desktop launcher. The original SBS prototype remains available.
 
 ## Using it
@@ -37,7 +37,7 @@ Do not enable another head transform on top of the app's cameras. No driver
 binaries, plugin files, feature restrictions or SteamOS system partitions changed.
 
 The original configuration was copied to
-`~/Applications/RetroCRT/prototype-20261014/xr-driver-config-before-tracking.ini`.
+`~/Applications/CRT-XR/prototype-20261014/xr-driver-config-before-tracking.ini`.
 To return only the approved setting to its previous disabled state:
 
 ```bash
@@ -51,7 +51,7 @@ Do not restore the entire backup over newer unrelated preferences.
 Godot checks `~/.local/bin/xrDriver` against the inspected binary hash
 (`bb14df…1479ed`). Unknown builds report unavailable; use simulation until checked.
 
-`retrocrt-tracking-bridge` is a C++ sidecar, chosen instead of a GDExtension to
+`crt-xr-tracking-bridge` is a C++ sidecar, chosen instead of a GDExtension to
 isolate the process-shared mutex from Godot and avoid a Godot C++ build dependency.
 It is compiled for Linux and sends only to 127.0.0.1 on an ephemeral app-bound UDP
 port. No remote service is exposed.
