@@ -100,6 +100,46 @@ class InstallerTests(unittest.TestCase):
         self.assertFalse((self.config/'shortcuts.vdf').exists())
         self.assertFalse((self.home/'Applications/CRT-XR/current').exists())
 
+    def add_artwork(self):
+        folder=self.package/'artwork';folder.mkdir()
+        for name in ['Portrait','Landscape','Hero','Logo','Icon']:(folder/(name+'.png')).write_bytes(('image '+name).encode())
+        manifest={p.relative_to(self.package).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in self.package.rglob('*') if p.is_file() and p.name!='package-manifest.json'}
+        (self.package/'package-manifest.json').write_text(json.dumps(manifest))
+
+    def test_artwork_install_and_customisation_preservation(self):
+        self.add_artwork()
+        first=setup.install(self.package,self.home,'','3840x1080');appid=first['appid'];grid=self.config/'grid'
+        self.assertEqual((grid/(str(appid)+'p.png')).read_bytes(),b'image Portrait')
+        self.assertTrue((grid/(str(appid)+'_hero.png')).is_file())
+        tree=kv.load_binary((self.config/'shortcuts.vdf').read_bytes())
+        self.assertTrue(tree['shortcuts'][1]['0'][1]['icon'][1].endswith('/current/artwork/Icon.png'))
+        (grid/(str(appid)+'p.png')).write_bytes(b'my custom cover')
+        (self.package/'artwork/Hero.png').write_bytes(b'updated Hero')
+        manifest=json.loads((self.package/'package-manifest.json').read_text());manifest['artwork/Hero.png']=hashlib.sha256(b'updated Hero').hexdigest()
+        (self.package/'package-manifest.json').write_text(json.dumps(manifest))
+        setup.install(self.package,self.home,'','3840x1080')
+        self.assertEqual((grid/(str(appid)+'p.png')).read_bytes(),b'my custom cover')
+        self.assertEqual((grid/(str(appid)+'_hero.png')).read_bytes(),b'updated Hero')
+
+    def test_existing_jpeg_artwork_is_preserved(self):
+        self.add_artwork()
+        # Use a dry-run to discover the generated shortcut ID without mutation.
+        appid=setup.install(self.package,self.home,'','Native',True)['appid']
+        grid=self.config/'grid';grid.mkdir();(grid/(str(appid)+'p.jpg')).write_bytes(b'custom jpeg')
+        setup.install(self.package,self.home,'','Native')
+        self.assertFalse((grid/(str(appid)+'p.png')).exists())
+        self.assertEqual((grid/(str(appid)+'p.jpg')).read_bytes(),b'custom jpeg')
+
+    def test_artwork_is_rolled_back_with_failed_configuration(self):
+        self.add_artwork();real_atomic=setup.atomic;failed=False
+        def fail_once(path,data):
+            nonlocal failed
+            if path.name=='localconfig.vdf' and not failed:failed=True;raise OSError('Simulated failure after artwork writes')
+            real_atomic(path,data)
+        with patch.object(setup,'atomic',side_effect=fail_once):
+            with self.assertRaises(OSError):setup.install(self.package,self.home,'','Native')
+        self.assertEqual(list((self.config/'grid').glob('*.png')),[])
+
     def test_multiple_accounts_require_choice(self):
         other=self.config.parents[1]/'456/config';other.mkdir(parents=True);(other/'localconfig.vdf').write_text('"UserLocalConfigStore" {}')
         with self.assertRaises(ValueError):setup.install(self.package,self.home,'','Native')

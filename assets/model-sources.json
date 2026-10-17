@@ -24,6 +24,7 @@
     "prepared": "build/console/console.scn",
     "source_url": "https://sketchfab.com/3d-models/super-retro-game-console-d672d0ac1d6a4d238314d6675f8f92b2",
     "author": "ELIZION",
-    "license": "CC-BY-4.0"
+    "license": "CC-BY-4.0",
+    "included_in_launch": false
   }
 ]

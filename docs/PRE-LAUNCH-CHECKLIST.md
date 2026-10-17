@@ -1,6 +1,6 @@
 # Pre-launch checklist
 
-Updated 17 October 2026. Candidate 0.1.0-beta.2 is for private review. The installer and guide are prepared; public release is not yet cleared.
+Updated 17 October 2026. Candidate 0.1.0-beta.4 targets an early public beta, rather than a private tester programme. The installer and guide are prepared; publication has not been performed, and the open checks/decisions below remain.
 
 | Area | State | Next acceptance step |
 |---|---|---|
@@ -10,13 +10,14 @@ Updated 17 October 2026. Candidate 0.1.0-beta.2 is for private review. The insta
 | No-glasses launch | Forced test flags removed; Deck mono sizing added | Human test with glasses unplugged |
 | Deck installer | Offline per-user installer and Linux transaction tests prepared | Run GUI against a real Steam account with Steam closed; verify correct settings branch, shortcut and controller layout |
 | Updates/recovery | Existing app ID retained, prior builds and configuration backups retained; disk-failure rollback tested | Real upgrade followed by reinstall of prior package |
-| Tracking prerequisite | Installer detects verified driver binary | Documented prerequisite: Decky Loader + XR Gaming already installed/enabled. Validate supported plugin/driver versions and clean-device calibration; CRT XR installer does not install the plugin |
+| Tracking prerequisite | Installer detects verified driver binary | Documented prerequisite: Decky Loader + XR Gaming installed/enabled; Pro 2 needs the testing version. Validate supported plugin/driver versions and clean-device calibration; CRT XR installer does not install the plugin |
 | Getting-started guide | Written, included in Linux package | Have a tester follow it without developer assistance |
 | Original source licence | MIT proposal written for owner review | Owner approval/copyright name; then add LICENSE |
 | Bundled core distribution | Actual notices/source snapshots available | Resolve host/core licence obligations and provenance before public release |
 | Reproducible emulator binaries | Pinned revisions and build script exist | Validate local builds for both platforms and record actual source/toolchain hashes |
 | Model/source backup | Local verified model archive exists | Owner supplies off-machine destination; verify restore from clean checkout + asset bundle |
 | Device reliability | Previous gameplay/audio/controller checks exist | Suspend/resume, glasses unplug/replug, missing SD, longer gameplay/music session |
+| Steam artwork | Original five assets packaged; per-shortcut installation/update/custom-preservation and rollback tested | Verify portrait/recent/hero/logo/icon in real Gaming Mode after setup |
 | Package privacy/integrity | Payload hashes, no private media/save formats in package; installer installs listed payload only | Verify final archive hashes; checksums detect corruption, not publisher authenticity |
 | Windows preview | Portable build route exists | Export current candidate and smoke-test the delivered folder |
 
@@ -32,7 +33,7 @@ Python tests cover shortcut binary round-trip, unrelated entries, app-ID/tag/lau
 
 ## Release sequence
 
-1. Finish clean-device installer + no-glasses/readability checks.
+1. Sanity-check installation on the available Deck. Track clean-account, no-glasses, readability and wider-device results openly as public-beta feedback; do not wait for a separate private tester group.
 2. Resolve tracking setup, original-source licence choice and bundled-core distribution/provenance.
 3. Verify external backup/rebuild and complete hardware soak checks.
 4. Produce the reviewed package/source/checksum set, then explicitly approve publication. No public upload or repository publication is performed by this work.

@@ -52,8 +52,9 @@ func _ready() -> void:
 	panel.add_theme_stylebox_override("panel",style)
 	center.add_child(panel)
 	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 24)
+	column.add_theme_constant_override("separation", 16)
 	panel.add_child(column)
+	column.add_child(preload("res://scripts/ui/startup_brand.gd").logo())
 	var heading := Label.new()
 	heading.text = "SWITCH TO SBS NOW"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER

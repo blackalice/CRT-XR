@@ -1,6 +1,6 @@
 # CRT XR â€” first beta review
 
-Review updated: 17 October 2026. Candidate: 0.1.0-beta.2. Status: suitable for further private device review; public distribution is pending the decisions below. No public upload, Git commit or release tag was made.
+Review updated: 17 October 2026. Candidate: 0.1.0-beta.4. Target: early public beta; private testers are not assumed. Publication has not been performed; the open distribution decisions below remain. No public upload, Git commit or release tag was made.
 
 ## Fixed during this pass
 
@@ -21,7 +21,7 @@ Review updated: 17 October 2026. Candidate: 0.1.0-beta.2. Status: suitable for f
 1. **Choose the licence for the app's own source and confirm combined distribution terms.** No app LICENSE file is present; LICENCE-PROPOSAL.md recommends MIT for original contributions, pending owner review. Nestopia is GPL-2.0; Snes9x and Genesis Plus GX contain non-commercial restrictions. Copies of core licences and upstream source snapshots are included, but that does not decide the host application's licence or combined-work obligations. The beta must not be presented as wholly permissive/commercially reusable. See THIRD_PARTY.md and the actual bundled licences.
 2. **Finish reproducible core provenance.** Current Nestopia/Genesis binaries came from the official buildbot, with pinned archive hashes/source revisions recorded. Linux/Windows source builds from those revisions should be validated before broad distribution so corresponding-source/toolchain provenance is clear. Source snapshots and a build script exist, but are not yet independently reproduced for both platforms.
 3. **Back up source/model assets off this machine and establish the release-source route.** Models are intentionally ignored by Git. archive/CRT-XR-model-assets-0.1.0-beta.1.zip is a verified local recovery copy, not an off-machine backup. A clean checkout needs that asset bundle (or the original downloads and documented preparation). The local Git repo is not published yet.
-4. **Human hardware sign-off.** Test clean install/upgrade, Desktop Mode SBS switching/restoration, Gaming Mode explicit SBS resolution, head tracking/recenter, unplug/replug, suspend/resume, SD-card removal and a longer gameplay/music session. Automated results do not establish through-glasses comfort, sound quality or every driver/firmware combination.
+4. **Public-beta hardware validation.** Test clean install/upgrade, Desktop Mode SBS switching/restoration, Gaming Mode explicit SBS resolution, head tracking/recenter, unplug/replug, suspend/resume, SD-card removal and a longer gameplay/music session. Automated results do not establish through-glasses comfort, sound quality or every driver/firmware combination. Broader-device acceptance will come from public-beta feedback; no private tester group is assumed. Document unverified combinations instead of presenting them as guaranteed.
 
 ## Known beta limitations / follow-ups
 
@@ -35,7 +35,7 @@ Review updated: 17 October 2026. Candidate: 0.1.0-beta.2. Status: suitable for f
 
 ## Suggested first-beta scope
 
-Free, small tester group; Steam Deck Desktop Mode + VITURE Pro 2 as the primary supported combination, Windows as a local preview. Ship a complete versioned package, quickstart, known limitations, credits, source/licensing materials and checksums. Use 0.1.0-beta.1 for review, then increment beta revisions for fixes. Public licensing/distribution decisions remain with the project owner.
+Free public beta, with feedback gathered from users rather than a separate private tester group. Steam Deck + VITURE Pro 2 is the tested XR combination; Windows is a local preview. Pro 2 currently requires the testing version of XR Gaming. Other SBS/3DoF glasses are intended to work through compatible tracking and display profiles but are untested. Ship a complete versioned package, quickstart, known limitations, credits, source/licensing materials and checksums. Use 0.1.0-beta.1 for review, then increment beta revisions for fixes. Public licensing/distribution decisions remain with the project owner.
 
 
 ## Installer preparation, 17 October
@@ -43,3 +43,7 @@ Free, small tester group; Steam Deck Desktop Mode + VITURE Pro 2 as the primary 
 See PRE-LAUNCH-CHECKLIST.md for current states and GETTING-STARTED.md for the packaged user guide. The installer verifies listed payload hashes, keeps prior versions, backs up Steam configuration, updates the same shortcut ID, and sets the observed ResolutionOverride2 field while Steam is closed. No SSH/developer debugging/root is required for app installation. The tracking-driver dependency is detected but not automatically installed. The Deck went offline during preparation, so no claim of clean-device installer acceptance is made.
 
 Current preparation checks: 24/24 application suites pass; the picture-fit readback test now explicitly disables the separately tested power-on reveal so it measures geometry rather than racing the startup animation. Installer checks: 31 passing Python checks on Windows plus 5 Linux-only transaction checks skipped there; all 9 installer checks pass in WSL/Linux, including those 5 transactions.
+
+Launch scope: console and cables are parked, omitted from rendering and exported model assets. Table and carpet contact AO were rebaked in Blender against the console-free layout; contact registration and geometry smoke checks pass. Original console sources/preparation remain available locally.
+
+Artwork: supplied portrait, landscape, hero, logo and icon are packaged. Setup installs grid assets using the actual shortcut ID and points the shortcut icon to its stable installed path. Managed artwork updates only if unchanged since its previous install; custom artwork is preserved. Artwork changes participate in configuration-failure rollback. Logos appear in the SBS instructions and controlled mono/stereo loading UI; engine boot and the SBS switching curtain remain black. Linux artwork tests pass; real Steam library appearance after installer setup still needs acceptance.

@@ -1,7 +1,7 @@
 extends RefCounted
 ## Folder names guide discovery; file contents/extensions still choose the core.
 const ALIASES := {
-	"snes":"snes","supernintendo":"snes","supernes":"snes","superfamicom":"snes","sfc":"snes",
+	"snes":"snes","supernintendo":"snes","supernintendoentertainmentsystem":"snes","nintendosuperfamicom":"snes","supernes":"snes","superfamicom":"snes","sfc":"snes",
 	"nes":"nes","famicom":"nes","nintendoentertainmentsystem":"nes",
 	"megadrive":"megadrive","genesis":"megadrive","segagenesis":"megadrive","segamegadrive":"megadrive","gen":"megadrive","md":"megadrive",
 	"mastersystem":"mastersystem","segamastersystem":"mastersystem","sms":"mastersystem",

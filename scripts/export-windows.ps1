@@ -53,14 +53,17 @@ foreach ($document in @('BETA-REVIEW.md','BETA-QUICKSTART.md')) {
     Copy-Item -LiteralPath (Join-Path $root "docs/$document") -Destination $out
 }
 Copy-Item -LiteralPath (Join-Path $root 'assets/model-sources.json') -Destination (Join-Path $out 'assets')
-$console = Join-Path $root 'build/console'
-if (Test-Path -LiteralPath (Join-Path $console 'console.scn')) {
-    $consoleOut = Join-Path $out 'assets/console'
-    New-Item -ItemType Directory -Force $consoleOut | Out-Null
-    foreach ($name in @('console.scn','manifest.json')) {
-        Copy-Item -LiteralPath (Join-Path $console $name) -Destination $consoleOut
+# Remove only known stale console payload files when reusing an export folder.
+$oldConsole = Join-Path $out 'assets/console'
+if (Test-Path -LiteralPath $oldConsole) {
+    $resolvedConsole = [IO.Path]::GetFullPath($oldConsole)
+    $resolvedOutput = [IO.Path]::GetFullPath($out).TrimEnd('\','/') + [IO.Path]::DirectorySeparatorChar
+    if (-not $resolvedConsole.StartsWith($resolvedOutput, [StringComparison]::OrdinalIgnoreCase)) { throw 'Console cleanup escaped export folder.' }
+    foreach ($name in @('console.scn','manifest.json','CREDITS-AND-PREPARATION.md')) {
+        Remove-Item -LiteralPath (Join-Path $oldConsole $name) -ErrorAction SilentlyContinue
     }
-    Copy-Item -LiteralPath (Join-Path $root 'docs/console-prop.md') -Destination (Join-Path $consoleOut 'CREDITS-AND-PREPARATION.md')
+    if (@(Get-ChildItem -LiteralPath $oldConsole -Force).Count -ne 0) { throw 'Unexpected files remain in exported console folder; inspect before cleanup.' }
+    Remove-Item -LiteralPath $oldConsole
 }
 $roomBake = Join-Path $root 'build/room-bake'
 if (Test-Path -LiteralPath (Join-Path $roomBake 'bake.json')) {
@@ -73,5 +76,10 @@ if (Test-Path -LiteralPath (Join-Path $roomBake 'bake.json')) {
 }
 foreach ($name in @('GETTING-STARTED.md','PRE-LAUNCH-CHECKLIST.md','LICENCE-PROPOSAL.md')) {
     Copy-Item -LiteralPath (Join-Path $root "docs/$name") -Destination $out
+}
+$artworkOut = Join-Path $out 'artwork'
+New-Item -ItemType Directory -Force $artworkOut | Out-Null
+foreach ($name in @('Portrait.png','Landscape.png','Hero.png','Logo.png','Icon.png')) {
+    Copy-Item -LiteralPath (Join-Path $root "artwork/$name") -Destination $artworkOut
 }
 Write-Host "Windows build: $out/CRT-XR.exe"

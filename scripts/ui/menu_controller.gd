@@ -325,6 +325,8 @@ func library_items() -> Array:
 		var count: int=rom_index.games.get(id,[]).size()
 		if count==0: continue
 		result.append(card(catalog.action("library.system."+id,library.Registry.SYSTEMS[id].name,func(): open_system(id),"Open all %s cartridges in your library. Folders for other consoles stay out of this view." % library.Registry.SYSTEMS[id].name,false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
+	if h.default_rom_dir.is_empty():
+		result.push_front(card(catalog.action("library.setup","Set up your ROM library",open_library_tools,"Choose the folder containing snes, nes, megadrive and your other systems. Subfolders are included automatically."),"START HERE","locations",MenuSkin.AMBER,"LIBRARY SETUP"))
 	var detail := "Choose your main ROM folder" if h.default_rom_dir.is_empty() else "Folders · SD cards · Refresh"
 	result.append(card(catalog.action("library.locations","Library locations",open_library_tools,"Set the main roms folder once. CRT XR finds supported consoles and leaves the files where they are.",false,detail),"MAKE YOURSELF AT HOME","locations",Color("aeb6bf"),"YOUR CONSOLES" if rom_index.total()>0 else "LIBRARY"))
 	return result
@@ -548,9 +550,13 @@ func get_items() -> Array:
 		"settings": return catalog.pages(category)[subsection].rows
 		"library": return library_items()
 		"library_tools":
-			return [
+			var locations: Array = []
+			for candidate in library.Locations.library_candidates(library.home_folder(),library.Locations.sd_cards()):
+				var path: String = candidate
+				locations.append(catalog.action("library.detected:"+path,"Found ROM folder: "+path.trim_prefix(library.home_folder()+"/"),func(): open_folder(path),"Open this detected library, then choose Use this folder for my library. "+path))
+			return locations + [
 			catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the saved ROM folder for added or removed cartridges.",h.default_rom_dir.is_empty()),
-			catalog.action("library.default","ROM library folder",open_default,h.default_rom_dir if not h.default_rom_dir.is_empty() else "Browse to the main roms folder (containing snes, nes, megadrive, etc.), then press RB."),
+			catalog.action("library.default","Set up ROM library" if h.default_rom_dir.is_empty() else "Change ROM library folder",browse_folders,h.default_rom_dir if not h.default_rom_dir.is_empty() else "Browse to the main roms folder (containing snes, nes, megadrive, etc.), then press RB."),
 			catalog.action("library.sd","SD card",open_cards,"Browse a mounted Steam Deck SD card."),
 			catalog.action("library.browse","Browse folders",browse_folders,"Browse folders on this computer."),
 			catalog.action("library.drives","Computer drives",func(): remember(); clear_input(); mode="drives"; render(),"Choose a drive, then browse to your ROM folder.",OS.get_name()!="Windows"),
@@ -562,8 +568,8 @@ func get_items() -> Array:
 				var path: String = game.path
 				result.append(game_item(path,game.label))
 			if games.size()>GAMES_PER_PAGE:
-				result.append(catalog.action("games.previous","Previous page",func(): change_game_page(-1),"Also available with LB or Left.",game_page==0))
-				result.append(catalog.action("games.next","Next page",func(): change_game_page(1),"Also available with RB or Right.",(game_page+1)*GAMES_PER_PAGE>=games.size()))
+				result.append(catalog.action("games.previous","Previous page",func(): change_game_page(-1),"Also available with LB. Left/right jumps ten games.",game_page==0))
+				result.append(catalog.action("games.next","Next page",func(): change_game_page(1),"Also available with RB. Left/right jumps ten games.",(game_page+1)*GAMES_PER_PAGE>=games.size()))
 			return result
 		"alphabet":
 			var result: Array=[]
@@ -576,6 +582,9 @@ func get_items() -> Array:
 			return result
 		"browser":
 			var result: Array = []
+			result.append(catalog.action("folder.remember","Use this folder for my library",func():
+				set_default(library.current_dir)
+				if host.default_rom_dir==library.current_dir: open_library(),"Choose the parent ROM folder to include all supported systems and their subfolders. Current folder: "+library.current_dir))
 			for entry in library.entries:
 				var path: String = entry.path
 				var folder: bool = entry.folder
@@ -583,7 +592,6 @@ func get_items() -> Array:
 					if folder: open_folder(path)
 					else: select_file(path),path,false,"Folder" if folder else entry.get("system","Game")))
 			result.append(catalog.action("folder.home","Home folder",func(): open_folder(library.home_folder()),"Browse your home folder."))
-			result.append(catalog.action("folder.remember","Set as default",func(): set_default(library.current_dir),"Remember this folder as the default ROM location. Also available on RB."))
 			return result
 		"drives":
 			var result: Array = []
@@ -808,11 +816,11 @@ func refresh_hints(row) -> void:
 			if preview_available(): parts.append("X Preview")
 		hints.text="   ".join(parts)
 	elif mode in ["games","recent","favourites"]:
-		hints.text="↑↓ Select   "+("A Open · B Back" if pad else "Enter Open · Backspace Back · Ctrl+F Search")
+		hints.text="↑↓ Select · ←→ Jump 10   "+("A Open · B Back" if pad else "Enter Open · Backspace Back · Ctrl+F Search")
 		if row!=null and row.item.has("rom_path"): hints.text+="   X Favourite"
 		if pad and not search_query.is_empty(): hints.text+="   Y Clear search"
-		if mode=="games" and game_entries().size()>GAMES_PER_PAGE: hints.text+="   LB/RB Page" if pad else "   ←/→ Page"
-	elif mode=="browser": hints.text="A Open · B Back · LB Up · X SD · Y Default · RB Save default" if pad else "↑↓ Select · Enter Open · Backspace Back"
+		if mode=="games" and game_entries().size()>GAMES_PER_PAGE: hints.text+="   LB/RB Page" if pad else ""
+	elif mode=="browser": hints.text="A Open · ↑↓ Select · ←→ Jump 10 · B Back · LB Up · X SD · Y Default · RB Set folder" if pad else "↑↓ Select · ←→ Jump 10 · Enter Open · Backspace Back"
 	elif mode=="library": hints.text="D-pad Select · A Open · B Back · RB Refresh" if pad else "Arrows Select · Enter Open · Backspace Back · R Refresh"
 	elif mode=="pause" and row!=null and row.item.get("layout","")=="transport": hints.text="←/→ Playback controls · ↑↓ Menu · "+("A Activate · B Resume" if pad else "Enter Activate · Backspace Resume")
 	elif mode=="rename": hints.text="Type a name · Enter Save · ↓ Select button"
@@ -865,8 +873,29 @@ func navigate(next: Vector2i) -> void:
 			while candidate>=0 and candidate<rows.size() and rows[candidate].item.get("layout","")=="transport":
 				if not rows[candidate].disabled: select(rows[candidate].item.id); return
 				candidate+=next.x
-		elif mode=="games": change_game_page(next.x)
+		elif mode in ["browser","games","recent","favourites"]: jump_entries(next.x*10)
 		else: adjust(next.x)
+
+func jump_entries(amount: int) -> void:
+	if mode=="games":
+		var games := game_entries()
+		if games.is_empty(): return
+		var current := game_page*GAMES_PER_PAGE
+		for i in range(games.size()):
+			if "game:"+str(games[i].path)==selected_id: current=i; break
+		var target := clampi(current+amount,0,games.size()-1)
+		remember(); game_page=target/GAMES_PER_PAGE; system_pages[library_system]=game_page
+		render(); select("game:"+str(games[target].path)); return
+	var candidates: Array = []
+	for row in rows:
+		if row.disabled: continue
+		if mode=="browser" and not str(row.item.id).begins_with("file:"): continue
+		if mode in ["recent","favourites"] and row.item.get("layout","")!="game": continue
+		candidates.append(row.item.id)
+	if candidates.is_empty(): return
+	var current := candidates.find(selected_id)
+	var target := clampi((current if current>=0 else 0)+amount,0,candidates.size()-1)
+	select(candidates[target])
 
 func adjust(delta: int) -> void:
 	var row = selected_row()

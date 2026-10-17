@@ -33,6 +33,25 @@ func run():
    var shade:=lerpf(1,ao.get_pixel(x,y).r,.8)
    base.set_pixel(x,y,Color(colour.r*shade,colour.g*shade,colour.b*shade,colour.a).linear_to_srgb())
  material.albedo_texture=ImageTexture.create_from_image(base);material.ao_enabled=false
+ material.ao_texture=null # Occlusion is already baked into base colour.
+ # Keep the imported roughness detail, but give the dielectric plastic a matte
+ # finish. Packed metal pixels retain their authored roughness and metal values.
+ var packed_texture:=material.roughness_texture
+ var finish_image:=packed_texture.get_image()
+ if finish_image.is_compressed():finish_image.decompress()
+ finish_image.clear_mipmaps();finish_image.convert(Image.FORMAT_RGBA8)
+ for y in range(finish_image.get_height()):
+  for x in range(finish_image.get_width()):
+   var pixel:=finish_image.get_pixel(x,y)
+   var original:float=pixel[material.roughness_texture_channel]
+   var metal:float=pixel[material.metallic_texture_channel]*material.metallic
+   var plastic:=1.0-smoothstep(.15,.65,metal)
+   pixel[material.roughness_texture_channel]=lerpf(original,lerpf(.48,.95,original),plastic)
+   finish_image.set_pixel(x,y,pixel)
+ var matte:=ImageTexture.create_from_image(finish_image)
+ if material.metallic_texture==packed_texture:material.metallic_texture=matte
+ material.roughness_texture=matte
+ material.metallic_specular=.35
  var cache:Dictionary={};var total:=0;var textures:Array=[]
  for channel in range(BaseMaterial3D.TEXTURE_MAX):
   var texture:=material.get_texture(channel)
@@ -49,6 +68,6 @@ func run():
  var packed:=PackedScene.new();assert(packed.pack(console)==OK)
  DirAccess.make_dir_recursive_absolute(OUT)
  assert(ResourceSaver.save(packed,OUT+"/console.scn",ResourceSaver.FLAG_COMPRESS)==OK)
- var manifest={"source_sha256":FileAccess.get_sha256(SOURCE),"high_resolution_sha256":FileAccess.get_sha256("res://build/console-source/console-4k.glb"),"triangles":mesh.surface_get_array_index_len(0)/3,"removed":removed,"surfaces":1,"texture_count":cache.size(),"textures":textures,"gpu_texture_bytes_with_mips":total,"author":"ELIZION","license":"CC-BY-4.0","source_url":"https://sketchfab.com/3d-models/super-retro-game-console-d672d0ac1d6a4d238314d6675f8f92b2"}
+ var manifest={"finish":{"plastic_roughness_min":.48,"plastic_roughness_max":.95,"dielectric_specular":.35,"metal_mask_preserved":true},"source_sha256":FileAccess.get_sha256(SOURCE),"high_resolution_sha256":FileAccess.get_sha256("res://build/console-source/console-4k.glb"),"triangles":mesh.surface_get_array_index_len(0)/3,"removed":removed,"surfaces":1,"texture_count":cache.size(),"textures":textures,"gpu_texture_bytes_with_mips":total,"author":"ELIZION","license":"CC-BY-4.0","source_url":"https://sketchfab.com/3d-models/super-retro-game-console-d672d0ac1d6a4d238314d6675f8f92b2"}
  var file:=FileAccess.open(OUT+"/manifest.json",FileAccess.WRITE);file.store_string(JSON.stringify(manifest,"  "));file.close()
  print("CONSOLE PREPARED ",JSON.stringify(manifest));console.free();scene.free();quit.call_deferred()

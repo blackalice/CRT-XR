@@ -1,9 +1,6 @@
 # Picture fitting and CRT controls
 
-Open settings with **L1 + R1 + Start**. Use L1/R1 to change tabs, D-pad or left
-stick to select. Press A to edit, left/right to adjust, then A/B to finish.
-Left/right changes category while browsing. **Y resets only the
-selected option**. Save and close persists the new controls.
+Open settings with **L1 + R1 + Start**. Use up/down to select and left/right to adjust. **A** activates actions or toggles switches; **B** goes back. **L1/R1** changes category and **L2/R2** changes subsection. **Y resets only the selected option**; **X** opens compact preview for visual settings. Closing the menu saves preferences.
 
 ## Picture → Screen fit
 

@@ -1,57 +1,127 @@
-# CRT XR
+<p align="center">
+  <img src="artwork/Logo.png" alt="CRT XR logo" width="260">
+</p>
 
-CRT XR places your games on a curved 3D CRT television, with head tracking and side-by-side stereo for VITURE glasses on Steam Deck. **0.1.0-beta.2 is a release candidate under review**, not a public release approval.
+<h1 align="center">CRT XR</h1>
 
-Supported cartridges: SNES, NES, Mega Drive, Master System and Game Gear. Bring your own uncompressed ROMs; no commercial games or BIOS files are supplied. Windows provides a local simulation/mono/SBS preview. Live glasses tracking currently requires Linux and the supported XRLinuxDriver installation.
+<p align="center">
+  A little CRT room for your XR glasses.<br>
+  Retro games, head tracking, warm lighting and the radio on in the background.
+</p>
 
-Steam Deck setup: extract the Linux package and run **Install-CRT-XR.sh** in Desktop Mode. See [Getting started](docs/GETTING-STARTED.md) and the [pre-launch checklist](docs/PRE-LAUNCH-CHECKLIST.md).
+<p align="center">
+  <a href="#features">Features</a> ·
+  <a href="#install-on-steam-deck">Install</a> ·
+  <a href="docs/GETTING-STARTED.md">Getting started</a> ·
+  <a href="THIRD_PARTY.md">Credits</a>
+</p>
 
-Start with [Beta quickstart](docs/BETA-QUICKSTART.md). See [release review and remaining gates](docs/BETA-REVIEW.md), [third-party credits](THIRD_PARTY.md), [emulation/building](docs/emulation.md), [display setup](docs/display-setup.md) and [audio](docs/audio.md).
+> [!NOTE]
+> CRT XR is an **early public beta**. Testing so far has been on Steam Deck with VITURE Pro 2 glasses. Feedback and compatibility reports are welcome; see the [known limitations and remaining checks](docs/PRE-LAUNCH-CHECKLIST.md).
+
+![CRT XR showing its built-in test signal on a curved CRT television, with a wooden table and carpet](docs/images/crt-xr-preview.png)
+
+*An in-app, single-eye capture of the current scene using the built-in test signal. No game is included.*
+
+## Features
+
+- **A CRT in your space.** A detailed television, wooden table, soft carpet and baked contact shadows. The surroundings fade into black to suit XR glasses rather than filling your view with a whole virtual room.
+- **Stereo and head tracking.** Full side-by-side rendering and rotational **3DoF** tracking let you look around an anchored screen. Adjust its distance, height, size and curvature, then recenter with a stick click.
+- **A picture you can tune.** Scanlines, phosphor detail, glass reflections, PAL/NTSC-inspired signal effects and colour controls. Screen-fitting options keep the full game image inside the tube.
+- **Five classic systems.** SNES, NES, Mega Drive / Genesis, Master System and Game Gear, powered by libretro cores.
+- **A library that understands your folders.** Pick your ROM root or SD card and browse supported systems, Recent and Favourites. Unrelated console folders stay out of the way.
+- **Your music, in the room.** Play MP3 albums or direct MP3 web radio with positional sound and optional room reverb. Use the pause-menu transport and seek bar, and optionally lower game audio while music plays. The last track and position are restored, ready for you to press Play.
+- **Controller-first adjustments.** Organised settings pages, compact visual previews, per-option resets, saved setups and per-game picture preferences. Manual save states, automatic resume points and clean screenshots are built in.
+
+Bring your own games and music. Supported cartridge files are uncompressed SNES, NES and the listed Sega systems; ZIP archives, disc systems and BIOS-based consoles are outside this beta's scope.
+
+## What you need
+
+| Platform | Current use |
+|---|---|
+| **Steam Deck + VITURE Pro 2** | The tested XR setup, including Gaming Mode mono-to-SBS startup. **Decky Loader and the testing version of XR Gaming must already be installed** for Pro 2 tracking, with a CRT XR-supported driver build. |
+| **Steam Deck without glasses** | Mono play. The latest automatic launcher includes this path; final hardware acceptance is still pending. |
+| **Windows** | A portable local preview with mono, SBS and simulated tracking. Live glasses tracking currently uses the Linux driver. |
+
+The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a compatible XR Gaming driver**. We expect other compatible glasses to work, but **only VITURE Pro 2 has been tested**. Automatic detection currently recognises VITURE; other models may need manual display/profile setup and a compatible driver. SBS and built-in 3DoF alone do not guarantee that CRT XR can access tracking. See [display setup](docs/display-setup.md) and [Gaming Mode handoff notes](docs/SBS-HANDOFF-TEST.md).
+
+## Install on Steam Deck
+
+1. Download the **complete Linux beta package**, rather than GitHub’s source-code archive, and switch your Deck to **Desktop Mode**. Sign in to Steam at least once.
+2. For tracked XR, install **Decky Loader → XR Gaming** and confirm it recognises your glasses. **VITURE Pro 2 currently requires XR Gaming’s testing version**, rather than its stable release. CRT XR setup assumes this prerequisite; it does not install the plugin or replace your driver.
+3. Extract the package and run **`Install-CRT-XR.sh`**. Choose **Execute / Run** if prompted. Select the tested VITURE Full SBS profile, or Deck / monitor only.
+4. Finish any running game and allow setup to close Steam. It installs CRT XR, adds or updates the shortcut, applies the selected resolution profile and installs the supplied Steam artwork. Existing settings, saves and later custom artwork are preserved.
+5. After Steam restarts, **Return to Gaming Mode → Library → Non-Steam → CRT XR**.
+
+No SSH, Steam developer interface or administrator password is needed for CRT XR's app installer. The separately installed XR Gaming prerequisite has its own setup requirements. If the script opens as text, or you have several Steam accounts, follow the [full installation guide](docs/GETTING-STARTED.md).
+
+### First launch with glasses
+
+Connect the glasses in **mono**, then launch CRT XR. At the instructions, release the launch button, **press A**, then switch the glasses to **SBS**. The view stays black during the change and the room appears when ready.
+
+The tested VITURE profile uses an explicit **3840 × 1080** Steam game resolution; **Native alone did not work on our test Deck**. Setup prepares that profile. If the view stays black, X retries; return the glasses to mono before using B / Escape to leave.
+
+Open **Game library → Library locations** to choose your ROM folder or SD card. You can explore the built-in test signal before loading a game.
+
+### Windows preview
+
+Extract the complete Windows package and run **`CRT-XR.exe`**. Keep its neighbouring files and folders together. This is an unsigned portable preview; the Steam Deck installer is for Linux.
+
+## ROM folders
+
+In **Game library → Library locations**, select your **main ROM folder**—the folder containing the console folders. An existing EmuDeck-style layout can stay where it is, including on an SD card:
+
+```text
+roms/
+├── snes/
+│   ├── Game.sfc
+│   └── RPGs/
+│       └── Another game.smc
+├── nes/
+│   └── Game.nes
+├── megadrive/       # genesis/ also works
+│   └── Game.md
+├── mastersystem/
+│   └── Game.sms
+└── gamegear/
+    └── Game.gg
+```
+
+CRT XR discovers supported games in subfolders and presents them by system; you do not need to move ROMs into the app folder. Common folder aliases such as `genesis`, `superfamicom`, `sms` and `gg` are recognised. Folder names help discovery, while the supported file type/content chooses the emulator core. You can also select a single supported system folder or browse to a game directly.
+
+Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Only supported, recognised cartridges appear. ROMs must be **uncompressed**; ZIP archives are not scanned as games. No ROMs are supplied.
 
 ## Controls
 
-| Action | Gamepad | Keyboard |
+Use Steam's **Gamepad With Joystick Trackpad** layout. You do not need to hold the three-lines button to switch Desktop/gamepad mappings.
+
+| Action | Controller | Keyboard |
 |---|---|---|
-| Menu | L1 + R1 + Start | Escape |
+| Open / close menu | L1 + R1 + Start | Escape |
 | Recenter | R3 | R |
-| Select / adjust setting | Up/down / left/right | Arrows |
-| Activate / back | A / B | Enter / Backspace |
-| Category / subsection | L1/R1 / L2/R2 | Q/E / Z/C |
+| Select / adjust a setting | Up/down / left/right | Arrow keys |
+| Activate / go back | A / B | Enter / Backspace |
+| Change category / subsection | L1/R1 / L2/R2 | Q/E / Z/C |
 | Reset selected option | Y | Y |
-| Compact visual preview | X | X |
-| Move TV closer/farther | Right stick (optional) | Page Up/Down |
+| Compact adjustment preview | X | X |
+| Move TV closer / farther | Right stick, when enabled | Page Up / Page Down |
 | Screenshot | Pause menu | F6 |
 
-The settings categories are View, Picture, Audio, Room, Controls & XR, Saved setups and General. Left/right adjusts values immediately. The menu renders once at 960×720 and is shared between both eyes. It pauses the game and restores its prior pause state when closed. The music player keeps its own playback state; left/right selects transport icons or seeks on the timeline, while down leaves the icon group.
+Music sits above the usual pause-menu actions without taking the default selection. Left/right selects its transport controls or seeks on the timeline; down returns to the menu below. Game controls follow each supported console's layout.
 
-## Development
+## Updates, help and feedback
 
-Use Godot **4.5.1** with Compatibility rendering. On Windows:
+Run the installer from a newer complete package to update the existing Steam entry. Previous program versions are retained, and settings/saves live separately from the application. Old **RetroCRT XR** data is copied on first launch without deleting the originals.
 
-```powershell
-./scripts/setup-windows.ps1
-./scripts/dev.ps1
-./scripts/dev.ps1 -Editor
-./scripts/dev.ps1 -Rom 'D:\your-rom-folder\game.sfc'
-```
+- [Getting started and recovery](docs/GETTING-STARTED.md)
+- [Picture controls](docs/picture-controls.md) · [Room and view](docs/room-and-view.md) · [Audio](docs/audio.md)
+- [Development and builds](docs/DEVELOPMENT.md)
+- [Pre-launch checklist](docs/PRE-LAUNCH-CHECKLIST.md) · [Detailed beta review](docs/BETA-REVIEW.md)
 
-A fresh checkout needs the native emulator dependencies and model assets prepared separately; see the build and asset documents. Downloaded engines, native binaries, cores, models, builds and local archives are ignored by Git. `assets/model-sources.json` records source hashes and attribution. `scripts/check-release-assets.py` verifies the required assets. A local verified recovery bundle is stored under `archive/`; keep a copy off this machine. `scripts/archive-model-assets.py` recreates it from the original/prepared assets.
+For a bug report, use **General → Copy diagnostics** and include your device, Desktop/Gaming Mode, mono/SBS, and steps to reproduce. Review logs before sharing: they can contain local paths or radio URLs.
 
-```powershell
-python scripts/test-beta.py
-python scripts/check-release-assets.py
-./scripts/export-windows.ps1 -OutputDirectory dist/windows-review
-./scripts/export-linux.ps1 -OutputDirectory dist/linux-review
-```
+## Credits and licensing
 
-The Linux tracking helpers must be built before exporting. Native C++ identifiers use `crt_xr`; launchers/executables use `crt-xr` (Windows `CRT-XR.exe`). The local checkout may still be named `XR-CRT`; that filesystem path is independent of the app/Git project identity. There is no hosted Git remote configured yet.
+Built with **Godot** and **libretro**, with credited third-party models, shaders and audio components. See [THIRD_PARTY.md](THIRD_PARTY.md) for authors, licences and modifications.
 
-## Upgrading and data
-
-CRT XR uses its own Godot user-data directory. On first launch it copies preferences, saves, favourites, screenshots and music bookmarks from the previous **RetroCRT XR** directory. It never removes the old data or overwrites existing new files. Old logs and shader caches are skipped. Save formats and ROM identities are unchanged. `RETROCRT_CORE` remains a legacy alias for the new `CRT_XR_CORE` environment override.
-
-On Linux, preferences are normally in `~/.local/share/godot/app_userdata/CRT XR/`; logs launched through Steam are under `${XDG_STATE_HOME:-$HOME/.local/state}/crt_xr/`. On Windows they are normally under `%APPDATA%/Godot/app_userdata/CRT XR/`. Development scripts intentionally use isolated `tools/userdata/`.
-
-## Release status
-
-The code, packaged assets and bundled emulator cores have different licensing requirements. The app's own source licence has not yet been selected. Snes9x and Genesis Plus GX restrict commercial use; Nestopia is GPL-2.0. Included core source snapshots/credits are not a blanket licence for the app. Resolve the distribution/licensing decisions in the release review before publishing downloads. User ROMs, music and private data must never be included.
+The licence for our original source is still [under review](docs/LICENCE-PROPOSAL.md). Bundled emulator cores and assets retain their own terms; the complete package must not be described as wholly permissive. Core distribution/provenance and the remaining release checks need resolving before public downloads are published.

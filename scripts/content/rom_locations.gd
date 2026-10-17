@@ -30,3 +30,18 @@ static func sd_cards() -> PackedStringArray:
 	for path in parse_sd_mounts(mountinfo):
 		if DirAccess.open(path) != null: result.append(path)
 	return result
+
+# Suggest existing libraries only; never scan an entire home directory or card
+# automatically, and never replace the user's saved root without their choice.
+static func library_candidates(home: String, mounts: PackedStringArray) -> PackedStringArray:
+	var result := PackedStringArray()
+	var seen: Dictionary = {}
+	var roots := PackedStringArray([home])
+	roots.append_array(mounts)
+	for root in roots:
+		for relative in ["Emulation/roms", "emulation/roms", "retrodeck/roms", "RetroDECK/roms", "roms", "ROMs", "Roms", "ROMs/roms"]:
+			var path := root.path_join(relative)
+			var key := path.to_lower() if OS.get_name()=="Windows" else path
+			if DirAccess.open(path)!=null and not seen.has(key):
+				seen[key]=true; result.append(path)
+	return result

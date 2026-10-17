@@ -3,8 +3,8 @@ config_version=5
 
 [application]
 config/name="CRT XR"
-config/version="0.1.0-beta.2"
-config/icon="res://assets/branding/crt-xr.svg"
+config/version="0.1.0-beta.4"
+config/icon="res://artwork/Icon.png"
 run/main_scene="res://scenes/main.tscn"
 config/features=PackedStringArray("4.5", "GL Compatibility")
 boot_splash/show_image=false

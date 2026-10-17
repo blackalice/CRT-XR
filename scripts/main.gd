@@ -96,6 +96,7 @@ var view_diagnosed := false
 var sbs_prompt: Control
 var sbs_startup := false
 var sbs_starting := false
+var startup_loading := false
 
 func _ready() -> void:
 	var migration := preload("res://scripts/content/user_data_migration.gd").migrate()
@@ -116,7 +117,17 @@ func _ready() -> void:
 		if "--startup-black" in startup_args: sbs_prompt.darken()
 		set_process(false)
 		return
-	start_application()
+	# Engine boot remains black. Draw branding only once we can control eye layout.
+	if not OS.has_feature("editor") and DisplayServer.get_name()!="headless" and not "--script" in OS.get_cmdline_args():
+		startup_loading=true;set_process(false)
+		var brand=preload("res://scripts/ui/startup_brand.gd").new()
+		brand.stereo="--sbs" in startup_args or "--full-sbs" in startup_args
+		brand.z_index=4096;add_child(brand)
+		await get_tree().process_frame
+		await RenderingServer.frame_post_draw
+		start_application()
+		brand.queue_free();startup_loading=false;set_process(true)
+	else: start_application()
 
 func sbs_target_size() -> Vector2i:
 	# The probe profile is explicit; never infer optical SBS from aspect ratio alone.
@@ -420,7 +431,7 @@ func _process(delta: float) -> void:
 		eyes[i].set_frustum(2.0 * near_plane * tan(deg_to_rad(vertical_fov) / 2.0), Vector2(-offset * near_plane / convergence, 0), near_plane, 50.0)
 		if refresh_diagnostics and diagnostics[i].visible and not menu_open:
 			var a := displayed.get_euler() * 180.0 / PI
-			diagnostics[i].text = "RETROCRT XR   /   %s\n%s\nYaw %+.1f   Pitch %+.1f   Roll %+.1f\n%.2fm  /  IPD %.0fmm  /  %.0f fps\nL + R + Start / Esc: menu   R3 / R: recenter" % ["LEFT" if stereo and i == 0 else ("RIGHT" if stereo else "DESKTOP"), provider.status, a.y, a.x, a.z, distance, ipd * 1000, Engine.get_frames_per_second()]
+			diagnostics[i].text = "CRT XR   /   %s\n%s\nYaw %+.1f   Pitch %+.1f   Roll %+.1f\n%.2fm  /  IPD %.0fmm  /  %.0f fps\nL + R + Start / Esc: menu   R3 / R: recenter" % ["LEFT" if stereo and i == 0 else ("RIGHT" if stereo else "DESKTOP"), provider.status, a.y, a.x, a.z, distance, ipd * 1000, Engine.get_frames_per_second()]
 	if "--capture" in OS.get_cmdline_user_args() and Engine.get_process_frames() == 30 and not screenshot_pending:
 		screenshot_pending = true
 		capture.call_deferred()
@@ -450,6 +461,7 @@ func capture() -> void:
 	get_tree().quit(result)
 
 func _input(event: InputEvent) -> void:
+	if startup_loading: return
 	if is_instance_valid(menu): menu.release_input(event)
 	if is_instance_valid(sbs_prompt): return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F6:

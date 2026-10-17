@@ -1,10 +1,10 @@
 # Getting started with CRT XR
 
-Private beta candidate: 0.1.0-beta.2. Public release approval is still pending. No games or music are included.
+Public beta candidate: 0.1.0-beta.4. This is an early beta; testing so far has been on Steam Deck with VITURE Pro 2. No games or music are included.
 
 ## Before you start
 
-**Install Decky Loader and its XR Gaming plugin before using CRT XR with head tracking.** Most XR users will already have these. Confirm XR Gaming recognises your glasses and its driver is enabled. CRT XR setup assumes the plugin is installed; it does not install Decky Loader or XR Gaming for you. Keep XR Gaming's display effects disabled when CRT XR is managing the stereo view.
+**Install Decky Loader and its XR Gaming plugin before using CRT XR with head tracking.** **VITURE Pro 2 currently requires the testing version of XR Gaming, rather than the stable release.** Most XR users will already have Decky and XR Gaming, but Pro 2 users should check which version they have. Confirm XR Gaming recognises your glasses and its driver is enabled. CRT XR setup assumes the plugin is installed; it does not install Decky Loader or XR Gaming for you. Keep XR Gaming's display effects disabled when CRT XR is managing the stereo view.
 
 ## Install on Steam Deck
 
@@ -29,15 +29,43 @@ Open **Game library → Library locations** and choose your main ROM folder, inc
 
 L1 + R1 + Start opens the menu. Up/down selects, left/right adjusts, A activates and B returns. R3 recentres. Music controls sit above the normal menu actions without taking the default selection.
 
+## ROM folders
+
+On first use, choose **Game library → Set up your ROM library**. Existing libraries in common EmuDeck, RetroDECK and SD-card locations are suggested when found. Open your **main ROM folder**, then choose **Use this folder for my library**—the folder containing the console folders. An existing EmuDeck-style layout can stay where it is, including on an SD card:
+
+```text
+roms/
+├── snes/
+│   ├── Game.sfc
+│   └── RPGs/
+│       └── Another game.smc
+├── nes/
+│   └── Game.nes
+├── megadrive/       # genesis/ also works
+│   └── Game.md
+├── mastersystem/
+│   └── Game.sms
+└── gamegear/
+    └── Game.gg
+```
+
+CRT XR discovers supported games in subfolders and presents them by system; you do not need to move ROMs into the app folder. Common folder aliases such as `genesis`, `superfamicom`, `sms` and `gg` are recognised. Folder names help discovery, while the supported file type/content chooses the emulator core. You can also select a single supported system folder or browse to a game directly.
+
+Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Only supported, recognised cartridges appear. ROMs must be **uncompressed**; ZIP archives are not scanned as games. No ROMs are supplied.
+
+In folder and game lists, **left/right jumps ten entries** and holding a direction continues scrolling. Jumps stop at the ends and cross game-list pages. **LB/RB** still changes whole game pages. To change the saved folder later, use **Library locations**.
+
 ## Head tracking prerequisite
 
-**XR Gaming for Decky Loader must already be installed and enabled.** It provides the XR driver used for tracking. Confirm it recognises your glasses before testing CRT XR. The project is [XR Gaming](https://github.com/wheaney/decky-XRGaming).
+**XR Gaming for Decky Loader must already be installed and enabled.** It provides the XR driver used for tracking. **Pro 2 users need its testing version.** Confirm it recognises your glasses before testing CRT XR. The project is [XR Gaming](https://github.com/wheaney/decky-XRGaming).
 
-CRT XR setup checks for the supported driver binary. Plugin installation alone does not prove that its driver version is compatible with this beta. If the check fails, CRT XR can use fixed view; record the message so we can check the plugin/driver version. Setup does not install or update Decky, replace drivers, modify USB rules or change the driver's settings. Do not remove an already working XR Gaming installation just to run CRT XR setup.
+CRT XR setup checks for the supported driver binary. Other SBS/3DoF glasses are expected to work when their tracking is exposed through a compatible driver, but only Pro 2 has been tested. Automatic detection currently recognises VITURE; other models may need an explicit display profile. Plugin installation alone does not prove that its driver version is compatible with this beta. If the check fails, CRT XR can use fixed view; record the message so we can check the plugin/driver version. Setup does not install or update Decky, replace drivers, modify USB rules or change the driver's settings. Do not remove an already working XR Gaming installation just to run CRT XR setup.
 
 ## Updates and recovery
 
 Run the installer from the next complete package. It updates the existing entry instead of deliberately creating another shortcut, preserves settings/saves, and retains previous program versions. Re-running an older package reinstalls that version. Close CRT XR before updating. Steam must close while its configuration is changed.
+
+Steam artwork is installed automatically: portrait/landscape covers, hero, logo and shortcut icon. Updates refresh artwork installed by CRT XR while preserving later custom artwork. Steam must restart before the library reflects changes.
 
 Programs: `~/Applications/CRT-XR/releases/`, with a stable `current` link. Install receipts/backups: `~/Applications/CRT-XR/`. Backups can contain Steam-local account/configuration details; do not share them. Settings/saves: `~/.local/share/godot/app_userdata/CRT XR/`; these are separate from the app and never removed by setup. Old RetroCRT XR data is copied on first app launch without deleting originals.
 
