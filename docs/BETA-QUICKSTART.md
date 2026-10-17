@@ -1,12 +1,14 @@
 # CRT XR — beta quickstart
 
-Version: 0.1.0-beta.1. Keep the complete extracted folder together; run CRT-XR.exe on Windows or launch-steam.sh from Steam on Linux. Windows may show an unsigned-application warning; code signing is not configured yet.
+Version: 0.1.0-beta.2. Keep the complete extracted folder together; run CRT-XR.exe on Windows or launch-steam.sh from Steam on Linux. Windows may show an unsigned-application warning; code signing is not configured yet.
 
 ## Steam Deck
 
-Use Desktop Mode for the first setup. Connect the glasses directly, enable their SBS mode when prompted, and launch through Steam using the normal Gamepad layout. Do not hold the three-lines button to switch Desktop/gamepad mappings. Live tracking requires the supported XRLinuxDriver installation; the app offers a fixed view if tracking is unavailable. Follow DISPLAY-SETUP.md and GAMING-MODE.md for details.
+**Prerequisite for tracked XR: Decky Loader with the XR Gaming plugin installed and enabled.** CRT XR setup assumes this is already present and does not install the plugin.
 
-Gaming Mode cannot always negotiate the external 3840×1080 mode automatically. Set the shortcut's external resolution to Native in Steam; Desktop Mode remains the recommended first beta route. The glasses may still need their physical SBS switch. Recenter with R3; the view has rotational tracking (3DoF), not walking/positional tracking.
+Use Desktop Mode for installation. Extract the complete Linux package and run **Install-CRT-XR.sh**, choose the tested VITURE SBS profile or mono/monitor profile, and allow Steam to close so setup can safely register CRT XR. Restart Steam and return to Gaming Mode. See **GETTING-STARTED.md** for the full walkthrough, tracking prerequisite and recovery information.
+
+With glasses connected in mono, launch CRT XR, press A at the prompt, then switch the glasses to SBS. The view stays black until the app dimensions settle. The VITURE profile sets Steam's per-game resolution explicitly to 3840×1080; Native alone did not work on our test Deck. Without glasses the automatic launcher uses mono. Live tracking uses XR Gaming’s supported driver; the installer currently reports that dependency rather than installing it. Fresh-account installer, prompt readability and no-glasses acceptance remain pending.
 
 ## Games
 

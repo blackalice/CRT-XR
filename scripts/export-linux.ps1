@@ -113,4 +113,15 @@ foreach ($name in @('crt-xr.x86_64','launch-deck.sh','launch-steam.sh','launch-g
     $text = [IO.File]::ReadAllText($scriptPath).Replace("`r`n", "`n")
     [IO.File]::WriteAllText($scriptPath, $text, [Text.UTF8Encoding]::new($false))
 }
+$installerOut = Join-Path $out 'installer'
+New-Item -ItemType Directory -Force $installerOut | Out-Null
+foreach ($name in @('install.py','steam_config.py')) {
+    $text = [IO.File]::ReadAllText((Join-Path $root "scripts/installer/$name")).Replace("`r`n", "`n")
+    [IO.File]::WriteAllText((Join-Path $installerOut $name), $text, [Text.UTF8Encoding]::new($false))
+}
+$text = [IO.File]::ReadAllText((Join-Path $root 'scripts/installer/Install-CRT-XR.sh')).Replace("`r`n", "`n")
+[IO.File]::WriteAllText((Join-Path $out 'Install-CRT-XR.sh'), $text, [Text.UTF8Encoding]::new($false))
+foreach ($name in @('GETTING-STARTED.md','PRE-LAUNCH-CHECKLIST.md','LICENCE-PROPOSAL.md')) {
+    Copy-Item -LiteralPath (Join-Path $root "docs/$name") -Destination $out
+}
 Write-Host "Linux package: $out"

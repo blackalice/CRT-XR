@@ -71,4 +71,7 @@ if (Test-Path -LiteralPath (Join-Path $roomBake 'bake.json')) {
     }
     Copy-Item -LiteralPath (Join-Path $root 'docs/room-contact-bake.md') -Destination (Join-Path $out 'assets/ROOM-CONTACT-BAKE.md')
 }
+foreach ($name in @('GETTING-STARTED.md','PRE-LAUNCH-CHECKLIST.md','LICENCE-PROPOSAL.md')) {
+    Copy-Item -LiteralPath (Join-Path $root "docs/$name") -Destination $out
+}
 Write-Host "Windows build: $out/CRT-XR.exe"

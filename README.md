@@ -1,8 +1,10 @@
 # CRT XR
 
-CRT XR places your games on a curved 3D CRT television, with head tracking and side-by-side stereo for VITURE glasses on Steam Deck. **0.1.0-beta.1 is a release candidate under review**, not a public release approval.
+CRT XR places your games on a curved 3D CRT television, with head tracking and side-by-side stereo for VITURE glasses on Steam Deck. **0.1.0-beta.2 is a release candidate under review**, not a public release approval.
 
 Supported cartridges: SNES, NES, Mega Drive, Master System and Game Gear. Bring your own uncompressed ROMs; no commercial games or BIOS files are supplied. Windows provides a local simulation/mono/SBS preview. Live glasses tracking currently requires Linux and the supported XRLinuxDriver installation.
+
+Steam Deck setup: extract the Linux package and run **Install-CRT-XR.sh** in Desktop Mode. See [Getting started](docs/GETTING-STARTED.md) and the [pre-launch checklist](docs/PRE-LAUNCH-CHECKLIST.md).
 
 Start with [Beta quickstart](docs/BETA-QUICKSTART.md). See [release review and remaining gates](docs/BETA-REVIEW.md), [third-party credits](THIRD_PARTY.md), [emulation/building](docs/emulation.md), [display setup](docs/display-setup.md) and [audio](docs/audio.md).
 

@@ -14,6 +14,9 @@ func settle():
 func run():
 	app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	# Geometry readback must not race the separately tested tube power-on reveal.
+	app.power_on.enabled=false
+	app.power_on.apply()
 	app.close_settings()
 	app.use_tracking(false)
 	app.set_stereo(true)
