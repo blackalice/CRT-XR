@@ -18,6 +18,7 @@ Copy-Item -LiteralPath (Join-Path $root 'cores/sources') -Destination (Join-Path
 Copy-Item -LiteralPath (Join-Path $root 'cores/core-builds.json') -Destination (Join-Path $out 'cores')
 Copy-Item -LiteralPath (Join-Path $root 'docs/emulation.md') -Destination (Join-Path $out 'PLAYING.md')
 Copy-Item -LiteralPath (Join-Path $root 'THIRD_PARTY.md') -Destination $out
+foreach ($notice in @('LICENSE','LICENSING.md')) { Copy-Item -LiteralPath (Join-Path $root $notice) -Destination $out }
 Copy-Item -LiteralPath (Join-Path $root 'extensions/bin/godot-cpp-LICENSE.md') -Destination $out
 Copy-Item -Path (Join-Path $root 'third_party/shaders/*') -Destination (Join-Path $out 'licenses/shaders')
 $model = Join-Path $root 'build/crt-model/crt_tv.glb'

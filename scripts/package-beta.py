@@ -5,7 +5,7 @@ from pathlib import Path
 import hashlib,json,sys,tarfile,zipfile
 folder=Path(sys.argv[1]).resolve();platform=sys.argv[2]
 assert folder.is_dir()
-required=["THIRD_PARTY.md","BETA-REVIEW.md","BETA-QUICKSTART.md","licenses/godot/LICENSE.txt","assets/optimised/cabinet.scn","assets/wood-table/table.scn","assets/room-bake/table_contact_albedo.res"]
+required=["LICENSE","LICENSING.md","THIRD_PARTY.md","BETA-REVIEW.md","BETA-QUICKSTART.md","licenses/godot/LICENSE.txt","assets/optimised/cabinet.scn","assets/wood-table/table.scn","assets/room-bake/table_contact_albedo.res"]
 required += ["CRT-XR.exe","crt_xr_libretro.windows.x86_64.dll"] if platform=="windows" else ["crt-xr.x86_64","crt-xr-engine.x86_64","crt-xr.pck","crt-xr-tracking-bridge","crt-xr-ipc-inventory","crt_xr_libretro.linux.x86_64.so"]
 if platform=="linux":required += ["Install-CRT-XR.sh","installer/install.py","installer/steam_config.py","GETTING-STARTED.md"]
 required += ["artwork/"+name+".png" for name in ["Portrait","Landscape","Hero","Logo","Icon"]]

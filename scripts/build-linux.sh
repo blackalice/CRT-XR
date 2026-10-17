@@ -20,6 +20,6 @@ if [[ "${1:-}" == "--export" ]]; then
     if [[ -f "$root/cores/snes9x_libretro.so" ]]; then
         mkdir -p "$root/dist/linux/cores"
         cp "$root/cores/snes9x_libretro.so" "$root/cores/"*LICENSE* "$root/dist/linux/cores/"
-        cp "$root/THIRD_PARTY.md" "$root/extensions/bin/godot-cpp-LICENSE.md" "$root/dist/linux/"
+        cp "$root/LICENSE" "$root/LICENSING.md" "$root/THIRD_PARTY.md" "$root/extensions/bin/godot-cpp-LICENSE.md" "$root/dist/linux/"
     fi
 fi

@@ -6,7 +6,9 @@
     "prepared": "build/crt-model/optimised/cabinet.scn",
     "source_url": "https://sketchfab.com/3d-models/crt-tv-9ba4baa106e64319a0b540cf0af5aa9e",
     "author": "Timothy Ahene",
-    "license": "CC-BY-4.0"
+    "license": "CC-BY-4.0",
+    "license_review": "Archived listing version independently verified; retain provenance linking the downloaded source revision to that grant.",
+    "license_evidence": "docs/license-evidence/crt-tv.json"
   },
   {
     "name": "Table",

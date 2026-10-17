@@ -71,3 +71,9 @@ Desktop.ini
 
 # Local source downloads and obsolete import files. Never ship or commit.
 /archive/
+
+# Local music libraries and ambiguous cartridge images (Markdown remains tracked).
+*.mp3
+*.flac
+*.m4a
+*.bin

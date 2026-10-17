@@ -8,14 +8,13 @@ has since supplied stronger historical evidence: the creator's own listing,
 archived on 29 September 2022, shows **CC Attribution** for the exact model ID:
 https://web.archive.org/web/20220929230421/https://sketchfab.com/3d-models/crt-tv-9ba4baa106e64319a0b540cf0af5aa9e
 
-The evidence and modification credit are recorded in `THIRD_PARTY.md`; the
-screenshot is retained locally in `build/license-evidence/`. Its licence-link
-destination/version has not yet been independently retrieved. This supports an
-earlier CC grant; do not describe it as a newly granted or verified CC0 licence.
-The current file/revision and separately accepted download terms must be
-considered when documenting the source for release. Earlier guidance against
-standalone redistribution applied to the Standard licence, not to a valid CC BY
-grant, which permits redistribution subject to its conditions.
+The archived listing HTML was independently retrieved on 17 October 2026.
+Its visible licence link and embedded metadata both point to CC BY 4.0.
+The retrieval URL and HTML hash are recorded in `docs/license-evidence/crt-tv.json`;
+full HTML and the original screenshot remain local under `build/license-evidence/`.
+Credit and modifications are recorded in `THIRD_PARTY.md`. This verifies the
+historical licence version; it does not establish that a later download is the
+same revision or override separately accepted terms. Keep source provenance.
 
 The asset is separate from the application's source-code licence. Original and
 prepared model files remain ignored by project policy. Keep source and licence

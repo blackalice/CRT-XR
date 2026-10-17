@@ -37,6 +37,7 @@ Copy-Item -LiteralPath (Join-Path $root 'docs/audio.md') -Destination (Join-Path
 New-Item -ItemType Directory -Force (Join-Path $out 'licenses/audio') | Out-Null
 Copy-Item -Path (Join-Path $root 'third_party/audio/*') -Destination (Join-Path $out 'licenses/audio')
 Copy-Item -LiteralPath (Join-Path $root 'THIRD_PARTY.md') -Destination $out
+foreach ($notice in @('LICENSE','LICENSING.md')) { Copy-Item -LiteralPath (Join-Path $root $notice) -Destination $out }
 $shaderNotices = Join-Path $out 'licenses/shaders'
 New-Item -ItemType Directory -Force $shaderNotices | Out-Null
 Copy-Item -Path (Join-Path $root 'third_party/shaders/*') -Destination $shaderNotices

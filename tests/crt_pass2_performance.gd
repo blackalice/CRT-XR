@@ -24,6 +24,15 @@ func sample_phase(label: String, distance_value: float) -> Dictionary:
 	wall.sort()
 	return {"phase":label,"distance":distance_value,"gpu_ms":gpu[60],"gpu_p95_ms":gpu[114],"wall_ms":wall[60],"wall_p95_ms":wall[114]}
 func run():
+	var reference_dir := OS.get_environment("CRT_XR_REFERENCE_SHADERS")
+	if reference_dir.is_empty():
+		push_error("Set CRT_XR_REFERENCE_SHADERS to an offline shader baseline folder containing crt_reference_pass1.gdshader and analog_reference.gdshader.")
+		quit(2); return
+	var reference := load(reference_dir.path_join("crt_reference_pass1.gdshader")) as Shader
+	var reference_decoder := load(reference_dir.path_join("analog_reference.gdshader")) as Shader
+	if reference==null or reference_decoder==null:
+		push_error("The reference shader baseline is unavailable. Supply both files; no benchmark was run.")
+		quit(2); return
 	DisplayServer.window_set_vsync_mode(DisplayServer.VSYNC_DISABLED)
 	stage = SubViewport.new()
 	stage.size = Vector2i(3840,1080)
@@ -48,8 +57,6 @@ func run():
 	var screen:ShaderMaterial=app.world.screen_material
 	var current_shader:=screen.shader
 	var current_decoder:Shader=picture.decoder.shader
-	var reference:Shader=load("/home/deck/Applications/CRT XR/crt_reference_pass1.gdshader")
-	var reference_decoder:Shader=load("/home/deck/Applications/CRT XR/analog_reference.gdshader")
 	for distance_value in [2.64,1.2]:
 		for index in range(4):
 			var optimized:=index%2==1

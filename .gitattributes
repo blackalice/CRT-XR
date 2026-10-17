@@ -1,3 +1,18 @@
+# Keep source text portable; Linux launchers must never acquire CRLF.
+* text=auto
 *.sh text eol=lf
 *.gd text eol=lf
 *.gdshader text eol=lf
+*.py text eol=lf
+*.ps1 text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.cfg text eol=lf
+LICENSE text eol=lf
+*.png binary
+*.jpg binary
+*.wav binary
+*.glb binary
+.gitignore text eol=lf

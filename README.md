@@ -124,4 +124,4 @@ For a bug report, use **General → Copy diagnostics** and include your device, 
 
 Built with **Godot** and **libretro**, with credited third-party models, shaders and audio components. See [THIRD_PARTY.md](THIRD_PARTY.md) for authors, licences and modifications.
 
-The licence for our original source is still [under review](docs/LICENCE-PROPOSAL.md). Bundled emulator cores and assets retain their own terms; the complete package must not be described as wholly permissive. Core distribution/provenance and the remaining release checks need resolving before public downloads are published.
+Original CRT XR code and documentation use the [MIT License](LICENSE). See [licensing scope and exclusions](LICENSING.md). Bundled emulator cores and assets retain their own terms; the complete package must not be described as wholly permissive. Core distribution/provenance and the remaining release checks need resolving before public downloads are published.

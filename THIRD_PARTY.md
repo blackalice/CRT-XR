@@ -1,5 +1,7 @@
 # Third-party components
 
+Original CRT XR code uses MIT; see LICENSE and LICENSING.md. The notices below retain their own terms.
+
 ## CRT shaders
 
 * Timothy Lottes' `crt-lottes.glsl`, public domain. The tube shader adapts its
@@ -28,7 +30,7 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   script; it is not copied into the application source tree.
 * Libretro API header, MIT license, Copyright 2010–2018 The RetroArch team.
   Its full header notice is copied into `cores/libretro-header-LICENSE.txt`.
-* Nestopia Libretro, GPL-2.0, Martin Freij, Nestopia UE contributors and
+* Nestopia Libretro, GPL version 2 (the original core file headers permit version 2 or later; preserve individual notices), Martin Freij, Nestopia UE contributors and
   Rupert Carmichael. Upstream source revision:
   https://github.com/libretro/nestopia/tree/06a8949e0b3cf60e3a38a374b1426bf40fccb9a0
   Full licence: `cores/Nestopia-LICENSE.txt`.
@@ -63,13 +65,14 @@ Historical licence evidence: the creator's listing archived on **29 September
 2022 at 23:04:21 UTC** displays **CC Attribution** for that same model ID:
 https://web.archive.org/web/20220929230421/https://sketchfab.com/3d-models/crt-tv-9ba4baa106e64319a0b540cf0af5aa9e
 
-The user supplied a screenshot of that archive on 15 October 2026; a local
-copy is retained at `build/license-evidence/crt-tv-2022-09-29-listing.png`.
-The archive could not be independently fetched by the research tool. The
-screenshot does not expose the destination of its licence link, so the exact
-CC version remains to be recorded. An older third-party derivative explicitly
-credits Timothy Ahene's model as CC BY 4.0:
-https://blendswap.com/blend/31310
+On 17 October 2026 the archived HTML was independently retrieved. Both its
+visible licence link and embedded model metadata identify **Creative Commons
+Attribution 4.0 International**: https://creativecommons.org/licenses/by/4.0/ .
+The model ID and author match the listing above. Retrieval URL, date and HTML
+SHA-256 are recorded in `docs/license-evidence/crt-tv.json`. The original user
+screenshot and retrieved HTML are retained locally under `build/license-evidence/`.
+This verifies the historical licence version; it does not certify that every
+later downloadable GLB is byte-identical to that historical revision.
 
 Modifications in CRT XR: rescaling/alignment, replacement live screen/glass,
 material adjustments, new baked occlusion and grain, reduced and GPU-compressed
@@ -79,8 +82,8 @@ Phonysonic SVG. No endorsement by the original creator is implied.
 
 This record documents historical licensing evidence; it does not relicense the
 asset or assert that later revisions or separately accepted download terms are
-covered. Preserve applicable creator notices and identify the licence/version
-for the source used in a public release. The model is separate from the app's
+covered. Preserve the CC BY 4.0 attribution, licence link and modification notice; retain
+the provenance of the source revision used in a public release. The model is separate from the app's
 source-code licence. See `docs/crt-model-local.md` for asset handling.
 
 ## CRT power-on sound
