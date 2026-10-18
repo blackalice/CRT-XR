@@ -16,3 +16,6 @@ LICENSE text eol=lf
 *.wav binary
 *.glb binary
 .gitignore text eol=lf
+*.desktop text eol=lf
+*.godot text eol=lf
+.gitattributes text eol=lf

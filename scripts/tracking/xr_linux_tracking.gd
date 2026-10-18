@@ -10,6 +10,8 @@ var raw_orientation := Quaternion.IDENTITY
 
 var predictor := Predictor.new()
 
+var live_status := "XRLinuxDriver / LIVE 3DoF"
+
 func _init() -> void:
 	valid = false
 	if OS.get_name() != "Linux":
@@ -65,7 +67,7 @@ func update(delta: float) -> void:
 		var driver_ms = message.get("driver_ms", -1.0)
 		newest_stamp_usec = int(round(float(driver_ms) * 1000.0)) if float(driver_ms) >= 0.0 else sample_time_usec
 		valid = true
-		status = "XRLinuxDriver / LIVE 3DoF"
+		status = live_status
 	if valid and Time.get_ticks_usec() - sample_time_usec > 300000:
 		valid = false
 		status = "XR: stale tracking / holding last pose"

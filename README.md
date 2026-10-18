@@ -11,13 +11,14 @@
 
 <p align="center">
   <a href="#features">Features</a> ·
-  <a href="#install-on-steam-deck">Install</a> ·
+  <a href="https://github.com/blackalice/CRT-XR/releases">Downloads</a> ·
+  <a href="#install-on-steam-deck">Steam Deck setup</a> ·
   <a href="docs/GETTING-STARTED.md">Getting started</a> ·
   <a href="THIRD_PARTY.md">Credits</a>
 </p>
 
 > [!NOTE]
-> CRT XR is an **early public beta**. Testing so far has been on Steam Deck with VITURE Pro 2 glasses. Feedback and compatibility reports are welcome; see the [known limitations and remaining checks](docs/PRE-LAUNCH-CHECKLIST.md).
+> CRT XR is an **early public beta**. VITURE Pro 2 has been tested on Steam Deck and Windows with an Xbox controller. Feedback and compatibility reports are welcome; see the [known limitations and remaining checks](docs/PRE-LAUNCH-CHECKLIST.md).
 
 ![CRT XR showing its built-in test signal on a curved CRT television, with a wooden table and carpet](docs/images/crt-xr-preview.png)
 
@@ -35,13 +36,19 @@
 
 Bring your own games and music. Supported cartridge files are uncompressed SNES, NES and the listed Sega systems; ZIP archives, disc systems and BIOS-based consoles are outside this beta's scope.
 
+## Download the beta
+
+Get the complete Windows ZIP or Steam Deck/Linux archive from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases). Start with **0.1.0-beta.6**. GitHub’s automatic source-code ZIP is not an installable app. The separate corresponding-source archive is for rebuilding and licence compliance.
+
+The app is free and early: please [report bugs](https://github.com/blackalice/CRT-XR/issues), suggest improvements and share compatibility results. This project has been built with substantial AI coding assistance (“vibe coded”); code reviews and contributions are welcome.
+
 ## What you need
 
 | Platform | Current use |
 |---|---|
 | **Steam Deck + VITURE Pro 2** | The tested XR setup, including Gaming Mode mono-to-SBS startup. **Decky Loader and the testing version of XR Gaming must already be installed** for Pro 2 tracking, with a CRT XR-supported driver build. |
 | **Steam Deck without glasses** | Mono play. The latest automatic launcher includes this path; final hardware acceptance is still pending. |
-| **Windows** | A portable local preview with mono, SBS and simulated tracking. Live glasses tracking currently uses the Linux driver. |
+| **Windows** | Portable preview with mono/SBS and native VITURE tracking tested locally on Pro 2. Requires the separately supplied Windows SDK; vendor SDK DLLs are not bundled. |
 
 The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a compatible XR Gaming driver**. We expect other compatible glasses to work, but **only VITURE Pro 2 has been tested**. Automatic detection currently recognises VITURE; other models may need manual display/profile setup and a compatible driver. SBS and built-in 3DoF alone do not guarantee that CRT XR can access tracking. See [display setup](docs/display-setup.md) and [Gaming Mode handoff notes](docs/SBS-HANDOFF-TEST.md).
 
@@ -49,9 +56,9 @@ The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a 
 
 1. Download the **complete Linux beta package**, rather than GitHub’s source-code archive, and switch your Deck to **Desktop Mode**. Sign in to Steam at least once.
 2. For tracked XR, install **Decky Loader → XR Gaming** and confirm it recognises your glasses. **VITURE Pro 2 currently requires XR Gaming’s testing version**, rather than its stable release. CRT XR setup assumes this prerequisite; it does not install the plugin or replace your driver.
-3. Extract the package and run **`Install-CRT-XR.sh`**. Choose **Execute / Run** if prompted. Select the tested VITURE Full SBS profile, or Deck / monitor only.
+3. Extract the package and open **Install CRT XR.desktop**. Choose **Trust and Launch / Execute** if prompted. Select the tested VITURE Full SBS profile, or Deck / monitor only.
 4. Finish any running game and allow setup to close Steam. It installs CRT XR, adds or updates the shortcut, applies the selected resolution profile and installs the supplied Steam artwork. Existing settings, saves and later custom artwork are preserved.
-5. After Steam restarts, **Return to Gaming Mode → Library → Non-Steam → CRT XR**.
+5. Restart Steam yourself, then **Return to Gaming Mode → Library → Non-Steam → CRT XR**.
 
 No SSH, Steam developer interface or administrator password is needed for CRT XR's app installer. The separately installed XR Gaming prerequisite has its own setup requirements. If the script opens as text, or you have several Steam accounts, follow the [full installation guide](docs/GETTING-STARTED.md).
 
@@ -63,9 +70,16 @@ The tested VITURE profile uses an explicit **3840 × 1080** Steam game resolutio
 
 Open **Game library → Library locations** to choose your ROM folder or SD card. You can explore the built-in test signal before loading a game.
 
-### Windows preview
+## Install on Windows
 
-Extract the complete Windows package and run **`CRT-XR.exe`**. Keep its neighbouring files and folders together. This is an unsigned portable preview; the Steam Deck installer is for Linux.
+1. Extract the **complete Windows ZIP**, keeping `CRT-XR.exe`, `CRT-XR.pck` and all neighbouring folders together. The app is unsigned and portable; no installer or Steam is required.
+2. For glasses tracking, obtain the **VITURE Windows x86_64 SDK separately** and copy the contents of its `x86_64` folder into a folder named `sdk` beside the EXE. The beta does **not** include proprietary VITURE SDK DLLs; installing SpaceWalker alone does not configure this step. See [Windows setup](docs/WINDOWS-SETUP.md).
+3. Close SpaceWalker so it does not compete for tracking. **Switch the glasses to SBS first**, then launch CRT XR on your normal monitor.
+4. Choose the glasses display and select **Open glasses view**. The app moves under a black curtain and opens when the selected display is ready. For normal-monitor play, choose **Play on this screen without glasses**.
+
+Windows uses native Xbox-compatible controller support. **LB + RB + Start** opens the menu; **R3** recentres. Both platforms use the same TV-distance range; desktop and XR field-of-view calibration are stored separately. Mixed Windows display scaling is handled by the exported app's per-monitor DPI manifest.
+
+Only **VITURE Pro 2** has been tested for Windows tracking. Other brands need a tracking backend; SBS support alone is not sufficient. Public-package setup with a different Windows user and extended reconnect/suspend testing remain beta feedback areas.
 
 ## ROM folders
 
@@ -87,13 +101,15 @@ roms/
     └── Game.gg
 ```
 
+Windows users can open **Computer drives** directly in the browser, including mapped drives, or use **Open folder or network path…** with a path such as `\\server\share\roms`. Connect protected shares in Windows File Explorer first. Choose **Use this folder for my library** to save the root.
+
 CRT XR discovers supported games in subfolders and presents them by system; you do not need to move ROMs into the app folder. Common folder aliases such as `genesis`, `superfamicom`, `sms` and `gg` are recognised. Folder names help discovery, while the supported file type/content chooses the emulator core. You can also select a single supported system folder or browse to a game directly.
 
 Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Only supported, recognised cartridges appear. ROMs must be **uncompressed**; ZIP archives are not scanned as games. No ROMs are supplied.
 
 ## Controls
 
-Use Steam's **Gamepad With Joystick Trackpad** layout. You do not need to hold the three-lines button to switch Desktop/gamepad mappings.
+On Steam Deck, use Steam's **Gamepad With Joystick Trackpad** layout. On Windows, use an Xbox/XInput-compatible controller directly. You do not need to hold the three-lines button to switch Desktop/gamepad mappings.
 
 | Action | Controller | Keyboard |
 |---|---|---|
@@ -111,7 +127,7 @@ Music sits above the usual pause-menu actions without taking the default selecti
 
 ## Updates, help and feedback
 
-Run the installer from a newer complete package to update the existing Steam entry. Previous program versions are retained, and settings/saves live separately from the application. Old **RetroCRT XR** data is copied on first launch without deleting the originals.
+On Steam Deck, run the installer from a newer complete package to update the existing Steam entry. On Windows, extract a new complete folder and run it; settings and saves remain in the separate user-data folder. Previous program versions are retained, and settings/saves live separately from the application. Old **RetroCRT XR** data is copied on first launch without deleting the originals.
 
 - [Getting started and recovery](docs/GETTING-STARTED.md)
 - [Picture controls](docs/picture-controls.md) · [Room and view](docs/room-and-view.md) · [Audio](docs/audio.md)
@@ -124,4 +140,4 @@ For a bug report, use **General → Copy diagnostics** and include your device, 
 
 Built with **Godot** and **libretro**, with credited third-party models, shaders and audio components. See [THIRD_PARTY.md](THIRD_PARTY.md) for authors, licences and modifications.
 
-Original CRT XR code and documentation use the [MIT License](LICENSE). See [licensing scope and exclusions](LICENSING.md). Bundled emulator cores and assets retain their own terms; the complete package must not be described as wholly permissive. Core distribution/provenance and the remaining release checks need resolving before public downloads are published.
+Original CRT XR code and documentation use the [MIT License](LICENSE). See [licensing scope and exclusions](LICENSING.md). Bundled emulator cores and assets retain their own terms; the complete package must not be described as wholly permissive. The [core distribution review](docs/CORE-DISTRIBUTION.md) explains the in-process GPL treatment, exact source builds and corresponding-source materials; retain that source download alongside executable releases.

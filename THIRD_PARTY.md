@@ -40,16 +40,14 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   Upstream source revision:
   https://github.com/libretro/Genesis-Plus-GX/tree/393f70cd64c7334564c19a424c383f53986c13f4
 
-The new cores in this local review build are official Libretro buildbot binaries.
-`cores/core-builds.json` records download URLs, archive hashes and source revisions;
-complete upstream source snapshots are included under `cores/sources/`.
-Windows core version strings contain the recorded upstream revision prefixes.
-Compiler flags/toolchain details for the official binaries are not independently
-reproduced here. `scripts/build-cartridge-cores.sh` provides a source-build route
-for the existing compiler container, pending validation after Docker is available.
-Retain these sources and notices with the binaries. Review the combined app/core
-licensing before a public release; these core licences do not imply that every
-component of the application is permissively licensed or commercially usable.
+beta.5 uses locally compiled cores from the exact revisions above. `cores/core-builds.json`
+records the actual binary/source archive SHA-256 hashes, compiler versions and
+make arguments. Complete upstream source snapshots are under `cores/sources/`.
+The release also supplies the corresponding application/host/bindings source and
+build materials. Earlier buildbot binaries are kept only in ignored local backups.
+No bit-for-bit equivalence with Libretro's official builds is claimed. See
+`docs/CORE-DISTRIBUTION.md` for the conservative GPL treatment of the NES
+in-process combination, component separation and commercial-use restrictions.
 
 The generated diagnostic cartridges are original, asset-free test programs.
 Their source generators, `tests/make_probe_rom.py` and
@@ -71,8 +69,13 @@ Attribution 4.0 International**: https://creativecommons.org/licenses/by/4.0/ .
 The model ID and author match the listing above. Retrieval URL, date and HTML
 SHA-256 are recorded in `docs/license-evidence/crt-tv.json`. The original user
 screenshot and retrieved HTML are retained locally under `build/license-evidence/`.
-This verifies the historical licence version; it does not certify that every
-later downloadable GLB is byte-identical to that historical revision.
+The current listing was also fetched: its uploaded-version UID
+`43f147becf8c4edfada8951d27d34850` and source-file metadata match the archived
+2022 listing. The supplied GLB identifies that same model ID; its original
+Standard label is preserved unchanged. We rely on the earlier CC BY 4.0 grant
+for this unchanged uploaded model, without claiming that converted GLB bytes
+are identical across conversion dates. The provenance record includes the
+source hash and comparison details.
 
 Modifications in CRT XR: rescaling/alignment, replacement live screen/glass,
 material adjustments, new baked occlusion and grain, reduced and GPU-compressed

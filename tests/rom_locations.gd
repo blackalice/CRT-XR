@@ -14,6 +14,9 @@ func edge(code:int,down:bool):
 func press(code:int):
  edge(code,true);await settle();edge(code,false);await settle()
 func run():
+ check(Locations.normalize_windows_path("D:")=="D:/","Drive letters become explicit absolute roots")
+ var slash:=String.chr(92)
+ check(Locations.normalize_windows_path(slash+slash+"haruna"+slash+"elements"+slash+"roms")=="//haruna/elements/roms","UNC paths preserve their server and share")
  var mounts:="11 1 179:1 / /run/media/deck/My\\040SD rw - ext4 /dev/mmcblk0p1 rw\n12 1 259:1 / /home rw - ext4 /dev/nvme0n1p1 rw\n13 1 8:1 / /run/media/deck/USB rw - vfat /dev/sda1 rw\n14 1 179:1 / /run/media/deck/My\\040SD rw - ext4 /dev/mmcblk0p1 rw"
  check(Locations.parse_sd_mounts(mounts)==PackedStringArray(["/run/media/deck/My SD"]),"SD mount parser decodes spaces and filters internal/USB/duplicates")
  check(Locations.parse_sd_mounts("bad line\n").is_empty(),"Malformed mount data handled safely")
@@ -85,6 +88,18 @@ func run():
  check(menu.error_label.text.contains("Reconnect"),"Missing ROM offers reconnect recovery")
  menu.set_default("");config.load("user://recent.cfg")
  check(app.default_rom_dir.is_empty() and config.get_value("library","default_rom_dir","wrong")=="","Clearing default preserves files")
+ menu.open_folder(folder_a)
+ menu.enter_folder_path();await settle()
+ menu.rename_field.text=fixture.path_join("not-present")
+ menu.submit_folder_path()
+ check(menu.mode=="folder_path" and menu.error_label.visible,"Bad entered path remains editable with an error")
+ menu.rename_field.text=folder_b;menu.submit_folder_path();await settle()
+ check(menu.mode=="browser" and menu.library.current_dir==folder_b,"Entered local folder opens in the ROM browser")
+ if OS.get_name()=="Windows":
+  menu.open_drives();await settle()
+  check(menu.selected_row()!=null and not Locations.computer_drives().is_empty(),"Windows drive picker is reachable")
+  for drive in Locations.computer_drives(): check(drive.ends_with("/"),"Drive root is absolute: "+drive)
+ menu.open_folder(folder_a)
  menu.set_default(folder_a);menu.open_folder(folder_b)
  for code in [JOY_BUTTON_LEFT_SHOULDER,JOY_BUTTON_RIGHT_SHOULDER,JOY_BUTTON_START]:edge(code,true);await settle()
  check(app.default_rom_dir==folder_a and not menu.visible,"Menu chord closes browser without saving a different default")

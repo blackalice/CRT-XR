@@ -1,18 +1,21 @@
 """Package a reviewed build, checking payload and recording checksums/modes.
-Usage: python scripts/package-beta.py dist/CRT-XR-0.1.0-beta.4-windows windows
+Usage: python scripts/package-beta.py dist/CRT-XR-0.1.0-beta.6-windows windows
 """
 from pathlib import Path
-import hashlib,json,sys,tarfile,zipfile
+import hashlib,json,sys,tarfile,zipfile,subprocess
 folder=Path(sys.argv[1]).resolve();platform=sys.argv[2]
 assert folder.is_dir()
-required=["LICENSE","LICENSING.md","THIRD_PARTY.md","BETA-REVIEW.md","BETA-QUICKSTART.md","licenses/godot/LICENSE.txt","assets/optimised/cabinet.scn","assets/wood-table/table.scn","assets/room-bake/table_contact_albedo.res"]
-required += ["CRT-XR.exe","crt_xr_libretro.windows.x86_64.dll"] if platform=="windows" else ["crt-xr.x86_64","crt-xr-engine.x86_64","crt-xr.pck","crt-xr-tracking-bridge","crt-xr-ipc-inventory","crt_xr_libretro.linux.x86_64.so"]
-if platform=="linux":required += ["Install-CRT-XR.sh","installer/install.py","installer/steam_config.py","GETTING-STARTED.md"]
+required=["LICENSE","LICENSING.md","CORE-DISTRIBUTION.md","SOURCE-ACCESS.md","THIRD_PARTY.md","BETA-REVIEW.md","BETA-QUICKSTART.md","licenses/godot/LICENSE.txt","assets/optimised/cabinet.scn","assets/wood-table/table.scn","assets/room-bake/table_contact_albedo.res"]
+required += ["CRT-XR.exe","CRT-XR.pck","WINDOWS-SETUP.md","crt-xr-windows-tracking.exe","crt_xr_libretro.windows.x86_64.dll"] if platform=="windows" else ["crt-xr.x86_64","crt-xr-engine.x86_64","crt-xr.pck","crt-xr-tracking-bridge","crt-xr-ipc-inventory","crt_xr_libretro.linux.x86_64.so"]
+if platform=="linux":required += ["Install CRT XR.desktop","Install-CRT-XR.sh","installer/install.py","installer/steam_config.py","GETTING-STARTED.md"]
 required += ["artwork/"+name+".png" for name in ["Portrait","Landscape","Hero","Logo","Icon"]]
 for name in required:assert (folder/name).is_file(),f"Missing packaged asset: {name}"
 for core in ["snes9x","nestopia","genesis_plus_gx"]:assert (folder/"cores"/(core+"_libretro."+("dll" if platform=="windows" else "so"))).is_file()
+subprocess.run([sys.executable,str(Path(__file__).with_name('check-core-sources.py')),str(folder)],check=True)
 files=[p for p in folder.rglob("*") if p.is_file() and p.name not in ["SHA256SUMS.txt","package-manifest.json"]]
 for p in files:
+ assert p.relative_to(folder).parts[0].lower()!="sdk",f"Vendor SDK must not be bundled: {p}"
+ assert p.name.lower() not in ["glasses.dll","libglasses.dll","carina_vio.dll","libusb-1.0.dll","opencv_world4100.dll"],f"Vendor runtime must not be bundled: {p}"
  assert p.suffix.lower() not in [".sfc",".smc",".nes",".gen",".smd",".sms",".gg",".mp3",".srm",".rst",".blend"],f"Private/source-only file in package: {p}"
  assert not p.name.lower().startswith("retrocrt"),f"Stale product binary: {p}"
 if platform=="linux":
@@ -30,7 +33,7 @@ if platform=="windows":
 else:
  def permissions(info):
   name=Path(info.name).name
-  info.mode=0o755 if info.isdir() or name.endswith(".x86_64") or name.startswith("launch-") or name=="Install-CRT-XR.sh" or name in ["crt-xr-tracking-bridge","crt-xr-ipc-inventory"] else 0o644
+  info.mode=0o755 if info.isdir() or name.endswith(".x86_64") or name.startswith("launch-") or name in ["Install-CRT-XR.sh","Install CRT XR.desktop"] or name in ["crt-xr-tracking-bridge","crt-xr-ipc-inventory"] else 0o644
   return info
  with tarfile.open(archive,"w:gz") as output:output.add(folder,arcname=folder.name,filter=permissions)
 print("Checked beta candidate archive:",archive)

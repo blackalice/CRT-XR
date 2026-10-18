@@ -1,0 +1,40 @@
+# Emulator distribution review - beta.5
+
+Reviewed 17 October 2026 against the pinned sources in scripts/build-release-cores.py.
+
+## In-process Nestopia integration
+
+CRT XR loads Libretro cores with dlopen/LoadLibrary, resolves retro_* function pointers, and shares video/audio/input callbacks and Libretro structures. This is close in-process integration, not a command-line subprocess boundary. The release therefore follows the conservative GPL combined-program interpretation for the host when distributed for use with Nestopia. Original CRT XR contributions remain available under MIT, which permits GPL-compatible redistribution; the GPL obligations of the NES host/core combination are not removed by that MIT grant.
+
+Release requirements implemented:
+
+- Retain Nestopia's full COPYING and per-file notices. Original Nestopia headers permit GPL version 2 or later; retain those exact notices rather than asserting a different blanket version for every imported file.
+- Supply complete corresponding application/host source, native bindings source, exact core source archives, the scripts used to build/install, compiler versions, make arguments and binary/source hashes. Provide the corresponding-source download alongside both executable packages; do not rely solely on a mutable upstream link or a source revision prefix in a binary.
+- Retain the MIT permission notices on original code. Do not add a non-commercial restriction to the Nestopia/GPL-covered source or its permitted redistribution. No warranty is offered.
+- Do not distribute a proprietary host-only replacement without assessing these obligations.
+
+Primary interpretation: https://www.gnu.org/licenses/gpl-faq.en.html#GPLPlugins and https://www.gnu.org/licenses/gpl-faq.en.html#GPLAndPlugins . GPL v2 source distribution: https://www.gnu.org/licenses/old-licenses/gpl-2.0.html#section3 . This document records a conservative engineering compliance approach, not a court determination.
+
+## Other cores are separately licensed modules
+
+Only one Libretro core is loaded at a time. emulation_session.gd closes/deinitialises the old core before loading another. Cores do not link to or call each other. The release is a collection of separately built core libraries, not a single binary linking Nestopia to Genesis Plus GX or Snes9x. The distribution treatment relies on that separation; it must be reassessed if core code is merged or libraries are linked together. Providing all source does not make GPL-incompatible code compatible.
+
+- Snes9x at 1bcc369e89f08243e0a462882fb1f3e42e51de3a permits non-commercial use/copy/modification/distribution with its notices. Do not sell it, include it in a commercial product/promotion, or describe the complete collection as commercially unrestricted. The libretro build uses snes_ntsc; its licence and the other retained upstream notices are packaged. JMA/xBRZ notices are retained conservatively even though the libretro source list does not compile those desktop filter/decompression modules.
+- Genesis Plus GX at 393f70cd64c7334564c19a424c383f53986c13f4 prohibits sale/commercial use and requires complete source for modified redistributions. The exact complete tree is supplied. Its embedded Nuked OPN2 component has LGPL-2.1-or-later terms; its source and build scripts are provided for rebuilding/relinking, and no restriction on debugging modifications to that component is imposed by CRT XR. Full upstream component notices are retained. CD/CHD support is disabled in this cartridge-only build.
+- libretro.h keeps its MIT notice. Godot/godot-cpp keep their MIT and bundled component notices. The release makes no claim to relicense any core, asset, engine dependency or imported shader.
+
+This collection is offered free of charge. MIT permission for original code is not a promise that the downloaded multi-core package can be sold. If commercial distribution or a monolithic combined-core build is desired, obtain compatible replacements/permissions first.
+
+## Exact source versus official binaries
+
+beta.4's downloaded official core archives are retained only as local backups. beta.5 uses new local builds from pinned git objects. Source archives are created directly with git archive, so working-tree CRLF conversion and local edits cannot silently affect core input. core-builds.json records every actual .dll/.so hash, archive hash, compiler and make arguments. This establishes which sources produced these binaries; it does not claim bit-for-bit reproduction of Libretro's official builds or all future compilers.
+
+Follow docs/DEVELOPMENT.md to build, or run python3 scripts/build-release-cores.py all in the compiler environment. Do not replace a core binary without regenerating its provenance. Source snapshots include the upstream licence texts and dependencies included in the respective git trees. The corresponding-source bundle also includes the host and binding build inputs. Release validation checks source and binary hashes before packaging.
+
+## TV and other assets
+
+The TV source is kept byte-for-byte, SHA-256 6342fcebb5faae40854d3639f97b386b302b11f99a0f2bb6857601b877b9dff5. Its GLB metadata points to the same creator/model ID. The 2022 creator listing explicitly links CC BY 4.0; the current listing exposes the same 2021 upload UID and identical source-file metadata. docs/license-evidence/crt-tv.json records the comparison, retrieval hashes and later Standard label without altering the original GLB. We rely on the historical grant for this unchanged uploaded version. The converted GLB is not represented as byte-identical to a 2022 conversion.
+
+Retain Timothy Ahene's credit, source and CC BY 4.0 link, and the modification notice in THIRD_PARTY.md. The table's CC BY 4.0 attribution and carpet/sound CC0 provenance are retained separately. These artistic assets are not blanket-relicensed under the application's MIT or the NES combination's GPL terms.
+
+The source package additionally contains the pinned godot-cpp tree and Godot 4.5.1 engine source, with the upstream engine/component notices retained. SOURCE-ACCESS.md in each executable package names and hashes the companion source archive. Keep that archive on the same GitHub release/download page.

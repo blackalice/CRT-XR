@@ -23,7 +23,7 @@ docker run --rm --mount "type=bind,source=$($PWD.Path),target=/work" crt-xr-buil
 docker run --rm --mount "type=bind,source=$($PWD.Path),target=/work" crt-xr-build bash scripts/build-linux.sh
 ```
 
-This builds both native extension platforms, Snes9x and the additional cartridge cores, then Linux tracking helpers. Use `linux` or `windows` instead of `all` for one platform. If Docker is unavailable, run the same shell scripts in a Linux environment with the packages listed in `Dockerfile.emulation`. Source-build commands are provided, but a fresh-environment rebuild and independent binary provenance acceptance are still outstanding; do not treat them as a certification of existing downloaded binaries. The hash-pinned `scripts/fetch-cartridge-cores.ps1` is an alternative for local development; nightly URLs may change, in which case its hash check deliberately refuses the download.
+This builds both native extension platforms, Snes9x and the additional cartridge cores, then Linux tracking helpers. Use `linux` or `windows` instead of `all` for one platform. If Docker is unavailable, run the same shell scripts in a Linux environment with the packages listed in `Dockerfile.emulation`. beta.5 cores were built locally under Ubuntu 24.04/GCC 13 and MinGW GCC 13, with hashes, compiler versions and make arguments recorded in third_party/cores/release-builds.json. Rebuild with `python3 scripts/build-release-cores.py all`; this also works from the corresponding-source bundle using its verified input archives, without Git metadata. This does not claim bit-for-bit equality with the earlier buildbot binaries. The hash-pinned `scripts/fetch-cartridge-cores.ps1` is an alternative for local development; nightly URLs may change, in which case its hash check deliberately refuses the download.
 
 ```powershell
 ./scripts/dev.ps1 -Editor
@@ -48,6 +48,7 @@ $godot = './tools/godot/Godot_v4.5.1-stable_win64_console.exe'
 & 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe' --background --factory-startup --python scripts/bake-cabinet-ao.py
 ./scripts/rebake-room.ps1
 python scripts/check-release-assets.py
+python scripts/check-core-sources.py
 ```
 
 The console is excluded from launch and does not need preparing. See [TV preparation](crt-model-local.md), [table preparation](wood-table.md) and [contact rebaking](room-contact-bake.md). Bakes must be rerun when static geometry changes. Prepared Godot resources may depend on texture files beside them; retain complete output folders.
@@ -61,6 +62,7 @@ python scripts/check-repository.py
 python scripts/test-beta.py
 python -m unittest discover -s tests -p '*_test.py'
 python scripts/check-release-assets.py
+python scripts/check-core-sources.py
 ./scripts/export-windows.ps1 -OutputDirectory dist/windows-review
 ./scripts/export-linux.ps1 -OutputDirectory dist/linux-review
 ```
@@ -77,3 +79,7 @@ CRT XR uses its own Godot user-data directory. On first launch it copies prefere
 
 On Linux, preferences are normally in `~/.local/share/godot/app_userdata/CRT XR/`; logs launched through Steam are under `${XDG_STATE_HOME:-$HOME/.local/state}/crt_xr/`. On Windows they are normally under `%APPDATA%/Godot/app_userdata/CRT XR/`. Development scripts intentionally use isolated `tools/userdata/`.
 
+
+## Windows XR release builds
+
+Run `scripts/build-windows-tracking.ps1` (WSL Ubuntu with the MinGW POSIX compiler), then `scripts/export-windows.ps1`. Windows export requires Python and applies the per-monitor DPI manifest after export with a separate PCK. Keep that PCK with the EXE. The VITURE SDK under ignored `sdk/` is for local testing only; public packages exclude proprietary SDK files. End users follow [Windows setup](WINDOWS-SETUP.md). Use the exported EXE for mixed-DPI hardware checks; the unmodified editor executable retains system DPI awareness.

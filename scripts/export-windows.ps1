@@ -9,6 +9,9 @@ $env:APPDATA = Join-Path $root 'tools/userdata'
 if ($LASTEXITCODE -ne 0) { throw 'Project import failed.' }
 & $godot --headless --path $root --export-release 'Windows Desktop' (Join-Path $out 'CRT-XR.exe')
 if ($LASTEXITCODE -ne 0) { throw 'Windows export failed.' }
+# Keep the PCK separate so manifest edits cannot relocate embedded game data.
+& python (Join-Path $root 'scripts/set-windows-dpi.py') (Join-Path $out 'CRT-XR.exe')
+if ($LASTEXITCODE -ne 0) { throw 'Windows DPI manifest update failed.' }
 New-Item -ItemType Directory -Force (Join-Path $out 'cores'), (Join-Path $out 'assets'), (Join-Path $out 'licenses/shaders') | Out-Null
 foreach ($core in @('snes9x','nestopia','genesis_plus_gx')) {
     Copy-Item -LiteralPath (Join-Path $root "cores/${core}_libretro.dll") -Destination (Join-Path $out 'cores')
@@ -19,6 +22,9 @@ Copy-Item -LiteralPath (Join-Path $root 'cores/core-builds.json') -Destination (
 Copy-Item -LiteralPath (Join-Path $root 'docs/emulation.md') -Destination (Join-Path $out 'PLAYING.md')
 Copy-Item -LiteralPath (Join-Path $root 'THIRD_PARTY.md') -Destination $out
 foreach ($notice in @('LICENSE','LICENSING.md')) { Copy-Item -LiteralPath (Join-Path $root $notice) -Destination $out }
+Copy-Item -LiteralPath (Join-Path $root 'docs/CORE-DISTRIBUTION.md') -Destination (Join-Path $out 'CORE-DISTRIBUTION.md')
+New-Item -ItemType Directory -Force (Join-Path $out 'licenses/model-evidence') | Out-Null
+Copy-Item -LiteralPath (Join-Path $root 'docs/license-evidence/crt-tv.json') -Destination (Join-Path $out 'licenses/model-evidence/crt-tv.json')
 Copy-Item -LiteralPath (Join-Path $root 'extensions/bin/godot-cpp-LICENSE.md') -Destination $out
 Copy-Item -Path (Join-Path $root 'third_party/shaders/*') -Destination (Join-Path $out 'licenses/shaders')
 $model = Join-Path $root 'build/crt-model/crt_tv.glb'
@@ -83,4 +89,11 @@ New-Item -ItemType Directory -Force $artworkOut | Out-Null
 foreach ($name in @('Portrait.png','Landscape.png','Hero.png','Logo.png','Icon.png')) {
     Copy-Item -LiteralPath (Join-Path $root "artwork/$name") -Destination $artworkOut
 }
+# Vendor SDK is deliberately external until its redistribution terms are verified.
+$trackingHelper = Join-Path $root 'build/windows-tracking/crt-xr-windows-tracking.exe'
+if (Test-Path -LiteralPath $trackingHelper) {
+    Copy-Item -LiteralPath $trackingHelper -Destination $out
+}
 Write-Host "Windows build: $out/CRT-XR.exe"
+
+Copy-Item -LiteralPath (Join-Path $root "docs/WINDOWS-SETUP.md") -Destination $out

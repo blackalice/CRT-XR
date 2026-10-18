@@ -11,9 +11,10 @@ func home_folder() -> String:
 	return home if not home.is_empty() else ProjectSettings.globalize_path("res://")
 
 func show_folder(path: String) -> bool:
+	if OS.get_name()=="Windows": path=Locations.normalize_windows_path(path)
 	var directory := DirAccess.open(path)
 	if directory == null:
-		message = "Folder unavailable. Reconnect its SD card or choose another folder."
+		message = "Folder unavailable. Check its drive or network connection, or choose another folder."
 		return false
 	current_dir = directory.get_current_dir()
 	entries.clear()

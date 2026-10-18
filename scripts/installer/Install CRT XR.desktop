@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Install CRT XR
+Comment=Install or update CRT XR for Steam Deck
+Icon=system-software-install
+TryExec=python3
+Exec=python3 -c "from pathlib import Path;from urllib.parse import urlparse,unquote;import subprocess,sys;p=Path(unquote(urlparse(sys.argv[1]).path)) if sys.argv[1].startswith('file:') else Path(sys.argv[1]);sys.exit(subprocess.call(['bash',str(p.resolve().parent/'Install-CRT-XR.sh')],cwd=p.resolve().parent))" %k
+Terminal=false
+StartupNotify=false
+Categories=Game;System;

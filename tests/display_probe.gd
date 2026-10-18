@@ -23,7 +23,13 @@ func run():
  root.add_child(prompt)
  assert(prompt.probe_expected==size)
  assert(prompt.prompt_canvas.size==Vector2(1280,720))
- assert(prompt.prompt_canvas.scale==prompt.get_viewport_rect().size/Vector2(1280,720))
+ for window in [Vector2(1280,720),Vector2(1920,1080),Vector2(3840,1080),Vector2(5120,1440),Vector2(1280,800)]:
+  var layout=Prompt.prompt_layout(window)
+  var content_size=Vector2(1280,720)*layout.scale
+  assert(layout.position.x>=0 and layout.position.y>=0)
+  assert((content_size+layout.position).x<=window.x and (content_size+layout.position).y<=window.y)
+  assert(is_equal_approx(content_size.x/content_size.y,1280.0/720.0))
+ assert(is_equal_approx(prompt.prompt_canvas.scale.x,prompt.prompt_canvas.scale.y))
  var event=InputEventJoypadButton.new();event.button_index=JOY_BUTTON_A;event.pressed=true
  prompt._input(event)
  assert(not prompt.probe_armed and not prompt.darkened)

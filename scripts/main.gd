@@ -1,6 +1,7 @@
 extends Control
 
 const Simulated = preload("res://scripts/tracking/simulated_tracking.gd")
+const WindowsTracking = preload("res://scripts/tracking/xr_windows_tracking.gd")
 const LinuxTracking = preload("res://scripts/tracking/xr_linux_tracking.gd")
 const PosePrediction = preload("res://scripts/tracking/pose_prediction.gd")
 const CRTWorld = preload("res://scripts/rendering/crt_world.gd")
@@ -66,6 +67,8 @@ var convergence: float = Showcase.VIEW.convergence
 var smoothing: float = Showcase.VIEW.smoothing
 var motion_predict: float = Showcase.VIEW.motion_predict
 var vertical_fov := 50.0
+var desktop_fov := 50.0
+var xr_fov := 24.0
 var edge_fade: float = Showcase.VIEW.edge_fade
 var scanlines: float = Showcase.CRT.scanlines
 var phosphor_mask: float = Showcase.CRT.phosphor_mask
@@ -97,6 +100,8 @@ var sbs_prompt: Control
 var sbs_startup := false
 var sbs_starting := false
 var startup_loading := false
+var windows_sbs_size := Vector2i.ZERO
+var windows_fixed_start := false
 
 func _ready() -> void:
 	var migration := preload("res://scripts/content/user_data_migration.gd").migrate()
@@ -106,6 +111,22 @@ func _ready() -> void:
 	for arg in startup_args:
 		if arg in ["--sbs","--full-sbs","--sbs-session","--sbs-session-manual","--sbs-prompt"]:
 			Input.mouse_mode=Input.MOUSE_MODE_HIDDEN
+	if OS.get_name()=="Windows" and ("--windows-xr" in startup_args or (not OS.has_feature("editor") and not "--script" in OS.get_cmdline_args())):
+		sbs_prompt=preload("res://scripts/ui/windows_setup.gd").new()
+		sbs_prompt.z_index=4096
+		sbs_prompt.xr_ready.connect(func(size: Vector2i):
+			windows_sbs_size=size
+			sbs_startup=true
+			start_sbs_session())
+		sbs_prompt.desktop_ready.connect(func():
+			windows_fixed_start=true
+			start_application()
+			sbs_prompt.queue_free()
+			sbs_prompt=null
+			set_process(true))
+		add_child(sbs_prompt)
+		set_process(false)
+		return
 	sbs_startup = "--sbs-session" in startup_args or "--sbs-session-manual" in startup_args
 	if "--sbs-prompt" in startup_args or sbs_startup:
 		sbs_prompt = load("res://scripts/ui/sbs_prompt.gd").new()
@@ -130,6 +151,7 @@ func _ready() -> void:
 	else: start_application()
 
 func sbs_target_size() -> Vector2i:
+	if windows_sbs_size!=Vector2i.ZERO: return windows_sbs_size
 	# The probe profile is explicit; never infer optical SBS from aspect ratio alone.
 	if not OS.get_environment("CRT_XR_DISPLAY_PROBE").is_empty():
 		var parts := OS.get_environment("CRT_XR_SBS_SIZE").split("x")
@@ -163,7 +185,7 @@ func start_sbs_session() -> void:
 
 func start_application() -> void:
 	fade_material.shader = load("res://shaders/eye_fade.gdshader")
-	if OS.get_name() == "Linux" and not "--simulate" in OS.get_cmdline_user_args():
+	if not windows_fixed_start and OS.get_name() in ["Linux", "Windows"] and not "--simulate" in OS.get_cmdline_user_args():
 		use_tracking(true)
 	signal_view = SubViewport.new()
 	signal_view.size = Vector2i(256, 240)
@@ -321,6 +343,7 @@ func start_application() -> void:
 	elif not settings_panel.visible and not is_instance_valid(sbs_prompt): power_on.begin()
 
 func apply_settings(config: ConfigFile) -> void:
+	SettingsStore.migrate_view_fov(config)
 	for key in music.DEFAULTS: music.set(key,config.get_value("music",key,music.DEFAULTS[key]))
 	music.apply()
 	metrics_visible=bool(config.get_value("preferences","metrics_visible",false))
@@ -344,7 +367,9 @@ func apply_settings(config: ConfigFile) -> void:
 	ipd = clampf(config.get_value("view", "ipd", Showcase.VIEW.ipd), 0.0, 0.080)
 	convergence = clampf(config.get_value("view", "convergence", Showcase.VIEW.convergence), 1.0, 10.0)
 	edge_fade = clampf(config.get_value("view", "edge_fade", Showcase.VIEW.edge_fade), 0.0, 0.2)
-	vertical_fov = clampf(config.get_value("view", "vertical_fov", vertical_fov), 18.0, 70.0)
+	desktop_fov = clampf(config.get_value("view", "desktop_fov", desktop_fov),18.0,70.0)
+	xr_fov = clampf(config.get_value("view", "xr_fov", xr_fov),18.0,70.0)
+	vertical_fov = xr_fov if provider is LinuxTracking else desktop_fov
 	smoothing = clampf(config.get_value("view", "smoothing", Showcase.VIEW.smoothing), 0.0, 0.15)
 	motion_predict = clampf(config.get_value("view", "motion_predict", Showcase.VIEW.motion_predict), 0.0, 0.08)
 	for axis in ["yaw", "pitch", "roll"]:
@@ -535,8 +560,11 @@ func recenter() -> void:
 func use_tracking(real_tracking: bool) -> void:
 	var inversion := Vector3(float(provider.invert_pitch), float(provider.invert_yaw), float(provider.invert_roll))
 	var changed := real_tracking != (provider is LinuxTracking)
+	if changed:
+		if provider is LinuxTracking: xr_fov=vertical_fov
+		else: desktop_fov=vertical_fov
 	provider.close()
-	provider = LinuxTracking.new() if real_tracking else Simulated.new()
+	provider = (WindowsTracking.new() if OS.get_name() == "Windows" else LinuxTracking.new()) if real_tracking else Simulated.new()
 	provider.invert_pitch = bool(inversion.x)
 	provider.invert_yaw = bool(inversion.y)
 	provider.invert_roll = bool(inversion.z)
@@ -544,7 +572,7 @@ func use_tracking(real_tracking: bool) -> void:
 	displayed = Quaternion.IDENTITY
 	needs_center = real_tracking
 	tracking_was_valid = false
-	if changed: vertical_fov = 24.0 if real_tracking else 50.0
+	if changed: vertical_fov = xr_fov if real_tracking else desktop_fov
 
 func request_exit() -> void:
 	if not emulator.save_auto() or not save_settings():
@@ -760,7 +788,7 @@ func refresh_startup_status() -> void:
 	for key in ["XDG_CURRENT_DESKTOP","XDG_SESSION_DESKTOP","DESKTOP_SESSION"]:
 		gaming_mode = gaming_mode or OS.get_environment(key).to_lower().contains("gamescope")
 	var state := StartupStatus.describe(emulator.loaded,default_rom_dir,last_game_path,
-		provider is LinuxTracking,provider.valid,provider.status,stereo,get_window().size,gaming_mode)
+		provider is LinuxTracking,provider.valid,provider.status,stereo,get_window().size,gaming_mode,sbs_target_size())
 	menu.status_title = state.title
 	menu.status_detail = state.detail + (" " + startup_message if not startup_message.is_empty() else "")
 	if menu.visible: menu.refresh_labels()
@@ -886,7 +914,11 @@ func room_preset(preset: String) -> void:
 	world.apply_room_settings()
 
 func capture_settings() -> ConfigFile:
+	if provider is LinuxTracking: xr_fov=vertical_fov
+	else: desktop_fov=vertical_fov
 	var config := ConfigFile.new()
+	config.set_value("view","desktop_fov",desktop_fov)
+	config.set_value("view","xr_fov",xr_fov)
 	for key in music.DEFAULTS: config.set_value("music",key,music.get(key))
 	config.set_value("atmosphere","power_on",power_on.enabled)
 	config.set_value("atmosphere","power_sound",power_on.sound_level)

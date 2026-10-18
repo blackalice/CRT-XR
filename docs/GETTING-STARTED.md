@@ -1,21 +1,23 @@
 # Getting started with CRT XR
 
-Public beta candidate: 0.1.0-beta.4. This is an early beta; testing so far has been on Steam Deck with VITURE Pro 2. No games or music are included.
+Public beta candidate: 0.1.0-beta.6. VITURE Pro 2 has been tested on Steam Deck and Windows; other hardware remains unverified. No games or music are included.
 
 ## Before you start
 
 **Install Decky Loader and its XR Gaming plugin before using CRT XR with head tracking.** **VITURE Pro 2 currently requires the testing version of XR Gaming, rather than the stable release.** Most XR users will already have Decky and XR Gaming, but Pro 2 users should check which version they have. Confirm XR Gaming recognises your glasses and its driver is enabled. CRT XR setup assumes the plugin is installed; it does not install Decky Loader or XR Gaming for you. Keep XR Gaming's display effects disabled when CRT XR is managing the stereo view.
 
+The `.desktop` installer must stay beside the extracted package files; do not move it onto the desktop by itself. KDE may ask you to **Trust and Launch** or allow execution. `Install-CRT-XR.sh` remains available as a fallback. The launcher installs the local package; it does not download or execute a remote installer.
+
 ## Install on Steam Deck
 
 1. Switch to **Desktop Mode** from the Deck's Power menu. Sign in to Steam at least once before setup.
 2. Download the complete Linux package and extract it with the Deck's archive manager. Keep the extracted files together until installation finishes.
-3. Open **Install-CRT-XR.sh** in the extracted folder and choose **Execute / Run**. If the file manager opens it as text, right-click → Properties → Permissions → enable executable, then run it. Alternatively, open a terminal in the extracted folder and run `bash ./Install-CRT-XR.sh`.
+3. Open **Install CRT XR.desktop** in the extracted folder. Choose **Trust and Launch / Execute** if prompted; if needed, right-click -> Properties -> Permissions -> allow execution. Keep the launcher beside the package files. `Install-CRT-XR.sh` remains a fallback.
 4. Choose **VITURE Full SBS** for our tested glasses setup, or **Deck / monitor only**. The VITURE profile supports playing without glasses as well. Other glasses need manual display/profile setup during this beta.
 5. Finish any running game, then allow setup to close Steam. If there are several Steam accounts, choose the account you use. Setup verifies the files, installs CRT XR in your home folder, backs up configuration and adds or updates its Steam shortcut. It needs no administrator password and does not enable SSH or Steam debugging.
-6. Steam restarts after setup. Choose **Return to Gaming Mode**, then open **Library → Non-Steam → CRT XR**. Keep compatibility/Proton disabled: this is a native Linux application.
+6. Restart Steam yourself, or choose **Return to Gaming Mode**, then open **Library -> Non-Steam -> CRT XR**. Setup does not start a detached Steam process. Keep compatibility/Proton disabled: this is a native Linux application.
 
-Fresh-device installer and controller-layout acceptance are still pending. If Steam's controller layout is not a gamepad, select the **Gamepad With Joystick Trackpad** template for CRT XR. The installer preserves an existing CRT XR shortcut's app ID and controller settings.
+The real-account upgrade was tested on 17 October 2026: the original shortcut ID, controller values, artwork and preferences were preserved. Fresh-device controller-layout acceptance remains pending. If Steam's controller layout is not a gamepad, select the **Gamepad With Joystick Trackpad** template for CRT XR. The installer preserves an existing CRT XR shortcut's app ID and controller settings.
 
 ## First play
 
@@ -73,7 +75,7 @@ If setup reports an unsupported Steam configuration, it stops rather than guessi
 
 ## Windows preview
 
-Extract the complete Windows package and run **CRT-XR.exe**. Keep its neighbouring folders/files together. This is an unsigned portable preview; the Steam Deck setup script is for Linux only. Windows offers mono/SBS simulation, not the Linux tracking driver.
+Extract the complete Windows package and run **CRT-XR.exe**. Keep its neighbouring folders/files together. This is an unsigned portable preview; the Steam Deck setup script is for Linux only. Native Windows VITURE tracking is being validated with Pro 2 and a separately supplied SDK. See [Windows setup](WINDOWS-SETUP.md). Use Play without glasses for a fixed mono view.
 
 ## Report a problem
 

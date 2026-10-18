@@ -9,5 +9,24 @@
   "license_label": "CC Attribution",
   "license_url_in_archived_html": "http://creativecommons.org/licenses/by/4.0/",
   "license": "CC-BY-4.0",
-  "scope": "Documents the archived listing grant. The archive does not identify the SHA-256 of the current downloaded GLB; this is not a byte-for-byte revision certificate."
+  "scope": "Archived CC BY 4.0 listing and current listing expose the same 2021 uploaded-version UID and identical source-file manifest. The supplied GLB identifies the same model ID. We rely on the earlier grant for this unchanged uploaded model, retaining later download metadata unchanged. Converted GLB bytes are not claimed identical to a historical GLB.",
+  "current_listing_verified_date": "2026-10-17",
+  "current_listing_html_sha256": "f258a6508b26548a8a03b247ac5c92c4763e0c9c9880227b1cbc4293cfae7091",
+  "archived_and_current_version": {
+    "uid": "43f147becf8c4edfada8951d27d34850",
+    "status": {
+      "warning": {},
+      "processing": "SUCCEEDED"
+    },
+    "isCurrentVersion": true,
+    "isCandidateVersion": false,
+    "createdAt": "2021-07-28T02:29:19.915000",
+    "processedAt": "2021-07-28T02:31:02.834100",
+    "reason": "upload"
+  },
+  "source_file_manifest_sha256": "507aabb41080c75857a3d3863ffd8f5425be0db5790029eb39902e10bc5463ed",
+  "source_file_manifest_matches": true,
+  "local_glb_sha256": "6342fcebb5faae40854d3639f97b386b302b11f99a0f2bb6857601b877b9dff5",
+  "local_glb_embedded_source_model_id": "9ba4baa106e64319a0b540cf0af5aa9e",
+  "local_glb_embedded_license_label": "SKETCHFAB Standard"
 }

@@ -45,3 +45,15 @@ static func library_candidates(home: String, mounts: PackedStringArray) -> Packe
 			if DirAccess.open(path)!=null and not seen.has(key):
 				seen[key]=true; result.append(path)
 	return result
+
+static func normalize_windows_path(path: String) -> String:
+	var result := path.strip_edges().replace("\\", "/")
+	if result.length()==2 and result[1]==":": result+="/"
+	return result
+
+static func computer_drives() -> PackedStringArray:
+	var result := PackedStringArray()
+	for index in range(DirAccess.get_drive_count()):
+		var path := normalize_windows_path(DirAccess.get_drive_name(index))
+		if not path in result: result.append(path)
+	return result

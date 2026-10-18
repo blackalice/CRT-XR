@@ -1,39 +1,28 @@
-# Pre-launch checklist
+# Public beta release checklist
 
-Updated 17 October 2026. Candidate 0.1.0-beta.4 targets an early public beta, rather than a private tester programme. The installer and guide are prepared; publication has not been performed, and the open checks/decisions below remain.
+Updated 18 October 2026 for **0.1.0-beta.6**. These are observed checks and remaining beta limitations; they are not a claim of universal compatibility. Release files are prepared locally; publication is a separate action.
 
-| Area | State | Next acceptance step |
+| Area | Verified | Remaining beta coverage |
 |---|---|---|
-| App naming and existing-data migration | Implemented and automated | Verify a real upgrade and save restore |
-| Gaming Mode SBS handoff | User confirmed mono → black → SBS works | Repeat after installer on a fresh Steam account/device |
-| Prompt readability | Scaled logical canvas implemented | Confirm larger instructions through glasses |
-| No-glasses launch | Forced test flags removed; Deck mono sizing added | Human test with glasses unplugged |
-| Deck installer | Offline per-user installer and Linux transaction tests prepared | Run GUI against a real Steam account with Steam closed; verify correct settings branch, shortcut and controller layout |
-| Updates/recovery | Existing app ID retained, prior builds and configuration backups retained; disk-failure rollback tested | Real upgrade followed by reinstall of prior package |
-| Tracking prerequisite | Installer detects verified driver binary | Documented prerequisite: Decky Loader + XR Gaming installed/enabled; Pro 2 needs the testing version. Validate supported plugin/driver versions and clean-device calibration; CRT XR installer does not install the plugin |
-| Getting-started guide | Written, included in Linux package | Have a tester follow it without developer assistance |
-| Original source licence | MIT approved; LICENSE and scope notices added | Preserve third-party notices in every distribution |
-| Bundled core distribution | Actual notices/source snapshots available | Resolve host/core licence obligations and provenance before public release |
-| Reproducible emulator binaries | Pinned revisions and build script exist | Validate local builds for both platforms and record actual source/toolchain hashes |
-| Model/source backup | Local verified model archive exists | Owner supplies off-machine destination; verify restore from clean checkout + asset bundle |
-| Device reliability | Previous gameplay/audio/controller checks exist | Suspend/resume, glasses unplug/replug, missing SD, longer gameplay/music session |
-| Steam artwork | Original five assets packaged; per-shortcut installation/update/custom-preservation and rollback tested | Verify portrait/recent/hero/logo/icon in real Gaming Mode after setup |
-| Package privacy/integrity | Payload hashes, no private media/save formats in package; installer installs listed payload only | Verify final archive hashes; checksums detect corruption, not publisher authenticity |
-| Windows preview | Portable build route exists | Export current candidate and smoke-test the delivered folder |
+| Steam Deck / VITURE Pro 2 | User confirmed tracking, SBS, controller operation, corrected prompt proportions and A → SBS handoff | Fresh Steam account/device, other plugin versions and glasses |
+| Real Deck installer upgrade | GUI and .desktop launcher succeeded; original shortcut ID, controller settings and 42 user-data files preserved; payload/artwork hashes checked | Clean-account first install and broader Steam versions |
+| Windows / VITURE Pro 2 | User confirmed SBS, head tracking after axis correction and Xbox navigation; per-monitor DPI fix matched all four Windows display modes | Updated FOV migration and browser changes need user acceptance; clean-user SDK setup, longer play, unplug/replug, suspend |
+| Windows startup | User found SBS-before-launch more reliable; docs now recommend choosing the already-SBS glasses display | Wider display arrangements; desktop fallback has automated coverage |
+| Windows SDK | Vendor files excluded from Git, exports and public archives; explicit user-supplied SDK setup documented | No claim of vendor redistribution permission; do not bundle proprietary DLLs |
+| App regression checks | Automated suites, isolated preferences, five-system synthetic cartridge checks and exact core provenance | See release BUILD-RECORD.json for the candidate's actual executed results |
+| Source and licences | MIT original code; conservative GPL host/Nestopia treatment; exact core sources/build records; asset attributions and TV historical CC BY evidence retained | Keep corresponding-source archive and notices alongside binaries; no claim that the whole collection is MIT or commercially unrestricted |
+| Local artistic assets | Prepared models, source hashes and contact bakes validated | Off-machine recovery backup remains the owner's responsibility |
+| Privacy and integrity | Packages exclude ROMs, music, saves, credentials and local SDK; manifests/checksums generated | Checksums are integrity checks, not code signing; Windows binaries remain unsigned |
 
-## Installer scope
+## Known limits to disclose
 
-Setup runs in Desktop Mode, under the current user. It verifies the local package, asks before closing Steam, chooses the Steam account, installs immutable versioned payloads and updates a stable link. It writes Steam shortcuts plus the observed per-game ResolutionOverride2 setting only while Steam is closed; no live VDF edits, SSH, developer console, root or network downloads. Other configuration values are retained, although text formatting/comments are normalised by the strict parser. Unknown syntax stops installation before configuration changes.
+Only VITURE Pro 2 has been tested. Steam Deck tracking needs Decky Loader and the testing version of XR Gaming with the supported driver. Windows tracking needs a separately supplied VITURE SDK; other brands require a different backend. No automatic updater or crash uploader is present.
 
-The installer supports the tested VITURE 3840×1080 profile and a mono/monitor Native profile. This is not universal XR support or universal Steam-version compatibility. Other displays can use the lower-level explicit profile options documented in SBS-HANDOFF-TEST.md; a friendly persistent cross-device profile selector is a follow-up.
+Only uncompressed cartridges for SNES, NES, Mega Drive/Genesis, Master System and Game Gear are included in scope. MP3 files up to 256 MiB and direct MP3 radio are supported. Large/slow album loads are synchronous and can briefly stall the menu. AAC/HLS/DRM/station webpages and radio time-shifting are unsupported. Long sessions, suspend/reconnect, missing network storage and broader hardware remain beta test requests.
 
-## Local validation records
+## Publish the prepared candidate
 
-Python tests cover shortcut binary round-trip, unrelated entries, app-ID/tag/launch-option preservation, resolution insertion, escaped text values, malformed formats, package corruption/traversal, Steam-running refusal, dry-run, multiple accounts, fresh install/update/save preservation, and rollback on a simulated configuration write failure. Linux transaction tests use temporary fixture homes, not the real Steam account. The Deck went offline during preparation, so actual installer acceptance remains outstanding.
-
-## Release sequence
-
-1. Sanity-check installation on the available Deck. Track clean-account, no-glasses, readability and wider-device results openly as public-beta feedback; do not wait for a separate private tester group.
-2. Resolve tracking setup and bundled-core distribution/provenance; the original-source MIT decision is complete.
-3. Verify external backup/rebuild and complete hardware soak checks.
-4. Produce the reviewed package/source/checksum set, then explicitly approve publication. No public upload or repository publication is performed by this work.
+1. Read the release folder's START-HERE.md and BUILD-RECORD.json, including any failed or skipped checks.
+2. Commit the reviewed source and tag the matching snapshot as v0.1.0-beta.6. The corresponding-source archive identifies the exact supplied files even while this checkout is uncommitted.
+3. Create a GitHub **prerelease**, paste RELEASE-NOTES.md and upload every file from upload/, including corresponding source and SHA256SUMS.txt. Keep third-party notices inside both app packages.
+4. Confirm public download links work, then post the launch video and beta invitation. No upload or social post is sent automatically.

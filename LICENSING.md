@@ -14,11 +14,6 @@ Downloaded emulator cores, Godot/godot-cpp, models, textures and sounds retain t
 
 The source repository excludes downloaded cores and local model archives. Review the notices for the assets committed to the repository as well as those in any binary package. Include LICENSE, LICENSING.md, THIRD_PARTY.md and the applicable full upstream notices in exports.
 
-The following binary-release questions remain open; the MIT decision does not answer them:
+The implementation-specific distribution review and corresponding-source requirements are recorded in [docs/CORE-DISTRIBUTION.md](docs/CORE-DISTRIBUTION.md). beta.5 replaces the old downloaded core binaries with locally built pinned-source binaries, retaining per-binary hashes, source archives and build materials. The Nestopia integration is treated conservatively as an in-process GPL combination, with original MIT grants retained. Other cores remain separate libraries under their own terms; no global commercial permission is asserted for the collection.
 
-* Nestopia: preserve the upstream GPL notices and corresponding source. Assess the obligations for the in-process host/core combination; dynamic loading is not treated as an automatic exemption.
-* Snes9x and Genesis Plus GX: retain their custom licences and component notices, including commercial-use restrictions. Do not market the complete package as MIT-only.
-* Official core binaries: existing source snapshots and revision records are retained, but independently reproduced builds/toolchain provenance are still pending. Follow the source-build instructions in docs/DEVELOPMENT.md.
-* TV model: the archived creator listing was independently verified as CC BY 4.0; docs/license-evidence/crt-tv.json records the URL and HTML hash. Retain attribution, modifications and source provenance. The listing does not certify the bytes of a later downloaded revision or override separately accepted download terms.
-
-These are distribution review items, not restrictions added to the original MIT source licence. No public binary release has been approved by this document.
+Keep the corresponding-source package available alongside the exact executable packages. Runtime acceptance and packaging checks do not change the applicable licences.

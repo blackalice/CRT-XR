@@ -1,16 +1,20 @@
 # CRT XR — beta quickstart
 
-Version: 0.1.0-beta.4. Keep the complete extracted folder together; run CRT-XR.exe on Windows or launch-steam.sh from Steam on Linux. Windows may show an unsigned-application warning; code signing is not configured yet.
+Version: 0.1.0-beta.6. Keep the complete extracted folder together; run CRT-XR.exe on Windows or launch-steam.sh from Steam on Linux. Windows may show an unsigned-application warning; code signing is not configured yet.
 
 ## Steam Deck
 
 **Prerequisite for tracked XR: Decky Loader with XR Gaming installed and enabled. VITURE Pro 2 currently needs XR Gaming’s testing version.** CRT XR setup assumes this is already present and does not install the plugin.
 
-Use Desktop Mode for installation. Extract the complete Linux package and run **Install-CRT-XR.sh**, choose the tested VITURE SBS profile or mono/monitor profile, and allow Steam to close so setup can safely register CRT XR. Restart Steam and return to Gaming Mode. See **GETTING-STARTED.md** for the full walkthrough, tracking prerequisite and recovery information.
+Use Desktop Mode for installation. Extract the complete Linux package and open **Install CRT XR.desktop**, choose the tested VITURE SBS profile or mono/monitor profile, and allow Steam to close so setup can safely register CRT XR. Restart Steam and return to Gaming Mode. See **GETTING-STARTED.md** for the full walkthrough, tracking prerequisite and recovery information.
 
-With glasses connected in mono, launch CRT XR, press A at the prompt, then switch the glasses to SBS. The view stays black until the app dimensions settle. The VITURE profile sets Steam's per-game resolution explicitly to 3840×1080; Native alone did not work on our test Deck. Without glasses the automatic launcher uses mono. Live tracking uses XR Gaming’s supported driver; the installer currently reports that dependency rather than installing it. Fresh-account installer, prompt readability and no-glasses acceptance remain pending.
+With glasses connected in mono, launch CRT XR, press A at the prompt, then switch the glasses to SBS. The view stays black until the app dimensions settle. The VITURE profile sets Steam's per-game resolution explicitly to 3840×1080; Native alone did not work on our test Deck. Without glasses the automatic launcher uses mono. Live tracking uses XR Gaming’s supported driver; the installer currently reports that dependency rather than installing it. Real-account upgrade and prompt/SBS acceptance passed; fresh-account and no-glasses hardware coverage remain pending.
 
 Other SBS/3DoF glasses are intended to work through a compatible driver/display profile, but only Pro 2 has been tested.
+
+## Windows
+
+See **WINDOWS-SETUP.md**. Extract the entire ZIP; keep CRT-XR.pck beside the EXE. For native VITURE tracking, supply the Windows SDK separately in sdk/ beside the app; vendor DLLs are not bundled. Close SpaceWalker, switch the glasses to SBS **before launching**, choose their display, then Open glasses view. Xbox controllers work directly. Choose Play on this screen without glasses for a fixed mono view.
 
 ## Games
 

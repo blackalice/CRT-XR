@@ -23,6 +23,7 @@ func read(path: String, defaults: ConfigFile = null) -> ConfigFile:
 	# previous enabled state instead of falling back to the default.
 	if path == "user://settings.cfg" and config.has_section_key("emulation","run_ahead") and config.get_value("emulation","run_ahead") is bool:
 		config.set_value("emulation","run_ahead", 1 if config.get_value("emulation","run_ahead") else 0)
+	migrate_view_fov(config)
 	if defaults == null: return config
 	var result := ConfigFile.new()
 	for section in defaults.get_sections():
@@ -54,3 +55,14 @@ static func write(path: String, config: ConfigFile) -> Error:
 		error = previous.save(path + ".bak")
 		if error != OK: return error
 	return DirAccess.rename_absolute(ProjectSettings.globalize_path(path + ".tmp"), ProjectSettings.globalize_path(path))
+
+static func migrate_view_fov(config: ConfigFile) -> void:
+	if not config.has_section_key("view","vertical_fov"): return
+	var legacy = config.get_value("view","vertical_fov")
+	if not (legacy is float or legacy is int) or not is_finite(float(legacy)): return
+	# The former Windows preview stored its 50-degree desktop default in the
+	# same slot as XR calibration. Keep custom values, split the two defaults.
+	if not config.has_section_key("view","desktop_fov"):
+		config.set_value("view","desktop_fov",50.0 if is_equal_approx(float(legacy),24.0) else float(legacy))
+	if not config.has_section_key("view","xr_fov"):
+		config.set_value("view","xr_fov",24.0 if is_equal_approx(float(legacy),50.0) else float(legacy))

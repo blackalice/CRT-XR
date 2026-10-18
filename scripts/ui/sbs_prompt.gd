@@ -31,9 +31,9 @@ func _ready() -> void:
 	background.color = Color.BLACK
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(background)
-	# A wide game-facing SBS canvas can be squeezed into mono during setup.
-	# Lay out on a fixed readable canvas and scale each axis to the window;
-	# the physical mono display cancels that horizontal squeeze.
+	# Preserve UI proportions even when Gamescope exposes a wide SBS virtual
+	# window while the glasses are still mono. Independent axis scaling made
+	# the logo and text short/wide on compositors that already preserve aspect.
 	prompt_canvas=Control.new()
 	prompt_canvas.size=Vector2(1280,720)
 	add_child(prompt_canvas)
@@ -104,7 +104,13 @@ func _ready() -> void:
 
 func resize_prompt_canvas() -> void:
 	if is_instance_valid(prompt_canvas):
-		prompt_canvas.scale=get_viewport_rect().size/Vector2(1280,720)
+		var layout := prompt_layout(get_viewport_rect().size)
+		prompt_canvas.scale=Vector2.ONE*layout.scale
+		prompt_canvas.position=layout.position
+
+static func prompt_layout(available: Vector2) -> Dictionary:
+	var scale_factor := maxf(0.01,minf(available.x/1280.0,available.y/720.0))
+	return {"scale":scale_factor,"position":(available-Vector2(1280,720)*scale_factor)*0.5}
 
 func on_window_size_changed() -> void:
 	resize_prompt_canvas()
@@ -134,7 +140,7 @@ func _process(delta: float) -> void:
 			var request = parser.data
 			if request is Dictionary and request.get("start",false): continue_session()
 	if waiting_time > 20.0:
-		help.text = ("If SBS is active but the picture is wrong, set this game's\nSteam resolution to Native (3840 × 1080), then relaunch.\n" if manual_confirmation else "Still waiting for Full-SBS. Check the USB connection and use the glasses' SBS button.\n") + "B / Escape cancels safely; reconnect and launch again to retry."
+		help.text = ("If SBS is active but the picture is wrong, set this game's\nSteam resolution to 3840 × 1080, then relaunch.\n" if manual_confirmation else "Still waiting for Full-SBS. Check the USB connection and use the glasses' SBS button.\n") + "B / Escape cancels safely; reconnect and launch again to retry."
 	# Native Gamescope resolution may update when the glasses reconnect in SBS.
 	if manual_confirmation and DisplayServer.screen_get_size(get_window().current_screen) == Vector2i(3840, 1080):
 		continue_session()

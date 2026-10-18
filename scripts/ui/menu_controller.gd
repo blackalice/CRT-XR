@@ -54,6 +54,8 @@ var music_dir := ""
 var music_page := 0
 var music_origin: Dictionary = {}
 var music_heading: Label
+var folder_path_origin: Dictionary = {}
+var folder_path_music := false
 var rename_field: LineEdit
 var sidebar_buttons: Array[Button] = []
 var direction := Vector2i.ZERO
@@ -116,7 +118,8 @@ func _ready() -> void:
 	rename_field.max_length = 32
 	rename_field.placeholder_text = "Optional name; keyboard entry"
 	rename_field.text_submitted.connect(func(_text):
-		if mode=="radio_url": save_radio_url()
+		if mode=="folder_path": submit_folder_path()
+		elif mode=="radio_url": save_radio_url()
 		else: save_draft_name())
 	layout.add_child(rename_field); rename_field.hide()
 	body = HBoxContainer.new()
@@ -255,6 +258,7 @@ func back() -> void:
 		"alphabet": mode=alphabet_origin; render()
 		"launch": restore(launch_origin)
 		"slot", "room_presets": mode="settings"; render()
+		"folder_path": restore(folder_path_origin)
 		"rename": mode="slot"; render()
 		"music_browser": restore(music_origin)
 		"radio_url": mode="settings"; render()
@@ -358,6 +362,27 @@ func open_folder(path: String) -> void:
 	error_label.hide()
 	mode="browser"; render()
 
+func open_drives() -> void:
+	remember(); clear_input(); mode="drives"; render()
+
+func enter_folder_path(for_music := false) -> void:
+	remember(); folder_path_origin=snapshot(); folder_path_music=for_music
+	clear_input(); mode="folder_path"; render()
+	rename_field.text=music_dir if for_music else library.current_dir
+	rename_field.grab_focus(); rename_field.select_all()
+
+func submit_folder_path() -> void:
+	var path := library.Locations.normalize_windows_path(rename_field.text) if OS.get_name()=="Windows" else rename_field.text.strip_edges()
+	if path.is_empty(): show_error("Enter a folder path, such as D:/roms or //server/share/roms."); return
+	if DirAccess.open(path)==null:
+		show_error("Cannot open this folder. Check the path, drive or network connection. For a network share, connect and sign in through Windows File Explorer first.")
+		return
+	if folder_path_music:
+		var origin := music_origin.duplicate()
+		open_music_browser(path)
+		music_origin=origin
+	else: open_folder(path)
+
 func browse_folders() -> void:
 	var candidates := [library.current_dir,host.default_rom_dir,host.last_game_path.get_base_dir(),library.home_folder()]
 	for path in candidates:
@@ -443,6 +468,7 @@ func perform_state_action(saving: bool) -> void:
 	refresh()
 
 func open_music_browser(path := "") -> void:
+	if OS.get_name()=="Windows" and not path.is_empty(): path=library.Locations.normalize_windows_path(path)
 	if mode!="music_browser": music_origin=snapshot()
 	remember(); clear_input()
 	if path.is_empty():
@@ -465,13 +491,12 @@ func save_radio_url() -> void:
 
 func music_browser_items() -> Array:
 	var result: Array=[catalog.action("music.up","Parent folder",func(): open_music_browser(music_dir.get_base_dir()))]
-	var locations: Array=[catalog.action("music.home","Music folder",func(): open_music_browser(OS.get_system_dir(OS.SYSTEM_DIR_MUSIC)))]
+	var locations: Array=[catalog.action("music.path","Open folder or network path…",func(): enter_folder_path(true)),catalog.action("music.home","Music folder",func(): open_music_browser(OS.get_system_dir(OS.SYSTEM_DIR_MUSIC)))]
 	for mount in library.cards():
 		var path: String=mount
 		locations.append(catalog.action("music.sd."+path,"SD card",func(): open_music_browser(path)))
 	if OS.get_name()=="Windows":
-		for index in range(DirAccess.get_drive_count()):
-			var drive := DirAccess.get_drive_name(index)
+		for drive in library.Locations.computer_drives():
 			locations.append(catalog.action("music.drive."+drive,drive,func(): open_music_browser(drive)))
 	var entries: Array=[]
 	var album: Array=host.music.album_tracks(music_dir)
@@ -559,7 +584,8 @@ func get_items() -> Array:
 			catalog.action("library.default","Set up ROM library" if h.default_rom_dir.is_empty() else "Change ROM library folder",browse_folders,h.default_rom_dir if not h.default_rom_dir.is_empty() else "Browse to the main roms folder (containing snes, nes, megadrive, etc.), then press RB."),
 			catalog.action("library.sd","SD card",open_cards,"Browse a mounted Steam Deck SD card."),
 			catalog.action("library.browse","Browse folders",browse_folders,"Browse folders on this computer."),
-			catalog.action("library.drives","Computer drives",func(): remember(); clear_input(); mode="drives"; render(),"Choose a drive, then browse to your ROM folder.",OS.get_name()!="Windows"),
+			catalog.action("library.drives","Computer drives",open_drives,"Choose a drive, then browse to your ROM folder.",OS.get_name()!="Windows"),
+			catalog.action("library.path","Open folder or network path…",enter_folder_path,"Enter a drive folder or a network share path; Windows handles sign-in."),
 			catalog.action("library.clear","Clear default folder",func(): set_default(""),"Forget the default folder without changing any files.",h.default_rom_dir.is_empty())]
 		"games":
 			var result: Array = [catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",game_entries().is_empty())]
@@ -585,6 +611,8 @@ func get_items() -> Array:
 			result.append(catalog.action("folder.remember","Use this folder for my library",func():
 				set_default(library.current_dir)
 				if host.default_rom_dir==library.current_dir: open_library(),"Choose the parent ROM folder to include all supported systems and their subfolders. Current folder: "+library.current_dir))
+			if OS.get_name()=="Windows": result.append(catalog.action("folder.drives","Computer drives",open_drives,"Open another drive, including mapped network drives."))
+			result.append(catalog.action("folder.path","Open folder or network path…",enter_folder_path,"Enter a local folder or //server/share/roms."))
 			for entry in library.entries:
 				var path: String = entry.path
 				var folder: bool = entry.folder
@@ -594,9 +622,8 @@ func get_items() -> Array:
 			result.append(catalog.action("folder.home","Home folder",func(): open_folder(library.home_folder()),"Browse your home folder."))
 			return result
 		"drives":
-			var result: Array = []
-			for index in range(DirAccess.get_drive_count()):
-				var path := DirAccess.get_drive_name(index)
+			var result: Array = [catalog.action("drives.path","Open folder or network path…",enter_folder_path,"Use a network share such as //server/share/roms, or enter a drive path.")]
+			for path in library.Locations.computer_drives():
 				result.append(catalog.action("drive:"+path,path,func(): open_folder(path),"Browse this drive."))
 			return result
 		"volumes":
@@ -617,6 +644,7 @@ func get_items() -> Array:
 				catalog.action("slot.load","Load setup",h.load_profile,"Apply this slot while retaining display mode and tracking provider.",not saved),
 				catalog.action("slot.rename","Name for next save",func(): mode="rename"; clear_input(); render(); rename_field.grab_focus(),"Optional keyboard entry. Default names work with a controller."),
 				catalog.action("slot.undo","Undo last setup load",h.undo_profile,"Restores the settings from before the last setup load.",h.profile_undo==null)]
+		"folder_path": return [catalog.action("folder_path.open","Open folder",submit_folder_path,"Opens a local folder or a network share you can access in Windows."),catalog.action("folder_path.cancel","Cancel",back)]
 		"rename": return [catalog.action("rename.save","Use this name",save_draft_name,"The new name is stored when you save the setup."),catalog.action("rename.cancel","Cancel",back,"Leave the name unchanged.")]
 		"confirm": return [catalog.action("cancel","Cancel",back,"Keep things as they are."),catalog.action("confirm","Confirm",confirmed,confirmation.detail)]
 	return []
@@ -699,12 +727,12 @@ func render() -> void:
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"CRT XR" if host.emulator.loaded else "Welcome to CRT XR","library":"Your game library","library_tools":"Library locations","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"CRT XR")
+	else: heading.text = {"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"CRT XR" if host.emulator.loaded else "Welcome to CRT XR","library":"Your game library","library_tools":"Library locations","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm": confirm_panel.describe(confirmation.title,confirmation.detail)
-	rename_field.visible = mode in ["rename","radio_url"]
-	rename_field.max_length=2048 if mode=="radio_url" else 32
-	rename_field.placeholder_text="Direct MP3 stream URL; keyboard entry" if mode=="radio_url" else "Optional name; keyboard entry"
+	rename_field.visible = mode in ["rename","radio_url","folder_path"]
+	rename_field.max_length=2048 if mode in ["radio_url","folder_path"] else 32
+	rename_field.placeholder_text="D:/roms or //server/share/roms" if mode=="folder_path" else "Direct MP3 stream URL; keyboard entry" if mode=="radio_url" else "Optional name; keyboard entry"
 	if mode=="rename": rename_field.text = str(draft_names.get(host.selected_profile,setup_name()))
 	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites"] and not preview
 	if not search_field.visible and search_field.has_focus(): search_field.release_focus()
@@ -823,6 +851,7 @@ func refresh_hints(row) -> void:
 	elif mode=="browser": hints.text="A Open · ↑↓ Select · ←→ Jump 10 · B Back · LB Up · X SD · Y Default · RB Set folder" if pad else "↑↓ Select · ←→ Jump 10 · Enter Open · Backspace Back"
 	elif mode=="library": hints.text="D-pad Select · A Open · B Back · RB Refresh" if pad else "Arrows Select · Enter Open · Backspace Back · R Refresh"
 	elif mode=="pause" and row!=null and row.item.get("layout","")=="transport": hints.text="←/→ Playback controls · ↑↓ Menu · "+("A Activate · B Resume" if pad else "Enter Activate · Backspace Resume")
+	elif mode=="folder_path": hints.text="Enter a folder path · Enter Open · B / Escape Back"
 	elif mode=="rename": hints.text="Type a name · Enter Save · ↓ Select button"
 	else: hints.text="D-pad Select · A Open · B Back" if pad else "Arrows Select · Enter Open · Backspace Back"
 
@@ -1028,9 +1057,9 @@ func handle(event: InputEvent) -> bool:
 				if event.pressed and event.physical_keycode in [KEY_DOWN,KEY_UP,KEY_ENTER,KEY_KP_ENTER]:
 					search_field.release_focus(); select(selected_id,false); return true
 				return false
-		if mode in ["rename","radio_url"] and get_viewport().gui_get_focus_owner()==rename_field:
+		if mode in ["rename","radio_url","folder_path"] and get_viewport().gui_get_focus_owner()==rename_field:
 			if event.pressed and event.physical_keycode==KEY_DOWN:
-				select("radio.save" if mode=="radio_url" else "rename.save"); return true
+				select("folder_path.open" if mode=="folder_path" else ("radio.save" if mode=="radio_url" else "rename.save")); return true
 			return false
 		var moves := {KEY_UP:Vector2i.UP,KEY_DOWN:Vector2i.DOWN,KEY_LEFT:Vector2i.LEFT,KEY_RIGHT:Vector2i.RIGHT}
 		if moves.has(event.physical_keycode):

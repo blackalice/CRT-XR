@@ -17,6 +17,7 @@ mono_crash.*.json
 
 # Downloaded engines, SDK sources, dependencies and generated packages.
 /tools/
+/sdk/
 /build/
 /dist/
 /extensions/bin/

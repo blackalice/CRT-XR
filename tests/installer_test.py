@@ -34,6 +34,29 @@ class SteamConfigTests(unittest.TestCase):
         self.assertEqual(entry['tags'][1]['0'][1],'Custom')
         self.assertEqual(entry['exe'][1],'"/new"')
 
+    def test_real_steam_field_casing_updates_existing_shortcut(self):
+        entry={'AppName':(1,'CRT XR'),'Exe':(1,'"/old/launch-steam.sh"'),'StartDir':(1,'"/old"'),
+               'appid':kv.integer(2147956315),'LaunchOptions':(1,'--keep'),
+               'tags':(0,{'0':(1,'Custom')}),'icon':(1,'custom.png')}
+        original={'shortcuts':(0,{'7':(0,entry)})}
+        short,_,appid=setup.configure(kv.dump_binary(original),'"UserLocalConfigStore" {}','"/new"','"/newdir"','3840x1080')
+        entries=kv.load_binary(short)['shortcuts'][1]
+        self.assertEqual(len(entries),1)
+        self.assertEqual(appid,2147956315)
+        updated=entries['7'][1]
+        self.assertEqual(updated['AppName'],(1,'CRT XR'))
+        self.assertEqual(updated['Exe'],(1,'"/new"'))
+        self.assertNotIn('appname',updated)
+        self.assertNotIn('exe',updated)
+        self.assertEqual(updated['LaunchOptions'],entry['LaunchOptions'])
+        self.assertEqual(updated['tags'],entry['tags'])
+        self.assertEqual(updated['icon'],entry['icon'])
+
+    def test_case_duplicate_fields_fail_before_mutation(self):
+        original={'shortcuts':(0,{'0':(0,{'AppName':(1,'CRT XR'),'appname':(1,'CRT XR'),'appid':kv.integer(7)})})}
+        with self.assertRaises(ValueError):
+            setup.configure(kv.dump_binary(original),'"UserLocalConfigStore" {}','"/new"','"/newdir"','Native')
+
     def test_text_roundtrip_preserves_escaped_and_unrelated_values(self):
         tree={'UserLocalConfigStore':{'path':'C:\\Games\\A "quoted" game','nested':{'setting':'a\nb'}}}
         self.assertEqual(kv.load_text(kv.dump_text(tree)),tree)

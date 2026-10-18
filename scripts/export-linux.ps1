@@ -38,6 +38,9 @@ New-Item -ItemType Directory -Force (Join-Path $out 'licenses/audio') | Out-Null
 Copy-Item -Path (Join-Path $root 'third_party/audio/*') -Destination (Join-Path $out 'licenses/audio')
 Copy-Item -LiteralPath (Join-Path $root 'THIRD_PARTY.md') -Destination $out
 foreach ($notice in @('LICENSE','LICENSING.md')) { Copy-Item -LiteralPath (Join-Path $root $notice) -Destination $out }
+Copy-Item -LiteralPath (Join-Path $root 'docs/CORE-DISTRIBUTION.md') -Destination (Join-Path $out 'CORE-DISTRIBUTION.md')
+New-Item -ItemType Directory -Force (Join-Path $out 'licenses/model-evidence') | Out-Null
+Copy-Item -LiteralPath (Join-Path $root 'docs/license-evidence/crt-tv.json') -Destination (Join-Path $out 'licenses/model-evidence/crt-tv.json')
 $shaderNotices = Join-Path $out 'licenses/shaders'
 New-Item -ItemType Directory -Force $shaderNotices | Out-Null
 Copy-Item -Path (Join-Path $root 'third_party/shaders/*') -Destination $shaderNotices
@@ -134,3 +137,6 @@ foreach ($name in @('Portrait.png','Landscape.png','Hero.png','Logo.png','Icon.p
     Copy-Item -LiteralPath (Join-Path $root "artwork/$name") -Destination $artworkOut
 }
 Write-Host "Linux package: $out"
+
+$text = [IO.File]::ReadAllText((Join-Path $root 'scripts/installer/Install CRT XR.desktop')).Replace("`r`n", "`n")
+[IO.File]::WriteAllText((Join-Path $out 'Install CRT XR.desktop'), $text, [Text.UTF8Encoding]::new($false))

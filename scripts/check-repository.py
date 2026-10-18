@@ -16,7 +16,7 @@ for name in files:
     path = ROOT / name
     if not path.is_file():
         continue
-    if name.split('/')[0] in {'tools', 'build', 'dist', 'archive', 'cores', 'userdata', 'saves', 'roms'}:
+    if name.split('/')[0] in {'sdk', 'tools', 'build', 'dist', 'archive', 'cores', 'userdata', 'saves', 'roms'}:
         problem('Local-only path in publication inputs: ' + name)
     if path.stat().st_size > 50 * 1024 * 1024:
         problem('File exceeds repository size budget: ' + name)
