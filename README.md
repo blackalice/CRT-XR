@@ -38,7 +38,7 @@ Bring your own games and music. Supported cartridge files are uncompressed SNES,
 
 ## Download the beta
 
-Get the complete Windows ZIP or Steam Deck/Linux archive from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases). Start with **0.1.0-beta.6**. GitHub’s automatic source-code ZIP is not an installable app. The separate corresponding-source archive is for rebuilding and licence compliance.
+Get the complete Windows ZIP or Steam Deck/Linux archive from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases). Start with **0.1.0-beta.7**. GitHub’s automatic source-code ZIP is not an installable app. The separate corresponding-source archive is for rebuilding and licence compliance.
 
 The app is free and early: please [report bugs](https://github.com/blackalice/CRT-XR/issues), suggest improvements and share compatibility results. This project has been built with substantial AI coding assistance (“vibe coded”); code reviews and contributions are welcome.
 
@@ -46,7 +46,7 @@ The app is free and early: please [report bugs](https://github.com/blackalice/CR
 
 | Platform | Current use |
 |---|---|
-| **Steam Deck + VITURE Pro 2** | The tested XR setup, including Gaming Mode mono-to-SBS startup. **Decky Loader and the testing version of XR Gaming must already be installed** for Pro 2 tracking, with a CRT XR-supported driver build. |
+| **Steam Deck + VITURE Pro 2** | The tested XR setup, including Gaming Mode mono-to-SBS startup. **Decky Loader and XR Gaming with Pro 2 support must already be installed**. Tracking compatibility is checked at runtime rather than restricted to one driver binary. |
 | **Steam Deck without glasses** | Mono play. The latest automatic launcher includes this path; final hardware acceptance is still pending. |
 | **Windows** | Portable preview with mono/SBS and native VITURE tracking tested locally on Pro 2. Requires the separately supplied Windows SDK; vendor SDK DLLs are not bundled. |
 
@@ -55,7 +55,7 @@ The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a 
 ## Install on Steam Deck
 
 1. Download the **complete Linux beta package**, rather than GitHub’s source-code archive, and switch your Deck to **Desktop Mode**. Sign in to Steam at least once.
-2. For tracked XR, install **Decky Loader → XR Gaming** and confirm it recognises your glasses. **VITURE Pro 2 currently requires XR Gaming’s testing version**, rather than its stable release. CRT XR setup assumes this prerequisite; it does not install the plugin or replace your driver.
+2. For tracked XR, install **Decky Loader → XR Gaming** and confirm it recognises your glasses. Use an XR Gaming release that supports VITURE Pro 2; older stable installations may need the testing channel. CRT XR setup assumes this prerequisite; it does not install the plugin or replace your driver.
 3. Extract the package and open **Install CRT XR.desktop**. Choose **Trust and Launch / Execute** if prompted. Select the tested VITURE Full SBS profile, or Deck / monitor only.
 4. Finish any running game and allow setup to close Steam. It installs CRT XR, adds or updates the shortcut, applies the selected resolution profile and installs the supplied Steam artwork. Existing settings, saves and later custom artwork are preserved.
 5. Restart Steam yourself, then **Return to Gaming Mode → Library → Non-Steam → CRT XR**.

@@ -1,10 +1,10 @@
 # CRT XR — beta quickstart
 
-Version: 0.1.0-beta.6. Keep the complete extracted folder together; run CRT-XR.exe on Windows or launch-steam.sh from Steam on Linux. Windows may show an unsigned-application warning; code signing is not configured yet.
+Version: 0.1.0-beta.7. Keep the complete extracted folder together; run CRT-XR.exe on Windows or launch-steam.sh from Steam on Linux. Windows may show an unsigned-application warning; code signing is not configured yet.
 
 ## Steam Deck
 
-**Prerequisite for tracked XR: Decky Loader with XR Gaming installed and enabled. VITURE Pro 2 currently needs XR Gaming’s testing version.** CRT XR setup assumes this is already present and does not install the plugin.
+**Prerequisite for tracked XR: Decky Loader with XR Gaming installed and enabled. Use an XR Gaming version with Pro 2 support (the testing channel may be needed on older installations).** CRT XR setup assumes this is already present and does not install the plugin.
 
 Use Desktop Mode for installation. Extract the complete Linux package and open **Install CRT XR.desktop**, choose the tested VITURE SBS profile or mono/monitor profile, and allow Steam to close so setup can safely register CRT XR. Restart Steam and return to Gaming Mode. See **GETTING-STARTED.md** for the full walkthrough, tracking prerequisite and recovery information.
 
@@ -33,3 +33,5 @@ Audio → TV sound includes optional automatic game-volume dipping. Audio → Mu
 General → Copy diagnostics copies version/platform details without ROM or music paths. Include those, Desktop/Gaming Mode, mono/SBS, steps to reproduce and what you expected. Settings/logs may contain local file paths or stream URLs; review them before sharing. A screenshot can be taken from the menu or F6. Some automatic checks use synthetic images; through-glasses comfort and sound still need human review.
 
 Keep the previous build as a fallback. First launch migrates old RetroCRT XR data by copying it; original settings/saves remain intact. Do not run old and new versions simultaneously while migrating. This beta candidate has not been signed or published automatically.
+
+Beta.7 accepts updated XR driver binaries without an exact hash allowlist. Live IPC layout, ownership and quaternion/timestamp checks still determine compatibility.

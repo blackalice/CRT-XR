@@ -1,3 +1,7 @@
+# Beta.7 update — 21 October 2026
+
+Removed exact XR driver and plugin-API fingerprints. Runtime shared-memory layout/ownership, pose validity and freshness checks remain. Installer detection and SBS control accept updated compatible builds. Deployed on Steam Deck with the updated driver; the user confirmed tracking works again. The prior installation remains available and 53 preference/save files were preserved.
+
 # CRT XR public beta review — 0.1.0-beta.6
 
 Reviewed 18 October 2026. See PRE-LAUNCH-CHECKLIST.md for current acceptance and the release BUILD-RECORD.json for executed candidate checks. Old development deployments are not evidence that a new user's install works.
@@ -22,4 +26,4 @@ TV historical CC BY 4.0 licence evidence, creator credit, model revision and mod
 
 The regression runner isolates preferences and uses synthetic cartridges. Real Deck GUI upgrade and .desktop installation passed; original app ID/user data and artwork integrity were checked. User confirmed corrected prompt readability and SBS on Deck. Windows hardware feedback corrected the SDK axes and established SBS-before-launch as the preferred sequence. The final new package still needs broader clean-user acceptance, updated FOV/browser feedback and longer unplug/replug/suspend/gameplay/music sessions.
 
-Known limitations: one verified Linux driver ABI; separately supplied Windows SDK; unsigned Windows binaries; synchronous large MP3/album loads; direct MP3 radio only with manual reconnect; five-second music bookmark checkpoint interval; no automatic updater/crash uploader. Logs can include private paths/URLs. Do not promise support for every SBS/3DoF display.
+Known limitations: runtime-validated Linux IPC layout; separately supplied Windows SDK; unsigned Windows binaries; synchronous large MP3/album loads; direct MP3 radio only with manual reconnect; five-second music bookmark checkpoint interval; no automatic updater/crash uploader. Logs can include private paths/URLs. Do not promise support for every SBS/3DoF display.

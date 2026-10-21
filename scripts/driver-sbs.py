@@ -1,31 +1,30 @@
 #!/usr/bin/env python3
 """Request SBS through the installed XR driver's existing control protocol."""
 import argparse
-import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
 import time
 
-DRIVER_SHA256 = "bb14df734f6fb81fb22d584e9954a843acb4dda68c841bab176053e0371479ed"
-API_SHA256 = "9e0bfcf85b7dc6f1a784fa0adfa1821d11351000883784df1668a173b36c0394"
 
 
 class DriverSBS:
     control_path = Path("/dev/shm/xr_driver_control")
     def __init__(self):
         driver = Path.home() / ".local/bin/xrDriver"
-        if hashlib.sha256(driver.read_bytes()).hexdigest() != DRIVER_SHA256:
-            raise RuntimeError("Unverified XR driver build; use the physical SBS switch.")
+        if not driver.is_file():
+            raise RuntimeError("XR driver missing; use the physical SBS switch.")
         # Reuse the installed API's state parsing and feature-availability rules.
         api = Path.home() / "homebrew/plugins/decky-XRGaming/PyXRLinuxDriverIPC/xrdriveripc.py"
-        if hashlib.sha256(api.read_bytes()).hexdigest() != API_SHA256:
-            raise RuntimeError("Unverified XR Gaming control API; use the physical SBS switch.")
+        if not api.is_file():
+            raise RuntimeError("XR Gaming control API missing; use the physical SBS switch.")
         spec = importlib.util.spec_from_file_location("crt_xr_installed_xr_api", api)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         self.ipc = module.XRDriverIPC()
+        if not callable(getattr(self.ipc, "retrieve_driver_state", None)):
+            raise RuntimeError("XR Gaming control API lacks state access; use the physical SBS switch.")
 
     def state(self):
         state = self.ipc.retrieve_driver_state()

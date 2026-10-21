@@ -1,10 +1,10 @@
 # Getting started with CRT XR
 
-Public beta candidate: 0.1.0-beta.6. VITURE Pro 2 has been tested on Steam Deck and Windows; other hardware remains unverified. No games or music are included.
+Public beta candidate: 0.1.0-beta.7. VITURE Pro 2 has been tested on Steam Deck and Windows; other hardware remains unverified. No games or music are included.
 
 ## Before you start
 
-**Install Decky Loader and its XR Gaming plugin before using CRT XR with head tracking.** **VITURE Pro 2 currently requires the testing version of XR Gaming, rather than the stable release.** Most XR users will already have Decky and XR Gaming, but Pro 2 users should check which version they have. Confirm XR Gaming recognises your glasses and its driver is enabled. CRT XR setup assumes the plugin is installed; it does not install Decky Loader or XR Gaming for you. Keep XR Gaming's display effects disabled when CRT XR is managing the stereo view.
+**Install Decky Loader and its XR Gaming plugin before using CRT XR with head tracking.** **VITURE Pro 2 requires an XR Gaming version with Pro 2 support, rather than the stable release.** Most XR users will already have Decky and XR Gaming, but Pro 2 users should check which version they have. Confirm XR Gaming recognises your glasses and its driver is enabled. CRT XR setup assumes the plugin is installed; it does not install Decky Loader or XR Gaming for you. Keep XR Gaming's display effects disabled when CRT XR is managing the stereo view.
 
 The `.desktop` installer must stay beside the extracted package files; do not move it onto the desktop by itself. KDE may ask you to **Trust and Launch** or allow execution. `Install-CRT-XR.sh` remains available as a fallback. The launcher installs the local package; it does not download or execute a remote installer.
 
@@ -59,7 +59,7 @@ In folder and game lists, **left/right jumps ten entries** and holding a directi
 
 ## Head tracking prerequisite
 
-**XR Gaming for Decky Loader must already be installed and enabled.** It provides the XR driver used for tracking. **Pro 2 users need its testing version.** Confirm it recognises your glasses before testing CRT XR. The project is [XR Gaming](https://github.com/wheaney/decky-XRGaming).
+**XR Gaming for Decky Loader must already be installed and enabled.** It provides the XR driver used for tracking. **Use an XR Gaming release with Pro 2 support; older stable installations may need the testing channel.** Confirm it recognises your glasses before testing CRT XR. The project is [XR Gaming](https://github.com/wheaney/decky-XRGaming).
 
 CRT XR setup checks for the supported driver binary. Other SBS/3DoF glasses are expected to work when their tracking is exposed through a compatible driver, but only Pro 2 has been tested. Automatic detection currently recognises VITURE; other models may need an explicit display profile. Plugin installation alone does not prove that its driver version is compatible with this beta. If the check fails, CRT XR can use fixed view; record the message so we can check the plugin/driver version. Setup does not install or update Decky, replace drivers, modify USB rules or change the driver's settings. Do not remove an already working XR Gaming installation just to run CRT XR setup.
 

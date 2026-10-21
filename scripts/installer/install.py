@@ -24,7 +24,6 @@ import zlib
 
 from steam_config import load_binary,dump_binary,integer,load_text,dump_text,branch
 
-DRIVER_HASH='bb14df734f6fb81fb22d584e9954a843acb4dda68c841bab176053e0371479ed'
 
 def steam_running():
 
@@ -236,7 +235,7 @@ def install(package,home,account,resolution,dry_run=False):
 
         new_short=dump_binary(tree)
 
-    result={'appid':appid,'account':profile.name,'resolution':resolution,'tracking':'Supported driver binary detected; tracking still needs its enabled service and connected glasses.' if (home/'.local/bin/xrDriver').is_file() and hashlib.sha256((home/'.local/bin/xrDriver').read_bytes()).hexdigest()==DRIVER_HASH else 'XR Gaming (Decky Loader) must be installed and enabled. Pro 2 needs its testing version and a supported driver. Fixed view remains available.'}
+    result={'appid':appid,'account':profile.name,'resolution':resolution,'tracking':'XR Gaming driver detected; runtime IPC checks determine tracking compatibility. Enable its service and connect the glasses.' if (home/'.local/bin/xrDriver').is_file() else 'Install and enable XR Gaming (Decky Loader), using a version with support for your glasses. Fixed view remains available.'}
 
     if dry_run: return dict(result,dry_run=True)
 
