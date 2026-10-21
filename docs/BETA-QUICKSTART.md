@@ -1,6 +1,6 @@
 # CRT XR — beta quickstart
 
-Version: 0.1.0-beta.7. Keep the complete extracted folder together; run CRT-XR.exe on Windows or launch-steam.sh from Steam on Linux. Windows may show an unsigned-application warning; code signing is not configured yet.
+Version: 0.1.0-beta.8. Keep the complete extracted folder together; run CRT-XR.exe on Windows or launch-steam.sh from Steam on Linux. Windows may show an unsigned-application warning; code signing is not configured yet.
 
 ## Steam Deck
 
@@ -35,3 +35,5 @@ General → Copy diagnostics copies version/platform details without ROM or musi
 Keep the previous build as a fallback. First launch migrates old RetroCRT XR data by copying it; original settings/saves remain intact. Do not run old and new versions simultaneously while migrating. This beta candidate has not been signed or published automatically.
 
 Beta.7 accepts updated XR driver binaries without an exact hash allowlist. Live IPC layout, ownership and quaternion/timestamp checks still determine compatibility.
+
+Beta.8: leave XR Gaming virtual display OFF. Gaming Mode enables tracking-only output for the app and restores driver settings on exit. Prediction defaults to 0 ms; existing choices are retained.

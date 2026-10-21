@@ -1,3 +1,7 @@
+# Beta.8 update — 21 October 2026
+
+Gaming Mode now leases the driver in tracking-only mode with compositor effects off, then restores the prior settings. The user confirmed tracking works with XR Gaming virtual display off, and that 0 ms prediction feels better than 30 ms. Driver configuration was verified restored exactly after exit, and 0 ms is now the default while explicit existing preferences remain. Automated coverage includes normal/error cleanup, interrupted-session recovery and preserving concurrent user changes. See RELEASE-NOTES-beta.8.md and the release build record.
+
 # Beta.7 update — 21 October 2026
 
 Removed exact XR driver and plugin-API fingerprints. Runtime shared-memory layout/ownership, pose validity and freshness checks remain. Installer detection and SBS control accept updated compatible builds. Deployed on Steam Deck with the updated driver; the user confirmed tracking works again. The prior installation remains available and 53 preference/save files were preserved.

@@ -1,6 +1,7 @@
 extends RefCounted
 ## User-tuned Deck setup captured on 2026-10-15. Paths, tracking-axis flags
 ## and platform field of view are excluded; values rounded to six decimals.
+## Prediction defaults to zero after updated-driver Gaming Mode acceptance.
 const VIEW := {
 	"right_stick_distance": true,
 	"distance_speed": 1.0,
@@ -10,7 +11,7 @@ const VIEW := {
 	"convergence": 3.5,
 	"edge_fade": 0.03,
 	"smoothing": 0.0,
-	"motion_predict": 0.03,
+	"motion_predict": 0.0,
 	"tv_scale": 1.0
 }
 const CRT := {

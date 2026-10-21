@@ -127,7 +127,7 @@ func pages(category: int) -> Array:
 				property_row("convergence","Convergence (m)",1,10,.1,"m","Depth at which the stereo views have zero horizontal disparity."),
 				property_row("vertical_fov","Vertical field of view",18,70,.5,"degrees","Advanced camera calibration. The glasses normally use 24 degrees."),
 				property_row("smoothing","Smoothing (seconds)",0,.15,.01,"ms","Tracking smoothing; higher values can feel less immediate."),
-				property_row("motion_predict","Motion prediction (seconds)",0,.08,.005,"ms","Extrapolates recent head rotation toward the frame being drawn, reducing perceived lag while moving. Zero keeps raw driver timing."),
+				property_row("motion_predict","Motion prediction (seconds)",0,.08,.005,"ms","Optional lead for recent head movement. Recommended default: 0 ms for raw driver timing. Increase only if tracking feels delayed; too much can feel oversensitive."),
 				action("system.signal","Stop game / test signal",func(): h.emulator.stop(); menu.open_pause(),"Stops emulation and restores the calibration pattern.",not h.emulator.loaded)])]
 		5:
 			var slots: Array = [action("slot.showcase","Deck Showcase",h.load_showcase_setup,"Your tuned picture, placement, dark room and TV audio. Keeps display mode, platform FOV, tracking axes and per-game preference; hides metrics. Undo is available after loading.",false,"Built-in")]

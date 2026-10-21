@@ -20,6 +20,7 @@ foreach ($helper in @('crt-xr-tracking-bridge','crt-xr-ipc-inventory')) {
 Copy-Item -LiteralPath (Join-Path $root 'scripts/launch-deck.sh') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/launch-steam.sh') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/steam-session.py') -Destination $out
+Copy-Item -LiteralPath (Join-Path $root 'scripts/tracking-session.py') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/display-probe.py') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/launch-glasses.sh') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/glasses-session.py') -Destination $out
@@ -115,7 +116,7 @@ if (Test-Path -LiteralPath (Join-Path $roomBake 'bake.json')) {
     Copy-Item -LiteralPath (Join-Path $root 'docs/room-contact-bake.md') -Destination (Join-Path $out 'assets/ROOM-CONTACT-BAKE.md')
 }
 # Linux shebangs must stay LF even when the checkout uses Windows line endings.
-foreach ($name in @('crt-xr.x86_64','launch-deck.sh','launch-steam.sh','launch-glasses.sh','steam-session.py','display-probe.py','glasses-session.py','driver-sbs.py')) {
+foreach ($name in @('crt-xr.x86_64','launch-deck.sh','launch-steam.sh','launch-glasses.sh','steam-session.py','tracking-session.py','display-probe.py','glasses-session.py','driver-sbs.py')) {
     $scriptPath = Join-Path $out $name
     $text = [IO.File]::ReadAllText($scriptPath).Replace("`r`n", "`n")
     [IO.File]::WriteAllText($scriptPath, $text, [Text.UTF8Encoding]::new($false))

@@ -1,5 +1,5 @@
 """Package a reviewed build, checking payload and recording checksums/modes.
-Usage: python scripts/package-beta.py dist/CRT-XR-0.1.0-beta.6-windows windows
+Usage: python scripts/package-beta.py dist/CRT-XR-0.1.0-beta.8-windows windows
 """
 from pathlib import Path
 import hashlib,json,sys,tarfile,zipfile,subprocess
@@ -7,7 +7,7 @@ folder=Path(sys.argv[1]).resolve();platform=sys.argv[2]
 assert folder.is_dir()
 required=["LICENSE","LICENSING.md","CORE-DISTRIBUTION.md","SOURCE-ACCESS.md","THIRD_PARTY.md","BETA-REVIEW.md","BETA-QUICKSTART.md","licenses/godot/LICENSE.txt","assets/optimised/cabinet.scn","assets/wood-table/table.scn","assets/room-bake/table_contact_albedo.res"]
 required += ["CRT-XR.exe","CRT-XR.pck","WINDOWS-SETUP.md","crt-xr-windows-tracking.exe","crt_xr_libretro.windows.x86_64.dll"] if platform=="windows" else ["crt-xr.x86_64","crt-xr-engine.x86_64","crt-xr.pck","crt-xr-tracking-bridge","crt-xr-ipc-inventory","crt_xr_libretro.linux.x86_64.so"]
-if platform=="linux":required += ["Install CRT XR.desktop","Install-CRT-XR.sh","installer/install.py","installer/steam_config.py","GETTING-STARTED.md"]
+if platform=="linux":required += ["Install CRT XR.desktop","Install-CRT-XR.sh","installer/install.py","installer/steam_config.py","GETTING-STARTED.md","tracking-session.py"]
 required += ["artwork/"+name+".png" for name in ["Portrait","Landscape","Hero","Logo","Icon"]]
 for name in required:assert (folder/name).is_file(),f"Missing packaged asset: {name}"
 for core in ["snes9x","nestopia","genesis_plus_gx"]:assert (folder/"cores"/(core+"_libretro."+("dll" if platform=="windows" else "so"))).is_file()

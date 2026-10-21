@@ -38,7 +38,7 @@ Bring your own games and music. Supported cartridge files are uncompressed SNES,
 
 ## Download the beta
 
-Get the complete Windows ZIP or Steam Deck/Linux archive from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases). Start with **0.1.0-beta.7**. GitHub’s automatic source-code ZIP is not an installable app. The separate corresponding-source archive is for rebuilding and licence compliance.
+Get the complete Windows ZIP or Steam Deck/Linux archive from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases). Start with **0.1.0-beta.8**. GitHub’s automatic source-code ZIP is not an installable app. The separate corresponding-source archive is for rebuilding and licence compliance.
 
 The app is free and early: please [report bugs](https://github.com/blackalice/CRT-XR/issues), suggest improvements and share compatibility results. This project has been built with substantial AI coding assistance (“vibe coded”); code reviews and contributions are welcome.
 
@@ -63,6 +63,8 @@ The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a 
 No SSH, Steam developer interface or administrator password is needed for CRT XR's app installer. The separately installed XR Gaming prerequisite has its own setup requirements. If the script opens as text, or you have several Steam accounts, follow the [full installation guide](docs/GETTING-STARTED.md).
 
 ### First launch with glasses
+
+Leave XR Gaming’s **virtual display off** for CRT XR. Gaming Mode temporarily enables tracking-only output with compositor effects disabled, then restores the previous driver settings on exit. CRT XR supplies its own SBS rendering and head tracking.
 
 Connect the glasses in **mono**, then launch CRT XR. At the instructions, release the launch button, **press A**, then switch the glasses to **SBS**. The view stays black during the change and the room appears when ready.
 

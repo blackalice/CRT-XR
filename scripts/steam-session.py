@@ -40,6 +40,14 @@ def launch_command(here, env, glasses, app_args):
             *(["--sbs-session-manual"] if glasses else (["--deck-mono"] if gaming_mode(env) else [])), *app_args]
 
 
+def tracking_session(state):
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("tracking_session", Path(__file__).with_name("tracking-session.py"))
+    module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    config = Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home()/".config"))) / "xr_driver/config.ini"
+    return module.TrackingSession(config, state)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
@@ -74,22 +82,24 @@ def main():
     # Unique files prevent a previous launch from authorising this handoff.
     run = Path(tempfile.mkdtemp(prefix="display-probe-", dir=state))
     env = dict(os.environ, CRT_XR_DISPLAY_PROBE=str(run / "display.json"), CRT_XR_SBS_SIZE=args.sbs_resolution)
-    watcher = subprocess.Popen([sys.executable, str(here / "display-probe.py"), "--output", env["CRT_XR_DISPLAY_PROBE"],
-                                "--size", args.sbs_resolution, "--connector", args.xr_connector])
-    child = None
-    old_handler = signal.signal(signal.SIGTERM, lambda number, frame: sys.exit(128+number))
-    try:
-        child = subprocess.Popen(command, env=env)
-        return child.wait()
-    finally:
-        signal.signal(signal.SIGTERM, old_handler)
-        if child is not None and child.poll() is None:
-            child.terminate()
-            try: child.wait(timeout=3)
-            except subprocess.TimeoutExpired: child.kill(); child.wait()
-        watcher.terminate()
-        try: watcher.wait(timeout=3)
-        except subprocess.TimeoutExpired: watcher.kill(); watcher.wait()
+    with tracking_session(state):
+        watcher = subprocess.Popen([sys.executable, str(here / "display-probe.py"), "--output", env["CRT_XR_DISPLAY_PROBE"],
+                                    "--size", args.sbs_resolution, "--connector", args.xr_connector])
+        child = None
+        old_handler = signal.signal(signal.SIGTERM, lambda number, frame: sys.exit(128+number))
+        try:
+            child = subprocess.Popen(command, env=env)
+            return child.wait()
+        finally:
+            signal.signal(signal.SIGTERM, old_handler)
+            if child is not None and child.poll() is None:
+                child.terminate()
+                try: child.wait(timeout=3)
+                except subprocess.TimeoutExpired: child.kill(); child.wait()
+            watcher.terminate()
+            try: watcher.wait(timeout=3)
+            except subprocess.TimeoutExpired: watcher.kill(); watcher.wait()
+
 
 
 if __name__ == "__main__":

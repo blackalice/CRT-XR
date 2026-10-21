@@ -12,12 +12,18 @@ func run():
 	var mismatch: Array[String]=[]
 	for section in original.get_sections():
 		for key in original.get_section_keys(section):
-			if section=="tracking" or (section=="view" and key=="vertical_fov"): continue
+			if section=="tracking" or (section=="view" and key in ["vertical_fov","motion_predict"]): continue
 			var expected=original.get_value(section,key)
 			var found=actual.get_value(section,key)
 			var equal: bool=absf(float(found)-float(expected))<.000001 if expected is float or expected is int else found==expected
 			if not equal: mismatch.append(section+"/"+key)
-	check(mismatch.is_empty(),"Fresh application reproduces the Deck setup: "+str(mismatch))
+	check(mismatch.is_empty(),"Fresh application reproduces the Deck picture/room setup: "+str(mismatch))
+	check(app.motion_predict==0.0,"Raw driver timing is the default; historical 30 ms preview lead is excluded")
+	var explicit_prediction: ConfigFile=app.capture_settings()
+	explicit_prediction.set_value("view","motion_predict",0.015)
+	app.apply_settings(explicit_prediction)
+	check(is_equal_approx(app.motion_predict,0.015),"Existing explicit prediction remains configurable")
+	app.motion_predict=0.0
 	check(not app.metrics_visible and app.diagnostics.all(func(label): return not label.visible),"Metrics are off from the first frame")
 	check(app.vertical_fov==50.0,"Desktop preview keeps its platform field of view")
 	app.metrics_visible=true

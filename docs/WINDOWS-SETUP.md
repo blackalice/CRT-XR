@@ -1,6 +1,6 @@
 # CRT XR — Windows beta setup
 
-Version: 0.1.0-beta.7. Tested with VITURE Pro 2 and an Xbox-compatible controller.
+Version: 0.1.0-beta.8. Tested with VITURE Pro 2 and an Xbox-compatible controller.
 
 ## Extract the app
 
