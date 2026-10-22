@@ -17,9 +17,9 @@ if [[ "${1:-}" == "--export" ]]; then
     cp "$root/scripts/linux-runtime.sh" "$root/dist/linux/crt-xr.x86_64"
     chmod +x "$root/dist/linux/crt-xr.x86_64" "$root/dist/linux/crt-xr-engine.x86_64"
     cp "$root/scripts/launch-deck.sh" "$root/dist/linux/"
-    if [[ -f "$root/cores/snes9x_libretro.so" ]]; then
+    if compgen -G "$root/cores/*_libretro.so" > /dev/null; then
         mkdir -p "$root/dist/linux/cores"
-        cp "$root/cores/snes9x_libretro.so" "$root/cores/"*LICENSE* "$root/dist/linux/cores/"
+        cp "$root/cores/"*_libretro.so "$root/cores/"*LICENSE* "$root/dist/linux/cores/"
         cp "$root/LICENSE" "$root/LICENSING.md" "$root/THIRD_PARTY.md" "$root/extensions/bin/godot-cpp-LICENSE.md" "$root/dist/linux/"
     fi
 fi

@@ -16,10 +16,18 @@ func _draw() -> void:
 		draw_colored_polygon(points,accent)
 	elif kind=="locations":
 		block(Rect2(6,18,48,35),accent); block(Rect2(6,12,23,12),accent); block(Rect2(12,26,36,3),ink)
-	elif kind=="gamegear":
-		block(Rect2(1,12,58,37),Color("424954"),8); block(Rect2(20,18,23,24),ink,2)
+	elif kind in ["gamegear","gameboy","gba","atarilynx","ngpc"]:
+		var shell := Color("b8bd97") if kind=="gameboy" else (Color("424954") if kind=="gamegear" else Color("2c2f38"))
+		block(Rect2(1,12,58,37),shell,8); block(Rect2(20,18,23,24),ink,2)
 		block(Rect2(23,21,17,16),accent,1); block(Rect2(7,27,11,3),accent,0);block(Rect2(11,23,3,11),accent,0)
 		draw_circle(Vector2(49,27),2.5,accent); draw_circle(Vector2(53,33),2.5,accent)
+	elif kind=="atari2600":
+		block(Rect2(2,20,56,26),Color("7a5a33"),3); block(Rect2(6,24,20,18),accent,1)
+		for y in [27,31,35]: draw_line(Vector2(30,y),Vector2(54,y),Color("5c4425"),2)
+		draw_circle(Vector2(49,15),3.5,Color("b9bdc4")); draw_line(Vector2(46,15),Vector2(52,15),ink,1)
+	elif kind=="vectrex":
+		block(Rect2(6,12,48,36),Color("e6e4da"),6); block(Rect2(12,17,36,22),Color("1d222b"),3)
+		draw_arc(Vector2(30,28),9,-0.7,PI+0.7,24,accent,1.5,true); block(Rect2(14,42,32,3),accent,1)
 	else:
 		var tall := kind=="nes"
 		var body := Rect2(13,3,35,53) if tall else Rect2(3,10,54,40)

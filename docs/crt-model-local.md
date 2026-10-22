@@ -79,7 +79,11 @@ bakes finite-distance Cycles AO through emission into the existing UV atlas:
 16-pixel extended island margins. Other TV parts participate as occluders.
 The original source, UVs and open Blender session remain untouched. The working
 copy restores the original material output connections after baking; the AO
-images remain available as labelled image nodes for inspection. It is not a
+images remain available as labelled image nodes for inspection.
+`scripts/prepare-cabinet-ao.gd` converts the baked PNGs to single-channel BC4
+textures with mipmaps (front 2048, back 1024 to match the other rear maps):
+about 3.4 MiB of video memory instead of 11.2 MiB of uncompressed L8, with no
+decode at startup. Packages ship the `.res` files; the PNGs remain the fallback. It is not a
 full-room lightmap or a bake of the screen's animated content.
 
 The runtime loads each map as single-channel linear L8 data with mipmaps

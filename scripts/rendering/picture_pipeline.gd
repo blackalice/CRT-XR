@@ -42,6 +42,13 @@ var shared_beam_enabled := true # Reference path retained for measured A/B check
 var beam := SubViewport.new()
 var beam_filter := ShaderMaterial.new()
 var beam_active := false
+# With an emulator source the shared passes redraw once per new game frame (or
+# composite frame index) rather than every display frame: 50 Hz games and
+# 72/90/120 Hz displays no longer recompute identical output.
+var frame_driven := false
+var frame_pending := true
+var last_frame_index := -1.0
+var decode_active := false
 
 func _init() -> void:
 	for field in all_fields(): values[field[0]] = field[5]
@@ -75,7 +82,9 @@ func configure(material: ShaderMaterial, texture: Texture2D, aperture: Rect2, as
 	screen.set_shader_parameter("beam_texture",beam.get_texture())
 	set_source(texture)
 
-func set_source(texture: Texture2D) -> void:
+func set_source(texture: Texture2D, driven_by_frames := false) -> void:
+	frame_driven = driven_by_frames
+	frame_pending = true
 	source_texture = texture
 	source_size = Vector2(texture.get_width(), texture.get_height())
 	decode.size = Vector2i(1024, int(source_size.y))
@@ -123,8 +132,9 @@ func refresh() -> void:
 		decoder.set_shader_parameter(key, values[key])
 	decoder.set_shader_parameter("signal_standard", effective_mode())
 	var active := effective_mode() != 0 and float(values.composite_strength) > 0.0
+	decode_active = active
 	screen.set_shader_parameter("signal_texture", decode.get_texture() if active else source_texture)
-	decode.render_target_update_mode = (SubViewport.UPDATE_ONCE if paused else SubViewport.UPDATE_ALWAYS) if active else SubViewport.UPDATE_DISABLED
+	decode.render_target_update_mode = pass_mode(active)
 	beam_filter.set_shader_parameter("signal_texture",decode.get_texture() if active else source_texture)
 	beam_filter.set_shader_parameter("signal_size",source_size)
 	for key in ["gamma","brightness","contrast","saturation","beam_softness"]:
@@ -152,12 +162,27 @@ func update_beam_state(force := false) -> void:
 	if force or active != beam_active:
 		beam_active = active
 		screen.set_shader_parameter("use_shared_beam",active)
-		beam.render_target_update_mode = (SubViewport.UPDATE_ONCE if paused else SubViewport.UPDATE_ALWAYS) if active else SubViewport.UPDATE_DISABLED
+		beam.render_target_update_mode = pass_mode(active)
+
+func pass_mode(active: bool) -> int:
+	if not active: return SubViewport.UPDATE_DISABLED
+	return SubViewport.UPDATE_ONCE if paused or frame_driven else SubViewport.UPDATE_ALWAYS
+
+func frame_presented(_image: Image = null) -> void:
+	frame_pending = true
 
 func _process(delta: float) -> void:
 	update_beam_state()
 	if not paused: elapsed += delta
-	decoder.set_shader_parameter("frame_index", floorf(elapsed * source_rate))
+	var frame_index := floorf(elapsed * source_rate)
+	var index_changed := frame_index != last_frame_index
+	if index_changed:
+		last_frame_index = frame_index
+		decoder.set_shader_parameter("frame_index", frame_index)
+	if frame_driven and not paused and (frame_pending or index_changed):
+		frame_pending = false
+		if decode_active: decode.render_target_update_mode = SubViewport.UPDATE_ONCE
+		if beam_active: beam.render_target_update_mode = SubViewport.UPDATE_ONCE
 	if paused != was_paused:
 		was_paused = paused
 		refresh()

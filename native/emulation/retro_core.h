@@ -8,14 +8,21 @@
 class RetroCore : public godot::RefCounted {
     GDCLASS(RetroCore, godot::RefCounted)
     crt_xr::LibretroHost host;
+    // Input preview runs in a second copy of the core so the playing instance is
+    // never rewound; its audio then stays continuous for every core.
+    crt_xr::LibretroHost preview_host;
+    std::string preview_library;
+    std::vector<std::uint8_t> preview_state; // reused every frame
 protected:
     static void _bind_methods();
 public:
     bool load_core(const godot::String& path);
     bool load_game(const godot::String& path, const godot::String& saves);
     bool run_frame(int buttons);
+    bool reset();
     godot::PackedByteArray frame() const;
     godot::Dictionary info() const;
+    bool video_changed() const;
     godot::String last_error() const;
     int push_audio(const godot::Ref<godot::AudioStreamGeneratorPlayback>& playback);
     godot::PackedByteArray save_state();
@@ -24,4 +31,8 @@ public:
     bool load_ram(const godot::PackedByteArray& ram);
     void close_game();
     void close();
+    bool load_preview(const godot::String& core_path, const godot::String& game_path, const godot::String& directory);
+    godot::Dictionary run_preview(int buttons, int frames);
+    bool has_preview() const;
+    void close_preview();
 };

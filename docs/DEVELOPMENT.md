@@ -14,16 +14,16 @@ On Windows, from the repository root:
 ./scripts/setup-emulation.ps1
 ```
 
-These download the engine/templates and clone pinned godot-cpp/Snes9x/Nestopia/Genesis Plus GX sources into ignored `tools/`. The native build uses CMake, Make and GCC; the compiler image includes the MinGW cross compiler for Windows.
+These download the engine/templates and clone pinned godot-cpp and the ten core sources (Snes9x, Nestopia, Genesis Plus GX, Gambatte, mGBA, Beetle PCE Fast, Beetle Lynx, Beetle NeoPop, Stella and vecx) into ignored `tools/`. The native build uses CMake, Make and GCC (mGBA builds with CMake); the compiler image includes the MinGW cross compiler for Windows.
 
 ```powershell
 docker build -f Dockerfile.emulation -t crt-xr-build .
 docker run --rm --mount "type=bind,source=$($PWD.Path),target=/work" crt-xr-build bash scripts/build-emulation.sh all
-docker run --rm --mount "type=bind,source=$($PWD.Path),target=/work" crt-xr-build bash scripts/build-cartridge-cores.sh all
+docker run --rm --mount "type=bind,source=$($PWD.Path),target=/work" crt-xr-build python3 scripts/build-release-cores.py all
 docker run --rm --mount "type=bind,source=$($PWD.Path),target=/work" crt-xr-build bash scripts/build-linux.sh
 ```
 
-This builds both native extension platforms, Snes9x and the additional cartridge cores, then Linux tracking helpers. Use `linux` or `windows` instead of `all` for one platform. If Docker is unavailable, run the same shell scripts in a Linux environment with the packages listed in `Dockerfile.emulation`. beta.5 cores were built locally under Ubuntu 24.04/GCC 13 and MinGW GCC 13, with hashes, compiler versions and make arguments recorded in third_party/cores/release-builds.json. Rebuild with `python3 scripts/build-release-cores.py all`; this also works from the corresponding-source bundle using its verified input archives, without Git metadata. This does not claim bit-for-bit equality with the earlier buildbot binaries. The hash-pinned `scripts/fetch-cartridge-cores.ps1` is an alternative for local development; nightly URLs may change, in which case its hash check deliberately refuses the download.
+This builds both native extension platforms and runs the host test, then all ten release cores from their pinned commits, then the Linux tracking helpers. Use `linux` or `windows` instead of `all` for one platform. If Docker is unavailable, run the same commands in WSL or another Linux environment with the packages listed in `Dockerfile.emulation`. `build-release-cores.py` records every binary's source archive, compiler and arguments in `cores/core-builds.json`, extracts the licence files and also works from the corresponding-source bundle without Git metadata; `python3 scripts/check-core-sources.py` verifies the records. `build-emulation.sh` uses its own Snes9x build only for the host test and does not replace recorded cores. No bit-for-bit equality with Libretro's buildbot binaries is claimed.
 
 ```powershell
 ./scripts/dev.ps1 -Editor
@@ -46,6 +46,7 @@ $godot = './tools/godot/Godot_v4.5.1-stable_win64_console.exe'
 & $godot --headless --path . --script scripts/optimise-cabinet.gd
 & $godot --headless --path . --script scripts/prepare-wood-table.gd
 & 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe' --background --factory-startup --python scripts/bake-cabinet-ao.py
+& $godot --headless --path . --script scripts/prepare-cabinet-ao.gd
 ./scripts/rebake-room.ps1
 python scripts/check-release-assets.py
 python scripts/check-core-sources.py
@@ -63,9 +64,14 @@ python scripts/test-beta.py
 python -m unittest discover -s tests -p '*_test.py'
 python scripts/check-release-assets.py
 python scripts/check-core-sources.py
-./scripts/export-windows.ps1 -OutputDirectory dist/windows-review
-./scripts/export-linux.ps1 -OutputDirectory dist/linux-review
+./scripts/export-windows.ps1 -OutputDirectory dist/CRT-XR-<version>-Windows
+./scripts/export-linux.ps1 -OutputDirectory dist/CRT-XR-<version>-SteamDeck
+python scripts/package-corresponding-source.py dist/CRT-XR-<version>-source-code.tar.gz
+python scripts/package-beta.py dist/CRT-XR-<version>-Windows windows dist/CRT-XR-<version>-source-code.tar.gz
+python scripts/package-beta.py dist/CRT-XR-<version>-SteamDeck linux dist/CRT-XR-<version>-source-code.tar.gz
 ```
+
+`package-beta.py` arranges each download so the first thing people see is what to open: the Steam Deck archive holds **Install CRT XR**, **HOW TO INSTALL.txt** and a `CRT XR files` folder; the Windows ZIP holds **CRT-XR.exe** (with the pack and extension it needs beside it), **HOW TO START.txt** and `cores`, `assets`, `tracking`, `docs` and `licenses` folders. Only the getting-started, game and platform setup guides are packaged; these developer notes stay on GitHub. The instructions files are `scripts/installer/HOW TO INSTALL.txt` and `HOW TO START.txt`.
 
 `test-beta.py` isolates preferences for each suite. Set `GODOT_BIN` to use another Godot 4.5.1 executable; on Linux it also isolates `XDG_DATA_HOME`. Installer transaction checks need Linux and skip on Windows. Exported folders contain native libraries, cores, model resources and notices beside the executable; do not distribute just the EXE. Binary releases still require the [distribution review](../LICENSING.md).
 

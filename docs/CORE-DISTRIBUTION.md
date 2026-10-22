@@ -1,8 +1,20 @@
-# Emulator distribution review - beta.5
+# Emulator distribution review - beta.9
 
-Reviewed 17 October 2026 against the pinned sources in scripts/build-release-cores.py.
+Reviewed 17 October 2026 for beta.5 and updated 22 October 2026 for the ten-core
+beta.9 collection, against the pinned sources in scripts/build-release-cores.py.
 
-## In-process Nestopia integration
+## In-process copyleft cores
+
+The treatment below was written for Nestopia and applies equally to every
+copyleft core in the collection: Nestopia (GPL-2.0-or-later), Gambatte (GPL-2.0
+only, per its file headers), Beetle PCE Fast, Beetle Lynx and Beetle NeoPop
+(GPL-2.0-or-later; Beetle Lynx also contains zlib-licensed Handy code), Stella
+(GPL-2.0) and vecx (GPL-3.0). mGBA is MPL-2.0, a file-level copyleft: its source
+is supplied unchanged and remains under the MPL. Each copyleft core is combined
+in process with the MIT host only, never with another core, so the GPL version
+of each core governs its own combination.
+
+### Nestopia (the original review)
 
 CRT XR loads Libretro cores with dlopen/LoadLibrary, resolves retro_* function pointers, and shares video/audio/input callbacks and Libretro structures. This is close in-process integration, not a command-line subprocess boundary. The release therefore follows the conservative GPL combined-program interpretation for the host when distributed for use with Nestopia. Original CRT XR contributions remain available under MIT, which permits GPL-compatible redistribution; the GPL obligations of the NES host/core combination are not removed by that MIT grant.
 
@@ -17,10 +29,10 @@ Primary interpretation: https://www.gnu.org/licenses/gpl-faq.en.html#GPLPlugins 
 
 ## Other cores are separately licensed modules
 
-Only one Libretro core is loaded at a time. emulation_session.gd closes/deinitialises the old core before loading another. Cores do not link to or call each other. The release is a collection of separately built core libraries, not a single binary linking Nestopia to Genesis Plus GX or Snes9x. The distribution treatment relies on that separation; it must be reassessed if core code is merged or libraries are linked together. Providing all source does not make GPL-incompatible code compatible.
+Only one core library type is in use at a time. emulation_session.gd closes/deinitialises the old core before loading another. The optional input preview loads a second, renamed copy of the same core library (into the system temporary folder, removed afterwards) and transfers that core's own save state between the two copies; it never combines different cores. Cores do not link to or call each other. The release is a collection of separately built core libraries, not a single binary linking Nestopia to Genesis Plus GX or Snes9x. The distribution treatment relies on that separation; it must be reassessed if core code is merged or libraries are linked together. Providing all source does not make GPL-incompatible code compatible.
 
 - Snes9x at 1bcc369e89f08243e0a462882fb1f3e42e51de3a permits non-commercial use/copy/modification/distribution with its notices. Do not sell it, include it in a commercial product/promotion, or describe the complete collection as commercially unrestricted. The libretro build uses snes_ntsc; its licence and the other retained upstream notices are packaged. JMA/xBRZ notices are retained conservatively even though the libretro source list does not compile those desktop filter/decompression modules.
-- Genesis Plus GX at 393f70cd64c7334564c19a424c383f53986c13f4 prohibits sale/commercial use and requires complete source for modified redistributions. The exact complete tree is supplied. Its embedded Nuked OPN2 component has LGPL-2.1-or-later terms; its source and build scripts are provided for rebuilding/relinking, and no restriction on debugging modifications to that component is imposed by CRT XR. Full upstream component notices are retained. CD/CHD support is disabled in this cartridge-only build.
+- Genesis Plus GX at 393f70cd64c7334564c19a424c383f53986c13f4 prohibits sale/commercial use and requires complete source for modified redistributions. The exact complete tree is supplied. Its embedded Nuked OPN2 component has LGPL-2.1-or-later terms; its source and build scripts are provided for rebuilding/relinking, and no restriction on debugging modifications to that component is imposed by CRT XR. Full upstream component notices are retained. Sega CD images (.cue/.bin) are supported; CHD decompression and physical-drive (cdrom://) access are disabled in this build. The Sega CD and Atari Lynx BIOS files are never distributed: users supply their own.
 - libretro.h keeps its MIT notice. Godot/godot-cpp keep their MIT and bundled component notices. The release makes no claim to relicense any core, asset, engine dependency or imported shader.
 
 This collection is offered free of charge. MIT permission for original code is not a promise that the downloaded multi-core package can be sold. If commercial distribution or a monolithic combined-core build is desired, obtain compatible replacements/permissions first.

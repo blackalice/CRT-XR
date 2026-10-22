@@ -5,7 +5,7 @@ maps, rather than high-frequency live shadow maps. This intentionally bakes
 contact and soft cavity shading, not a fixed lamp direction. Room controls and
 the coloured screen light still update normally.
 
-- The table uses its original UVs. Its 2048-square contact map is combined with
+- The table uses its original UVs. Its contact map, resized to the 1024-square colour map, is combined with
   the original wood colour offline in linear light, then GPU-compressed.
   Compatibility ignores native AO on direct lights; applying contact to colour
   makes the grounding visible under the lamp as well as ambient fill. No decal, projection mesh, extra viewport or additional pass is added.
@@ -15,8 +15,9 @@ the coloured screen light still update normally.
 - Existing static TV/table meshes stop casting live shadow maps when a matching
   bake is available. The lamp setting remains available for future dynamic objects.
 - The floor contact map is mipmapped single-channel data (about 1.3 MiB).
-  The prepared table colour is mipmapped BC7 (about 5.3 MiB), with no extra
-  runtime table texture sample. The source table AO remains available for rebakes.
+  The prepared table colour is mipmapped BC7 (about 1.3 MiB), with no extra
+  runtime table texture sample. The table's original colour map is released at
+  runtime once the contact colour replaces it. The source table AO remains available for rebakes.
   Missing/mismatched floor layouts fall back without enabling the bake.
 
 The floor uses ambientCG Carpet 012's CC0 colour, OpenGL normal and roughness
@@ -25,7 +26,7 @@ assets/carpet; import settings explicitly enable mipmaps and GPU compression.
 A warm neutral tint and reduced normal strength give it a subdued bedroom look.
 It uses one half-metre tile, low specular, high roughness and fades fine normals
 at distance. There are no displaced fibres, fur shells or parallax samples.
-The existing brightness control, rug toggle and XR distance/edge fades remain.
+The existing floor brightness and style controls and XR distance/edge fades remain.
 
 ## Repeatable bake
 

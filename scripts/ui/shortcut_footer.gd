@@ -9,7 +9,7 @@ var text := "":
 		for action in value.replace("   "," · ").split(" · ",false):
 			var group := HBoxContainer.new(); group.add_theme_constant_override("separation",4); add_child(group)
 			for word in action.split(" ",false):
-				if controller and word in ["A","B","X","Y","LB","RB","LT","RT","R3"]: group.add_child(Glyph.new(word))
+				if controller and word in ["A","B","X","Y","L1","R1","L2","R2","R3"]: group.add_child(Glyph.new(word))
 				else:
 					var label := Label.new(); label.text=word; label.add_theme_font_size_override("font_size",18); label.add_theme_color_override("font_color",Color("bfc1c5")); group.add_child(label)
 var last_controller := false

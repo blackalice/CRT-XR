@@ -7,6 +7,11 @@ var menu: Control
 func action(id: String, label: String, callback: Callable, help := "", disabled := false, value := "›") -> Dictionary:
 	return {"id":id,"label":label,"kind":"action","action":callback,"help":help,"disabled":disabled,"value":value}
 
+# Says why a greyed-out row is unavailable, inline under its title.
+func unavailable(item: Dictionary, reason: String) -> Dictionary:
+	if item.get("disabled",false): item.disabled_reason=reason
+	return item
+
 func number(id: String, label: String, target: Object, key: String, low: float, high: float, step: float, fallback: float, unit: String, help: String, changed: Callable, visual := true) -> Dictionary:
 	return {"id":id,"label":label,"kind":"number","min":low,"max":high,"step":step,"default":fallback,"unit":unit,"help":help,"visual":visual,
 		"getter":func(): return target.get(key),"setter":func(value): target.set(key,value); changed.call()}
@@ -70,7 +75,7 @@ func pages(category: int) -> Array:
 			var crt: Array = []
 			for field in [["scanlines","Scanlines",.7,.05],["phosphor_mask","Phosphor mask",.5,.05],["phosphor_glow","Phosphor glow",.4,.02],["glass_reflections","Glass reflections",.4,.02],["screen_curvature","Screen curvature (0 = flat)",1,.05]]:
 				var key: String = field[0]
-				crt.append(number("crt."+key,str(field[1]).replace(" (0 = flat)",""),h,key,0,field[2],field[3],h.SettingsDefaults.PICTURE[key],"percent","Adjusts the tube appearance. Changes are visible immediately.",func():
+				crt.append(number("crt."+key,str(field[1]).replace(" (0 = flat)",""),h,key,0,field[2],field[3],h.SettingsDefaults.PICTURE[key],"strength","Adjusts the tube appearance. Changes are visible immediately.",func():
 					w.screen_material.set_shader_parameter("scanlines",h.scanlines)
 					w.screen_material.set_shader_parameter("mask_strength",h.phosphor_mask)
 					w.screen_material.set_shader_parameter("glow_strength",h.phosphor_glow)
@@ -86,6 +91,12 @@ func pages(category: int) -> Array:
 			for pair in [["showcase","Deck Showcase (PAL)","Warm PAL colour and pronounced scanlines."],["clean","Clean source","Crisp source pixels; scanlines and phosphor effects off."],["rgb","RGB CRT","Clean RGB colour with a defined CRT beam."],["auto","Auto composite","Composite character matched to the game’s frame rate."],["pal","PAL composite","Soft PAL colour blending and analog texture."],["ntsc","NTSC composite","NTSC colour bleed and classic composite artifacts."]]:
 				var preset: String = pair[0]
 				presets.append(action("preset."+preset,pair[1],func(): menu.apply_preset(preset),pair[2],false,"✓ Active" if menu.applied_preset()==preset else "Apply"))
+			if menu.has_custom_picture():
+				presets.append(unavailable(action("preset.custom","Restore my custom picture",menu.restore_custom_picture,"Brings back the picture you had tuned yourself before choosing a preset.",menu.applied_preset().is_empty()),"Your custom picture is already in use."))
+			for i in range(menu.MY_PRESET_COUNT):
+				var index: int = i
+				var state := "✓ Active" if menu.applied_preset()=="mine.%d" % index else ("Saved" if menu.my_preset_saved(index) else "Empty")
+				presets.append(action("preset.mine.%d" % index,menu.my_preset_name(index),func(): menu.open_my_preset(index),"Your own saved picture: apply, save the current picture here, rename or delete.",false,state))
 			if menu.picture_undo!=null: presets.append(action("preset.undo","Undo picture preset",menu.undo_picture_preset,"Restore the picture from before the last preset."))
 			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference; Auto uses the game rate."}]
 			signal_rows.append_array(picture_fields(w.picture.COLOR_FIELDS.slice(6)))
@@ -99,7 +110,7 @@ func pages(category: int) -> Array:
 				"cabinet_ao_strength":"Strength of Blender-baked shading in the TV's joins and recesses.",
 				"cabinet_grain_strength":"Subtle static plastic finish. Fine grain fades at distance to avoid shimmer.",
 				"spill_strength":"Picture-coloured light on the casing and surroundings. Zero disables both lights.",
-				"floor_brightness":"Brightness of the carpet and woven rug.","fade_begin":"Distance where the small room island begins fading to black.","fade_end":"Distance where the surroundings become fully black."}
+				"floor_brightness":"Brightness of the floor.","fade_begin":"Distance where the small room island begins fading to black.","fade_end":"Distance where the surroundings become fully black."}
 			for field in h.ROOM_FIELDS:
 				var key: String = field[0]
 				var group := "Materials" if key in ["cabinet_ao_strength","cabinet_grain_strength","floor_brightness","spill_strength"] else ("Placement & fade" if key in ["lamp_height","lamp_side","fade_begin","fade_end"] else "Lighting")
@@ -108,30 +119,45 @@ func pages(category: int) -> Array:
 					"getter":func(): return w.get(key),"setter":func(value): h.set_room_value(key,value),"help":tips.get(key,"Moves the room lamp while the TV stays stationary.")})
 			groups.Lighting.append(toggle("room.shadows","Lamp shadows",w,"shadows",true,"Controls live shadows on unbaked objects. The TV and table keep their soft baked contact shading.",w.apply_room_settings))
 			groups.Lighting.append(action("room.presets","Lighting presets",func(): menu.open_room_presets(),"Choose Warm bedroom, Bright inspection or Dim XR."))
-			groups.Materials.append(toggle("room.rug","Bedroom rug",w,"show_rug",true,"Shows or hides the rug without changing the rest of the set.",w.apply_room_settings))
-			return [page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Placement & fade",groups["Placement & fade"])]
+			groups.Materials.push_front({"id":"room.floor_style","label":"Floor","kind":"choice","choices":w.FLOOR_STYLES,"default":h.Showcase.ROOM.floor_style,"visual":true,
+				"getter":func(): return w.floor_style,"setter":func(value): w.floor_style=value; w.apply_room_settings(),
+				"help":"90s confetti carpet, a plain wool carpet with natural wear, or wooden floorboards."})
+			var props: Array = [
+				toggle("room.clock_radio","Clock radio",w,"show_clock_radio",true,"A clock radio beside the TV showing the time on a dim red display. Music plays from its side of the room.",w.apply_room_settings),
+				toggle("room.clock_24_hour","24-hour clock",w,"clock_24_hour",false,"Shows the clock radio and VCR time in 24-hour format.",w.apply_room_settings),
+				toggle("room.vcr","VCR",w,"show_vcr",true,"A video recorder on the shelf under the TV; its dim panel shows the standby clock.",w.apply_room_settings),
+				toggle("room.game_boxes","Game boxes",w,"show_game_boxes",true,"A small stack of unbranded game boxes beside the TV.",w.apply_room_settings)]
+			return [page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Props",props),page("Placement & fade",groups["Placement & fade"])]
 
 		4:
 			var tracking: Array = [
-				action("tracking.real","Use glasses / retry",func(): h.use_tracking(true); menu.refresh(),"Connects or retries the glasses' tracking driver."),
+				action("tracking.real","Connect glasses",func(): h.use_tracking(true); menu.refresh(),"Connects or retries the glasses' tracking driver."),
 				action("tracking.fixed","Use fixed view",func(): h.use_tracking(false); h.recenter(); menu.refresh(),"Uses a steady view. On desktop, mouse/keyboard simulation remains available."),
 				toggle("tracking.diagnostics","Metrics overlay",h,"metrics_visible",false,"Shows frame rate, pose and tracking details. Off by default for a clean view. F1 also toggles it.",unchanged,false)]
 			for axis in ["yaw","pitch","roll"]:
 				tracking.append(toggle("tracking."+axis,"Invert "+axis,h.provider,"invert_"+axis,false,"Reverses this tracking axis. Only change it if movement feels reversed.",unchanged,false))
+			var input_delay: Dictionary = {"id":"controls.preview","label":"Reduce input delay","kind":"choice","choices":["Off","1 frame","2 frames"],"default":1,"visual":false,"getter":func(): return h.emulator.run_ahead,"setter":func(value): h.emulator.run_ahead=value,"help":"Runs extra presentation-only game frames from a snapshot that is then restored. Two frames costs about twice the preview work."}
+			if h.emulator.loaded and not h.emulator.preview_possible():
+				input_delay.disabled=true
+				var console: String=h.emulator.Registry.SYSTEMS[h.emulator.system_id].name
+				if h.emulator.preview_suspended: input_delay.disabled_reason="Paused for this game: it needs the full frame time. Reload the game to try again."
+				elif h.emulator.separate_preview: input_delay.disabled_reason="The separate preview core could not start for %s." % console
+				else: input_delay.disabled_reason="%s needs Separate preview core: its sound buzzes with a same-core preview." % console
+			var separate_preview := toggle("controls.separate_preview","Separate preview core",h.emulator,"separate_preview",true,"Runs the input preview in a second copy of the emulator, so game sound is never rewound. Works on every console; uses a little more memory. Off limits the preview to SNES.",func(): h.emulator.set_separate_preview(h.emulator.separate_preview); menu.refresh(),false)
 			return [page("Controller",[
 				action("controls.mapping","Game button layout",func(): menu.notify(h.emulator.Registry.controls(h.emulator.system_id)),h.emulator.Registry.controls(h.emulator.system_id),false,h.emulator.Registry.SYSTEMS[h.emulator.system_id].name),
 				toggle("controls.distance","Right stick adjusts distance",h,"right_stick_distance",true,"Stick up brings the TV closer; stick down moves it farther away.",unchanged,false),
 				property_row("distance_speed","Distance adjustment speed",.2,2,.1,"m/s","Speed of the right-stick distance control, in metres per second.",false),
-				{"id":"controls.preview","label":"Reduce input delay","kind":"choice","choices":["Off","1 frame","2 frames"],"default":1,"visual":false,"getter":func(): return h.emulator.run_ahead,"setter":func(value): h.emulator.run_ahead=value,"help":"Runs extra presentation-only game frames from a snapshot that is then restored. Two frames costs about twice the preview work."}]),
+				input_delay,separate_preview]),
 				page("Tracking",tracking),page("Advanced calibration",[
 				property_row("ipd","IPD (m)",0,.08,.001,"mm","Virtual eye separation; match your interpupillary distance."),
 				property_row("convergence","Convergence (m)",1,10,.1,"m","Depth at which the stereo views have zero horizontal disparity."),
 				property_row("vertical_fov","Vertical field of view",18,70,.5,"degrees","Advanced camera calibration. The glasses normally use 24 degrees."),
 				property_row("smoothing","Smoothing (seconds)",0,.15,.01,"ms","Tracking smoothing; higher values can feel less immediate."),
 				property_row("motion_predict","Motion prediction (seconds)",0,.08,.005,"ms","Optional lead for recent head movement. Recommended default: 0 ms for raw driver timing. Increase only if tracking feels delayed; too much can feel oversensitive."),
-				action("system.signal","Stop game / test signal",func(): h.emulator.stop(); menu.open_pause(),"Stops emulation and restores the calibration pattern.",not h.emulator.loaded)])]
+				unavailable(action("system.signal","Stop game / test signal",func(): h.emulator.stop(); menu.open_pause(),"Stops emulation and restores the calibration pattern.",not h.emulator.loaded),"No game is running.")])]
 		5:
-			var slots: Array = [action("slot.showcase","Deck Showcase",h.load_showcase_setup,"Your tuned picture, placement, dark room and TV audio. Keeps display mode, platform FOV, tracking axes and per-game preference; hides metrics. Undo is available after loading.",false,"Built-in")]
+			var slots: Array = [action("slot.showcase","Deck Showcase",h.load_showcase_setup,"The tuned Deck picture, placement, dark room and TV audio. Display mode, tracking and per-game settings stay as they are; you can undo it.",false,"Built-in")]
 			for i in range(3):
 				var slot := i
 				var config = h.settings_store.read("user://presets/slot-%d.cfg" % i)
@@ -140,13 +166,13 @@ func pages(category: int) -> Array:
 			if h.profile_undo!=null: slots.append(action("setups.undo","Undo last setup load",h.undo_profile,"Restore the setup from before loading Deck Showcase or a saved slot."))
 			return [page("Setup slots",slots),page("Per-game picture",[
 				{"id":"setups.pergame","label":"Remember picture per game","kind":"toggle","default":h.Showcase.PER_GAME_PICTURE,"visual":false,"getter":func(): return h.remember_game_picture,"setter":h.set_remember_game_picture,"help":"Fitting, CRT and colour belong to the game; room and view stay global."},
-				action("setups.global","Use global picture for this game",h.forget_game_picture,"Removes this game's picture override; future global picture changes apply.",h.active_game_key.is_empty())])]
+				unavailable(action("setups.global","Use global picture for this game",h.forget_game_picture,"Removes this game's picture override; future global picture changes apply.",h.active_game_key.is_empty()),"Start a game first.")])]
 		6:
 			return [page("About & Help",[
 				action("system.version","CRT XR",func(): menu.notify("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))),"A little CRT room for your XR glasses.",false,str(ProjectSettings.get_setting("application/config/version"))),
 				action("system.device","Device status",func(): menu.open_help("Device status",menu.status_title+"\n\n"+menu.status_detail),"Current display and tracking status."),
-				action("system.controls","Controls",func(): menu.open_help("Controls","Menu: LB + RB + Start / Escape. Recenter: R3 / R. Navigate: D-pad / arrows. Select: A / Enter. Back: B / Backspace. Categories: LB/RB; sections: LT/RT. Reset option: Y. Picture preview: X."),"Controller and keyboard shortcuts."),
-				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting","Tracking unavailable? Retry glasses in Controls & XR → Tracking, or choose fixed view. Double image? Match the glasses’ SBS mode with View → Display. Missing games? Check Library locations and use uncompressed supported cartridges. No radio? Use a direct MP3 stream URL. Save failed? Check free space and folder permissions."),"Help with glasses, games, audio and saving."),
+				action("system.controls","Controls",func(): menu.open_help("Controls","Menu: L1 + R1 + Start / Escape. Recenter: R3 / R. Navigate: D-pad / arrows. Select: A / Enter. Back: B / Backspace. Categories: L1 / R1 (Q / E); sections: L2 / R2 (Z / C). Reset option: Y. Picture preview: X."),"Controller and keyboard shortcuts."),
+				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting","Tracking unavailable? Retry glasses in Controls & XR → Tracking, or choose fixed view. Double image? Match the glasses’ SBS mode with View → Display. Missing games? Check Library locations and use uncompressed games for a supported console. No radio? Use a direct MP3 stream URL. Save failed? Check free space and folder permissions."),"Help with glasses, games, audio and saving."),
 				action("system.credits","Credits & licences",func(): menu.open_help("Credits & licences",FileAccess.get_file_as_string("res://THIRD_PARTY.md")),"Godot, libretro, and the artists and developers behind CRT XR."),
 				action("system.diagnostics","Copy diagnostics",func():
 					DisplayServer.clipboard_set("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))+" | "+OS.get_name()+" | Godot "+str(Engine.get_version_info().string)+" | "+DisplayServer.get_name()); menu.notify("Version and platform details copied; no ROM or music paths included."),"Copies version/platform information for a bug report."),
@@ -160,8 +186,16 @@ func pages(category: int) -> Array:
 			for source in pages(0)[0].rows:
 				if source.id in ["view.distance","view.height_offset","view.recenter"]:
 					var copy: Dictionary=source.duplicate(); copy.id="quick."+source.id; quick.append(copy)
-			quick.append({"id":"quick.preset","label":"Picture preset","kind":"choice","choices":["Custom","Deck Showcase (PAL)","Clean source","RGB CRT","Auto composite","PAL composite","NTSC composite"],"getter":func(): return menu.PRESET_IDS.find(menu.applied_preset())+1,"setter":func(value):
-				menu.apply_preset(menu.PRESET_IDS[value-1] if value>0 else ("ntsc" if menu.applied_preset()=="showcase" else "showcase")),"help":"Choose a starting look. Manual picture adjustments show Custom.","visual":true})
+			# Custom restores your own tuned picture; saved presets follow the built-in ones.
+			var preset_ids: Array = [""]+menu.PRESET_IDS
+			var preset_names: Array = ["Custom"]+menu.PRESET_NAMES
+			for i in range(menu.MY_PRESET_COUNT):
+				if menu.my_preset_saved(i): preset_ids.append("mine.%d" % i); preset_names.append(menu.my_preset_name(i))
+			quick.append({"id":"quick.preset","label":"Picture preset","kind":"choice","choices":preset_names,"getter":func(): return maxi(0,preset_ids.find(menu.applied_preset())),"setter":func(value):
+				var id: String=preset_ids[value]
+				if id.is_empty(): menu.restore_custom_picture()
+				elif id.begins_with("mine."): menu.apply_my_preset(int(id.get_slice(".",1)))
+				else: menu.apply_preset(id),"help":"Choose a look. Custom brings back your own tuned picture; save your own on Picture → Presets.","visual":true})
 			quick.append(number("quick.game_volume","Game volume",h.music,"game_volume",0,1,.05,1,"percent","Independent game volume.",h.music.apply,false))
 			quick.append(number("quick.music_volume","Music volume",h.music,"volume",0,1,.05,.45,"percent","Independent music volume.",h.music.apply,false))
 			return [page("Everyday",quick)]
@@ -192,10 +226,10 @@ func pages(category: int) -> Array:
 				duck_amount.disabled=true; duck_amount.disabled_reason="Enable Dip game during music first."
 			return [page("TV sound",audio_rows),page("Music balance",[duck_toggle,duck_amount]),page("Music & radio",[
 				action("music.file","Choose music / album",menu.open_music_browser,"Browse local storage or an SD card. Music keeps playing in menus."),
-				action("music.replay","Play last MP3",func(): music.play_last_file(); menu.notify(music.status),"Continues the saved track and position without changing the game.",music.last_file.is_empty()),
+				unavailable(action("music.replay","Play last MP3",func(): music.play_last_file(); menu.refresh(); menu.notify(music.status),"Continues the saved track and position without changing the game.",music.last_file.is_empty()),"No MP3 has been played yet."),
 				action("music.url","Radio stream URL",menu.edit_radio_url,"Enter a direct MP3 stream URL. Station webpages, AAC and HLS are not supported.",false,"Edit"),
-				action("music.radio","Play radio",func(): music.play_station(music.station_url); menu.notify(music.status),"Streams a direct MP3 radio station with a bounded audio buffer.",music.station_url.is_empty()),
-				action("music.stop","Stop music",func(): music.stop(); menu.notify(music.status),"Stops music or radio. Leaves game sound unchanged."),
+				unavailable(action("music.radio","Play radio",func(): music.play_station(music.station_url); menu.refresh(); menu.notify(music.status),"Streams a direct MP3 radio station with a bounded audio buffer.",music.station_url.is_empty()),"Add a radio stream URL first."),
+				action("music.stop","Stop music",func(): music.stop(); menu.refresh(); menu.notify(music.status),"Stops music or radio. Leaves game sound unchanged.",music.player.stream==null and not music.connecting),
 				number("music.volume","Music volume",music,"volume",0,1,.05,.45,"percent","Independent music level. Continues while the game is paused.",music.apply,false),
 				toggle("music.loop","Repeat album",music,"loop",true,"Repeat the folder after its last track. Off stops at the album end.",music.apply,false)]),page("Music space",[
 				number("music.reverb","Music room reverb",music,"reverb",0,.3,.01,.12,"percent","Short, subtle reflections from the room; zero disables the effect.",music.apply,false),

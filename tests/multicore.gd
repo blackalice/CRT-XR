@@ -4,6 +4,9 @@ var failures := 0
 func check(value: bool, message: String) -> void:
 	print("PASS: " if value else "FAIL: ", message)
 	if not value: failures += 1
+func tag(bytes: PackedByteArray, offset: int, text: String) -> void:
+	var ascii := text.to_ascii_buffer()
+	for i in ascii.size(): bytes[offset+i] = ascii[i]
 func _initialize() -> void: call_deferred("run")
 func run() -> void:
 	var session = load("res://scripts/emulation/emulation_session.gd").new()
@@ -11,9 +14,9 @@ func run() -> void:
 	session.set_process(false)
 	var library = load("res://scripts/ui/rom_library.gd").new()
 	check(library.show_folder(ProjectSettings.globalize_path("res://build")), "ROM browser opens diagnostic folder")
-	for ext in ["nes","md","sms","gg"]:
+	for ext in ["nes","md","sms","gg","gb","gba","pce","a26"]:
 		check(library.entries.any(func(entry): return entry.path.ends_with("crt-xr-probe."+ext)), "Browser includes "+ext)
-	for pair in [["sfc","snes"],["nes","nes"],["md","megadrive"],["md","megadrive"],["sms","mastersystem"],["gg","gamegear"],["nes","nes"],["sfc","snes"]]:
+	for pair in [["sfc","snes"],["nes","nes"],["md","megadrive"],["md","megadrive"],["sms","mastersystem"],["gg","gamegear"],["gb","gameboy"],["gba","gba"],["pce","pcengine"],["a26","atari2600"],["nes","nes"],["sfc","snes"]]:
 		var path := ProjectSettings.globalize_path("res://build/crt-xr-probe."+pair[0])
 		check(session.load_rom(path), "Loads/switches to "+pair[1])
 		if not session.loaded: continue
@@ -39,22 +42,71 @@ func run() -> void:
 			print("PIXEL pressed: ",pressed.slice(pressed.size()/2,pressed.size()/2+4))
 			check(normal!=pressed, "Physical bottom button reaches game B")
 		var before: PackedByteArray = session.core.save_state()
+		var picture: PackedByteArray = session.core.frame()
+		var output: Dictionary = session.core.info()
 		session.preview_frame(0,1)
-		check(session.core.save_state()==before and session.run_ahead>0, "Latency preview restores core state")
+		var restored: bool = session.core.frame()==picture and session.core.info().audio_frames==output.audio_frames
+		# Gambatte serializes link-cable timing read from process CPU time (clock()), so
+		# any work in the process changes those bytes; compare exact state elsewhere.
+		if Registry.SYSTEMS[session.system_id].core!="gambatte": restored = restored and session.core.save_state()==before
+		check(restored and session.run_ahead>0, "Latency preview restores core state")
+		check(session.core.has_preview() and session.preview_copy=="ready", "Input preview runs in a separate core copy")
 		session.update_texture(true)
 		check(session.texture!=null, "Frame uploaded to presentation texture")
 		if pair[0] in ["nes","md"]:
 			session.flush_sram()
 			var ram: PackedByteArray = FileAccess.get_file_as_bytes(session.save_directory.path_join(session.rom_hash+".srm"))
 			check(not ram.is_empty() and 0x5A in ram, "Cartridge battery RAM persisted")
-		check(is_equal_approx(session.display_aspect,10.0/9.0 if pair[1]=="gamegear" else 4.0/3.0), "System display proportions")
+		check(is_equal_approx(session.display_aspect,Registry.SYSTEMS[pair[1]].aspect), "System display proportions")
+		var battery: PackedByteArray = session.core.save_ram()
+		check(session.reset_game() and session.loaded and session.core.run_frame(0) and session.core.save_ram()==battery, "Reset restarts the console and keeps battery RAM: "+pair[1])
 	var copy := FileAccess.get_file_as_bytes("res://build/crt-xr-probe.md")
 	var bin := FileAccess.open("user://probe.bin",FileAccess.WRITE); bin.store_buffer(copy); bin.close()
 	check(Registry.identify("user://probe.bin")=="megadrive", "Ambiguous .bin accepts Sega header")
 	bin = FileAccess.open("user://unrelated.bin",FileAccess.WRITE); bin.store_buffer(PackedByteArray([1,2,3])); bin.close()
 	check(Registry.identify("user://unrelated.bin").is_empty(), "Unrelated binary is not treated as a game")
+	check(Registry.preview_safe("snes") and not Registry.preview_safe("gameboy") and not Registry.preview_safe("megadrive"), "Input preview runs only on cores whose audio survives the restore")
+	var cd := PackedByteArray(); cd.resize(0x110); tag(cd,0x100,"SEGADISCSYSTEM")
+	var disc := FileAccess.open("user://crt-xr-probe.bin",FileAccess.WRITE); disc.store_buffer(cd); disc.close()
+	check(Registry.identify("user://crt-xr-probe.bin")=="segacd", "Ambiguous .bin accepts the Sega CD header")
+	var cue := FileAccess.open("user://crt-xr-probe.cue",FileAccess.WRITE)
+	cue.store_string('FILE "crt-xr-probe.bin" BINARY\n  TRACK 01 MODE2/2352\n'); cue.close()
+	check(Registry.identify("user://crt-xr-probe.cue")=="segacd", "Cue sheet resolves its image header")
+	var psx := FileAccess.open("user://playstation.cue",FileAccess.WRITE)
+	psx.store_string('FILE "missing.bin" BINARY\n'); psx.close()
+	check(Registry.identify("user://playstation.cue").is_empty(), "A PlayStation cue stays unidentified")
+	var addon := FileAccess.get_file_as_bytes("res://build/crt-xr-probe.md")
+	tag(addon,0x100,"SEGA 32X")
+	var md32 := FileAccess.open("user://addon32x.bin",FileAccess.WRITE); md32.store_buffer(addon); md32.close()
+	check(Registry.identify("user://addon32x.bin").is_empty(), "32X images are not offered as Mega Drive games")
+	for ext in ["32x","sgx"]:
+		var unsupported := FileAccess.open("user://probe."+ext,FileAccess.WRITE); unsupported.store_buffer(addon); unsupported.close()
+		check(Registry.identify("user://probe."+ext).is_empty(), "Unsupported add-on extension stays hidden: "+ext)
+	for fixture in [["vec","vectrex"],["lynx","atarilynx"],["ngp","ngpc"],["ngpc","ngpc"],["ngc","ngpc"],["ws",""]]:
+		var tiny := FileAccess.open("user://probe."+fixture[0],FileAccess.WRITE); tiny.store_buffer(PackedByteArray([0,1,2,3])); tiny.close()
+		check(Registry.identify("user://probe."+fixture[0])==fixture[1], "Extension classifies "+fixture[0])
 	for ext in ["nes", "md"]:
 		check(session.load_rom(ProjectSettings.globalize_path("res://build/crt-xr-probe-pal."+ext)) and session.fps<55.0, "PAL console timing: "+ext)
+	check(not session.load_rom(ProjectSettings.globalize_path("user://probe.lynx")) and session.status.contains("needs its BIOS") and session.loaded, "Lynx without a boot ROM explains what is missing")
+	var bios_dir := "user://bios-fixture"
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(bios_dir))
+	var fake := FileAccess.open(bios_dir.path_join("lynxboot.img"),FileAccess.WRITE); fake.store_buffer(PackedByteArray(range(2048))); fake.close()
+	OS.set_environment("CRT_XR_BIOS",ProjectSettings.globalize_path(bios_dir))
+	session.load_rom(ProjectSettings.globalize_path("user://probe.lynx"))
+	check(not session.status.contains("needs its BIOS"), "A staged boot ROM satisfies the Lynx BIOS gate")
+	check(FileAccess.file_exists("user://saves/atarilynx/mednafen_lynx/lynxboot.img"), "The BIOS is staged into the core system directory")
+	OS.set_environment("CRT_XR_BIOS","")
+	# EmuDeck keeps roms and bios side by side; that bios folder is found automatically.
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://emudeck/roms"))
+	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path("user://emudeck/bios"))
+	var emudeck := FileAccess.open("user://emudeck/bios/lynxboot.img",FileAccess.WRITE); emudeck.store_buffer(PackedByteArray(range(2048))); emudeck.close()
+	var previous_root: String = Registry.library_root
+	Registry.library_root = ""
+	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://saves/atarilynx/mednafen_lynx/lynxboot.img"))
+	check(not Registry.bios_satisfied("atarilynx"), "No BIOS is found before the library folder is known")
+	Registry.library_root = ProjectSettings.globalize_path("user://emudeck/roms")
+	check(Registry.bios_satisfied("atarilynx") and Registry.bios_file("lynxboot.img").ends_with("emudeck/bios/lynxboot.img"), "The bios folder beside the ROM folder (EmuDeck layout) is used")
+	Registry.library_root = previous_root
 	var fitting = load("res://scripts/rendering/picture_pipeline.gd").new()
 	fitting.source_aspect=10.0/9.0
 	var area: Rect2 = fitting.picture_rect()

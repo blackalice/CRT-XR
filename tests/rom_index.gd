@@ -45,6 +45,18 @@ func run():
 	check(not menu.items.any(func(item): return item.id=="library.system.gamegear"),"Empty systems stay hidden")
 	menu.select("library.system.snes");await press(JOY_BUTTON_A)
 	check(menu.mode=="games" and menu.items.size()==53,"Game list is paged rather than building thousands of rows")
+	var visible_in_list := func() -> bool:
+		var row = menu.selected_row()
+		var view: Rect2 = menu.scroll.get_global_rect()
+		return row != null and row.get_global_rect().position.y >= view.position.y - 1 and row.get_global_rect().end.y <= view.end.y + 1
+	menu.select(menu.items[1].id); await settle()
+	for jump in range(3): await press(JOY_BUTTON_DPAD_RIGHT)
+	check(menu.game_page==0 and menu.selected_id==menu.items[31].id and visible_in_list.call(),"Right jumps ten games and the list scrolls with the selection")
+	for jump in range(2): await press(JOY_BUTTON_DPAD_RIGHT)
+	check(menu.game_page==1 and visible_in_list.call(),"Jumping onto the next page keeps the selection in view")
+	await press(JOY_BUTTON_DPAD_LEFT)
+	check(menu.game_page==0 and visible_in_list.call(),"Left jumps back across the page and stays in view")
+	menu.game_page=0;menu.render();await settle()
 	await press(JOY_BUTTON_RIGHT_SHOULDER)
 	check(menu.game_page==1 and menu.subtitle.text.contains("Page 2 of 2"),"Controller page navigation shows position")
 	var selected: String = menu.rows[2].item.id;menu.select(selected);await settle()

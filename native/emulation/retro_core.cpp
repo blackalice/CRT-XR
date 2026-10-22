@@ -3,6 +3,15 @@
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <algorithm>
 #include <cstring>
+#include <filesystem>
+#include <string>
+#ifdef _WIN32
+#include <process.h>
+#define CRT_XR_PID _getpid()
+#else
+#include <unistd.h>
+#define CRT_XR_PID getpid()
+#endif
 
 using namespace godot;
 namespace {
@@ -17,8 +26,10 @@ void RetroCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("load_core", "path"), &RetroCore::load_core);
     ClassDB::bind_method(D_METHOD("load_game", "path", "saves"), &RetroCore::load_game);
     ClassDB::bind_method(D_METHOD("run_frame", "buttons"), &RetroCore::run_frame);
+    ClassDB::bind_method(D_METHOD("reset"), &RetroCore::reset);
     ClassDB::bind_method(D_METHOD("frame"), &RetroCore::frame);
     ClassDB::bind_method(D_METHOD("info"), &RetroCore::info);
+    ClassDB::bind_method(D_METHOD("video_changed"), &RetroCore::video_changed);
     ClassDB::bind_method(D_METHOD("last_error"), &RetroCore::last_error);
     ClassDB::bind_method(D_METHOD("push_audio", "playback"), &RetroCore::push_audio);
     ClassDB::bind_method(D_METHOD("save_state"), &RetroCore::save_state);
@@ -27,10 +38,15 @@ void RetroCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("load_ram", "ram"), &RetroCore::load_ram);
     ClassDB::bind_method(D_METHOD("close_game"), &RetroCore::close_game);
     ClassDB::bind_method(D_METHOD("close"), &RetroCore::close);
+    ClassDB::bind_method(D_METHOD("load_preview", "core_path", "game_path", "directory"), &RetroCore::load_preview);
+    ClassDB::bind_method(D_METHOD("run_preview", "buttons", "frames"), &RetroCore::run_preview);
+    ClassDB::bind_method(D_METHOD("has_preview"), &RetroCore::has_preview);
+    ClassDB::bind_method(D_METHOD("close_preview"), &RetroCore::close_preview);
 }
 bool RetroCore::load_core(const String& path) { return host.load_core(path.utf8().get_data()); }
 bool RetroCore::load_game(const String& path, const String& saves) { return host.load_game(path.utf8().get_data(), saves.utf8().get_data()); }
 bool RetroCore::run_frame(int buttons) { return host.step(static_cast<std::uint16_t>(buttons)); }
+bool RetroCore::reset() { return host.reset(); }
 PackedByteArray RetroCore::frame() const { return pack(host.rgba); }
 Dictionary RetroCore::info() const {
     Dictionary result;
@@ -42,6 +58,8 @@ Dictionary RetroCore::info() const {
     result["audio_frames"] = static_cast<int64_t>(host.pcm.size() / 2);
     return result;
 }
+// Checked after every emulated frame; cheaper than building info()'s Dictionary.
+bool RetroCore::video_changed() const { return host.video_changed; }
 String RetroCore::last_error() const { return String::utf8(host.error.c_str()); }
 int RetroCore::push_audio(const Ref<AudioStreamGeneratorPlayback>& playback) {
     if (playback.is_null() || host.pcm.empty()) return 0;
@@ -57,5 +75,48 @@ PackedByteArray RetroCore::save_state() { return pack(host.serialize()); }
 bool RetroCore::load_state(const PackedByteArray& state) { return host.unserialize(state.ptr(), static_cast<std::size_t>(state.size())); }
 PackedByteArray RetroCore::save_ram() const { return pack(host.save_ram()); }
 bool RetroCore::load_ram(const PackedByteArray& ram) { return host.set_save_ram(ram.ptr(), static_cast<std::size_t>(ram.size())); }
-void RetroCore::close_game() { host.close_game(); }
-void RetroCore::close() { host.close(); }
+void RetroCore::close_game() { close_preview(); host.close_game(); }
+void RetroCore::close() { close_preview(); host.close(); }
+bool RetroCore::load_preview(const String& core_path, const String& game_path, const String& directory) {
+    close_preview();
+    // Loading the same library path again would share the playing core's globals;
+    // a renamed private copy gets its own.
+    namespace fs = std::filesystem;
+    std::error_code ignored;
+    const fs::path source = fs::u8path(core_path.utf8().get_data());
+    const fs::path folder = fs::temp_directory_path(ignored) / ("crt-xr-preview-" + std::to_string(CRT_XR_PID));
+    fs::create_directories(folder, ignored);
+    const fs::path copy = folder / (source.stem().string() + "_preview" + source.extension().string());
+    if (!fs::copy_file(source, copy, fs::copy_options::overwrite_existing, ignored)) return false;
+    preview_library = copy.u8string();
+    preview_host.want_audio = false; // its frames are shown, never heard
+    if (preview_host.load_core(preview_library) && preview_host.load_game(game_path.utf8().get_data(), directory.utf8().get_data())) return true;
+    close_preview();
+    return false;
+}
+Dictionary RetroCore::run_preview(int buttons, int frames) {
+    Dictionary result;
+    if (!host.loaded || !preview_host.loaded) return result;
+    if (!host.serialize_into(preview_state) || !preview_host.unserialize(preview_state.data(), preview_state.size())) return result;
+    // Not every core keeps SRAM in its save state. Genesis Plus GX reports a
+    // content-dependent SRAM size, so a mismatch is skipped: the preview only
+    // affects the picture, never the playing game.
+    const auto ram = host.save_ram();
+    if (!ram.empty()) preview_host.set_save_ram(ram.data(), ram.size());
+    for (int i = 0; i < std::max(frames, 1); ++i)
+        if (!preview_host.step(static_cast<std::uint16_t>(buttons))) return result;
+    if (preview_host.width == 0) return result;
+    result["bytes"] = pack(preview_host.rgba);
+    result["width"] = preview_host.width; result["height"] = preview_host.height;
+    return result;
+}
+bool RetroCore::has_preview() const { return preview_host.loaded; }
+void RetroCore::close_preview() {
+    preview_host.close();
+    if (preview_library.empty()) return;
+    std::error_code ignored;
+    const auto copy = std::filesystem::u8path(preview_library);
+    std::filesystem::remove(copy, ignored);
+    std::filesystem::remove(copy.parent_path(), ignored); // only when empty
+    preview_library.clear();
+}

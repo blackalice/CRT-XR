@@ -12,9 +12,9 @@ func press(menu, button: int):
 	event.pressed=false; menu.handle(event); await settle()
 func run():
 	var path := ProjectSettings.globalize_path("user://many-consoles")
-	for folder in ["snes/Europe","snes/Ports","Nintendo Entertainment System","Genesis","Master System","Game Gear","PS2/deep","gameboy/collection","sega-cd","arcade","Handpicked classics"]:
+	for folder in ["snes/Europe","snes/Ports","Nintendo Entertainment System","Genesis","Master System","Game Gear","PS2/deep","n64/collection","saturn","arcade","Handpicked classics"]:
 		DirAccess.make_dir_recursive_absolute(path.path_join(folder))
-	for file in ["snes/Europe/Adventure.sfc","snes/Ports/Legitimate folder.sfc","Nintendo Entertainment System/Quest.nes","Master System/Runner.sms","Game Gear/Pocket.gg","Handpicked classics/Custom.sfc","PS2/deep/Unrelated.sfc","gameboy/collection/Unrelated.nes","sega-cd/Unrelated.sfc","arcade/Unrelated.sms"]:
+	for file in ["snes/Europe/Adventure.sfc","snes/Ports/Legitimate folder.sfc","Nintendo Entertainment System/Quest.nes","Master System/Runner.sms","Game Gear/Pocket.gg","Handpicked classics/Custom.sfc","PS2/deep/Unrelated.sfc","n64/collection/Unrelated.nes","saturn/Unrelated.sfc","arcade/Unrelated.sms"]:
 		var handle := FileAccess.open(path.path_join(file),FileAccess.WRITE); handle.store_8(0); handle.close()
 	var handle := FileAccess.open(path.path_join("Genesis/Adventure.md"),FileAccess.WRITE)
 	var bytes := PackedByteArray(); bytes.resize(0x110); bytes.encode_u32(0x100,0x41474553); handle.store_buffer(bytes); handle.close()
@@ -30,7 +30,7 @@ func run():
 	app.default_rom_dir=path; app.choose_rom(); var menu=app.menu
 	while menu.rom_index.scanning: await process_frame
 	await settle()
-	check(menu.items.size()==8 and menu.items.all(func(item): return item.get("layout")=="card"),"Home shows five system cards, two shortcuts and one locations card")
+	check(menu.items.size()==6 and menu.items.all(func(item): return item.get("layout")=="card") and not menu.items.any(func(item): return item.id in ["library.recent","library.favourites"]),"Home shows five system cards and one locations card; empty shortcuts stay hidden")
 	check(not menu.items.any(func(item): return item.id in ["library.drives","library.sd","library.browse"]),"Folder management stays out of the game shelf")
 	menu.select("library.system.snes"); await press(menu,JOY_BUTTON_DPAD_UP)
 	check(menu.selected_id=="library.system.snes","Grid navigation skips empty quick-access cards and stops at the edge")

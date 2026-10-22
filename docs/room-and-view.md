@@ -78,12 +78,12 @@ not loaded into generative image tools or visually inspected by the assistant.
 | Game | ROM browser, last game, pause, states, test signal, input-delay preview |
 | View | Distance, screen height, stick binding and speed, scale, stereo, fullscreen, IPD, convergence, FOV, soft edges, smoothing |
 | Picture | Scanlines, phosphor mask and glow, glass reflection, screen curvature |
-| Room | Lighting presets, ambient/lamp/fill energy, warmth, lamp position, carpet brightness, fade distances, shadows, rug |
+| Room | Lighting presets, ambient/lamp/fill energy, warmth, lamp position, floor style and brightness, props (clock radio, 24-hour clock, VCR, game boxes), fade distances, shadows |
 | Setup | Tracking provider, axis inversion, diagnostic overlay |
 
 ## Lighting and furniture
 
-The default Deck Showcase uses a dark room with stronger screen spill and no rug.
+The default Deck Showcase uses a dark room with stronger screen spill.
 Warm bedroom remains available with more ambient/front fill. Bright inspection
 makes the cabinet easier to inspect; Dim XR keeps a
 small pool of light around it. Sliders update immediately. Save settings & close
@@ -123,9 +123,39 @@ replaces the stand when installed (see [wood-table.md](wood-table.md)). It keeps
 its proportions, supports the full CRT depth, and moves the floor island down
 to its feet without moving the viewing position. The original rounded oak-style
 shelf unit remains as a fallback. Its open shelves contain
-four unbranded game cases and a small console-shaped prop. Sage carpet and a
-muted teal/terracotta woven rug provide colour without surrounding the viewer
-with walls. The floor patch has soft black edges as well as distance fading.
+four unbranded game cases and a small console-shaped prop. The floor provides
+colour without surrounding the viewer with walls: **Room → Materials → Floor**
+offers a 90s confetti carpet (default), a wool carpet with large-scale
+patches and a worn path, or wooden floorboards. At 2–3 m a carpet's pile is far
+below a pixel, so each style adds detail that reads at that distance; the
+confetti marks fade into the base colour before they become small enough to
+shimmer. All three are one shader branch on a uniform with at most the existing
+carpet texture reads (floorboards read none). The former woven rug was removed.
+
+### Table props
+
+**Room → Props** toggles three original, procedurally built props (no external
+models or textures; `scripts/rendering/room_props.gd`, `shaders/prop_*.gdshader`):
+
+- A **clock radio** left of the TV: charcoal plastic, speaker grille, snooze bar
+  and a smoked red seven-segment display showing the system time (12-hour with a
+  PM dot by default, or 24-hour). It sits where the music's default Radio
+  position places the sound.
+- A full-size **VCR** on a lower shelf under the TV, with a cassette door,
+  transport buttons and a dim teal standby clock. Its display is ready to report
+  playback later. The shelf is a plain board resting on the table's lower rails
+  between the legs, toned from the table's own wood and darkened by the tabletop's
+  shade; it stays when the VCR is hidden.
+- Three **unbranded game boxes** (a clamshell case under two cardboard cartons)
+  right of the TV. Cover art is original abstract shapes with no titles or logos,
+  muted to stay in the background.
+
+Displays are emissive but add no lights and never blink. Props are built at 2.3×
+real size to match the oversized TV and table, cast no
+shadows, receive the screen light and distance fade, and sit on a soft
+multiply contact patch in place of baked AO. Together they add about four draw
+calls per eye and no video memory (measured +8 draws for both eyes, +0.016 ms
+GPU per eye on Windows). The floor patch has soft black edges as well as distance fading.
 The self-lit game picture keeps its contrast as the surroundings fade.
 
 **Screen light spill** in Room now uses two native, shadowless lights instead

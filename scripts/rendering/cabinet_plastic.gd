@@ -36,6 +36,12 @@ static func apply(scene: Node) -> void:
 
 static func load_baked_ao(filename: String) -> Texture2D:
 	var base := ProjectSettings.globalize_path("res://build/crt-model/ao") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir().path_join("assets/ao")
+	# Prefer the BC4 conversion from scripts/prepare-cabinet-ao.gd (about a third
+	# of the memory, no decode at startup); the PNG remains the fallback.
+	var compressed := base.path_join(filename.get_basename() + ".res")
+	if FileAccess.file_exists(compressed):
+		var texture := ResourceLoader.load(compressed, "Texture2D") as Texture2D
+		if texture != null: return texture
 	var path := base.path_join(filename)
 	if not FileAccess.file_exists(path): return null
 	var image := Image.load_from_file(path)

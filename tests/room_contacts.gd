@@ -18,6 +18,34 @@ func run():
     for node in w.television.find_children("*","MeshInstance3D",true,false):
         if node.cast_shadow!=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:all_static=false
     check(all_static,"Static shapes avoid aliasing live shadow maps")
+    check(not w.key_light.shadow_enabled,"With nothing casting, the lamp renders no shadow map")
+    check(table.mesh.surface_get_material(0)==null,"The superseded table colour map is released")
+    var ao:Texture2D=preload("res://scripts/rendering/cabinet_plastic.gd").load_baked_ao("tvfront_ao.png")
+    check(ao!=null and ao.get_image().get_format()==Image.FORMAT_RGTC_R and ao.get_image().has_mipmaps(),"Cabinet AO loads as compressed single-channel data")
+    var props:Array=[w.clock_radio,w.video_recorder,w.game_boxes]
+    check(props.all(func(p):return p!=null and p.visible and p.cast_shadow==GeometryInstance3D.SHADOW_CASTING_SETTING_OFF),"Clock radio, VCR and game boxes are shown by default without shadow casting")
+    check(not w.fade_parts.any(func(p):return p.has_meta("contact_patch")),"Prop contact shading is never covered by the black distance overlay")
+    w._update_prop_clocks(1.0)
+    var now:=Time.get_time_dict_from_system()
+    var clock:ShaderMaterial=w.clock_radio.material_override
+    check(clock.get_shader_parameter("hours")==int(now.hour) and clock.get_shader_parameter("minutes")==int(now.minute) and clock.get_shader_parameter("twelve_hour"),"The clock radio shows the current time, 12-hour by default")
+    w.clock_24_hour=true;w.apply_room_settings();w._update_prop_clocks(1.0)
+    check(not clock.get_shader_parameter("twelve_hour") and not (w.video_recorder.material_override as ShaderMaterial).get_shader_parameter("twelve_hour"),"24-hour format applies to both displays")
+    var board:MeshInstance3D=w.television.get_node("LowerShelf")
+    var deck_bottom:float=w.video_recorder.position.y-w.video_recorder.mesh.get_aabb().size.y*0.5
+    var board_bounds:AABB=board.mesh.get_aabb()
+    check(is_equal_approx(deck_bottom,board_bounds.end.y) and board_bounds.size.x<2.6 and board_bounds.end.y<w.support_floor_y+0.6,"A full-size VCR sits on the lower shelf between the table legs")
+    w.show_vcr=false;w.show_clock_radio=false;w.apply_room_settings()
+    check(not w.video_recorder.visible and not w.clock_radio.visible and w.game_boxes.visible and board.visible,"Each prop toggles independently; the shelf is part of the table")
+    w.show_clock_radio=true;w.show_vcr=true;w.clock_24_hour=false;w.apply_room_settings()
+    w.update_fade_overlays(Vector3(0,1.25,0))
+    var faded:=0;var near_parts:=0
+    for part in w.fade_parts:
+        if part.material_overlay!=null:faded+=1
+        else:near_parts+=1
+    w.fade_begin=0.5;w.update_fade_overlays(Vector3(0,1.25,0))
+    var all_faded:bool=w.fade_parts.all(func(part):return part.material_overlay!=null)
+    check(near_parts>0 and all_faded,"Distance fade is drawn only for parts reaching past its start (%d of %d skipped)"%[near_parts,w.fade_parts.size()])
     var floor_image:Image=w.floor_material.get_shader_parameter("contact_ao").get_image()
     var table_image:Image=preload("res://scripts/rendering/room_contacts.gd").texture("table_ao.png").get_image()
     var vertices:PackedVector3Array=table.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]

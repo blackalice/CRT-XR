@@ -2,7 +2,7 @@
 
 The local multi-system build uses an in-process Libretro host. Choose a game
 in the pause menu; the file determines the core automatically. The new cores
-have been tested locally on Windows with original diagnostic cartridges;
+have been tested locally with original diagnostic cartridges;
 Steam Deck deployment and hardware validation follow separately.
 
 | System | Core | Uncompressed cartridge extensions |
@@ -12,13 +12,26 @@ Steam Deck deployment and hardware validation follow separately.
 | Mega Drive / Genesis | Genesis Plus GX | `.md`, `.gen`, `.smd`, `.bin` |
 | Master System | Genesis Plus GX | `.sms` |
 | Game Gear | Genesis Plus GX | `.gg` |
+| Game Boy / Game Boy Color | Gambatte | `.gb`, `.gbc` |
+| Game Boy Advance | mGBA | `.gba` |
+| PC Engine / TurboGrafx-16 | Beetle PCE Fast | `.pce` |
+| Sega CD / Mega-CD | Genesis Plus GX | `.cue` or `.bin` with the Sega CD header |
+| Atari 2600 | Stella | `.a26` |
+| Atari Lynx | Beetle Lynx | `.lynx` |
+| Neo Geo Pocket / Color | Beetle NeoPop | `.ngp`, `.ngpc` |
+| Vectrex | vecx | `.vec` |
 
-`.md` and `.bin` require the standard SEGA cartridge header to avoid treating
-documents and unrelated binary files as games. Archives, Famicom Disk System,
-Sega CD, 32X, light guns, paddles and multiplayer are outside this first pass.
-Ordinary supported cartridges need no BIOS. The browser retains SD-card,
-default-folder and recent-game behaviour. Game Gear is fitted at 10:9;
-the TV consoles retain the existing 4:3 presentation.
+`.md` and `.bin` require a SEGA cartridge header (Mega Drive) or the
+`SEGADISCSYSTEM` header (Sega CD) to avoid treating documents and unrelated
+binary files as games; a `.cue` sheet resolves its first image the same way.
+Archives, CHD, Sega 32X, SuperGrafx, Famicom Disk System, PC Engine CD, mid-game disc changes,
+analog sticks, light guns, paddles and multiplayer are outside this pass.
+Ordinary cartridges need no BIOS; Sega CD and Atari Lynx read their hardware
+files (`bios_CD_U.bin` and friends, `lynxboot.img`) from a `bios` folder next
+to the application, staged into the core's system directory at load. The
+browser retains SD-card, default-folder and recent-game behaviour. Handhelds
+keep their native proportions (10:9, 3:2, 160:102, 16:15); the TV consoles
+retain the existing 4:3 presentation.
 
 ## System library
 

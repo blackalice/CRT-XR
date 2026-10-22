@@ -20,3 +20,10 @@ func configure(definition: Dictionary) -> void:
 	focus_entered.connect(func(): selected.emit(item.id))
 	refresh()
 
+
+func refresh() -> void:
+	super.refresh()
+	# Cards without a count read their caption instead of a bare chevron.
+	if not item.has("value") or str(item.value)=="›":
+		var caption := str(item.get("caption","")).to_lower()
+		value_label.text=caption.left(1).to_upper()+caption.substr(1)

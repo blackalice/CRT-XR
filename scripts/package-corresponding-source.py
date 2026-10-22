@@ -5,6 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 version=(ROOT/'project.godot').read_text(encoding='utf-8').split('config/version="',1)[1].split('"',1)[0]
 output=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else ROOT/'build/release-source'/('CRT-XR-'+version+'-corresponding-source.tar.gz')
 output.parent.mkdir(parents=True,exist_ok=True)
+subprocess.run([sys.executable,str(ROOT/'scripts/check-core-sources.py')],check=True)
 paths=set(subprocess.check_output(['git','ls-files','-c','-o','--exclude-standard','-z'],cwd=ROOT).decode().split('\0'))-{''}
 files={name:ROOT/name for name in paths if (ROOT/name).is_file()}
 for p in (ROOT/'cores/sources').glob('*.tar.gz'):files['cores/sources/'+p.name]=p
@@ -16,7 +17,7 @@ for name in files:
  assert Path(name).suffix not in ['.dll','.so','.sfc','.nes','.sms','.gg','.srm','.mp3','.pem','.key'],name
 recipe='''# Rebuilding the supplied source
 
-Original CRT XR code is MIT; preserve all upstream notices. See docs/CORE-DISTRIBUTION.md for the NES in-process GPL treatment and separate restricted cores.
+Original CRT XR code is MIT; preserve all upstream notices. See docs/CORE-DISTRIBUTION.md for the in-process GPL core treatment and separate restricted cores.
 
 This archive supplies the actual application/host source tree, exact core source snapshots, godot-cpp bindings, Godot engine source, core build logs and per-binary source/compiler/flag hashes. Native host code is in native/emulation; installation scripts are in scripts/installer. SOURCE-MANIFEST.json identifies every supplied input. Local TV/table model originals are separate artistic data, not bundled here; use creator URLs and preparation instructions in docs/DEVELOPMENT.md.
 

@@ -2,6 +2,7 @@ extends SceneTree
 ## Offline extraction. Preserve the supplied set and retain only its wide table.
 const SOURCE="res://build/wood-table-source/wood_drawer__tables_set.glb"
 const OUTPUT="res://build/wood-table"
+const TEXTURE_LIMIT:=1024
 func _initialize():call_deferred("run")
 func run():
     var hash_before:=FileAccess.get_sha256(SOURCE)
@@ -42,7 +43,9 @@ func run():
         var image:=texture.get_image()
         if image.is_compressed():image.decompress()
         var original:=image.get_size();image.clear_mipmaps()
-        if max(original.x,original.y)>2048:image.resize(2048,2048,Image.INTERPOLATE_LANCZOS)
+        # 1024 holds the grain at viewing distance (about 2.2 m wide, seen from
+        # ~3 m) for a quarter of the 2048 map's video memory.
+        if max(original.x,original.y)>TEXTURE_LIMIT:image.resize(TEXTURE_LIMIT,TEXTURE_LIMIT,Image.INTERPOLATE_LANCZOS)
         image.generate_mipmaps(channel==BaseMaterial3D.TEXTURE_NORMAL)
         image.convert(Image.FORMAT_RGBA8)
         if image.compress(Image.COMPRESS_BPTC)!=OK:push_error("BC7 preparation failed");scene.free();quit(1);return

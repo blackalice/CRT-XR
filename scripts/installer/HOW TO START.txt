@@ -1,0 +1,35 @@
+CRT XR for Windows: how to start
+================================
+
+1. Extract this whole ZIP to a folder, for example Documents\CRT XR.
+   (Running it from inside the ZIP will not work.)
+
+2. Double-click CRT-XR.exe.
+   Windows may say it protected your PC, because CRT XR is not signed:
+   choose "More info", then "Run anyway".
+
+3. Choose "Play on this screen without glasses", or set up VITURE glasses
+   with docs\WINDOWS-SETUP.md. Glasses tracking needs the VITURE SDK, which
+   is not included.
+
+There is nothing to install. Keep CRT-XR.exe together with the files and
+folders next to it.
+
+
+Your games
+----------
+No games are included. In CRT XR, open Game library > Library locations and
+choose your main ROM folder (the one containing snes, nes, megadrive...).
+
+Sega CD and Atari Lynx also need their BIOS files (bios_CD_U.bin and friends,
+lynxboot.img). Put them in a "bios" folder next to CRT-XR.exe, or in the
+"bios" folder next to your roms folder.
+
+Updating
+--------
+Close CRT XR, then extract the new version to a new folder. Settings and saves
+are kept separately, in %APPDATA%\Godot\app_userdata\CRT XR.
+
+More help
+---------
+docs\GETTING-STARTED.md, or https://github.com/blackalice/CRT-XR

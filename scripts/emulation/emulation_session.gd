@@ -26,10 +26,22 @@ var tv_audio := preload("res://scripts/emulation/tv_audio.gd").new()
 var playback: AudioStreamGeneratorPlayback
 var audio_overflows := 0
 var slow_frames := 0
+# Recent late frames, decaying each second. Sustained lateness with the input
+# preview on suspends the preview for this game: a frame of latency is better
+# than dropped game frames on a heavy core.
+var late_pressure := 0.0
+var preview_suspended := false
+const PREVIEW_SUSPEND_PRESSURE := 20.0
 var sram_timer := 0.0
+var sram_written := PackedByteArray() # last battery RAM on disk; skip identical writes
 var sram_restore_ok := true
 var skip_delta := true
 var run_ahead := 1
+## Preview in a second copy of the core: the playing core is never rewound, so
+## its sound stays continuous on every console. Off limits preview to cores whose
+## audio survives a same-instance restore (Registry.PREVIEW_SAFE_CORES).
+var separate_preview := true
+var preview_copy := "" # "", "ready" or "failed" for the loaded game
 var preview_time_usec := 0
 var preview_count := 0
 var gamepad := preload("res://scripts/emulation/gamepad_input.gd").new()
@@ -60,11 +72,14 @@ func load_rom(path: String) -> bool:
 		return false
 	var detected := Registry.identify(path)
 	if detected.is_empty():
-		report("Unsupported cartridge. Use an uncompressed SNES, NES or Sega cartridge file; .bin needs a SEGA header.", true)
+		report("Unsupported cartridge. Use an uncompressed game file for a supported system; .bin needs a SEGA or SEGADISCSYSTEM header.", true)
 		return false
 	var selected_path := Registry.core_path(detected)
 	if not FileAccess.file_exists(selected_path):
 		report("%s core missing. Restore %s from the application package." % [Registry.SYSTEMS[detected].name, selected_path], true)
+		return false
+	if not Registry.bios_satisfied(detected):
+		report("%s needs its BIOS. Put one of %s in the bios folder next to your roms folder, or in %s, then reload the game." % [Registry.SYSTEMS[detected].name, ", ".join(PackedStringArray(Registry.SYSTEMS[detected].bios_any)), Registry.preferred_bios_folder()], true)
 		return false
 	if not save_auto(): return false
 	stop()
@@ -84,10 +99,12 @@ func load_rom(path: String) -> bool:
 	if error != OK:
 		report("Cannot create save directory: " + error_string(error), true)
 		return false
+	Registry.stage_bios(system_id, saves)
 	if not core.load_game(path, saves):
 		report(str(core.last_error()), true)
 		return false
 	rom_path = path
+	preview_copy = ""
 	rom_hash = FileAccess.get_sha256(path)
 	var info: Dictionary = core.info()
 	core_identity = str(info.name)
@@ -98,12 +115,15 @@ func load_rom(path: String) -> bool:
 	accumulator = 0.0
 	audio_overflows = 0
 	slow_frames = 0
+	late_pressure = 0.0
+	preview_suspended = false
 	sram_timer = 0.0
 	skip_delta = true
 	preview_time_usec = 0
 	preview_count = 0
 	var sram_path := save_directory.path_join(rom_hash + ".srm")
 	sram_restore_ok = true
+	sram_written = PackedByteArray()
 	if FileAccess.file_exists(sram_path):
 		var ram := FileAccess.get_file_as_bytes(sram_path)
 		# Genesis Plus GX writes only the modified prefix but requests its full
@@ -116,6 +136,9 @@ func load_rom(path: String) -> bool:
 		if ram.is_empty() or not core.load_ram(ram):
 			sram_restore_ok = false
 			report("Could not restore SRAM: " + str(core.last_error()), true)
+	# Load the preview copy now, inside the game-load pause, rather than as a
+	# visible hitch on the first previewed frame.
+	if run_ahead > 0 and separate_preview: prepare_preview_copy()
 	var generator := AudioStreamGenerator.new()
 	generator.mix_rate_mode = AudioStreamGenerator.MIX_RATE_CUSTOM
 	generator.mix_rate = float(info.sample_rate)
@@ -134,6 +157,7 @@ func _process(delta: float) -> void:
 		skip_delta = false
 		return
 	accumulator += minf(delta, 0.25)
+	late_pressure = maxf(0.0, late_pressure - delta * 2.0)
 	var period := 1.0 / fps
 	var frames := 0
 	var rendered := false
@@ -146,7 +170,7 @@ func _process(delta: float) -> void:
 		accumulator -= period
 		frames += 1
 		auto_saved = false
-		rendered = rendered or bool(core.info().video_changed)
+		rendered = rendered or core.video_changed()
 		if playback != null and core.push_audio(playback) < 0:
 			audio_overflows += 1
 			if audio_overflows == 1 or audio_overflows % 300 == 0:
@@ -154,17 +178,56 @@ func _process(delta: float) -> void:
 	if accumulator >= period:
 		slow_frames += 1
 		accumulator = fmod(accumulator, period)
+		late_pressure += 1.0
+		if run_ahead > 0 and not preview_suspended and late_pressure >= PREVIEW_SUSPEND_PRESSURE:
+			preview_suspended = true
+			if core != null: core.close_preview()
+			preview_copy = ""
+			report("Input preview paused for this game: it needs the full frame time.", true)
 		if slow_frames == 1 or slow_frames % 300 == 0:
 			push_warning("Emulator cannot keep up with real time; reduce rendering load")
 	if rendered:
-		var preview := preview_frame(buttons, run_ahead) if run_ahead > 0 else {}
+		var preview := preview_frame(buttons, run_ahead) if run_ahead > 0 and preview_possible() else {}
 		if not paused: update_texture(true, preview)
 	sram_timer += delta
 	if sram_timer >= 10.0:
 		sram_timer = 0.0
 		flush_sram()
 
+func preview_possible() -> bool:
+	if preview_suspended: return false
+	return (separate_preview and preview_copy != "failed") or Registry.preview_safe(system_id)
+
+func set_separate_preview(value: bool) -> void:
+	separate_preview = value
+	if not value and core != null: core.close_preview()
+	preview_copy = ""
+
+func prepare_preview_copy() -> void:
+	if not preview_copy.is_empty() or not loaded: return
+	# Its own folder: a preview core must never write over real saves.
+	var directory := ProjectSettings.globalize_path("user://preview/" + system_id)
+	DirAccess.make_dir_recursive_absolute(directory)
+	Registry.stage_bios(system_id, directory)
+	preview_copy = "ready" if core.load_preview(Registry.core_path(system_id), rom_path, directory) else "failed"
+
+func separate_preview_frame(buttons: int, frames: int) -> Dictionary:
+	var started := Time.get_ticks_usec()
+	prepare_preview_copy()
+	var result: Dictionary = core.run_preview(buttons, maxi(frames, 1)) if preview_copy == "ready" else {}
+	if result.is_empty():
+		preview_copy = "failed"
+		core.close_preview()
+		push_warning("Separate preview core unavailable for this game; " + ("using the same-core preview." if Registry.preview_safe(system_id) else "input preview is off."))
+		return {}
+	preview_time_usec += Time.get_ticks_usec() - started
+	preview_count += 1
+	return result
+
 func preview_frame(buttons: int, frames := 1) -> Dictionary:
+	if separate_preview and preview_copy != "failed":
+		var separate := separate_preview_frame(buttons, frames)
+		if not separate.is_empty() or not Registry.preview_safe(system_id): return separate
 	# Advance disposable frames for presentation only. Audio was already queued
 	# from the real frames above; never enqueue preview audio.
 	var started := Time.get_ticks_usec()
@@ -204,23 +267,26 @@ func update_texture(force := false, preview: Dictionary = {}) -> void:
 	if (not force and not info.video_changed) or int(info.width) == 0:
 		return
 	var bytes: PackedByteArray = preview.bytes if not preview.is_empty() else core.frame()
-	var image := Image.create_from_data(int(info.width), int(info.height), false, Image.FORMAT_RGBA8, bytes)
+	# One Image is refilled each frame instead of allocating a new one.
+	if last_frame == null: last_frame = Image.create_from_data(int(info.width), int(info.height), false, Image.FORMAT_RGBA8, bytes)
+	else: last_frame.set_data(int(info.width), int(info.height), false, Image.FORMAT_RGBA8, bytes)
+	var image := last_frame
 	if texture == null or texture.get_width() != image.get_width() or texture.get_height() != image.get_height():
 		texture = ImageTexture.create_from_image(image)
 		content_changed.emit(texture)
 	else:
 		texture.update(image)
 	# Reuse the CPU image already uploaded for presentation; never read the GPU.
-	last_frame=image
 	frame_presented.emit(image)
+
+# Libretro joypad IDs: B,Y,Select,Start,Up,Down,Left,Right,A,X,L,R.
+const KEYBOARD_PAD := [KEY_Z, KEY_A, KEY_TAB, KEY_ENTER, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_X, KEY_S, KEY_Q, KEY_W]
 
 func input_mask() -> int:
 	if gamepad.menu_active: return 0
 	var mask: int = gamepad.mask()
-	# Libretro joypad IDs: B,Y,Select,Start,Up,Down,Left,Right,A,X,L,R.
-	var keys := [KEY_Z, KEY_A, KEY_TAB, KEY_ENTER, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_X, KEY_S, KEY_Q, KEY_W]
 	for id in range(12):
-		var pressed := Input.is_physical_key_pressed(keys[id])
+		var pressed := Input.is_physical_key_pressed(KEYBOARD_PAD[id])
 		if pressed: mask |= 1 << id
 	return mask
 
@@ -262,7 +328,8 @@ func write_bytes_atomic(path: String, bytes: PackedByteArray) -> bool:
 func flush_sram() -> void:
 	if not loaded or not sram_restore_ok: return
 	var ram: PackedByteArray = core.save_ram()
-	if not ram.is_empty(): write_bytes_atomic(save_directory.path_join(rom_hash + ".srm"), ram)
+	if ram.is_empty() or ram == sram_written: return
+	if write_bytes_atomic(save_directory.path_join(rom_hash + ".srm"), ram): sram_written = ram
 
 func state_path(slot := 0) -> String:
 	return save_directory.path_join("%s.slot%d.rst" % [rom_hash, slot])
@@ -309,6 +376,19 @@ func save_to(path: String, description: String) -> bool:
 	if not write_bytes_atomic(path, var_to_bytes(envelope)):
 		return false
 	report("%s • %s • %s" % [description,rom_path.get_file().get_basename(),state_time(path)])
+	return true
+
+## The console's reset button: the game restarts; battery saves and states are kept.
+func reset_game() -> bool:
+	if not loaded: return false
+	if not core.reset():
+		report(str(core.last_error()), true)
+		return false
+	restart_audio()
+	accumulator = 0.0
+	skip_delta = true
+	auto_saved = false
+	report("Reset • " + rom_path.get_file().get_basename())
 	return true
 
 func load_state(slot := 0) -> bool:

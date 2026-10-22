@@ -1,14 +1,15 @@
 #include "libretro_host.h"
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
-#include <stdexcept>
 
 void check(bool value, const char* message) {
     if (!value) throw std::runtime_error(message);
     std::cout << "PASS: " << message << '\n';
 }
 int main(int argc, char** argv) {
-    if (argc != 5) return 2;
+    if (argc != 5 && argc != 6) return 2;
     try {
         crt_xr::LibretroHost host;
         check(!host.load_core("/missing/crt_xr-core"), "Missing core fails cleanly");
@@ -27,9 +28,27 @@ int main(int argc, char** argv) {
         const std::uint8_t invalid = 1;
         check(!host.unserialize(&invalid, 1), "Core rejects malformed state without crashing");
         auto ram = host.save_ram();
+        {
+            const auto running = host.serialize();
+            check(host.reset() && host.serialize() != running && host.save_ram() == ram, "Reset restarts the console and keeps SRAM");
+            check(host.unserialize(running.data(), running.size()), "State restores after a reset");
+        }
         ram[0] = 73;
         check(host.set_save_ram(ram.data(), ram.size()) && host.save_ram()[0] == 73, "SRAM export and restore work");
         check(!host.set_save_ram(&invalid, 1), "Wrong-sized SRAM is rejected");
+        {
+            // Input preview runs a renamed copy of the core beside the playing one.
+            const std::filesystem::path original(argv[1]);
+            const auto copy = std::filesystem::temp_directory_path() / ("crt_xr_mock_preview" + original.extension().string());
+            std::filesystem::copy_file(original, copy, std::filesystem::copy_options::overwrite_existing);
+            crt_xr::LibretroHost second;
+            check(second.load_core(copy.string()) && second.load_game(argv[3], argv[4]), "A renamed core copy loads beside the playing core");
+            const auto playing = host.serialize();
+            check(second.unserialize(playing.data(), playing.size()) && second.serialize() == playing, "The copy adopts the playing core's state");
+            check(second.step(0) && second.step(0) && host.serialize() == playing && second.serialize() != playing, "Running the copy leaves the playing core untouched");
+            second.close();
+            std::filesystem::remove(copy);
+        }
         host.close();
         check(host.load_core(argv[2]), "Real Snes9x core dynamically loads");
         check(host.load_game(argv[3], argv[4]), "Real Snes9x loads original diagnostic ROM");
@@ -48,6 +67,20 @@ int main(int argc, char** argv) {
         check(!saved_ram.empty() && saved_ram[0] == 0x5A, "Real SNES program writes the expected SRAM sentinel");
         host.close_game();
         check(!host.step(0), "Frame execution is rejected after unload");
+        if (argc == 6) {
+            host.close();
+            crt_xr::LibretroHost fullpath_host;
+            check(fullpath_host.load_core(argv[5]), "Fullpath fixture core dynamically loads");
+            const auto image = std::filesystem::temp_directory_path() / "crt_xr_fullpath_probe.bin";
+            {
+                std::ofstream out(image, std::ios::binary);
+                out.seekp(40LL * 1024 * 1024 - 1);
+                out.put(0);
+            }
+            check(fullpath_host.load_game(image.string(), argv[4]), "Fullpath core receives a 40 MiB image without the buffer read");
+            check(fullpath_host.step(0) && fullpath_host.width == 2, "Fullpath core executes a frame");
+            std::filesystem::remove(image);
+        }
     } catch (const std::exception& error) { std::cerr << "FAIL: " << error.what() << '\n'; return 1; }
     return 0;
 }

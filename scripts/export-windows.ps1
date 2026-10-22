@@ -13,7 +13,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows export failed.' }
 & python (Join-Path $root 'scripts/set-windows-dpi.py') (Join-Path $out 'CRT-XR.exe')
 if ($LASTEXITCODE -ne 0) { throw 'Windows DPI manifest update failed.' }
 New-Item -ItemType Directory -Force (Join-Path $out 'cores'), (Join-Path $out 'assets'), (Join-Path $out 'licenses/shaders') | Out-Null
-foreach ($core in @('snes9x','nestopia','genesis_plus_gx')) {
+foreach ($core in @('snes9x','nestopia','genesis_plus_gx','gambatte','mgba','mednafen_pce_fast','mednafen_lynx','mednafen_ngp','stella','vecx')) {
     Copy-Item -LiteralPath (Join-Path $root "cores/${core}_libretro.dll") -Destination (Join-Path $out 'cores')
 }
 Copy-Item -Path (Join-Path $root 'cores/*LICENSE*') -Destination (Join-Path $out 'cores')
@@ -38,7 +38,7 @@ if ((Test-Path -LiteralPath $model) -or (Test-Path -LiteralPath (Join-Path $prep
     $ao = Join-Path $root 'build/crt-model/ao'
     if (Test-Path -LiteralPath $ao) {
         New-Item -ItemType Directory -Force (Join-Path $out 'assets/ao') | Out-Null
-        Copy-Item -Path (Join-Path $ao '*_ao.png') -Destination (Join-Path $out 'assets/ao')
+        Copy-Item -Path (Join-Path $ao '*_ao.res') -Destination (Join-Path $out 'assets/ao')
         Copy-Item -LiteralPath (Join-Path $ao 'bake.json') -Destination (Join-Path $out 'assets/ao')
     }
 }
@@ -76,7 +76,7 @@ $roomBake = Join-Path $root 'build/room-bake'
 if (Test-Path -LiteralPath (Join-Path $roomBake 'bake.json')) {
     $bakeOut = Join-Path $out 'assets/room-bake'
     New-Item -ItemType Directory -Force $bakeOut | Out-Null
-    foreach ($name in @('table_ao.png','floor_ao.png','table_contact_albedo.res','bake.json')) {
+    foreach ($name in @('floor_ao.png','table_contact_albedo.res','bake.json')) {
         Copy-Item -LiteralPath (Join-Path $roomBake $name) -Destination $bakeOut
     }
     Copy-Item -LiteralPath (Join-Path $root 'docs/room-contact-bake.md') -Destination (Join-Path $out 'assets/ROOM-CONTACT-BAKE.md')

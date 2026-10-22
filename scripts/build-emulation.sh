@@ -21,14 +21,16 @@ for platform in linux windows; do
     fi
     if [[ "$platform" == linux ]]; then
         make --silent -C "$source/libretro" -j"$jobs" platform=unix LTO= CXX='g++ -std=c++17'
-        cp "$source/libretro/snes9x_libretro.so" "$root/cores/"
+        core="$source/libretro/snes9x_libretro.so"
     else
         make --silent -C "$source/libretro" -j"$jobs" platform=win CC=x86_64-w64-mingw32-gcc-posix CXX='x86_64-w64-mingw32-g++-posix -std=c++17' LTO= LDFLAGS='-static -static-libgcc -static-libstdc++'
-        cp "$source/libretro/snes9x_libretro.dll" "$root/cores/"
+        core="$source/libretro/snes9x_libretro.dll"
     fi
+    # The test build only seeds cores/; build-release-cores.py owns the recorded release binaries.
+    if [[ ! -f "$root/cores/$(basename "$core")" ]]; then cp "$core" "$root/cores/"; fi
     python3 "$root/tests/make_probe_rom.py" "$root/build/crt-xr-probe.sfc"
     if [[ "$platform" == linux ]]; then
-        "$root/build/emulation-linux/crt-xr-host-test" "$root/build/emulation-linux/libcrt_xr_mock_core.so" "$root/cores/snes9x_libretro.so" "$root/build/crt-xr-probe.sfc" "$root/build"
+        "$root/build/emulation-linux/crt-xr-host-test" "$root/build/emulation-linux/libcrt_xr_mock_core.so" "$core" "$root/build/crt-xr-probe.sfc" "$root/build" "$root/build/emulation-linux/libcrt_xr_mock_fullpath_core.so"
     fi
 done
 cp "$root/tools/snes9x/LICENSE" "$root/cores/Snes9x-LICENSE.txt"

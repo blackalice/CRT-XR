@@ -14,9 +14,10 @@ Run Godot with --headless --path . --script scripts/prepare-wood-table.gd
 when the source GLB is present to reproduce build/wood-table/table.scn.
 
 Changes: extract the one table, flatten transforms, regenerate tangent vectors,
-and prepare three 2048-square mipmapped BC7 textures. Runtime keeps one mesh,
-one PBR material and 3,272 triangles. Texture storage including mipmaps is
-16 MiB. No other furniture, books or console props are retained.
+and prepare three 1024-square mipmapped BC7 textures (2048 until 22 October
+2026; an A/B capture at viewing distance differed by 0.17/255 on average).
+Runtime keeps one mesh, one PBR material and 3,272 triangles. Texture storage
+including mipmaps is 4 MiB. No other furniture, books or console props are retained.
 
 The support spans at least 2.2 units left/right, and the CRT footprint plus
 0.2 units front/back. Its top meets the casing underside and its feet meet the

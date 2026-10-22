@@ -4,7 +4,9 @@ func _init() -> void:
 	valid = false
 	live_status = "VITURE Windows / LIVE 3DoF"
 	var base := ProjectSettings.globalize_path("res://build/windows-tracking") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()
-	var helper := base.path_join("crt-xr-windows-tracking.exe")
+	# Packages keep the helper in tracking/ so it is not mistaken for the app.
+	var helper := base.path_join("tracking/crt-xr-windows-tracking.exe")
+	if not FileAccess.file_exists(helper): helper = base.path_join("crt-xr-windows-tracking.exe")
 	var sdk := OS.get_environment("CRT_XR_VITURE_SDK")
 	if sdk.is_empty():
 		sdk = ProjectSettings.globalize_path("res://sdk/x86_64/glasses.dll") if OS.has_feature("editor") else base.path_join("sdk/glasses.dll")

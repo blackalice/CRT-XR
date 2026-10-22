@@ -12,9 +12,10 @@ var menu: PanelContainer
 const Showcase = preload("res://scripts/presets/showcase.gd")
 const SettingsDefaults = preload("res://scripts/ui/settings_defaults.gd")
 const SettingsStore = preload("res://scripts/ui/settings_store.gd")
+const CoreRegistry = preload("res://scripts/emulation/core_registry.gd")
 const StartupStatus = preload("res://scripts/ui/startup_status.gd")
 const PICTURE_SECTIONS := ["crt", "picture"]
-const PROFILE_NAMES := ["Everyday", "Evening", "Showcase"]
+const PROFILE_NAMES := ["Everyday", "Evening", "Bright room"]
 var settings_store := SettingsStore.new()
 var picture_baseline := ConfigFile.new()
 var active_game_key := ""
@@ -22,6 +23,8 @@ var remember_game_picture := Showcase.PER_GAME_PICTURE
 var selected_profile := 0
 var profile_undo: ConfigFile
 var settings_dirty := false
+var capture_requested := "--capture" in OS.get_cmdline_user_args()
+var diagnose_requested := "--diagnose-view" in OS.get_cmdline_user_args()
 var startup_message := ""
 var recovery_elapsed := 0.0
 var diagnostics_elapsed := 0.0
@@ -64,7 +67,7 @@ const ROOM_FIELDS := [
 	["cabinet_grain_strength", "Plastic grain", 0.0, 1.0, 0.05],
 	["lamp_height", "Lamp height", 0.5, 4.0, 0.1],
 	["lamp_side", "Lamp side", -3.0, 3.0, 0.1],
-	["floor_brightness", "Carpet / rug brightness", 0.0, 2.0, 0.05],
+	["floor_brightness", "Floor brightness", 0.0, 2.0, 0.05],
 	["fade_begin", "Room fade begins (m)", 2.0, 10.0, 0.25],
 	["fade_end", "Room fades to black (m)", 3.0, 16.0, 0.25]]
 var tv_scale: float = Showcase.VIEW.tv_scale
@@ -99,7 +102,10 @@ var menu_view: SubViewport
 var menu_overlays: Array[TextureRect] = []
 var play_history := preload("res://scripts/content/play_history.gd").new()
 var last_game_path := ""
-var default_rom_dir := ""
+var default_rom_dir := "":
+	set(value):
+		default_rom_dir = value
+		CoreRegistry.library_root = value
 var display_report_elapsed := 0.0
 var view_diagnosed := false
 var sbs_prompt: Control
@@ -240,13 +246,8 @@ func start_application() -> void:
 		hud.add_theme_constant_override("shadow_offset_y", 1)
 		panel.add_child(hud)
 		diagnostics.append(hud)
-		# Each eye gets its own full-rect fade, including at the SBS join.
-		var fade := ColorRect.new()
-		fade.name = "EyeEdgeFade"
-		fade.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		fade.material = fade_material
-		fade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		panel.add_child(fade)
+		# Each eye fades at its own edges, including at the SBS join.
+		panel.material = fade_material
 		var notice := Label.new()
 		notice.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 		notice.offset_top = -75
@@ -277,8 +278,9 @@ func start_application() -> void:
 	for device in Input.get_connected_joypads():
 		print("Controller ", device, ": ", Input.get_joy_name(device))
 	emulator.content_changed.connect(func(texture):
-		world.picture.set_source(texture))
+		world.picture.set_source(texture, true))
 	emulator.frame_presented.connect(world.screen_light.set_image)
+	emulator.frame_presented.connect(world.picture.frame_presented)
 	emulator.game_changed.connect(func(active):
 		change_game_preferences(active)
 		pattern.visible = not active
@@ -368,9 +370,12 @@ func apply_settings(config: ConfigFile) -> void:
 	for setting in ROOM_FIELDS:
 		world.set(setting[0], clampf(config.get_value("room", setting[0], world.get(setting[0])), setting[2], setting[3]))
 	world.shadows = bool(config.get_value("room", "shadows", true))
-	world.show_rug = bool(config.get_value("room", "show_rug", true))
+	world.floor_style = clampi(int(config.get_value("room", "floor_style", Showcase.ROOM.floor_style)), 0, world.FLOOR_STYLES.size() - 1)
+	for key in ["show_clock_radio", "clock_24_hour", "show_vcr", "show_game_boxes"]:
+		world.set(key, bool(config.get_value("room", key, Showcase.ROOM[key])))
 	var preview_depth = config.get_value("emulation", "run_ahead", 1)
 	emulator.run_ahead = clampi(int(preview_depth), 0, 2)
+	emulator.set_separate_preview(bool(config.get_value("emulation", "separate_preview", true)))
 	distance = clampf(config.get_value("view", "distance", Showcase.VIEW.distance), 1.2, 5.0)
 	height_offset = clampf(config.get_value("view", "height_offset", Showcase.VIEW.height_offset), -1.5, 1.5)
 	tv_scale = clampf(config.get_value("view", "scale", Showcase.VIEW.tv_scale), 0.5, 1.6)
@@ -419,7 +424,8 @@ func _process(delta: float) -> void:
 		if distance_save_delay < 0.0: save_settings()
 	for overlay in menu_overlays: overlay.visible = menu_open
 	for hud in diagnostics: hud.modulate.a = 0.0 if menu_open else 1.0
-	menu_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if menu_open else SubViewport.UPDATE_DISABLED
+	var menu_mode := SubViewport.UPDATE_ALWAYS if menu_open else SubViewport.UPDATE_DISABLED
+	if menu_view.render_target_update_mode != menu_mode: menu_view.render_target_update_mode = menu_mode
 	provider.enabled = not menu_open and not emulator.loaded
 	display_report_elapsed += delta
 	if display_report_elapsed >= 1.0:
@@ -451,8 +457,10 @@ func _process(delta: float) -> void:
 	if motion_predict > 0.001 and provider.valid:
 		target = PosePrediction.extrapolate(target, provider.angular_velocity, motion_predict)
 	displayed = displayed.slerp(target, 1.0 - exp(-delta / smoothing)) if smoothing > 0.001 else target
-	world.television.position = Vector3(0, 1.25 + height_offset, -distance)
-	world.television.scale = Vector3.ONE * tv_scale
+	# Write only on change: each transform write dirties the TV subtree and its lights.
+	var tv_position := Vector3(0, 1.25 + height_offset, -distance)
+	if world.television.position != tv_position: world.television.position = tv_position
+	if world.television.scale != Vector3.ONE * tv_scale: world.television.scale = Vector3.ONE * tv_scale
 	emulator.tv_audio.update_pose(displayed,Vector3(0,1.25,0),world.television.position,delta)
 	music.update_pose(displayed,Vector3(0,1.25,0),world.television.position,delta)
 	diagnostics_elapsed += delta
@@ -467,10 +475,10 @@ func _process(delta: float) -> void:
 		if refresh_diagnostics and diagnostics[i].visible and not menu_open:
 			var a := displayed.get_euler() * 180.0 / PI
 			diagnostics[i].text = "CRT XR   /   %s\n%s\nYaw %+.1f   Pitch %+.1f   Roll %+.1f\n%.2fm  /  IPD %.0fmm  /  %.0f fps\nL + R + Start / Esc: menu   R3 / R: recenter" % ["LEFT" if stereo and i == 0 else ("RIGHT" if stereo else "DESKTOP"), provider.status, a.y, a.x, a.z, distance, ipd * 1000, Engine.get_frames_per_second()]
-	if "--capture" in OS.get_cmdline_user_args() and Engine.get_process_frames() == 30 and not screenshot_pending:
+	if capture_requested and Engine.get_process_frames() == 30 and not screenshot_pending:
 		screenshot_pending = true
 		capture.call_deferred()
-	if "--diagnose-view" in OS.get_cmdline_user_args() and Engine.get_process_frames() >= 180 and not view_diagnosed:
+	if diagnose_requested and Engine.get_process_frames() >= 180 and not view_diagnosed:
 		view_diagnosed = true
 		diagnose_view.call_deferred()
 
@@ -941,11 +949,14 @@ func capture_settings() -> ConfigFile:
 	config.set_value("preferences","metrics_visible",metrics_visible)
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds"]: config.set_value("accessibility",key,get(key))
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
+	config.set_value("emulation", "separate_preview", emulator.separate_preview)
 	config.set_value("view", "right_stick_distance", right_stick_distance)
 	config.set_value("view", "distance_speed", distance_speed)
 	for setting in ROOM_FIELDS: config.set_value("room", setting[0], world.get(setting[0]))
 	config.set_value("room", "shadows", world.shadows)
-	config.set_value("room", "show_rug", world.show_rug)
+	config.set_value("room", "floor_style", world.floor_style)
+	for key in ["show_clock_radio", "clock_24_hour", "show_vcr", "show_game_boxes"]:
+		config.set_value("room", key, world.get(key))
 	for pair in [["distance", distance], ["height_offset", height_offset], ["scale", tv_scale], ["ipd", ipd], ["convergence", convergence], ["edge_fade", edge_fade], ["vertical_fov", vertical_fov], ["smoothing", smoothing], ["motion_predict", motion_predict]]:
 		config.set_value("view", pair[0], pair[1])
 	for axis in ["yaw", "pitch", "roll"]:

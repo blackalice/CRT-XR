@@ -22,23 +22,33 @@
 
 ![CRT XR showing its built-in test signal on a curved CRT television, with a wooden table and carpet](docs/images/crt-xr-preview.png)
 
-*An in-app, single-eye capture of the current scene using the built-in test signal. No game is included.*
+*An example in-app, single-eye capture using the built-in test signal. No game is included.*
 
 ## Features
 
-- **A CRT in your space.** A detailed television, wooden table, soft carpet and baked contact shadows. The surroundings fade into black to suit XR glasses rather than filling your view with a whole virtual room.
+- **A CRT in your space.** A detailed television, wooden table and baked contact shadows, with a dim red clock radio showing the real time, a VCR on a shelf and unbranded game boxes. Switch props off individually and choose 90s confetti carpet (the default), wool carpet or wooden floorboards. The surroundings fade into black to suit XR glasses.
 - **Stereo and head tracking.** Full side-by-side rendering and rotational **3DoF** tracking let you look around an anchored screen. Adjust its distance, height, size and curvature, then recenter with a stick click.
-- **A picture you can tune.** Scanlines, phosphor detail, glass reflections, PAL/NTSC-inspired signal effects and colour controls. Screen-fitting options keep the full game image inside the tube.
-- **Five classic systems.** SNES, NES, Mega Drive / Genesis, Master System and Game Gear, powered by libretro cores.
+- **A picture you can tune and keep.** Scanlines, phosphor detail, glass reflections, PAL/NTSC-inspired signal effects and colour controls. Trying a preset preserves your custom picture; restore it with **Custom**, or save up to three named picture presets. Screen-fitting options keep the full game image inside the tube.
+- **Thirteen classic systems.** SNES, NES, Mega Drive / Genesis, Master System, Game Gear, Game Boy / Game Boy Color, Game Boy Advance, PC Engine / TurboGrafx-16, Sega CD / Mega-CD, Atari 2600, Atari Lynx, Neo Geo Pocket / Color and Vectrex, powered by libretro cores.
 - **A library that understands your folders.** Pick your ROM root or SD card and browse supported systems, Recent and Favourites. Unrelated console folders stay out of the way.
 - **Your music, in the room.** Play MP3 albums or direct MP3 web radio with positional sound and optional room reverb. Use the pause-menu transport and seek bar, and optionally lower game audio while music plays. The last track and position are restored, ready for you to press Play.
-- **Controller-first adjustments.** Organised settings pages, compact visual previews, per-option resets, saved setups and per-game picture preferences. Manual save states, automatic resume points and clean screenshots are built in.
+- **Responsive play.** Optional input preview in a separate copy of the emulator reduces input delay while keeping game audio intact. **Reset game** in the pause menu emulates the console's reset button and keeps battery saves and save states.
+- **Controller-first adjustments.** Quick settings, organised settings pages, controller text entry, compact visual previews, per-option resets, saved setups and per-game picture preferences. Accessibility options include larger text, stronger contrast and reduced animation. Save states with thumbnail previews, automatic resume points and clean screenshots are built in.
 
-Bring your own games and music. Supported cartridge files are uncompressed SNES, NES and the listed Sega systems; ZIP archives, disc systems and BIOS-based consoles are outside this beta's scope.
+Bring your own games and music. Supported files are uncompressed cartridges for the listed systems; Sega CD adds disc images as a `.cue` sheet or a `.bin` carrying the Sega CD header. ZIP archives and CHD discs remain outside this beta's scope. Sega CD and Atari Lynx need their hardware's own files: the Sega CD BIOS (`bios_CD_U.bin` and friends) and the Lynx boot ROM (`lynxboot.img`). CRT XR finds them in the `bios` folder next to your `roms` folder (the EmuDeck layout), in `~/Applications/CRT-XR/bios` on the Deck, or in a `bios` folder next to `CRT-XR.exe` on Windows. The game library names anything still missing.
 
 ## Download the beta
 
-Get the complete Windows ZIP or Steam Deck/Linux archive from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases). Start with **0.1.0-beta.8**. GitHub’s automatic source-code ZIP is not an installable app. The separate corresponding-source archive is for rebuilding and licence compliance.
+**Beta.9 (0.1.0-beta.9)** adds eight systems, a furnished room, saved picture presets and simpler installation. See the [beta.9 release notes](docs/RELEASE-NOTES-beta.9.md) for the full changes and known limits.
+
+Download from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases). Pick **one** app package:
+
+| You have | Download | Then |
+|---|---|---|
+| **Steam Deck** | `CRT-XR-0.1.0-beta.9-SteamDeck.tar.gz` | Extract it in Desktop Mode and double-click **Install CRT XR** |
+| **Windows PC** | `CRT-XR-0.1.0-beta.9-Windows.zip` | Extract it and double-click **CRT-XR.exe** |
+
+Each download opens with a short **HOW TO INSTALL** / **HOW TO START** file. The `…-source-code.tar.gz` file and GitHub's automatic "Source code" links are not apps: they are for rebuilding and licence compliance.
 
 The app is free and early: please [report bugs](https://github.com/blackalice/CRT-XR/issues), suggest improvements and share compatibility results. This project has been built with substantial AI coding assistance (“vibe coded”); code reviews and contributions are welcome.
 
@@ -48,17 +58,18 @@ The app is free and early: please [report bugs](https://github.com/blackalice/CR
 |---|---|
 | **Steam Deck + VITURE Pro 2** | The tested XR setup, including Gaming Mode mono-to-SBS startup. **Decky Loader and XR Gaming with Pro 2 support must already be installed**. Tracking compatibility is checked at runtime rather than restricted to one driver binary. |
 | **Steam Deck without glasses** | Mono play. The latest automatic launcher includes this path; final hardware acceptance is still pending. |
-| **Windows** | Portable preview with mono/SBS and native VITURE tracking tested locally on Pro 2. Requires the separately supplied Windows SDK; vendor SDK DLLs are not bundled. |
+| **Windows** | Portable app for normal-monitor play or SBS glasses. VITURE tracking has been tested locally on Pro 2 and needs the separately supplied VITURE Windows SDK; monitor play does not need it. Vendor SDK DLLs are not bundled. |
 
 The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a compatible XR Gaming driver**. We expect other compatible glasses to work, but **only VITURE Pro 2 has been tested**. Automatic detection currently recognises VITURE; other models may need manual display/profile setup and a compatible driver. SBS and built-in 3DoF alone do not guarantee that CRT XR can access tracking. See [display setup](docs/display-setup.md) and [Gaming Mode handoff notes](docs/SBS-HANDOFF-TEST.md).
 
 ## Install on Steam Deck
 
-1. Download the **complete Linux beta package**, rather than GitHub’s source-code archive, and switch your Deck to **Desktop Mode**. Sign in to Steam at least once.
-2. For tracked XR, install **Decky Loader → XR Gaming** and confirm it recognises your glasses. Use an XR Gaming release that supports VITURE Pro 2; older stable installations may need the testing channel. CRT XR setup assumes this prerequisite; it does not install the plugin or replace your driver.
-3. Extract the package and open **Install CRT XR.desktop**. Choose **Trust and Launch / Execute** if prompted. Select the tested VITURE Full SBS profile, or Deck / monitor only.
-4. Finish any running game and allow setup to close Steam. It installs CRT XR, adds or updates the shortcut, applies the selected resolution profile and installs the supplied Steam artwork. Existing settings, saves and later custom artwork are preserved.
-5. Restart Steam yourself, then **Return to Gaming Mode → Library → Non-Steam → CRT XR**.
+1. In **Desktop Mode**, download `CRT-XR-0.1.0-beta.9-SteamDeck.tar.gz` and extract it (right-click → Extract). Sign in to Steam at least once beforehand.
+2. In the extracted folder, double-click **Install CRT XR**. Choose **Trust and Launch** if asked. Pick the VITURE Full SBS profile, or Deck / monitor only.
+3. Let setup close Steam. It installs CRT XR, adds or updates its Steam shortcut and artwork, and keeps your settings, saves and custom artwork.
+4. Restart Steam, then **Return to Gaming Mode → Library → Non-Steam → CRT XR**. You can delete the extracted folder.
+
+For head tracking, **Decky Loader → XR Gaming** must already be installed and recognise your glasses (VITURE Pro 2 currently needs an XR Gaming release with Pro 2 support, which may be the testing channel). CRT XR does not install the plugin or replace your driver; without it you get a fixed view.
 
 No SSH, Steam developer interface or administrator password is needed for CRT XR's app installer. The separately installed XR Gaming prerequisite has its own setup requirements. If the script opens as text, or you have several Steam accounts, follow the [full installation guide](docs/GETTING-STARTED.md).
 
@@ -74,12 +85,12 @@ Open **Game library → Library locations** to choose your ROM folder or SD card
 
 ## Install on Windows
 
-1. Extract the **complete Windows ZIP**, keeping `CRT-XR.exe`, `CRT-XR.pck` and all neighbouring folders together. The app is unsigned and portable; no installer or Steam is required.
+1. Extract `CRT-XR-0.1.0-beta.9-Windows.zip` to a folder (not inside the ZIP) and double-click **CRT-XR.exe**. It is portable and unsigned: if Windows warns, choose **More info → Run anyway**. Keep the files and folders next to the EXE together. For normal-monitor play, choose **Play on this screen without glasses**; the remaining steps are for glasses.
 2. For glasses tracking, obtain the **VITURE Windows x86_64 SDK separately** and copy the contents of its `x86_64` folder into a folder named `sdk` beside the EXE. The beta does **not** include proprietary VITURE SDK DLLs; installing SpaceWalker alone does not configure this step. See [Windows setup](docs/WINDOWS-SETUP.md).
 3. Close SpaceWalker so it does not compete for tracking. **Switch the glasses to SBS first**, then launch CRT XR on your normal monitor.
 4. Choose the glasses display and select **Open glasses view**. The app moves under a black curtain and opens when the selected display is ready. For normal-monitor play, choose **Play on this screen without glasses**.
 
-Windows uses native Xbox-compatible controller support. **LB + RB + Start** opens the menu; **R3** recentres. Both platforms use the same TV-distance range; desktop and XR field-of-view calibration are stored separately. Mixed Windows display scaling is handled by the exported app's per-monitor DPI manifest.
+Windows uses native Xbox-compatible controller support. **LB + RB + Start** opens the menu (L1 + R1 + Start on the Deck); **R3** recentres. Both platforms use the same TV-distance range; desktop and XR field-of-view calibration are stored separately. Mixed Windows display scaling is handled by the exported app's per-monitor DPI manifest.
 
 Only **VITURE Pro 2** has been tested for Windows tracking. Other brands need a tracking backend; SBS support alone is not sufficient. Public-package setup with a different Windows user and extended reconnect/suspend testing remain beta feedback areas.
 
@@ -99,15 +110,34 @@ roms/
 │   └── Game.md
 ├── mastersystem/
 │   └── Game.sms
-└── gamegear/
-    └── Game.gg
+├── gamegear/
+│   └── Game.gg
+├── gb/              # gbc/ and gameboy/ also work
+│   └── Game.gb
+├── gba/
+│   └── Game.gba
+├── pcengine/        # tg16/ turbografx16/ also work
+│   └── Game.pce
+├── segacd/          # megacd/ also works; needs the BIOS files
+│   ├── Game.cue
+│   └── Game.bin
+├── atari2600/       # atari/ atarivcs/ also work
+│   └── Game.a26
+├── atarilynx/       # needs lynxboot.img
+│   └── Game.lynx
+├── ngpc/            # ngp/ neogeopocket/ also work
+│   └── Game.ngpc
+└── vectrex/
+    └── Game.vec
 ```
 
 Windows users can open **Computer drives** directly in the browser, including mapped drives, or use **Open folder or network path…** with a path such as `\\server\share\roms`. Connect protected shares in Windows File Explorer first. Choose **Use this folder for my library** to save the root.
 
 CRT XR discovers supported games in subfolders and presents them by system; you do not need to move ROMs into the app folder. Common folder aliases such as `genesis`, `superfamicom`, `sms` and `gg` are recognised. Folder names help discovery, while the supported file type/content chooses the emulator core. You can also select a single supported system folder or browse to a game directly.
 
-Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Only supported, recognised cartridges appear. ROMs must be **uncompressed**; ZIP archives are not scanned as games. No ROMs are supplied.
+Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Supported, recognised games appear. ROMs must be **uncompressed**; ZIP archives are not scanned as games. No ROMs are supplied.
+
+PC Engine, Atari 2600, Lynx and Vectrex still need real-game testing beyond diagnostic programs. PC Engine CD, SuperGrafx, Sega 32X and CHD images are unsupported. Sega CD needs the BIOS matching the disc's region; a different region's BIOS can produce a generic load error. See [supported formats and BIOS setup](docs/emulation.md).
 
 ## Controls
 
@@ -125,7 +155,7 @@ On Steam Deck, use Steam's **Gamepad With Joystick Trackpad** layout. On Windows
 | Move TV closer / farther | Right stick, when enabled | Page Up / Page Down |
 | Screenshot | Pause menu | F6 |
 
-Continue or library setup leads the home screen. Quick settings opens TV placement, recenter, picture presets and both volume controls. Music uses a compact strip when idle or paused and expands its transport and timeline during playback. Left/right selects playback controls or seeks; up/down moves between music and game actions. Game controls follow each supported console's layout.
+Continue or library setup leads the home screen. Quick settings opens TV placement, recenter, picture presets and both volume controls. In game lists, left/right jumps ten games and scrolls the selection into view. **Reset game** is in the pause menu. **Controls & XR → Separate preview core** controls the separate emulator copy used by **Reduce input delay**. Save picture presets under **Picture → Presets**; accessibility options are under **About & Help → Accessibility**. Music uses a compact strip when idle or paused and expands its transport and timeline during playback. Left/right selects playback controls or seeks; up/down moves between music and game actions. Game controls follow each supported console's layout.
 
 ## Updates, help and feedback
 

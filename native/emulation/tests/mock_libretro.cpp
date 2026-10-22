@@ -25,15 +25,27 @@ RETRO_API void retro_init() {
     environment(RETRO_ENVIRONMENT_SET_VARIABLES, options);
 }
 RETRO_API void retro_deinit() {}
-RETRO_API void retro_get_system_info(retro_system_info* info) { *info = {"CRT XR test fixture", "1", "sfc", false, false}; }
+RETRO_API void retro_get_system_info(retro_system_info* info) { *info = {"CRT XR test fixture", "1", "sfc",
+#ifdef MOCK_NEED_FULLPATH
+    true
+#else
+    false
+#endif
+    , false}; }
 RETRO_API void retro_get_system_av_info(retro_system_av_info* info) { *info = {{2, 2, 2, 2, 1}, {60, 32000}}; }
 RETRO_API void retro_set_controller_port_device(unsigned, unsigned) {}
 RETRO_API bool retro_load_game(const retro_game_info* game) {
     counter = 0;
+#ifdef MOCK_NEED_FULLPATH
+    const bool supplied = game && game->path && !game->data;
+#else
+    const bool supplied = game && game->data;
+#endif
     retro_variable option{"fixture_option", nullptr};
-    return game && game->data && environment(RETRO_ENVIRONMENT_GET_VARIABLE, &option) && std::strcmp(option.value, "default") == 0;
+    return supplied && environment(RETRO_ENVIRONMENT_GET_VARIABLE, &option) && std::strcmp(option.value, "default") == 0;
 }
 RETRO_API void retro_unload_game() {}
+RETRO_API void retro_reset() { counter = 0; }
 RETRO_API void retro_run() {
     ++counter;
     poll();

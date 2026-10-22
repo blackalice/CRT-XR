@@ -4,7 +4,7 @@ Version: 0.1.0-beta.8. Tested with VITURE Pro 2 and an Xbox-compatible controlle
 
 ## Extract the app
 
-Download the complete Windows ZIP from https://github.com/blackalice/CRT-XR/releases and extract it. Keep CRT-XR.exe, CRT-XR.pck, the tracking helper, cores, assets and notices together. Run CRT-XR.exe. It is unsigned; there is no Windows installer and Steam is optional.
+Download `CRT-XR-<version>-Windows.zip` from https://github.com/blackalice/CRT-XR/releases and extract it to a folder. Double-click **CRT-XR.exe**; it is unsigned, so if Windows warns, choose **More info → Run anyway**. There is nothing to install and Steam is optional. Keep the EXE with the files and folders next to it (`CRT-XR.pck`, the extension DLL, `cores`, `assets`, `tracking`, `docs`, `licenses`).
 
 Without glasses, choose **Play on this screen without glasses**. No VITURE SDK is needed for this path.
 
@@ -22,7 +22,7 @@ If the view stays black, return the glasses to mono and press B / Escape to retr
 
 Xbox/XInput-compatible controllers work directly, without Steam desktop mappings. LB + RB + Start opens settings; R3 recentres. Up/down selects; left/right adjusts; A activates, B returns, Y resets the selected option, X opens compact preview. LB/RB changes categories and LT/RT changes subsections. The right stick adjusts TV distance when enabled.
 
-Choose **Game library → Library locations** and your main ROM folder containing snes, nes, megadrive/genesis, mastersystem and gamegear subfolders. Select **Use this folder for my library**. The browser's **Computer drives** lists local/removable/mapped drives; **Open folder or network path…** accepts D:/roms or \\server\share\roms. Sign in to protected shares in Windows File Explorer first. Music uses the same path entry. No games or music are supplied. ROMs must be uncompressed; ZIP games are not supported.
+Choose **Game library → Library locations** and your main ROM folder containing the console subfolders (snes, nes, megadrive, gb, gba and so on). Select **Use this folder for my library**. The browser's **Computer drives** lists local/removable/mapped drives; **Open folder or network path…** accepts D:/roms or \\server\share\roms. Sign in to protected shares in Windows File Explorer first. Music uses the same path entry. No games or music are supplied. ROMs must be uncompressed; ZIP games are not supported.
 
 Desktop and XR calibration are stored independently. Older Windows preview settings using a 50-degree field of view migrate to 24 degrees for glasses. Distance limits remain 1.2–5 metres; if a formerly small picture becomes very large, move the TV back with the right stick.
 

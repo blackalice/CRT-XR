@@ -7,28 +7,39 @@
 #include <vector>
 
 namespace crt_xr {
-// One Libretro instance, used only on the Godot main thread.
+// One Libretro instance, used only on the Godot main thread. Several hosts may
+// coexist when each loads its own copy of a core library; the C callbacks reach
+// whichever host is currently calling into its core.
 class LibretroHost {
 public:
     ~LibretroHost();
     bool load_core(const std::string& path);
     bool load_game(const std::string& path, const std::string& save_directory);
     bool step(std::uint16_t buttons);
+    bool reset();
     void close_game();
     void close();
     std::vector<std::uint8_t> serialize();
+    bool serialize_into(std::vector<std::uint8_t>& state); // reuses the buffer's capacity
     bool unserialize(const std::uint8_t* data, std::size_t size);
     std::vector<std::uint8_t> save_ram() const;
     bool set_save_ram(const std::uint8_t* data, std::size_t size);
     bool loaded = false;
     unsigned width = 0, height = 0;
     bool video_changed = false;
+    // False tells the core its audio is unused (input preview) and drops samples.
+    bool want_audio = true;
     double fps = 60.0, sample_rate = 32040.0;
     std::string error, name;
     std::vector<std::uint8_t> rgba;
     std::vector<std::int16_t> pcm;
 private:
     static LibretroHost* active;
+    struct Use {
+        LibretroHost* previous;
+        explicit Use(const LibretroHost* host) : previous(active) { active = const_cast<LibretroHost*>(host); }
+        ~Use() { active = previous; }
+    };
     void* library = nullptr;
     bool initialized = false;
     retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
@@ -50,7 +61,7 @@ private:
     CORE_API(set_audio_sample); CORE_API(set_audio_sample_batch);
     CORE_API(set_input_poll); CORE_API(set_input_state);
     CORE_API(get_system_info); CORE_API(get_system_av_info);
-    CORE_API(set_controller_port_device); CORE_API(load_game); CORE_API(unload_game);
+    CORE_API(set_controller_port_device); CORE_API(load_game); CORE_API(unload_game); CORE_API(reset);
     CORE_API(run); CORE_API(serialize_size); CORE_API(serialize); CORE_API(unserialize);
     CORE_API(get_memory_data); CORE_API(get_memory_size);
 #undef CORE_API

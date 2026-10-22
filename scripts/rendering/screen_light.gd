@@ -18,6 +18,8 @@ var current := Vector3.ZERO
 var elapsed := SAMPLE_PERIOD
 var sample_count := 0
 var sampling_usec := 0
+var applied := Vector3(-1, -1, -1) # colour last written to the lights
+var applied_scale := Vector3.ZERO # range scale, power level, strength last written
 
 func _ready() -> void:
 	name = "ScreenLight"
@@ -60,6 +62,12 @@ static func average_radiance(image: Image, settings: Dictionary) -> Vector3:
 	# Grade each sample BEFORE averaging, in linear emitted-light space.
 	var matrix := Pipeline.colour_basis_for(settings)
 	var balance := Vector3(1.0 + settings.temperature * .08, 1.0, 1.0 - settings.temperature * .10)
+	# Hoisted out of the 192-sample loop: dictionary lookups dominate GDScript cost.
+	var contrast := float(settings.contrast)
+	var gamma := float(settings.gamma)
+	var brightness := float(settings.brightness)
+	var width := image.get_width()
+	var height := image.get_height()
 	var total := Vector3.ZERO
 	for y in range(12):
 		for x in range(16):
@@ -67,11 +75,10 @@ static func average_radiance(image: Image, settings: Dictionary) -> Vector3:
 			# Repeat within quadrants so equal-area colour swaps remain invariant.
 			var jx := .15 + .7 * fmod((x%8)*.618034+(y%6)*.414214,1.0)
 			var jy := .15 + .7 * fmod((y%6)*.754878+(x%8)*.569840,1.0)
-			var pixel := image.get_pixel(mini(int((x+jx)*image.get_width()/16.0),image.get_width()-1),
-				mini(int((y+jy)*image.get_height()/12.0),image.get_height()-1))
+			var pixel := image.get_pixel(mini(int((x+jx)*width/16.0),width-1),mini(int((y+jy)*height/12.0),height-1))
 			var c := matrix * Vector3(pixel.r,pixel.g,pixel.b)
-			c = ((c-Vector3.ONE*.5)*float(settings.contrast)+Vector3.ONE*.5).clamp(Vector3.ZERO,Vector3.ONE)*balance
-			c = Vector3(pow(maxf(c.x,0),settings.gamma),pow(maxf(c.y,0),settings.gamma),pow(maxf(c.z,0),settings.gamma))*float(settings.brightness)
+			c = ((c-Vector3.ONE*.5)*contrast+Vector3.ONE*.5).clamp(Vector3.ZERO,Vector3.ONE)*balance
+			c = Vector3(pow(maxf(c.x,0),gamma),pow(maxf(c.y,0),gamma),pow(maxf(c.z,0),gamma))*brightness
 			total += c.clamp(Vector3.ZERO,Vector3.ONE)
 	return total / 192.0
 
@@ -93,6 +100,10 @@ func _process(delta: float) -> void:
 	var colour := Color(current.x,current.y,current.z) / maxf(peak,.00001)
 	var object_scale := global_transform.basis.get_scale().abs()
 	var range_scale := maxf(object_scale.x,maxf(object_scale.y,object_scale.z))
+	# The smoothing converges asymptotically; skip imperceptible light updates.
+	var scales := Vector3(range_scale, power_level, strength)
+	if (current - applied).length() < 0.0005 and scales == applied_scale: return
+	applied = current; applied_scale = scales
 	for light in lights:
 		light.visible = peak > .0001
 		light.light_color = colour.linear_to_srgb()

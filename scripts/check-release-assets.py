@@ -8,7 +8,7 @@ for item in json.loads((ROOT/"assets/model-sources.json").read_text()):
  assert source.is_file(),f"Missing {source}; restore the model-asset backup"
  assert hashlib.sha256(source.read_bytes()).hexdigest()==item["source_sha256"],f"Changed source: {source}"
  assert (ROOT/item["prepared"]).is_file(),f"Prepare {item['name']} before export"
-for path in ["build/room-bake/table_contact_albedo.res","build/room-bake/floor_ao.png","build/crt-model/ao/tvfront_ao.png","third_party/godot/LICENSE.txt","third_party/godot/COPYRIGHT.txt"]:
+for path in ["build/room-bake/table_contact_albedo.res","build/room-bake/floor_ao.png","build/crt-model/ao/tvfront_ao.png","build/crt-model/ao/tvfront_ao.res","build/crt-model/ao/tvback_ao.res","third_party/godot/LICENSE.txt","third_party/godot/COPYRIGHT.txt"]:
  assert (ROOT/path).is_file(),f"Missing release input: {path}"
 assert not json.loads((ROOT/"build/room-bake/bake.json").read_text())["console_present"],"Rebake the launch layout without the console"
 print("Release model sources, prepared assets, bakes and engine notices verified.")

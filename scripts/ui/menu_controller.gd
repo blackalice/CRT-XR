@@ -81,12 +81,16 @@ var notification := ""
 var notification_time := 0.0
 var notification_context := ""
 var status_title := "Choose a game"
-var status_detail := "Open a SNES, NES or Sega game, or adjust the test signal."
+var status_detail := "Open a game from your library, or adjust the test signal."
 var confirmation: Dictionary = {}
 var return_state: Dictionary = {}
 var draft_names: Dictionary = {}
 const PRESET_IDS := ["showcase","clean","rgb","auto","pal","ntsc"]
+const PRESET_NAMES := ["Deck Showcase (PAL)","Clean source","RGB CRT","Auto composite","PAL composite","NTSC composite"]
+const MY_PRESET_COUNT := 3
 var picture_undo: ConfigFile
+var my_preset := 0
+var rename_preset := -1
 var help_title := ""
 var help_copy := ""
 var help_origin: Dictionary = {}
@@ -154,7 +158,8 @@ func _ready() -> void:
 		button.text = CATEGORIES[i]
 		button.add_theme_font_size_override("font_size",20)
 		button.custom_minimum_size.y = 36
-		for style in ["normal","hover","pressed"]: button.add_theme_stylebox_override(style,MenuSkin.box(Color.TRANSPARENT,Color.TRANSPARENT,0,6))
+		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		for style in ["normal","hover","pressed"]: button.add_theme_stylebox_override(style,sidebar_box(Color.TRANSPARENT))
 		button.focus_mode = Control.FOCUS_NONE
 		button.pressed.connect(func(): switch_category(index-category))
 		sidebar.add_child(button); sidebar_buttons.append(button)
@@ -206,7 +211,7 @@ func _ready() -> void:
 	help_label = Label.new()
 	help_label.custom_minimum_size.y = 64
 	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_label.max_lines_visible = 2
+	help_label.max_lines_visible = 3
 	help_label.add_theme_font_size_override("font_size",20)
 	layout.add_child(help_label)
 	hints = preload("res://scripts/ui/shortcut_footer.gd").new()
@@ -224,6 +229,12 @@ func _ready() -> void:
 	open_pause()
 	hide()
 
+# Left-aligned category labels need side padding without taller buttons.
+func sidebar_box(colour: Color) -> StyleBoxFlat:
+	var style := MenuSkin.box(colour,Color.TRANSPARENT,0,6)
+	style.content_margin_left=12; style.content_margin_right=12
+	return style
+
 func state_key() -> String:
 	match mode:
 		"settings": return "settings:%d:%d" % [category,subsection]
@@ -231,6 +242,7 @@ func state_key() -> String:
 		"browser": return "browser:"+library.current_dir
 		"games": return "games:%s:%s:%d" % [host.default_rom_dir,library_system,game_page]
 		"slot": return "slot:%d" % host.selected_profile
+		"my_preset": return "my_preset:%d" % my_preset
 	return mode
 
 func remember() -> void:
@@ -290,7 +302,8 @@ func back() -> void:
 		"launch": restore(launch_origin)
 		"slot", "room_presets": mode="settings"; render()
 		"folder_path": restore(folder_path_origin)
-		"rename": mode="slot"; render()
+		"rename": mode="my_preset" if rename_preset>=0 else "slot"; render()
+		"my_preset": mode="settings"; render()
 		"music_browser": restore(music_origin)
 		"radio_url": mode="settings"; render()
 		"help": restore(help_origin)
@@ -331,6 +344,7 @@ func setup_name() -> String:
 	return str(config.get_value("meta","name",host.PROFILE_NAMES[host.selected_profile]))
 
 func save_draft_name() -> void:
+	if rename_preset>=0: rename_my_preset(rename_preset,rename_field.text); return
 	draft_names[host.selected_profile] = rename_field.text.strip_edges().left(32)
 	mode="slot"; clear_input(); render()
 	notify("Name ready. Save this setup to store the new name.")
@@ -354,10 +368,13 @@ func library_items() -> Array:
 	var h=host
 	if rom_index.total()==0:
 		return [card(catalog.action("library.setup","Set up your ROM library" if h.default_rom_dir.is_empty() else "Choose a ROM folder",open_library_tools,"Choose your main ROM folder or SD card. Supported games appear here automatically; your files stay where they are."),"CHOOSE A FOLDER TO GET STARTED","locations",MenuSkin.AMBER,"LIBRARY SETUP")]
-	var result: Array = [
-		card(catalog.action("library.recent","Recently played",func(): open_history("recent"),"Return to your latest games. Unplugged-card entries are kept.",h.play_history.recent.is_empty(),"%d game%s" % [h.play_history.recent.size(),"" if h.play_history.recent.size()==1 else "s"]),"PICK UP & PLAY","recent",MenuSkin.AMBER,"QUICK ACCESS"),
-		card(catalog.action("library.favourites","Favourites",func(): open_history("favourites"),"Your favourites across every supported console. Press X on a game to add it.",h.play_history.favourites.is_empty(),"%d game%s" % [h.play_history.favourites.size(),"" if h.play_history.favourites.size()==1 else "s"]),"YOUR PERSONAL SHELF","favourites",Color("dfb984"),"QUICK ACCESS")]
-	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"]}
+	var result: Array = []
+	# Quick-access shelves appear once they hold something.
+	if not h.play_history.recent.is_empty(): result.append(
+		card(catalog.action("library.recent","Recently played",func(): open_history("recent"),"Return to your latest games. Unplugged-card entries are kept.",h.play_history.recent.is_empty(),"%d game%s" % [h.play_history.recent.size(),"" if h.play_history.recent.size()==1 else "s"]),"PICK UP & PLAY","recent",MenuSkin.AMBER,"QUICK ACCESS"))
+	if not h.play_history.favourites.is_empty(): result.append(
+		card(catalog.action("library.favourites","Favourites",func(): open_history("favourites"),"Your favourites across every supported console. Press X on a game to add it.",h.play_history.favourites.is_empty(),"%d game%s" % [h.play_history.favourites.size(),"" if h.play_history.favourites.size()==1 else "s"]),"YOUR PERSONAL SHELF","favourites",Color("dfb984"),"QUICK ACCESS"))
+	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"]}
 	for system in library.Registry.SYSTEMS:
 		var id: String=system
 		var count: int=rom_index.games.get(id,[]).size()
@@ -425,7 +442,7 @@ func browse_folders() -> void:
 	show_error("No available folder could be opened.")
 
 func open_default() -> void:
-	if host.default_rom_dir.is_empty(): show_error("No default folder yet. Browse to your ROM folder and press RB.")
+	if host.default_rom_dir.is_empty(): show_error("No default folder yet. Browse to your ROM folder and press R1.")
 	else: open_folder(host.default_rom_dir)
 
 func open_cards() -> void:
@@ -472,10 +489,16 @@ func game_item(path: String, label: String) -> Dictionary:
 	var item: Dictionary = catalog.action("game:"+path,label,func(): select_file(path),"Open this cartridge or mark it as a favourite.",false,"★" if path in host.play_history.favourites else "›")
 	item["rom_path"]=path
 	item["layout"]="game"
-	var system: String=library.Registry.identify(path)
 	var folder := path.get_base_dir().get_file()
-	if system.is_empty(): system=RomIndex.Folders.system(folder)
-	item["detail"]=(library.Registry.SYSTEMS[system].name if not system.is_empty() else "Cartridge")+(" · Storage unavailable" if not FileAccess.file_exists(path) else (" · "+folder if RomIndex.Folders.system(folder).is_empty() else " cartridge"))
+	var parts: Array[String]=[]
+	# A console's own list already names the console; mixed lists need it.
+	if mode!="games":
+		var system: String=library.Registry.identify(path)
+		if system.is_empty(): system=RomIndex.Folders.system(folder)
+		parts.append(library.Registry.SYSTEMS[system].name if not system.is_empty() else "Game")
+	if not FileAccess.file_exists(path): parts.append("Storage unavailable")
+	elif RomIndex.Folders.system(folder).is_empty(): parts.append(folder)
+	item["detail"]=" · ".join(parts)
 	return item
 
 func toggle_favourite() -> void:
@@ -494,6 +517,11 @@ func state_action(saving: bool) -> void:
 	if FileAccess.file_exists(host.emulator.state_path()):
 		ask("Overwrite manual save?", "Replace the save for %s from %s?" % [host.emulator.rom_path.get_file().get_basename(),host.emulator.state_time(host.emulator.state_path())],func(): perform_state_action(true),host.emulator.state_path())
 	else: perform_state_action(true)
+
+func reset_game() -> void:
+	ask("Reset the game?","Restarts %s as if you pressed the console's reset button. Progress since your last save is lost; battery saves and save states are kept." % host.emulator.rom_path.get_file().get_basename(),func():
+		if host.emulator.reset_game(): host.close_settings(); host.show_notice(host.emulator.status)
+		else: show_error(host.emulator.status))
 
 func perform_state_action(saving: bool) -> void:
 	var succeeded: bool = host.emulator.save_state() if saving else host.emulator.load_state()
@@ -593,12 +621,14 @@ func get_items() -> Array:
 				home.insert(2,catalog.action("home.quick","Quick settings",func(): category=7; subsection=0; open_settings(),"TV position, recenter, picture preset and volumes."))
 				if h.default_rom_dir.is_empty(): home[1].label="Set up library"
 				home=home.slice(0,3)+music_actions()+home.slice(3)
+				if home[0].disabled: home.remove_at(0)
 				return home
 			var pause_items: Array = [
 			catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded),
 			catalog.action("games","Choose game",open_library,"Open your recent game, default ROM folder or SD card."),
 			catalog.action("save_state","Save state",func(): state_action(true),"Saves the current game to state slot 0.",not h.emulator.loaded),
 			catalog.action("load_state","Load state",func(): state_action(false),"Restores state slot 0 for the current game.",not h.emulator.loaded or not FileAccess.file_exists(h.emulator.state_path())),
+			catalog.action("reset_game","Reset game",reset_game,"Presses the console's reset button. Battery saves and save states are kept.",not h.emulator.loaded),
 			catalog.action("screenshot","Screenshot",h.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),
 			catalog.action("settings","Settings",open_settings,"Adjust the view, picture, room, controls and saved setups."),
 			catalog.action("exit","Exit CRT XR",func(): ask("Exit CRT XR?","An automatic resume point, settings and cartridge SRAM will be saved.",h.request_exit),"Close the application.")]
@@ -623,13 +653,13 @@ func get_items() -> Array:
 				var path: String = candidate
 				locations.append(catalog.action("library.detected:"+path,"Found ROM folder: "+path.trim_prefix(library.home_folder()+"/"),func(): open_folder(path),"Open this detected library, then choose Use this folder for my library. "+path))
 			return locations + [
-			catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the saved ROM folder for added or removed cartridges.",h.default_rom_dir.is_empty()),
-			catalog.action("library.default","Set up ROM library" if h.default_rom_dir.is_empty() else "Change ROM library folder",browse_folders,h.default_rom_dir if not h.default_rom_dir.is_empty() else "Browse to the main roms folder (containing snes, nes, megadrive, etc.), then press RB."),
+			catalog.unavailable(catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the saved ROM folder for added or removed games.",h.default_rom_dir.is_empty()),"Choose a library folder first."),
+			catalog.action("library.default","Set up ROM library" if h.default_rom_dir.is_empty() else "Change ROM library folder",browse_folders,h.default_rom_dir if not h.default_rom_dir.is_empty() else "Browse to the main roms folder (containing snes, nes, megadrive, etc.), then press R1."),
 			catalog.action("library.sd","SD card",open_cards,"Browse a mounted Steam Deck SD card."),
 			catalog.action("library.browse","Browse folders",browse_folders,"Browse folders on this computer."),
 			catalog.action("library.drives","Computer drives",open_drives,"Choose a drive, then browse to your ROM folder.",OS.get_name()!="Windows"),
 			catalog.action("library.path","Open folder or network path…",enter_folder_path,"Enter a drive folder or a network share path; Windows handles sign-in."),
-			catalog.action("library.clear","Clear default folder",func(): set_default(""),"Forget the default folder without changing any files.",h.default_rom_dir.is_empty())]
+			catalog.unavailable(catalog.action("library.clear","Clear default folder",func(): set_default(""),"Forget the default folder without changing any files.",h.default_rom_dir.is_empty()),"No library folder is set.")]
 		"games":
 			var result: Array = [catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",game_entries().is_empty())]
 			var games: Array = game_entries()
@@ -637,8 +667,8 @@ func get_items() -> Array:
 				var path: String = game.path
 				result.append(game_item(path,game.label))
 			if games.size()>GAMES_PER_PAGE:
-				result.append(catalog.action("games.previous","Previous page",func(): change_game_page(-1),"Also available with LB. Left/right jumps ten games.",game_page==0))
-				result.append(catalog.action("games.next","Next page",func(): change_game_page(1),"Also available with RB. Left/right jumps ten games.",(game_page+1)*GAMES_PER_PAGE>=games.size()))
+				result.append(catalog.action("games.previous","Previous page",func(): change_game_page(-1),"Also available with L1. Left/right jumps ten games.",game_page==0))
+				result.append(catalog.action("games.next","Next page",func(): change_game_page(1),"Also available with R1. Left/right jumps ten games.",(game_page+1)*GAMES_PER_PAGE>=games.size()))
 			return result
 		"alphabet":
 			var result: Array=[]
@@ -661,7 +691,7 @@ func get_items() -> Array:
 				var folder: bool = entry.folder
 				result.append(catalog.action("file:"+path,entry.label,func():
 					if folder: open_folder(path)
-					else: select_file(path),path,false,"Folder" if folder else entry.get("system","Game")))
+					else: select_file(path),path,false,(str(entry.system)+" folder" if not str(entry.system).is_empty() else "Folder") if folder else entry.get("system","Game")))
 			result.append(catalog.action("folder.home","Home folder",func(): open_folder(library.home_folder()),"Browse your home folder."))
 			return result
 		"drives":
@@ -684,12 +714,19 @@ func get_items() -> Array:
 		"slot":
 			var saved := FileAccess.file_exists(h.profile_path()) or FileAccess.file_exists(h.profile_path()+".bak")
 			return [catalog.action("slot.save","Save current setup",save_setup,"Stores current room, view and picture in this slot."),
-				catalog.action("slot.load","Load setup",h.load_profile,"Apply this slot while retaining display mode and tracking provider.",not saved),
-				catalog.action("slot.rename","Name for next save",func(): mode="rename"; entry_initialized=false; clear_input(); render(); focus_entry(),"Use the on-screen keys or a physical keyboard."),
-				catalog.action("slot.undo","Undo last setup load",h.undo_profile,"Restores the settings from before the last setup load.",h.profile_undo==null)]
+				catalog.unavailable(catalog.action("slot.load","Load setup",h.load_profile,"Apply this slot while retaining display mode and tracking provider.",not saved),"Save a setup to this slot first."),
+				catalog.action("slot.rename","Rename slot",func(): rename_preset=-1; mode="rename"; entry_initialized=false; clear_input(); render(); focus_entry(),"Use the on-screen keys or a physical keyboard."),
+				catalog.unavailable(catalog.action("slot.undo","Undo last setup load",h.undo_profile,"Restores the settings from before the last setup load.",h.profile_undo==null),"Available after loading a setup.")]
 		"folder_path": return text_keys()+[catalog.action("folder_path.open","Open folder",submit_folder_path,"Opens a local folder or a network share you can access in Windows."),catalog.action("folder_path.cancel","Cancel",back)]
-		"rename": return text_keys()+[catalog.action("rename.save","Use this name",save_draft_name,"The new name is stored when you save the setup."),catalog.action("rename.cancel","Cancel",back,"Leave the name unchanged.")]
-		"confirm": return [catalog.action("cancel","Cancel",back,"Keep things as they are."),catalog.action("confirm","Confirm",confirmed,confirmation.detail)]
+		"my_preset":
+			var saved := my_preset_saved(my_preset)
+			return [catalog.unavailable(catalog.action("mine.apply","Apply this preset",func(): apply_my_preset(my_preset),"Changes CRT, colour and signal settings. This game's screen fit stays as it is.",not saved),"Nothing is saved here yet."),
+				catalog.action("mine.save","Save current picture here",func(): save_my_preset(my_preset),"Stores the current CRT, colour and signal settings in this preset."),
+				catalog.unavailable(catalog.action("mine.rename","Rename",func(): rename_preset=my_preset; mode="rename"; entry_initialized=false; clear_input(); render(); focus_entry(),"Use the on-screen keys or a physical keyboard.",not saved),"Save a picture here first."),
+				catalog.unavailable(catalog.action("mine.delete","Delete",func(): delete_my_preset(my_preset),"Removes this preset. Your current picture does not change.",not saved),"Nothing is saved here yet.")]
+		"rename": return text_keys()+[catalog.action("rename.save","Use this name",save_draft_name,"Renames this preset now." if rename_preset>=0 else "The new name is stored when you save the setup."),catalog.action("rename.cancel","Cancel",back,"Leave the name unchanged.")]
+		# Dialog titles lead with their verb ("Overwrite this setup?"), which names the button.
+		"confirm": return [catalog.action("cancel","Cancel",back,"Keep things as they are.",false,""),catalog.action("confirm",str(confirmation.title).get_slice(" ",0),confirmed,confirmation.detail,false,"")]
 	return []
 
 func render() -> void:
@@ -759,11 +796,10 @@ func render() -> void:
 	sidebar.visible = mode=="settings" and not preview
 	section_bar.visible = mode=="settings" and not preview
 	for i in range(sidebar_buttons.size()):
-		sidebar_buttons[i].add_theme_stylebox_override("normal",MenuSkin.box(Color("353a40") if i==category else Color.TRANSPARENT,Color.TRANSPARENT,0,6))
+		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("353a40") if i==category else Color.TRANSPARENT))
 		sidebar_buttons[i].add_theme_color_override("font_color",MenuSkin.TEXT if i==category else MenuSkin.MUTED)
 	if mode=="settings":
 		var pages: Array = catalog.pages(category)
-		section_hint.text="LT / RT" if input_kind=="controller" else "Z / C"
 		for child in section_tabs.get_children(): section_tabs.remove_child(child);child.queue_free()
 		for i in range(pages.size()):
 			var index: int = i
@@ -789,7 +825,9 @@ func render() -> void:
 	rename_field.max_length=2048 if mode in ["radio_url","folder_path"] else 32
 	rename_field.placeholder_text="D:/roms or //server/share/roms" if mode=="folder_path" else "Direct MP3 stream URL" if mode=="radio_url" else "Name · Use on-screen keys or type"
 	if mode=="rename" and not entry_initialized:
-		rename_field.text = str(draft_names.get(host.selected_profile,setup_name())); entry_initialized=true
+		rename_field.text = my_preset_name(rename_preset) if rename_preset>=0 else str(draft_names.get(host.selected_profile,setup_name())); entry_initialized=true
+	if mode=="rename" and rename_preset>=0: heading.text="Name your preset"
+	if mode=="my_preset": heading.text=my_preset_name(my_preset)
 	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites"] and not preview
 	if not search_field.visible and search_field.has_focus(): search_field.release_focus()
 	body.visible = not preview
@@ -803,6 +841,10 @@ func render() -> void:
 	var saved: Dictionary = memory.get(state_key(),{})
 	var preferred: String = selected_id if preview else str(saved.get("id",""))
 	if mode=="library" and not scan_preferred_id.is_empty(): preferred=scan_preferred_id
+	if preferred.is_empty() and mode in ["games","recent","favourites"]:
+		# Land on the first game rather than the Jump to letter tool above it.
+		for row in rows:
+			if row.item.get("layout","")=="game": preferred=row.item.id; break
 	selected_id = ""
 	for row in rows:
 		if not row.disabled and (selected_id.is_empty() or row.item.id==preferred):
@@ -817,6 +859,7 @@ func render() -> void:
 		var article := Label.new(); article.text=help_copy; article.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; article.add_theme_font_size_override("font_size",24 if host.menu_large_text else 22); column.add_child(article)
 	if mode=="library" and not rom_index.scanning: scan_preferred_id=""
 	if saved.has("scroll") and not preview: restore_scroll.call_deferred(int(saved.scroll),layout_revision)
+	elif not preview: reveal_after_layout.call_deferred(layout_revision)
 	fit_panel.call_deferred()
 	refresh_labels()
 
@@ -830,6 +873,12 @@ func restore_scroll(value: int, revision: int) -> void:
 	await get_tree().process_frame
 	if revision!=layout_revision: return
 	scroll.scroll_vertical = value
+
+func reveal_after_layout(revision: int) -> void:
+	# New rows only have final positions once wrapped text has laid out.
+	await get_tree().process_frame
+	await get_tree().process_frame
+	if revision==layout_revision: reveal_selected()
 
 func selected_row():
 	for row in rows:
@@ -874,7 +923,7 @@ func refresh_labels() -> void:
 	elif mode=="radio_url": subtitle.text="Direct MP3 streams · On-screen keys or keyboard"
 	elif mode=="browser": subtitle.text = library.current_dir
 	elif mode=="library":
-		subtitle.text = ("Finding your games… %d found · You can browse while we look" % rom_index.total()) if rom_index.scanning else (count_caption(rom_index.total(),"game")+" · "+count_caption(rom_index.games.values().filter(func(games): return not games.is_empty()).size(),"console")+" · Ready to play" if rom_index.total()>0 else "SNES · NES · Mega Drive · Master System · Game Gear")
+		subtitle.text = ("Finding your games… %d found · You can browse while we look" % rom_index.total()) if rom_index.scanning else (count_caption(rom_index.total(),"game")+" · "+count_caption(rom_index.games.values().filter(func(games): return not games.is_empty()).size(),"console")+" · Ready to play" if rom_index.total()>0 else "%d consoles supported · Your files stay where they are" % library.Registry.SYSTEMS.size())
 	elif mode=="games":
 		var count: int = game_entries().size()
 		subtitle.text = count_caption(count,"game")
@@ -886,18 +935,20 @@ func refresh_labels() -> void:
 	elif mode=="settings":
 		if category==1: subtitle.text=context+" · "+preset_caption()
 		elif category==2: subtitle.text=["Game volume and TV sound", "Lower game audio while music plays", host.music.status, "Place music in the room"][subsection]
-		else: subtitle.text="Global settings · • Changed from default"
+		else: subtitle.text="Global settings · Changed options show •"
+	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [my_preset+1,"✓ Active" if applied_preset()=="mine.%d" % my_preset else ("Saved" if my_preset_saved(my_preset) else "Empty")]
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
-	else: subtitle.text = "CRT XR"
+	else: subtitle.text = ""
+	subtitle.visible = not preview and not subtitle.text.is_empty()
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0 and notification_context==state_key(): help_label.text = notification
 	elif mode=="help": help_label.text=""
-	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in Recently played or a system list and press X. B returns."
+	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in any console list and press X."
 	elif mode=="library" and not rom_index.message.is_empty(): help_label.text=rom_index.message
 	elif mode=="library" and host.default_rom_dir.is_empty(): help_label.text="Choose Set up your ROM library and select your main ROM folder. Your supported consoles appear here automatically."
-	elif mode=="library" and not rom_index.scanning and rom_index.total()==0: help_label.text="No supported cartridges here yet. Check Library locations. Use uncompressed SNES, NES or Sega cartridges; archives and discs are not supported."
+	elif mode=="library" and not rom_index.scanning and rom_index.total()==0: help_label.text="No supported games here yet. Check Library locations. Use uncompressed cartridges, or a .cue/.bin for Sega CD; ZIP and CHD files are not supported."
 	elif row!=null: help_label.text = str(row.item.get("help",""))
-	else: help_label.text = library.message if mode=="browser" else "Nothing to select. B returns."
+	else: help_label.text = library.message if mode=="browser" else ("Nothing here yet. B goes back." if input_kind=="controller" else "Nothing here yet. Backspace goes back.")
 	if preview and row!=null: compact.text = "▸  %s    ‹  %s  ›" % [row.item.label,row.formatted_value()]
 	refresh_hints(row)
 
@@ -914,27 +965,35 @@ func refresh_hints(row) -> void:
 	var back_caption := ("Return to game" if host.emulator.loaded else "Close menu") if mode=="pause" else "Back"
 	back_button.text=back_caption+("" if pad else "  [Backspace]")
 	back_glyph.visible=pad
-	sidebar.get_node("CategoryHint").text="LB / RB · Categories" if pad else "Q / E · Categories"
+	sidebar.get_node("CategoryHint").text="L1 / R1 · Categories" if pad else "Q / E · Categories"
+	section_hint.text="L2 / R2" if pad else "Z / C"
 	preview_button.visible=preview_available() and not preview
-	preview_button.text="Preview" if pad else "Preview  X"
+	preview_button.text="Preview" if pad else "Preview  [X]"
 	preview_glyph.visible=pad and preview_button.visible
+	# One vocabulary everywhere: Deck glyphs for the pad, key names for the keyboard.
+	var parts: Array=["D-pad Select" if pad else "↑↓ Select"]
+	var open := "A Open" if pad else "Enter Open"
+	var go_back := "B Back" if pad else "Backspace Back"
 	if mode=="settings":
-		var parts: Array[String]=["↑↓ Select"]
 		if row!=null:
-			if row.item.kind!="action": parts.append("←→ Adjust")
-			else: parts.append("A Open" if pad else "Enter Open")
+			if row.item.kind=="toggle": parts.append("←→ Change")
+			elif row.item.kind!="action": parts.append("←→ Adjust")
+			else: parts.append(open)
 			if row.item.has("default"): parts.append("Y Reset")
 		if preview: parts.append("B Settings" if pad else "Backspace Settings")
-		hints.text=" · ".join(parts)
 	elif mode in ["games","recent","favourites"]:
-		hints.text="↑↓ Select · "+("A Open" if pad else "Enter Open")
-		if row!=null and row.item.has("rom_path"): hints.text+=" · X Favourite · "+("Y Full title" if search_query.is_empty() else "Y Clear search")
-	elif mode=="browser": hints.text="↑↓ Select · "+("A Open · B Back · RB Set folder" if pad else "Enter Open · Backspace Back")
-	elif mode=="help": hints.text="↑↓ Scroll · "+("B Back" if pad else "Backspace Back")
-	elif mode=="library": hints.text="D-pad Select · A Open · B Back · RB Refresh" if pad else "Arrows Select · Enter Open · Backspace Back · R Refresh"
-	elif mode=="pause": hints.text="↑↓ Select · "+("A Open · B "+back_caption if pad else "Enter Open · Backspace "+back_caption)
-	elif mode in ["folder_path","rename","radio_url"]: hints.text="D-pad Keys · A Type · B Back" if pad else "Type or click keys · Enter Submit · Backspace Back"
-	else: hints.text="D-pad Select · A Open · B Back" if pad else "Arrows Select · Enter Open · Backspace Back"
+		parts.append(open)
+		if row!=null and row.item.has("rom_path"): parts.append_array(["X Favourite","Y Full title" if search_query.is_empty() else "Y Clear search"])
+	elif mode=="browser": parts.append_array([open,go_back,"R1 Use folder"] if pad else [open,go_back])
+	elif mode=="help": parts=["D-pad Scroll" if pad else "↑↓ Scroll",go_back]
+	elif mode=="library":
+		parts.append_array([open,go_back])
+		if not host.default_rom_dir.is_empty(): parts.append("R1 Refresh" if pad else "R Refresh")
+	elif mode=="pause": parts.append_array([open,("B " if pad else "Backspace ")+back_caption])
+	elif mode=="confirm": parts.append_array(["A Choose" if pad else "Enter Choose","B Cancel" if pad else "Backspace Cancel"])
+	elif mode in ["folder_path","rename","radio_url"]: parts=["D-pad Keys","A Type",go_back] if pad else ["Type or click keys","Enter Submit",go_back]
+	else: parts.append_array([open,go_back])
+	hints.text=" · ".join(parts)
 
 func navigate_library(next: Vector2i) -> void:
 	var row=selected_row()
@@ -997,8 +1056,15 @@ func jump_entries(amount: int) -> void:
 		for i in range(games.size()):
 			if "game:"+str(games[i].path)==selected_id: current=i; break
 		var target := clampi(current+amount,0,games.size()-1)
-		remember(); game_page=target/GAMES_PER_PAGE; system_pages[library_system]=game_page
-		render(); select("game:"+str(games[target].path)); return
+		var target_id := "game:"+str(games[target].path)
+		var page := target/GAMES_PER_PAGE
+		# Same page: just move, and the list follows as it does for up/down.
+		if page==game_page: select(target_id); return
+		remember(); game_page=page; system_pages[library_system]=game_page
+		# New page: no saved offset, so the rebuilt list scrolls to the target
+		# instead of restoring a stale position over it.
+		memory[state_key()]={"id":target_id}
+		render(); return
 	var candidates: Array = []
 	for row in rows:
 		if row.disabled: continue
@@ -1211,7 +1277,6 @@ func set_input_kind(kind: String) -> void:
 	search_field.visible=kind=="keyboard" and mode in ["games","recent","favourites"]
 	if kind=="controller" and search_field.has_focus():
 		search_field.release_focus(); select(selected_id,false)
-	if mode=="settings": section_hint.text="LT / RT" if kind=="controller" else "Z / C"
 	refresh_labels()
 
 func update_search(value: String) -> void:
@@ -1251,7 +1316,7 @@ func jump_to_letter(letter: String) -> void:
 		remember(); clear_input(); mode=alphabet_origin
 		if mode=="games": game_page=i/GAMES_PER_PAGE; system_pages[library_system]=game_page
 		selected_id="game:"+str(entries[i].path)
-		memory[state_key()]={"id":selected_id,"scroll":0}
+		memory[state_key()]={"id":selected_id}
 		render(); return
 
 func picture_signature() -> String:
@@ -1264,9 +1329,12 @@ func applied_preset() -> String:
 
 func preset_caption() -> String:
 	var id := applied_preset()
-	return "Custom" if id.is_empty() else "✓ "+["Deck Showcase (PAL)","Clean source","RGB CRT","Auto composite","PAL composite","NTSC composite"][PRESET_IDS.find(id)]
+	if id.is_empty(): return "Custom"
+	if id.begins_with("mine."): return "✓ "+my_preset_name(int(id.get_slice(".",1)))
+	return "✓ "+PRESET_NAMES[PRESET_IDS.find(id)]
 
 func apply_preset(id: String) -> void:
+	remember_custom_picture()
 	picture_undo=host.capture_settings()
 	host.apply_picture_preset(id)
 	host.picture_preset_id=id; host.picture_preset_signature=picture_signature()
@@ -1280,6 +1348,93 @@ func undo_picture_preset() -> void:
 	merged.set_value("menu","picture_preset_signature",picture_undo.get_value("menu","picture_preset_signature",""))
 	host.apply_settings(merged); picture_undo=null
 	refresh(); notify("Previous picture restored")
+
+## Choosing any preset first keeps a hand-tuned ("Custom") picture on disk, so
+## Custom in Quick settings or Picture → Presets can always bring it back.
+func custom_picture_path() -> String:
+	return "user://presets/picture-custom.cfg"
+
+func my_preset_path(index: int) -> String:
+	return "user://presets/picture-%d.cfg" % index
+
+func my_preset_saved(index: int) -> bool:
+	return FileAccess.file_exists(my_preset_path(index)) or FileAccess.file_exists(my_preset_path(index)+".bak")
+
+func my_preset_name(index: int) -> String:
+	var fallback := "My preset %d" % (index+1)
+	if not my_preset_saved(index): return fallback
+	return str(host.SettingsStore.new().read(my_preset_path(index)).get_value("meta","name",fallback))
+
+func has_custom_picture() -> bool:
+	return FileAccess.file_exists(custom_picture_path()) or FileAccess.file_exists(custom_picture_path()+".bak")
+
+func picture_only() -> ConfigFile:
+	var config := ConfigFile.new()
+	host.SettingsStore.copy_sections(host.capture_settings(),config,host.PICTURE_SECTIONS)
+	return config
+
+func remember_custom_picture() -> void:
+	if not applied_preset().is_empty(): return
+	if host.SettingsStore.write(custom_picture_path(),picture_only())!=OK:
+		show_error("Your custom picture could not be kept. Check free space and user-folder permissions.")
+
+func apply_saved_picture(saved: ConfigFile, id: String) -> void:
+	picture_undo=host.capture_settings()
+	var merged: ConfigFile=host.capture_settings()
+	host.SettingsStore.copy_sections(saved,merged,host.PICTURE_SECTIONS)
+	# Like the built-in presets, saved pictures keep this game's screen fitting.
+	for field in host.world.picture.FIT_FIELDS: merged.set_value("picture",field[0],host.world.picture.values[field[0]])
+	merged.set_value("picture","keep_aspect",host.world.picture.keep_aspect)
+	# Validate user-editable files against live types before applying them.
+	var validator := ConfigFile.new(); validator.parse(merged.encode_to_text())
+	host.apply_settings(host.validated_settings(validator,host.capture_settings()))
+	host.picture_preset_id=id
+	host.picture_preset_signature=picture_signature() if not id.is_empty() else ""
+	host.rebuild_settings()
+
+func restore_custom_picture() -> void:
+	if not has_custom_picture(): notify("No custom picture yet. Adjust the picture and it is kept here."); return
+	if applied_preset().is_empty(): notify("Your custom picture is already in use"); return
+	apply_saved_picture(host.SettingsStore.new().read(custom_picture_path()),"")
+	refresh(); notify("Your custom picture is back")
+
+func apply_my_preset(index: int) -> void:
+	if not my_preset_saved(index): return
+	remember_custom_picture()
+	apply_saved_picture(host.SettingsStore.new().read(my_preset_path(index)),"mine.%d" % index)
+	refresh(); notify(my_preset_name(index)+" applied · Undo available on Picture → Presets")
+
+func save_my_preset(index: int) -> void:
+	var title := my_preset_name(index)
+	var callback := func():
+		var config := picture_only()
+		config.set_value("meta","name",title)
+		if host.SettingsStore.write(my_preset_path(index),config)!=OK:
+			show_error("Preset could not be saved. Check free space and user-folder permissions."); return
+		host.picture_preset_id="mine.%d" % index; host.picture_preset_signature=picture_signature()
+		refresh(); notify("Saved · "+title)
+	if my_preset_saved(index): ask("Overwrite this preset?","Replace “%s” with the current picture?" % title,callback)
+	else: callback.call()
+
+func rename_my_preset(index: int, value: String) -> void:
+	var title := value.strip_edges().left(32)
+	if title.is_empty(): title="My preset %d" % (index+1)
+	var config: ConfigFile=host.SettingsStore.new().read(my_preset_path(index))
+	config.set_value("meta","name",title)
+	if host.SettingsStore.write(my_preset_path(index),config)!=OK:
+		show_error("Preset could not be renamed. Check user-folder permissions."); return
+	rename_preset=-1; mode="my_preset"; clear_input(); render(); notify("Renamed · "+title)
+
+func delete_my_preset(index: int) -> void:
+	var title := my_preset_name(index)
+	ask("Delete this preset?","Remove “%s”? Your current picture does not change." % title,func():
+		for suffix in ["",".bak"]:
+			if FileAccess.file_exists(my_preset_path(index)+suffix): DirAccess.remove_absolute(ProjectSettings.globalize_path(my_preset_path(index)+suffix))
+		if host.picture_preset_id=="mine.%d" % index: host.picture_preset_id=""; host.picture_preset_signature=""
+		refresh(); notify("Deleted · "+title))
+
+func open_my_preset(index: int) -> void:
+	remember(); clear_input(); my_preset=index; mode="my_preset"; render()
 
 func open_help(title: String, copy: String) -> void:
 	remember(); help_origin=snapshot(); help_title=title; help_copy=copy

@@ -25,7 +25,7 @@
         "LTO="
       ],
       "source_date_epoch": "1790283375",
-      "build_log_sha256": "fdfb83a2854702b808ec9ce720a71df5e1734001f6f6d0c58fed2f62b815f990"
+      "build_log_sha256": "cc507397deac75aa93aaef1e587b53b971190581c34b49dc110d2bb7cc54f099"
     },
     {
       "core": "snes9x",
@@ -45,14 +45,13 @@
         "Makefile",
         "-j6",
         "platform=win",
-        "CC=x86_64-w64-mingw32-gcc-posix",
-        "CXX=x86_64-w64-mingw32-g++-posix -std=c++17",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -std=c++17 -static -static-libgcc -static-libstdc++",
         "GIT_VERSION= 1bcc369",
-        "LTO=",
-        "LDFLAGS=-static -static-libgcc -static-libstdc++"
+        "LTO="
       ],
       "source_date_epoch": "1790283375",
-      "build_log_sha256": "1ee419c15a4ce5bfa30bbca398aef8b53b5f683af1aa212e9447644f85eb0a46"
+      "build_log_sha256": "07ef7defa0e6196e5fecc6f5fa2fb2f7073865468760387a60c7c8253b445e9f"
     },
     {
       "core": "nestopia",
@@ -77,7 +76,7 @@
         "GIT_VERSION= 06a8949"
       ],
       "source_date_epoch": "1792021122",
-      "build_log_sha256": "fc410342425474c85ff1f0a36bd44ce0c15afee6772751b100424e522e90c92c"
+      "build_log_sha256": "8f547de4d7387475b7c31a68c4923aa7763d31ce07e4218e2e1450a1ae517c54"
     },
     {
       "core": "nestopia",
@@ -97,13 +96,12 @@
         "Makefile",
         "-j6",
         "platform=win",
-        "CC=x86_64-w64-mingw32-gcc-posix",
-        "CXX=x86_64-w64-mingw32-g++-posix",
-        "GIT_VERSION= 06a8949",
-        "LDFLAGS=-static -static-libgcc -static-libstdc++"
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= 06a8949"
       ],
       "source_date_epoch": "1792021122",
-      "build_log_sha256": "7b32ba4cbe71cecca8d0d95af921b397172cde31183b1f250d15ac5f69ea54b2"
+      "build_log_sha256": "581b407ebb2c14e36ea616dc540a1bd455ec03d38c1f00ff3b70d22081deb5bb"
     },
     {
       "core": "genesis_plus_gx",
@@ -130,7 +128,7 @@
         "HAVE_CHD=0"
       ],
       "source_date_epoch": "1791565714",
-      "build_log_sha256": "8de98190ac9dfae75b4a4fbb7703dfecf2f19a02c17b89c9ef92620f9e3358ce"
+      "build_log_sha256": "428d773b16a89cc91e450acf0274649277e36dc963c14f82fc00799322f3b376"
     },
     {
       "core": "genesis_plus_gx",
@@ -150,17 +148,380 @@
         "Makefile.libretro",
         "-j6",
         "platform=win",
-        "CC=x86_64-w64-mingw32-gcc-posix",
-        "CXX=x86_64-w64-mingw32-g++-posix",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
         "GIT_VERSION= 393f70c",
         "HAVE_CDROM=0",
-        "HAVE_CHD=0",
-        "LDFLAGS=-static -static-libgcc -static-libstdc++"
+        "HAVE_CHD=0"
       ],
       "source_date_epoch": "1791565714",
-      "build_log_sha256": "c7a34de20372b78f2f74960d016d2f30dd399a3e5389b7648b9002864609a7f2"
+      "build_log_sha256": "b67db2c1452af692c75d4ff28b077e1f7c7c3c2bdb8fea32d5334f2eba00be25"
+    },
+    {
+      "core": "gambatte",
+      "platform": "linux",
+      "source_commit": "d9d6cd06382d1ced30de34d56d3609452323dab1",
+      "origin": "Local source build",
+      "binary_sha256": "8853793699bddb237df6d4319d3900291e4e2b28cfa45fa021d16a69e93604ed",
+      "source_archive": "sources/gambatte-d9d6cd06382d1ced30de34d56d3609452323dab1.tar.gz",
+      "source_sha256": "2b065b181fbef554b7141bc1745a3608c79af539591aa0a5797f36491a1c4f3a",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile.libretro",
+        "-j6",
+        "platform=unix",
+        "CC=gcc",
+        "CXX=g++",
+        "GIT_VERSION= d9d6cd0"
+      ],
+      "source_date_epoch": "1787309948",
+      "build_log_sha256": "b3254debbc28ee04e8fdf42bc497ae10c919ad9fd8d3d01c600ddddccf12c340"
+    },
+    {
+      "core": "gambatte",
+      "platform": "windows",
+      "source_commit": "d9d6cd06382d1ced30de34d56d3609452323dab1",
+      "origin": "Local source build",
+      "binary_sha256": "81663ed416e5119cbf40aafc85a8de98dabcedefacd875aa4d63773c78bd5764",
+      "source_archive": "sources/gambatte-d9d6cd06382d1ced30de34d56d3609452323dab1.tar.gz",
+      "source_sha256": "2b065b181fbef554b7141bc1745a3608c79af539591aa0a5797f36491a1c4f3a",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile.libretro",
+        "-j6",
+        "platform=win",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= d9d6cd0"
+      ],
+      "source_date_epoch": "1787309948",
+      "build_log_sha256": "a7dffbd498173427ab2a527171109ae114ef8ed1114ecb9d13080600e7a294dc"
+    },
+    {
+      "core": "mgba",
+      "platform": "linux",
+      "source_commit": "7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6",
+      "origin": "Local source build",
+      "binary_sha256": "6f9d85280acddf085896fec1e1018ba812583df46ed9b769c3502c45442a2262",
+      "source_archive": "sources/mgba-7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6.tar.gz",
+      "source_sha256": "1ffa30c6f405b8901c74d132bb40570962b19fbe56041b01790184f847a3f26b",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "cmake version 3.28.3",
+      "make_arguments": [
+        "-S",
+        "<extracted-source>",
+        "-B",
+        "<work>/cmake-build",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DLIBMGBA_ONLY=ON",
+        "-DBUILD_LIBRETRO=ON",
+        "&&",
+        "cmake",
+        "--build",
+        "<work>/cmake-build",
+        "--target",
+        "mgba_libretro",
+        "-j6"
+      ],
+      "source_date_epoch": "1789611180",
+      "build_log_sha256": "280e64644004f8251b3f7e90cd3e46fc55c06ca1d4b64ea703d1594d0cbdbd5f"
+    },
+    {
+      "core": "mgba",
+      "platform": "windows",
+      "source_commit": "7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6",
+      "origin": "Local source build",
+      "binary_sha256": "69ad098ca9d491d8f7c71559b32396c4d3d120ab505a059953df076b85c2f613",
+      "source_archive": "sources/mgba-7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6.tar.gz",
+      "source_sha256": "1ffa30c6f405b8901c74d132bb40570962b19fbe56041b01790184f847a3f26b",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "cmake version 3.28.3",
+      "make_arguments": [
+        "-S",
+        "<extracted-source>",
+        "-B",
+        "<work>/cmake-build",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DLIBMGBA_ONLY=ON",
+        "-DBUILD_LIBRETRO=ON",
+        "-DCMAKE_TOOLCHAIN_FILE=/mnt/d/git/XR-CRT/native/emulation/mingw.cmake",
+        "-DCMAKE_SHARED_LINKER_FLAGS=-static -static-libgcc -static-libstdc++",
+        "&&",
+        "cmake",
+        "--build",
+        "<work>/cmake-build",
+        "--target",
+        "mgba_libretro",
+        "-j6"
+      ],
+      "source_date_epoch": "1789611180",
+      "build_log_sha256": "195489937a8929ee3c5b4460811161ddd0858171f4fe2d3e7f69902fda94c28f"
+    },
+    {
+      "core": "mednafen_pce_fast",
+      "platform": "linux",
+      "source_commit": "3f946f277aef3aa99a95551618bbcd1dd2bda0d9",
+      "origin": "Local source build",
+      "binary_sha256": "00e4db562f4ee3c36a2158e0500c589ecb52a6b3f6d6d75e2a6754e5b869681c",
+      "source_archive": "sources/beetle-pce-fast-3f946f277aef3aa99a95551618bbcd1dd2bda0d9.tar.gz",
+      "source_sha256": "71ff0062ed6b76548e5f6d53d9929795ed84b62937b08683bacd0e649ae2ccae",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=unix",
+        "CC=gcc",
+        "CXX=g++",
+        "GIT_VERSION= 3f946f2"
+      ],
+      "source_date_epoch": "1790940780",
+      "build_log_sha256": "c0b9e2f3ff1757d86c1ce7b1b3b15911a7d692d5706e6b8066bfc7ec49835113"
+    },
+    {
+      "core": "mednafen_pce_fast",
+      "platform": "windows",
+      "source_commit": "3f946f277aef3aa99a95551618bbcd1dd2bda0d9",
+      "origin": "Local source build",
+      "binary_sha256": "66d3f332ad31c1d9f14cac0c704888c4a06ca37d85ef0b302aee9901704b15ac",
+      "source_archive": "sources/beetle-pce-fast-3f946f277aef3aa99a95551618bbcd1dd2bda0d9.tar.gz",
+      "source_sha256": "71ff0062ed6b76548e5f6d53d9929795ed84b62937b08683bacd0e649ae2ccae",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=win",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= 3f946f2"
+      ],
+      "source_date_epoch": "1790940780",
+      "build_log_sha256": "4b5bd87205745d611312b443cabbde87406b9a65c94bde39000a2b67c9b645d0"
+    },
+    {
+      "core": "mednafen_lynx",
+      "platform": "linux",
+      "source_commit": "fcdefcfb3c11d6d2e71be076a5d3df2e88ab73ed",
+      "origin": "Local source build",
+      "binary_sha256": "670f534c4ce644417aa4c26345a3b4541d513d94fb6b891046f256b820e1edd6",
+      "source_archive": "sources/beetle-lynx-fcdefcfb3c11d6d2e71be076a5d3df2e88ab73ed.tar.gz",
+      "source_sha256": "af9239593bf2c793aeed116233bb06c5be6c5a8c1d5e07b1ae4411ef25fd503c",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=unix",
+        "CC=gcc",
+        "CXX=g++",
+        "GIT_VERSION= fcdefcf"
+      ],
+      "source_date_epoch": "1776706464",
+      "build_log_sha256": "37841cab364b54459a14a97793e7a0257bfa4687d3406429a78c13fad69df346"
+    },
+    {
+      "core": "mednafen_lynx",
+      "platform": "windows",
+      "source_commit": "fcdefcfb3c11d6d2e71be076a5d3df2e88ab73ed",
+      "origin": "Local source build",
+      "binary_sha256": "8cc0d63cab1bb014709492b916dd005431de81ca380f8051a84f4dbcaa6f2c23",
+      "source_archive": "sources/beetle-lynx-fcdefcfb3c11d6d2e71be076a5d3df2e88ab73ed.tar.gz",
+      "source_sha256": "af9239593bf2c793aeed116233bb06c5be6c5a8c1d5e07b1ae4411ef25fd503c",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=win",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= fcdefcf"
+      ],
+      "source_date_epoch": "1776706464",
+      "build_log_sha256": "1c2ed6bb053fd6e73638ae937c2fc188253ab72d9dadb638eab242afbeec9591"
+    },
+    {
+      "core": "mednafen_ngp",
+      "platform": "linux",
+      "source_commit": "a50d5ac288a81f2104ddf43195a4efdd15c72227",
+      "origin": "Local source build",
+      "binary_sha256": "deb99d996de1825fdd62c8f4298ad62f3dee42504141f6ce52efc3549bbfb36f",
+      "source_archive": "sources/beetle-ngp-a50d5ac288a81f2104ddf43195a4efdd15c72227.tar.gz",
+      "source_sha256": "791b0f40cbeac4f7d8065d40b710cf8e6ee48700ad1169aa58f01ebc046d09bb",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=unix",
+        "CC=gcc",
+        "CXX=g++",
+        "GIT_VERSION= a50d5ac"
+      ],
+      "source_date_epoch": "1781461309",
+      "build_log_sha256": "d54f4f428f1f84c4520c526d07d122d2d7c37f6ff22bf1b46835e797bf9d9b81"
+    },
+    {
+      "core": "mednafen_ngp",
+      "platform": "windows",
+      "source_commit": "a50d5ac288a81f2104ddf43195a4efdd15c72227",
+      "origin": "Local source build",
+      "binary_sha256": "375d8c817a7f0462db099878e571caae0860f167217ec607494dc574a99203d0",
+      "source_archive": "sources/beetle-ngp-a50d5ac288a81f2104ddf43195a4efdd15c72227.tar.gz",
+      "source_sha256": "791b0f40cbeac4f7d8065d40b710cf8e6ee48700ad1169aa58f01ebc046d09bb",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=win",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= a50d5ac"
+      ],
+      "source_date_epoch": "1781461309",
+      "build_log_sha256": "121305a967e80b85978ed010c9fd612521ae5110556086e16bda08e043861ee1"
+    },
+    {
+      "core": "stella",
+      "platform": "linux",
+      "source_commit": "ba52c43b9eda950eb0c0eec69cda9b17dee8c39b",
+      "origin": "Local source build",
+      "binary_sha256": "b02bc7559a747bde2bc21676085d73385c6056df5592b3eabda64a8a776ea97a",
+      "source_archive": "sources/stella-ba52c43b9eda950eb0c0eec69cda9b17dee8c39b.tar.gz",
+      "source_sha256": "0c9e4878fda80c5017c33e4ff1ef45691c27ef2b86d4314d6fbb7c4b2c1baed7",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>/src/os/libretro",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=unix",
+        "CC=gcc",
+        "CXX=g++",
+        "GIT_VERSION= ba52c43"
+      ],
+      "source_date_epoch": "1788043885",
+      "build_log_sha256": "fe389401f4767582283d2a50f268065534e43a7bea274a4f4bba843f91bd216e"
+    },
+    {
+      "core": "stella",
+      "platform": "windows",
+      "source_commit": "ba52c43b9eda950eb0c0eec69cda9b17dee8c39b",
+      "origin": "Local source build",
+      "binary_sha256": "8598c524905cdaec7979f907206ed3dfd7cc997f8bfaaaec861361e2dc3f7af8",
+      "source_archive": "sources/stella-ba52c43b9eda950eb0c0eec69cda9b17dee8c39b.tar.gz",
+      "source_sha256": "0c9e4878fda80c5017c33e4ff1ef45691c27ef2b86d4314d6fbb7c4b2c1baed7",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>/src/os/libretro",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=win",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= ba52c43"
+      ],
+      "source_date_epoch": "1788043885",
+      "build_log_sha256": "50f05416aab695d23130f5a30a4cbf4359ff774d3f0bc4667c6d1324d4e015bd"
+    },
+    {
+      "core": "vecx",
+      "platform": "linux",
+      "source_commit": "dccff5402a16d1ea7c112095a8e42632bf149506",
+      "origin": "Local source build",
+      "binary_sha256": "9c7175ac66940fc121fd9b1958e61ad4677d6899040c959e1997852140551728",
+      "source_archive": "sources/vecx-dccff5402a16d1ea7c112095a8e42632bf149506.tar.gz",
+      "source_sha256": "fb2d0180357322c82d523d9447379be3078b1cccb0135edd083ff76f41650a4f",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile.libretro",
+        "-j6",
+        "platform=unix",
+        "CC=gcc",
+        "CXX=g++",
+        "GIT_VERSION= dccff54",
+        "HAS_GPU=0"
+      ],
+      "source_date_epoch": "1792199643",
+      "build_log_sha256": "6a4501a6ce0c4cf7138c908d637351f2d4d389a0e8af334fab3d3759b7bf5c09"
+    },
+    {
+      "core": "vecx",
+      "platform": "windows",
+      "source_commit": "dccff5402a16d1ea7c112095a8e42632bf149506",
+      "origin": "Local source build",
+      "binary_sha256": "a5e840f164baaa0e5e34fcd5c0a9ff085aa0571faade6e2e2e119db601b1b0dd",
+      "source_archive": "sources/vecx-dccff5402a16d1ea7c112095a8e42632bf149506.tar.gz",
+      "source_sha256": "fb2d0180357322c82d523d9447379be3078b1cccb0135edd083ff76f41650a4f",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile.libretro",
+        "-j6",
+        "platform=win",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= dccff54",
+        "HAS_GPU=0"
+      ],
+      "source_date_epoch": "1792199643",
+      "build_log_sha256": "b18f27974316c89658ac5a2a042f1f03864a34922cb859ab4c63768166c595d3"
     }
   ],
   "build_environment": "PRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.1 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
-  "built_utc": "2026-10-17T20:44:39.778320+00:00"
+  "built_utc": "2026-10-22T14:52:17.062127+00:00"
 }

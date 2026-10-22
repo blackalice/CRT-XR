@@ -114,3 +114,44 @@ existing CRT XR Steam entry. Its package hash was verified and the user's
 global and per-game preferences were unchanged after profiling. The previous
 `performance-crt-20261014` installation is retained. The final short live run
 again held 60 Hz with valid tracking and no measured-phase audio/catch-up events.
+
+## Headroom pass — 22 October 2026
+
+Measured on Windows (Compatibility renderer, 3840×1080 offscreen stereo,
+Sonic running); Deck timings still to be repeated. Draw calls and memory are
+renderer counters, so they carry over to the Deck.
+
+| | Before | After |
+| --- | ---: | ---: |
+| Draw calls, game running (both eyes) | 40 | 20 |
+| Primitives | 46.0k | 26.6k |
+| Video memory | 151.5 MB | 126.8 MB |
+| First input-preview frame after loading a game | 60 ms hitch | 0.5 ms (loaded during the game load) |
+
+Changes:
+
+* The key lamp's shadow map is skipped when nothing casts (contact baking
+  disables casting on the cabinet and furniture; the floor no longer casts).
+* The distance-fade overlay, a second blended draw, is attached only to parts
+  reaching past `fade_begin` (6 of 7 skipped at the default view).
+* Each eye's edge fade multiplies the eye copy instead of a full-screen blend.
+* The shared composite and beam passes redraw once per game frame (or composite
+  frame index), not every display frame.
+* Cabinet AO ships as BC4 (3.4 MiB vs 11.2 MiB uncompressed); table maps are
+  1024² (4.2 MiB vs 16.8 MiB) and its superseded colour map is released.
+* Main thread: transforms are written only on change; tracking parses packets
+  newest-first; battery saves are skipped when unchanged; music resume is saved
+  every 30 s plus on stop, pause and track changes; screen-light sampling hoists
+  its settings; menu rows share slider styles; the frame Image is reused.
+* Native: 16-bit pixels convert through lookup tables with one 32-bit store per
+  pixel; the preview core skips audio synthesis and reuses its state buffer.
+  Preview cost per frame (Linux build, same games): SNES 1.29→1.22 ms,
+  GB 0.13→0.09, Mega Drive 0.55→0.46, GBA 0.75→0.68, NGPC 0.39→0.36.
+* Sustained late frames with the input preview on suspend the preview for that
+  game (Controls & XR explains why) instead of dropping game frames.
+
+Not changed: a worker thread for emulation. The core, preview and upload must
+finish before the frame renders, and Compatibility submits GL on the main
+thread, so a worker could overlap only script time unless input were read a
+frame earlier (adding the latency the preview removes). Measure Deck script
+time before deciding.

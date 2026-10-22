@@ -18,6 +18,7 @@ namespace crt_xr {
 LibretroHost* LibretroHost::active = nullptr;
 LibretroHost::~LibretroHost() { close(); }
 void LibretroHost::close_game() {
+    Use use(this);
     if (loaded) fn_unload_game();
     loaded = false;
     rom.clear(); rgba.clear(); pcm.clear();
@@ -26,9 +27,9 @@ void LibretroHost::close_game() {
 }
 void LibretroHost::close() {
     close_game();
+    Use use(this);
     if (initialized) fn_deinit();
     initialized = false;
-    if (active == this) active = nullptr;
     if (library) {
 #ifdef _WIN32
         FreeLibrary(static_cast<HMODULE>(library));
@@ -40,7 +41,6 @@ void LibretroHost::close() {
     options.clear();
 }
 bool LibretroHost::load_core(const std::string& path) {
-    if (active && active != this) { error = "Only one Libretro core may be active"; return false; }
     close();
     error.clear();
 #ifdef _WIN32
@@ -55,11 +55,11 @@ bool LibretroHost::load_core(const std::string& path) {
     BIND(api_version); BIND(init); BIND(deinit); BIND(set_environment); BIND(set_video_refresh);
     BIND(set_audio_sample); BIND(set_audio_sample_batch); BIND(set_input_poll); BIND(set_input_state);
     BIND(get_system_info); BIND(get_system_av_info); BIND(set_controller_port_device);
-    BIND(load_game); BIND(unload_game); BIND(run); BIND(serialize_size); BIND(serialize); BIND(unserialize);
+    BIND(load_game); BIND(unload_game); BIND(reset); BIND(run); BIND(serialize_size); BIND(serialize); BIND(unserialize);
     BIND(get_memory_data); BIND(get_memory_size);
 #undef BIND
     if (fn_api_version() != RETRO_API_VERSION) { error = "Unsupported Libretro API version"; close(); return false; }
-    active = this;
+    Use use(this);
     pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
     fn_set_environment(environment);
     fn_set_video_refresh(video);
@@ -77,23 +77,33 @@ bool LibretroHost::load_core(const std::string& path) {
 bool LibretroHost::load_game(const std::string& path, const std::string& directory) {
     if (!library) { error = "No core loaded"; return false; }
     close_game();
+    Use use(this);
     error.clear();
     save_dir = directory;
     system_dir = directory;
     std::ifstream file(std::filesystem::u8path(path), std::ios::binary | std::ios::ate);
     if (!file) { error = "Cannot open ROM: " + path; return false; }
     const auto size = file.tellg();
-    if (size <= 0 || size > 32 * 1024 * 1024) { error = "ROM must contain 1 byte to 32 MiB"; return false; }
-    rom.resize(static_cast<std::size_t>(size));
-    file.seekg(0);
-    if (!file.read(reinterpret_cast<char*>(rom.data()), size)) { error = "Failed reading ROM"; rom.clear(); return false; }
+    rom.clear();
     if (!initialized) { fn_init(); initialized = true; }
     retro_system_info info{};
     fn_get_system_info(&info);
     retro_game_info game{};
     game.path = path.c_str();
-    game.data = info.need_fullpath ? nullptr : rom.data();
-    game.size = info.need_fullpath ? 0 : rom.size();
+    if (info.need_fullpath) {
+        // Disc images (for example Sega CD .cue/.bin) exceed the cartridge
+        // buffer cap; the core opens the path itself.
+        if (size <= 0) { error = "ROM file is empty: " + path; return false; }
+        game.data = nullptr;
+        game.size = 0;
+    } else {
+        if (size <= 0 || size > 32 * 1024 * 1024) { error = "ROM must contain 1 byte to 32 MiB"; return false; }
+        rom.resize(static_cast<std::size_t>(size));
+        file.seekg(0);
+        if (!file.read(reinterpret_cast<char*>(rom.data()), size)) { rom.clear(); error = "Failed reading ROM"; return false; }
+        game.data = rom.data();
+        game.size = rom.size();
+    }
     if (!fn_load_game(&game)) { error = "Core rejected ROM"; rom.clear(); return false; }
     loaded = true;
     fn_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
@@ -114,11 +124,19 @@ bool LibretroHost::av_info(const retro_system_av_info& info) {
 }
 bool LibretroHost::step(std::uint16_t mask) {
     if (!loaded) { error = "No game loaded"; return false; }
+    Use use(this);
     buttons = mask;
     pcm.clear();
     video_changed = false;
     error.clear();
     fn_run();
+    return error.empty();
+}
+bool LibretroHost::reset() {
+    if (!loaded) { error = "No game loaded"; return false; }
+    Use use(this);
+    error.clear();
+    fn_reset(); // The console's reset button; cartridge SRAM is kept.
     return error.empty();
 }
 bool LibretroHost::environment(unsigned command, void* data) {
@@ -156,7 +174,8 @@ bool LibretroHost::environment(unsigned command, void* data) {
     case RETRO_ENVIRONMENT_SET_GEOMETRY: return true; // actual callback dimensions are authoritative
     case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: return active->av_info(*static_cast<retro_system_av_info*>(data));
     case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS: return true;
-    case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: *static_cast<int*>(data) = 3; return true;
+    // Bit 0 video, bit 1 audio. Preview instances skip audio synthesis.
+    case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: *static_cast<int*>(data) = 1 | (active->want_audio ? 2 : 0); return true;
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
     case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
     case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
@@ -164,31 +183,52 @@ bool LibretroHost::environment(unsigned command, void* data) {
     default: return false;
     }
 }
-void LibretroHost::video(const void* data, unsigned w, unsigned h, std::size_t pitch) {
-    if (!active || !data) return; // null is a duplicate frame
-    const unsigned bytes = active->pixel_format == RETRO_PIXEL_FORMAT_XRGB8888 ? 4 : 2;
-    if (data == RETRO_HW_FRAME_BUFFER_VALID || w == 0 || h == 0 || w > 1024 || h > 1024 || pitch < w * bytes) {
-        active->error = "Unsupported core video buffer"; return;
-    }
-    active->rgba.resize(static_cast<std::size_t>(w) * h * 4);
-    for (unsigned y = 0; y < h; ++y) {
-        const auto* row = static_cast<const std::uint8_t*>(data) + y * pitch;
-        for (unsigned x = 0; x < w; ++x) {
-            auto* pixel = active->rgba.data() + (static_cast<std::size_t>(y) * w + x) * 4;
-            if (bytes == 4) {
-                std::uint32_t value; std::memcpy(&value, row + x * 4, 4);
-                pixel[0] = (value >> 16) & 255; pixel[1] = (value >> 8) & 255; pixel[2] = value & 255;
-            } else {
-                std::uint16_t value; std::memcpy(&value, row + x * 2, 2);
-                const bool rgb565 = active->pixel_format == RETRO_PIXEL_FORMAT_RGB565;
-                pixel[0] = static_cast<std::uint8_t>(((value >> (rgb565 ? 11 : 10)) & 31) * 255 / 31);
-                pixel[1] = static_cast<std::uint8_t>(((value >> 5) & (rgb565 ? 63 : 31)) * 255 / (rgb565 ? 63 : 31));
-                pixel[2] = static_cast<std::uint8_t>((value & 31) * 255 / 31);
-            }
-            pixel[3] = 255;
+namespace {
+// RGBA8 (little-endian bytes R,G,B,A) for every 16-bit pixel value: one table
+// read per pixel instead of shifts, multiplies and divides. 256 KiB each.
+const std::vector<std::uint32_t>& lookup(bool rgb565) {
+    static std::vector<std::uint32_t> tables[2];
+    auto& table = tables[rgb565 ? 1 : 0];
+    if (table.empty()) {
+        table.resize(65536);
+        for (std::uint32_t value = 0; value < 65536; ++value) {
+            const std::uint32_t r = ((value >> (rgb565 ? 11 : 10)) & 31) * 255 / 31;
+            const std::uint32_t g = ((value >> 5) & (rgb565 ? 63 : 31)) * 255 / (rgb565 ? 63 : 31);
+            const std::uint32_t b = (value & 31) * 255 / 31;
+            table[value] = r | (g << 8) | (b << 16) | 0xFF000000u;
         }
     }
-    active->width = w; active->height = h; active->video_changed = true;
+    return table;
+}
+}
+void LibretroHost::video(const void* data, unsigned w, unsigned h, std::size_t pitch) {
+    if (!active || !data) return; // null is a duplicate frame
+    LibretroHost& host = *active;
+    const unsigned bytes = host.pixel_format == RETRO_PIXEL_FORMAT_XRGB8888 ? 4 : 2;
+    if (data == RETRO_HW_FRAME_BUFFER_VALID || w == 0 || h == 0 || w > 1024 || h > 1024 || pitch < w * bytes) {
+        host.error = "Unsupported core video buffer"; return;
+    }
+    host.rgba.resize(static_cast<std::size_t>(w) * h * 4);
+    // Locals and one 32-bit store per pixel: byte writes through rgba.data()
+    // could alias anything, forcing the compiler to reload host state per pixel.
+    auto* out = reinterpret_cast<std::uint32_t*>(host.rgba.data());
+    const auto* source = static_cast<const std::uint8_t*>(data);
+    if (bytes == 4) {
+        for (unsigned y = 0; y < h; ++y, out += w) {
+            const auto* row = reinterpret_cast<const std::uint32_t*>(source + y * pitch);
+            for (unsigned x = 0; x < w; ++x) {
+                const std::uint32_t value = row[x];
+                out[x] = ((value >> 16) & 0xFF) | (value & 0xFF00) | ((value & 0xFF) << 16) | 0xFF000000u;
+            }
+        }
+    } else {
+        const std::uint32_t* table = lookup(host.pixel_format == RETRO_PIXEL_FORMAT_RGB565).data();
+        for (unsigned y = 0; y < h; ++y, out += w) {
+            const auto* row = reinterpret_cast<const std::uint16_t*>(source + y * pitch);
+            for (unsigned x = 0; x < w; ++x) out[x] = table[row[x]];
+        }
+    }
+    host.width = w; host.height = h; host.video_changed = true;
 }
 void LibretroHost::audio(std::int16_t left, std::int16_t right) {
     const std::int16_t pair[] = {left, right};
@@ -196,6 +236,7 @@ void LibretroHost::audio(std::int16_t left, std::int16_t right) {
 }
 std::size_t LibretroHost::audio_batch(const std::int16_t* data, std::size_t frames) {
     if (!active || !data) return 0;
+    if (!active->want_audio) return frames;
     if (frames > 32768 || active->pcm.size() + frames * 2 > 65536) {
         active->error = "Core audio batch exceeds safety limit"; return 0;
     }
@@ -213,26 +254,36 @@ void LibretroHost::log(retro_log_level, const char* format, ...) {
     va_list arguments; va_start(arguments, format); std::vfprintf(stderr, format, arguments); va_end(arguments);
 }
 std::vector<std::uint8_t> LibretroHost::serialize() {
-    if (!loaded) { error = "No game loaded"; return {}; }
-    const auto size = fn_serialize_size();
-    if (size == 0 || size > 64 * 1024 * 1024) { error = "Core returned unsupported state size"; return {}; }
-    std::vector<std::uint8_t> state(size);
-    if (!fn_serialize(state.data(), state.size())) { error = "Core failed to save state"; return {}; }
+    std::vector<std::uint8_t> state;
+    if (!serialize_into(state)) return {};
     return state;
 }
+bool LibretroHost::serialize_into(std::vector<std::uint8_t>& state) {
+    if (!loaded) { error = "No game loaded"; return false; }
+    Use use(this);
+    const auto size = fn_serialize_size();
+    if (size == 0 || size > 64 * 1024 * 1024) { error = "Core returned unsupported state size"; return false; }
+    state.resize(size);
+    if (!fn_serialize(state.data(), state.size())) { error = "Core failed to save state"; return false; }
+    return true;
+}
 bool LibretroHost::unserialize(const std::uint8_t* data, std::size_t size) {
+    Use use(this);
     if (!loaded || size == 0 || size > 64 * 1024 * 1024 || !fn_unserialize(data, size)) { error = "Core rejected save state"; return false; }
     return true;
 }
 std::vector<std::uint8_t> LibretroHost::save_ram() const {
     if (!loaded) return {};
+    Use use(this);
     const auto size = fn_get_memory_size(RETRO_MEMORY_SAVE_RAM);
     const auto* data = static_cast<const std::uint8_t*>(fn_get_memory_data(RETRO_MEMORY_SAVE_RAM));
     if (!data || size == 0 || size > 16 * 1024 * 1024) return {};
     return {data, data + size};
 }
 bool LibretroHost::set_save_ram(const std::uint8_t* data, std::size_t size) {
-    if (!loaded || size != fn_get_memory_size(RETRO_MEMORY_SAVE_RAM)) { error = "SRAM size does not match this game"; return false; }
+    if (!loaded) { error = "SRAM size does not match this game"; return false; }
+    Use use(this);
+    if (size != fn_get_memory_size(RETRO_MEMORY_SAVE_RAM)) { error = "SRAM size does not match this game"; return false; }
     auto* memory = fn_get_memory_data(RETRO_MEMORY_SAVE_RAM);
     if (!memory || !data) return false;
     std::memcpy(memory, data, size); return true;

@@ -281,7 +281,9 @@ func filter_icy(data: PackedByteArray) -> PackedByteArray:
 
 func _process(delta: float) -> void:
 	resume_elapsed+=delta
-	if resume_elapsed>=5:
+	# Stop, pause, track changes and quitting save immediately; this only bounds
+	# what a crash could lose without rewriting the file every few seconds.
+	if resume_elapsed>=30:
 		resume_elapsed=0; save_resume()
 	var audible := player.playing and not player.stream_paused and volume>0.0001
 	var target := (1.0-duck_amount) if duck_game and audible else 1.0

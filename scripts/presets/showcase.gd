@@ -36,7 +36,11 @@ const ROOM := {
 	"fade_begin": 3.5,
 	"fade_end": 7.0,
 	"shadows": true,
-	"show_rug": false
+	"floor_style": 0,
+	"show_clock_radio": true,
+	"clock_24_hour": false,
+	"show_vcr": true,
+	"show_game_boxes": true
 }
 const PICTURE := {
 	"width": 1.0,

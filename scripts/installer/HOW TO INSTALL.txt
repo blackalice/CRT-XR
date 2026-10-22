@@ -1,0 +1,33 @@
+CRT XR for Steam Deck: how to install
+=====================================
+
+1. In Desktop Mode, double-click "Install CRT XR" in this folder.
+   If you are asked, choose "Trust and Launch" (or allow it to run).
+
+2. Follow the prompts. Steam closes for a moment while CRT XR is added to your
+   library. Updating keeps your settings, saves and Steam shortcut.
+
+3. Return to Gaming Mode. CRT XR is in your library under Non-Steam.
+
+That's it. Keep this folder together until the install finishes, then you can
+delete it. "CRT XR files" holds the app itself; you do not need to open it.
+
+
+Head tracking
+-------------
+Needs Decky Loader with the XR Gaming plugin, using a version that supports your
+glasses (VITURE Pro 2 currently needs the testing version). Without it, CRT XR
+shows a fixed view. Leave XR Gaming's virtual display off.
+
+Your games
+----------
+No games are included. In CRT XR, open Game library > Library locations and
+choose your main ROM folder. An EmuDeck "Emulation/roms" folder works as it is.
+
+Sega CD and Atari Lynx also need their BIOS files (bios_CD_U.bin and friends,
+lynxboot.img). CRT XR finds them in the "bios" folder next to your roms folder
+(the EmuDeck layout), or in ~/Applications/CRT-XR/bios.
+
+More help
+---------
+CRT XR files/docs/GETTING-STARTED.md, or https://github.com/blackalice/CRT-XR

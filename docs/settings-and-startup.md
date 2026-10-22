@@ -4,8 +4,8 @@ This update is local only. The installed Steam Deck build has not changed.
 
 ## Pause menu and settings
 
-LB + RB + Start or Escape opens the menu. Without a game, Home shows Continue last game,
-Game library (or Set up library), Quick settings, Music, Settings and Exit. Continue is selected when its cartridge is available; otherwise library setup is selected. Idle or paused music stays compact; active playback expands transport and timeline below the game actions.
+L1 + R1 + Start (LB + RB + Start on an Xbox pad) or Escape opens the menu. Without a game, Home shows Continue last game,
+Game library (or Set up library), Quick settings, Music, Settings and Exit. Continue appears and is selected only when its cartridge is available; otherwise library setup leads. Idle or paused music stays compact; active playback expands transport and timeline below the game actions.
 With a game loaded, the pause menu provides Resume, Choose game, Save state, Load state,
 Screenshot, Quick settings, Music, Settings and Exit. R3 recentres. B returns one level; at the root it saves
 and restores the previous pause state. Failed saves keep the menu open with an error.
@@ -22,8 +22,8 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 | About & Help | About, controls, device status, troubleshooting, credits, diagnostics and reset; Accessibility |
 
 Up/down selects, left/right adjusts immediately, A toggles switches or opens actions,
-and Y resets only the selected option. There is no edit lock. LB/RB changes category;
-LT/RT changes subsection once per trigger press. Category and subsection selection use
+and Y resets only the selected option. There is no edit lock. L1/R1 changes category;
+L2/R2 changes subsection once per trigger press. Category and subsection selection use
 a quiet category fill and section underline; the focused setting gets the strongest amber border.
 Quick settings appears first in the sidebar; category shortcuts follow that visual order.
 Subsections stay on one line with input-specific navigation hints beside them.
@@ -100,8 +100,8 @@ ROM extensions remain .sfc, .smc, .swc and .fig. No files are moved or deleted.
 ## Saved setups
 
 Saved setups lists three named slots with Empty/Saved status. Open a slot for
-Save, Load, Name for next save and Undo last setup load. The initial labels are
-Everyday, Evening and Showcase. Names, folder paths and radio URLs support an on-screen controller keyboard with case, space, delete and cursor controls, as well as a physical keyboard. Saving an
+Save, Load, Rename slot and Undo last setup load. The initial labels are
+Everyday, Evening and Bright room. Names, folder paths and radio URLs support an on-screen controller keyboard with case, space, delete and cursor controls, as well as a physical keyboard. Saving an
 existing setup asks for confirmation, with Cancel selected first. Cancelling a
 rename leaves its prior name alone. Renaming takes effect when that setup is saved.
 
@@ -136,7 +136,7 @@ last-game path or SD folder keeps its saved location and explains how to reconne
 or choose another folder. A ROM load failure returns to the chooser with details.
 
 Startup guidance reports unavailable tracking. **Controls & XR → Tracking** offers
-**Use glasses / retry** or **Use fixed view**. During a tracking drop, the existing tracking implementation
+**Connect glasses** or **Use fixed view**. During a tracking drop, the existing tracking implementation
 holds the last view; a notice directs you to recovery. Reconnection retains its
 existing continuity behaviour. The application does not infer USB detection just
 from selecting SBS.
@@ -194,7 +194,7 @@ The default setup was captured from the user's saved Steam Deck preferences on 1
 
 - PAL connection; scanlines 70%, phosphor mask 50%, glow 40%, glass reflections 40%, tube curvature 70%.
 - Chroma phase noise 38% and moving signal artifacts 95%.
-- Dark room: ambient 0.05, warm lamp 0.30, front fill 0.10, screen spill 40%, no rug; room fade 3.5–7 m.
+- Dark room: ambient 0.05, warm lamp 0.30, front fill 0.10, screen spill 40%, 90s confetti floor; room fade 3.5–7 m.
 - Distance approximately 3.284 m, height −0.15 m, convergence 3.5 m and soft view edges 3%.
 - TV-in-room audio: room amount 18%, speaker character 15%, directional strength 80%.
 - Metrics overlay off. Per-game picture off by default, matching the captured configuration.

@@ -35,14 +35,43 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   https://github.com/libretro/nestopia/tree/06a8949e0b3cf60e3a38a374b1426bf40fccb9a0
   Full licence: `cores/Nestopia-LICENSE.txt`.
 * Genesis Plus GX, Charles MacDonald, Eke-Eke and other credited contributors.
+  Serves Mega Drive, Master System, Game Gear and Sega CD.
   Its custom licence prohibits sale and commercial use; bundled components
   have additional terms reproduced in `cores/Genesis-Plus-GX-LICENSE.txt`.
   Upstream source revision:
   https://github.com/libretro/Genesis-Plus-GX/tree/393f70cd64c7334564c19a424c383f53986c13f4
+* Gambatte Libretro (Game Boy / Game Boy Color), GPL version 2 (its file headers grant version 2 only),
+  singlam/tch and the Gambatte contributors. Upstream source revision:
+  https://github.com/libretro/gambatte-libretro/tree/d9d6cd06382d1ced30de34d56d3609452323dab1
+  Full licence: `cores/Gambatte-LICENSE.txt`.
+* mGBA (Game Boy Advance), Mozilla Public License 2.0 (individual files keep
+  their notices), Jeffrey Pfau and contributors. Upstream source revision:
+  https://github.com/libretro/mgba/tree/7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6
+  Full licence: `cores/mGBA-LICENSE.txt`.
+* Beetle PCE Fast (PC Engine / TurboGrafx-16), GPL version 2 or
+  later, the Mednafen team. Upstream source revision:
+  https://github.com/libretro/beetle-pce-fast-libretro/tree/3f946f277aef3aa99a95551618bbcd1dd2bda0d9
+  Full licence: `cores/Beetle-PCE-FAST-LICENSE.txt`.
+* Beetle Lynx (Atari Lynx), GPL version 2 or later with Zlib-licensed
+  components, the Mednafen team. Upstream source revision:
+  https://github.com/libretro/beetle-lynx-libretro/tree/fcdefcfb3c11d6d2e71be076a5d3df2e88ab73ed
+  Full licence: `cores/Beetle-LYNX-LICENSE.txt`.
+* Beetle NeoPop (Neo Geo Pocket / Color), GPL version 2 or later, the Mednafen
+  team. Upstream source revision:
+  https://github.com/libretro/beetle-ngp-libretro/tree/a50d5ac288a81f2104ddf43195a4efdd15c72227
+  Full licence: `cores/Beetle-NGP-LICENSE.txt`.
+* Stella (Atari 2600), GPL version 2, Bradford W. Mott, Stephen Anthony and
+  the Stella team. Upstream source revision:
+  https://github.com/libretro/stella/tree/ba52c43b9eda950eb0c0eec69cda9b17dee8c39b
+  Full licence: `cores/Stella-LICENSE.txt`.
+* vecx (Vectrex), GPL version 3, the vecx and libretro-vecx contributors.
+  Upstream source revision:
+  https://github.com/libretro/libretro-vecx/tree/dccff5402a16d1ea7c112095a8e42632bf149506
+  Full licence: `cores/Vecx-LICENSE.md`.
 
-beta.5 uses locally compiled cores from the exact revisions above. `cores/core-builds.json`
+Release cores are locally compiled from the exact revisions above. `cores/core-builds.json`
 records the actual binary/source archive SHA-256 hashes, compiler versions and
-make arguments. Complete upstream source snapshots are under `cores/sources/`.
+build arguments (make, or CMake for mGBA). Complete upstream source snapshots are under `cores/sources/`.
 The release also supplies the corresponding application/host/bindings source and
 build materials. Earlier buildbot binaries are kept only in ignored local backups.
 No bit-for-bit equivalence with Libretro's official builds is claimed. See

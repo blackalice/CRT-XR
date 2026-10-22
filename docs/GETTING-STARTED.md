@@ -1,18 +1,18 @@
 # Getting started with CRT XR
 
-Public beta candidate: 0.1.0-beta.8. VITURE Pro 2 has been tested on Steam Deck and Windows; other hardware remains unverified. No games or music are included.
+Public beta: 0.1.0-beta.9. VITURE Pro 2 has been tested on Steam Deck and Windows; other hardware remains unverified. No games or music are included.
 
 ## Before you start
 
 **Install Decky Loader and its XR Gaming plugin before using CRT XR with head tracking.** **VITURE Pro 2 requires an XR Gaming version with Pro 2 support, rather than the stable release.** Most XR users will already have Decky and XR Gaming, but Pro 2 users should check which version they have. Confirm XR Gaming recognises your glasses and its driver is enabled. CRT XR setup assumes the plugin is installed; it does not install Decky Loader or XR Gaming for you. Keep XR Gaming's display effects disabled when CRT XR is managing the stereo view.
 
-The `.desktop` installer must stay beside the extracted package files; do not move it onto the desktop by itself. KDE may ask you to **Trust and Launch** or allow execution. `Install-CRT-XR.sh` remains available as a fallback. The launcher installs the local package; it does not download or execute a remote installer.
+The download contains just **Install CRT XR**, **HOW TO INSTALL.txt** and a **CRT XR files** folder. Keep them together: the launcher installs from that folder and does not download anything. KDE may ask you to **Trust and Launch**. `CRT XR files/Install-CRT-XR.sh` remains available as a fallback.
 
 ## Install on Steam Deck
 
 1. Switch to **Desktop Mode** from the Deck's Power menu. Sign in to Steam at least once before setup.
-2. Download the complete Linux package and extract it with the Deck's archive manager. Keep the extracted files together until installation finishes.
-3. Open **Install CRT XR.desktop** in the extracted folder. Choose **Trust and Launch / Execute** if prompted; if needed, right-click -> Properties -> Permissions -> allow execution. Keep the launcher beside the package files. `Install-CRT-XR.sh` remains a fallback.
+2. Download `CRT-XR-<version>-SteamDeck.tar.gz` and extract it (right-click → Extract). Keep the extracted folder together until installation finishes.
+3. Double-click **Install CRT XR** in the extracted folder. Choose **Trust and Launch** if prompted; if needed, right-click → Properties → Permissions → allow execution.
 4. Choose **VITURE Full SBS** for our tested glasses setup, or **Deck / monitor only**. The VITURE profile supports playing without glasses as well. Other glasses need manual display/profile setup during this beta.
 5. Finish any running game, then allow setup to close Steam. If there are several Steam accounts, choose the account you use. Setup verifies the files, installs CRT XR in your home folder, backs up configuration and adds or updates its Steam shortcut. It needs no administrator password and does not enable SSH or Steam debugging.
 6. Restart Steam yourself, or choose **Return to Gaming Mode**, then open **Library -> Non-Steam -> CRT XR**. Setup does not start a detached Steam process. Keep compatibility/Proton disabled: this is a native Linux application.
@@ -27,7 +27,7 @@ The real-account upgrade was tested on 17 October 2026: the original shortcut ID
 
 If it stays black, X retries. To leave, return the glasses to mono and press B / Escape. First-install Steam/display behaviour still needs a clean-device test. The tested resolution override for this profile is 3840×1080; Native alone did not work on our Deck.
 
-Open **Game library → Library locations** and choose your main ROM folder, including an SD card. Relevant supported systems appear automatically. Open a game; bring your own uncompressed SNES, NES, Mega Drive, Master System or Game Gear ROMs.
+Open **Game library → Library locations** and choose your main ROM folder, including an SD card. Relevant supported systems appear automatically. Open a game; bring your own uncompressed games for any supported console (see the README list).
 
 L1 + R1 + Start opens the menu. Up/down selects, left/right adjusts, A activates and B returns. R3 recentres. Music controls sit above the normal menu actions without taking the default selection.
 
@@ -47,15 +47,32 @@ roms/
 │   └── Game.md
 ├── mastersystem/
 │   └── Game.sms
-└── gamegear/
-    └── Game.gg
+├── gamegear/
+│   └── Game.gg
+├── gb/              # gbc/ gameboy/ also work
+│   └── Game.gb
+├── gba/
+│   └── Game.gba
+├── pcengine/        # tg16/ turbografx16/ also work
+│   └── Game.pce
+├── segacd/          # megacd/ also works; needs the CD BIOS files
+│   ├── Game.cue
+│   └── Game.bin
+├── atari2600/       # atari/ atarivcs/ also work
+│   └── Game.a26
+├── atarilynx/       # needs lynxboot.img
+│   └── Game.lynx
+├── ngpc/            # ngp/ neogeopocket/ also work
+│   └── Game.ngpc
+└── vectrex/
+    └── Game.vec
 ```
 
 CRT XR discovers supported games in subfolders and presents them by system; you do not need to move ROMs into the app folder. Common folder aliases such as `genesis`, `superfamicom`, `sms` and `gg` are recognised. Folder names help discovery, while the supported file type/content chooses the emulator core. You can also select a single supported system folder or browse to a game directly.
 
-Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Only supported, recognised cartridges appear. ROMs must be **uncompressed**; ZIP archives are not scanned as games. No ROMs are supplied.
+Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Only supported, recognised cartridges appear. ROMs must be **uncompressed**; ZIP archives are not scanned as games. Sega CD and Atari Lynx are the two exceptions that need hardware files: put the Sega CD BIOS (`bios_CD_U.bin`, `bios_CD_E.bin`, `bios_CD_J.bin` as your discs require) and the Lynx boot ROM (`lynxboot.img`) in a `bios` folder next to the CRT XR application — the library tells you what is missing and never rewrites your ROMs. No ROMs are supplied.
 
-In folder and game lists, **left/right jumps ten entries** and holding a direction continues scrolling. Jumps stop at the ends and cross game-list pages. **LB/RB** still changes whole game pages. To change the saved folder later, use **Library locations**.
+In folder and game lists, **left/right jumps ten entries** and holding a direction continues scrolling. Jumps stop at the ends and cross game-list pages. **L1/R1** still changes whole game pages. To change the saved folder later, use **Library locations**.
 
 ## Head tracking prerequisite
 
@@ -75,7 +92,7 @@ If setup reports an unsupported Steam configuration, it stops rather than guessi
 
 ## Windows preview
 
-Extract the complete Windows package and run **CRT-XR.exe**. Keep its neighbouring folders/files together. This is an unsigned portable preview; the Steam Deck setup script is for Linux only. Native Windows VITURE tracking is being validated with Pro 2 and a separately supplied SDK. See [Windows setup](WINDOWS-SETUP.md). Use Play without glasses for a fixed mono view.
+Extract `CRT-XR-<version>-Windows.zip` to a folder and double-click **CRT-XR.exe** (if Windows warns about an unrecognised app, choose **More info → Run anyway**). Keep the files and folders next to it together. This is an unsigned portable preview; the Steam Deck setup script is for Linux only. Native Windows VITURE tracking is being validated with Pro 2 and a separately supplied SDK. See [Windows setup](WINDOWS-SETUP.md). Use Play without glasses for a fixed mono view.
 
 ## Report a problem
 

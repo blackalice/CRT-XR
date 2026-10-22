@@ -62,10 +62,12 @@ func run():
 	check(app.world.fade_begin <= 2.5 and app.world.fade_end == 3, "Fade end keeps a valid transition interval")
 	app.set_room_value("fade_begin", 8)
 	check(app.world.fade_end >= 8.5 and app.world.floor_material.get_shader_parameter("fade_end") == app.world.fade_end, "Fade start updates floor and end consistently")
-	app.world.show_rug = false
+	check(app.world.floor_style == 0 and app.world.floor_material.get_shader_parameter("style") == 0, "The 90s confetti carpet is the default floor")
+	UI.set_value(app, "room.floor_style", 2)
+	check(app.world.floor_material.get_shader_parameter("style") == 2, "Floor style applies immediately")
 	app.world.shadows = false
 	app.world.apply_room_settings()
-	check(not app.world.rug_node.visible and not app.world.key_light.shadow_enabled, "Rug and shadows can be toggled independently")
+	check(not app.world.key_light.shadow_enabled, "Lamp shadows can be switched off")
 	UI.set_value(app,"room.cabinet_grain_strength",.8)
 	check(is_equal_approx(app.world.cabinet_grain_strength,.8), "Plastic grain strength is adjustable")
 	UI.reset(app,"room.cabinet_grain_strength")
@@ -103,7 +105,7 @@ func run():
 	root.add_child(restored)
 	restored.close_settings()
 	restored.set_process(false)
-	check(restored.distance == 1.2 and not restored.right_stick_distance and restored.world.warmth == 1 and not restored.world.show_rug, "Room and view preferences survive reload")
+	check(restored.distance == 1.2 and not restored.right_stick_distance and restored.world.warmth == 1 and restored.world.floor_style == 2, "Room and view preferences survive reload")
 	check(is_equal_approx(restored.world.shadow_strength,.35), "Shadow darkness survives preferences reload")
 	check(is_equal_approx(restored.world.spill_strength,.24), "Screen spill strength survives settings reload")
 	check(is_equal_approx(restored.height_offset, 0.4) and is_equal_approx(UI.get_value(restored,"view.height_offset"), 0.4), "Screen height and its slider survive settings reload")

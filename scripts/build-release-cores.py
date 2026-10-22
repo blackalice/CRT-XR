@@ -1,14 +1,39 @@
 """Build release cores from exact git objects, with per-binary source/toolchain evidence.
 Run with Linux Python 3.9+: python3 scripts/build-release-cores.py [all|linux|windows].
-Requires make, GCC/G++, and MinGW-w64 POSIX cross-compilers for Windows.
+Requires make, CMake, GCC/G++, and MinGW-w64 POSIX cross-compilers for Windows.
 """
 from pathlib import Path
 import datetime, hashlib, json, os, shutil, subprocess, sys, tempfile, tarfile
-
 ROOT=Path(__file__).resolve().parents[1]
-SPECS=[('snes9x','snes9x','1bcc369e89f08243e0a462882fb1f3e42e51de3a','libretro/Makefile'),
-       ('nestopia','nestopia','06a8949e0b3cf60e3a38a374b1426bf40fccb9a0','libretro/Makefile'),
-       ('genesis_plus_gx','genesis-plus-gx','393f70cd64c7334564c19a424c383f53986c13f4','Makefile.libretro')]
+# Per-core recipes: source directory holding the makefile ("" = archive root), makefile,
+# optional extra make arguments, the produced library base name when it differs from the
+# core name, and the licence files to retain from the exact archive.
+SPECS=[
+ {'core':'snes9x','repository':'snes9x','revision':'1bcc369e89f08243e0a462882fb1f3e42e51de3a','directory':'libretro','makefile':'Makefile',
+  'cxx_extra':' -std=c++17','args':['LTO='],
+  'licenses':[['LICENSE','Snes9x-LICENSE.txt'],['filter/snes_ntsc-license.txt','snes_ntsc-LICENSE.txt'],['jma/license.txt','JMA-LICENSE.txt'],['filter/xbrz-license.txt','xbrz-LICENSE.txt']]},
+ {'core':'nestopia','repository':'nestopia','revision':'06a8949e0b3cf60e3a38a374b1426bf40fccb9a0','directory':'libretro','makefile':'Makefile',
+  'licenses':[['COPYING','Nestopia-LICENSE.txt']]},
+ # Genesis Plus GX carries Mega Drive, Master System, Game Gear and Sega CD images.
+ # HAVE_CDROM is libretro-common physical-drive (cdrom://) access, not Sega CD emulation;
+ # it stays off on both platforms, as does CHD decompression.
+ {'core':'genesis_plus_gx','repository':'genesis-plus-gx','revision':'393f70cd64c7334564c19a424c383f53986c13f4','directory':'','makefile':'Makefile.libretro','args':['HAVE_CDROM=0','HAVE_CHD=0'],
+  'licenses':[['LICENSE.txt','Genesis-Plus-GX-LICENSE.txt']]},
+ {'core':'gambatte','repository':'gambatte','revision':'d9d6cd06382d1ced30de34d56d3609452323dab1','directory':'','makefile':'Makefile.libretro',
+  'licenses':[['COPYING','Gambatte-LICENSE.txt']]},
+ {'core':'mgba','repository':'mgba','revision':'7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6','recipe':'cmake',
+  'licenses':[['LICENSE','mGBA-LICENSE.txt']]},
+ {'core':'mednafen_pce_fast','repository':'beetle-pce-fast','revision':'3f946f277aef3aa99a95551618bbcd1dd2bda0d9','directory':'','makefile':'Makefile',
+  'licenses':[['COPYING','Beetle-PCE-FAST-LICENSE.txt']]},
+ {'core':'mednafen_lynx','repository':'beetle-lynx','revision':'fcdefcfb3c11d6d2e71be076a5d3df2e88ab73ed','directory':'','makefile':'Makefile',
+  'licenses':[['COPYING','Beetle-LYNX-LICENSE.txt']]},
+ {'core':'mednafen_ngp','repository':'beetle-ngp','revision':'a50d5ac288a81f2104ddf43195a4efdd15c72227','directory':'','makefile':'Makefile',
+  'licenses':[['COPYING','Beetle-NGP-LICENSE.txt']]},
+ {'core':'stella','repository':'stella','revision':'ba52c43b9eda950eb0c0eec69cda9b17dee8c39b','directory':'src/os/libretro','makefile':'Makefile','artifact':'stella2023',
+  'licenses':[['License.txt','Stella-LICENSE.txt']]},
+ {'core':'vecx','repository':'vecx','revision':'dccff5402a16d1ea7c112095a8e42632bf149506','directory':'','makefile':'Makefile.libretro','args':['HAS_GPU=0'],
+  'licenses':[['LICENSE.md','Vecx-LICENSE.md']]},
+]
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def output(*args):return subprocess.check_output(args,text=True).strip()
 def main():
@@ -22,11 +47,12 @@ def main():
  for p in cores.iterdir():
   if p.is_file() and p.suffix in ['.dll','.so','.json']:shutil.copy2(p,backup/p.name)
  records=[]
- for core,repository,revision,makefile in SPECS:
+ for spec in SPECS:
+  core,repository,revision=spec['core'],spec['repository'],spec['revision']
   repo=ROOT/'tools'/repository
   archive=sources/(repository+'-'+revision+'.tar.gz')
   if (repo/'.git').exists():
-   assert output('git','-C',str(repo),'rev-parse',revision)==revision
+   assert output('git','-C',str(repo),'rev-parse',revision)==revision,repository+': revision must be a full commit hash present in '+str(repo)
    subprocess.run(['git','-C',str(repo),'archive','--format=tar.gz','--prefix='+repository+'/', '--output='+str(archive),revision],check=True)
    epoch=output('git','-C',str(repo),'show','-s','--format=%ct',revision)
   else:
@@ -39,32 +65,47 @@ def main():
   for platform in platforms:
    cc='gcc' if platform=='linux' else 'x86_64-w64-mingw32-gcc-posix'
    cxx='g++' if platform=='linux' else 'x86_64-w64-mingw32-g++-posix'
+   cxx_args=cxx+spec.get('cxx_extra','')
    version=output(cc,'--version').splitlines()[0]
    with tempfile.TemporaryDirectory(prefix='crt-xr-core-') as work:
     subprocess.run(['tar','-xzf',str(archive),'-C',work],check=True)
     source=Path(work)/repository
-    make_dir=source/'libretro' if core in ['snes9x','nestopia'] else source
-    build_makefile='Makefile' if core in ['snes9x','nestopia'] else makefile
-    args=['make','-C',str(make_dir),'-f',build_makefile,'-j'+os.environ.get('BUILD_JOBS','6'),
-          'platform='+('unix' if platform=='linux' else 'win'),'CC='+cc,
-          'CXX='+cxx+(' -std=c++17' if core=='snes9x' else ''),'GIT_VERSION= '+revision[:7]]
-    if core=='snes9x':args+=['LTO=']
-    if core=='genesis_plus_gx':args+=['HAVE_CDROM=0','HAVE_CHD=0']
-    if platform=='windows':args+=['LDFLAGS=-static -static-libgcc -static-libstdc++']
+    artifact=spec.get('artifact',core)
+    extension='so' if platform=='linux' else 'dll'
+    name=core+'_libretro.'+extension
     env=dict(os.environ,SOURCE_DATE_EPOCH=epoch,LC_ALL='C',TZ='UTC')
     log=logs/(core+'-'+platform+'.log')
     print('Building '+core+' '+platform,flush=True)
     with log.open('w') as stream:
-     subprocess.run(args,env=env,stdout=stream,stderr=subprocess.STDOUT,check=True)
-    name=core+'_libretro.'+('so' if platform=='linux' else 'dll')
-    built=make_dir/name
+     if spec.get('recipe')=='cmake':
+      # Upstream libretro CI recipe; LIBMGBA_ONLY disables optional host libraries
+      # (PNG, SQLite, Lua, FFmpeg...) so the core has no extra runtime dependencies.
+      configure=['cmake','-S',str(source),'-B',str(Path(work)/'cmake-build'),'-DCMAKE_BUILD_TYPE=Release','-DLIBMGBA_ONLY=ON','-DBUILD_LIBRETRO=ON']
+      if platform=='windows':
+       configure+=['-DCMAKE_TOOLCHAIN_FILE='+str(ROOT/'native/emulation/mingw.cmake'),'-DCMAKE_SHARED_LINKER_FLAGS=-static -static-libgcc -static-libstdc++']
+      subprocess.run(configure,env=env,stdout=stream,stderr=subprocess.STDOUT,check=True)
+      build=['cmake','--build',str(Path(work)/'cmake-build'),'--target',artifact+'_libretro','-j'+os.environ.get('BUILD_JOBS','6')]
+      subprocess.run(build,env=env,stdout=stream,stderr=subprocess.STDOUT,check=True)
+      # Record both steps: the configure line carries the toolchain and link flags.
+      args=configure+['&&']+build
+      built=Path(work)/'cmake-build'/(artifact+'_libretro.'+extension)
+     else:
+      make_dir=source/spec['directory'] if spec['directory'] else source
+      # Windows cores must not import libwinpthread/libstdc++ DLLs. The flags ride on the
+      # compiler drivers so each upstream makefile keeps its own LDFLAGS.
+      static=' -static -static-libgcc -static-libstdc++' if platform=='windows' else ''
+      args=['make','-C',str(make_dir),'-f',spec['makefile'],'-j'+os.environ.get('BUILD_JOBS','6'),
+            'platform='+('unix' if platform=='linux' else 'win'),'CC='+cc+static,'CXX='+cxx_args+static,
+            'GIT_VERSION= '+revision[:7]]+spec.get('args',[])
+      subprocess.run(args,env=env,stdout=stream,stderr=subprocess.STDOUT,check=True)
+      built=make_dir/(artifact+'_libretro.'+extension)
     assert built.is_file(),built
     destination=cores/name;shutil.copy2(built,destination)
     records.append({'core':core,'platform':platform,'source_commit':revision,'origin':'Local source build',
       'binary_sha256':digest(destination),'source_archive':'sources/'+archive.name,'source_sha256':digest(archive),
       'compiler':version,'cxx_compiler':output(cxx,'--version').splitlines()[0],
-      'make_version':output('make','--version').splitlines()[0],
-      'make_arguments':[str(a).replace(str(source),'<extracted-source>') for a in args[1:]],
+      'make_version':(output('cmake','--version').splitlines()[0] if spec.get('recipe')=='cmake' else output('make','--version').splitlines()[0]),
+      'make_arguments':[str(a).replace(str(source),'<extracted-source>').replace(str(work),'<work>') for a in args[1:]],
       'source_date_epoch':epoch,'build_log_sha256':digest(log)})
     print('Built '+name+' '+digest(destination),flush=True)
  manifest=cores/'core-builds.json'
@@ -74,10 +115,13 @@ def main():
  previous['build_environment']=Path('/etc/os-release').read_text()
  previous['built_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()
  manifest.write_text(json.dumps(previous,indent=2)+'\n',encoding='utf-8')
- for source,name in [('snes9x/LICENSE','Snes9x-LICENSE.txt'),('snes9x/filter/snes_ntsc-license.txt','snes_ntsc-LICENSE.txt'),('snes9x/jma/license.txt','JMA-LICENSE.txt'),('snes9x/filter/xbrz-license.txt','xbrz-LICENSE.txt'),('nestopia/COPYING','Nestopia-LICENSE.txt'),('genesis-plus-gx/LICENSE.txt','Genesis-Plus-GX-LICENSE.txt')]:
-  repository,relative=source.split('/',1)
-  revision=next(s[2] for s in SPECS if s[1]==repository)
-  with tarfile.open(sources/(repository+'-'+revision+'.tar.gz'),'r:gz') as archive:
-   (cores/name).write_bytes(archive.extractfile(repository+'/'+relative).read())
+ # Source-only releases use this tracked evidence when tools/<core> has no Git metadata.
+ evidence=ROOT/'third_party/cores/release-builds.json'
+ evidence.parent.mkdir(parents=True,exist_ok=True)
+ evidence.write_bytes(manifest.read_bytes())
+ for spec in SPECS:
+  for relative,stored in spec['licenses']:
+   with tarfile.open(sources/(spec['repository']+'-'+spec['revision']+'.tar.gz'),'r:gz') as tar:
+    (cores/stored).write_bytes(tar.extractfile(spec['repository']+'/'+relative).read())
  print('Core source builds and provenance complete.',flush=True)
 if __name__=='__main__':main()

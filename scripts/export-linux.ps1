@@ -58,11 +58,11 @@ if ((Test-Path -LiteralPath $cabinet) -or (Test-Path -LiteralPath (Join-Path $pr
     $ao = Join-Path $root 'build/crt-model/ao'
     if (Test-Path -LiteralPath $ao) {
         New-Item -ItemType Directory -Force (Join-Path $assetOut 'ao') | Out-Null
-        Copy-Item -Path (Join-Path $ao '*_ao.png') -Destination (Join-Path $assetOut 'ao')
+        Copy-Item -Path (Join-Path $ao '*_ao.res') -Destination (Join-Path $assetOut 'ao')
         Copy-Item -LiteralPath (Join-Path $ao 'bake.json') -Destination (Join-Path $assetOut 'ao')
     }
 }
-$allCores = @('snes9x','nestopia','genesis_plus_gx')
+$allCores = @('snes9x','nestopia','genesis_plus_gx','gambatte','mgba','mednafen_pce_fast','mednafen_lynx','mednafen_ngp','stella','vecx')
 foreach ($coreName in $allCores) {
     $core = Join-Path $root "cores/${coreName}_libretro.so"
     if (-not (Test-Path -LiteralPath $core)) { throw "Missing emulator core: $coreName" }
@@ -110,7 +110,7 @@ $roomBake = Join-Path $root 'build/room-bake'
 if (Test-Path -LiteralPath (Join-Path $roomBake 'bake.json')) {
     $bakeOut = Join-Path $out 'assets/room-bake'
     New-Item -ItemType Directory -Force $bakeOut | Out-Null
-    foreach ($name in @('table_ao.png','floor_ao.png','table_contact_albedo.res','bake.json')) {
+    foreach ($name in @('floor_ao.png','table_contact_albedo.res','bake.json')) {
         Copy-Item -LiteralPath (Join-Path $roomBake $name) -Destination $bakeOut
     }
     Copy-Item -LiteralPath (Join-Path $root 'docs/room-contact-bake.md') -Destination (Join-Path $out 'assets/ROOM-CONTACT-BAKE.md')

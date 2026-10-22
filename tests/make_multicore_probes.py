@@ -3,6 +3,9 @@
 NES: palette backdrop changes from green to red while NES B is held.
 Mega Drive: green CRAM backdrop, red while B is held (active-low port 1).
 Master System/Game Gear: green backdrop; verifies Z80/VDP boot paths.
+Game Boy / Game Boy Advance / PC Engine / Atari 2600: idle boot loops
+with valid headers and reset vectors; they exercise core load, frame execution,
+audio and state save paths rather than console-specific drawing.
 """
 from pathlib import Path
 import struct
@@ -63,6 +66,37 @@ def megadrive():
     struct.pack_into('>H',rom,0x18E,sum(struct.unpack('>'+str((len(rom)-0x200)//2)+'H',rom[0x200:])) & 65535)
     (out/'crt-xr-probe.md').write_bytes(rom)
 
+def gameboy():
+    rom = bytearray(0x8000)
+    rom[0:3] = bytes([0xC3,0x50,0x01])            # JP 0150
+    rom[0x150:0x153] = bytes([0xF0,0x18,0xFE])    # DI; JR self
+    rom[0x134:0x143] = b'RETROCRT PROB'.ljust(15,b'\0')
+    rom[0x148] = 2                                # 32 KiB
+    rom[0x14D] = (-sum(rom[0x134:0x14D])) & 255
+    struct.pack_into('>H',rom,0x14E,(-sum(rom)) & 65535)
+    (out/'crt-xr-probe.gb').write_bytes(rom)
+
+def gameboy_advance():
+    rom = bytearray(0x8000)
+    struct.pack_into('<I',rom,0x00,0xEA00002E)    # B 0xC0 (cores check the 0xEA opcode byte)
+    rom[0xA0:0xB2] = b'CRTXR PROBE NOBS00'        # title, game code, maker
+    rom[0xB2] = 0x96                              # fixed header value
+    rom[0xBD] = (-sum(rom[0xA0:0xBD]) - 0x19) & 255  # header complement check
+    struct.pack_into('<I',rom,0xC0,0xEAFFFFFE)    # branch self
+    (out/'crt-xr-probe.gba').write_bytes(rom)
+
+def pcengine():
+    rom = bytearray(0x10000)
+    rom[0:5] = bytes([0x78,0xD8,0x4C,0x00,0x80])  # SEI; CLD; JMP $8000
+    for vector in (0xFFFA,0xFFFC,0xFFFE): struct.pack_into('<H',rom,vector,0x8000)
+    (out/'crt-xr-probe.pce').write_bytes(rom)
+
+def atari2600():
+    rom = bytearray(4096)
+    rom[0:7] = bytes([0x78,0x58,0xA9,0x00,0x4C,0x00,0x10])  # SEI; CLD; LDA #0; JMP $1000
+    for vector in (0xFF8,0xFFA,0xFFC): struct.pack_into('<H',rom,vector,0x1000)
+    (out/'crt-xr-probe.a26').write_bytes(rom)
+
 def sega8(gamegear=False):
     code = bytearray([0xF3,0x31,0xF0,0xDF]) # DI, stack
     def emit(*b): code.extend(b)
@@ -77,7 +111,7 @@ def sega8(gamegear=False):
     rom[0x7FFF] = 0x6C if gamegear else 0x4C
     (out/('crt-xr-probe.gg' if gamegear else 'crt-xr-probe.sms')).write_bytes(rom)
 
-nes(); megadrive(); sega8(); sega8(True)
+nes(); megadrive(); sega8(); sega8(True); gameboy(); gameboy_advance(); pcengine(); atari2600()
 pal_nes = bytearray((out/'crt-xr-probe.nes').read_bytes()); pal_nes[9] = 1
 (out/'crt-xr-probe-pal.nes').write_bytes(pal_nes)
 pal_md = bytearray((out/'crt-xr-probe.md').read_bytes()); pal_md[0x1F0:0x200] = b'E'.ljust(16,b' ')

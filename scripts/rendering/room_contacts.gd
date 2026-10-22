@@ -29,6 +29,9 @@ static func apply(world: Node3D, support: Node3D) -> void:
     shaded.ao_enabled=false
     shaded.set_meta("contact_baked_into_colour",true)
     table.material_override=shaded
+    # The override replaces the mesh's own material; drop it so its original
+    # 2048 albedo (superseded by the contact colour) can leave video memory.
+    if table.mesh is ArrayMesh:(table.mesh as ArrayMesh).surface_set_material(0,null)
     var rect:Array=data.floor_rect
     world.floor_material.set_shader_parameter("contact_rect",Vector4(rect[0],rect[1],rect[2],rect[3]))
     world.floor_material.set_shader_parameter("contact_ao",floor_ao)

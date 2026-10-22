@@ -6,6 +6,8 @@ var socket := PacketPeerUDP.new()
 var helper_pid := -1
 var sequence := -1
 var raw_orientation := Quaternion.IDENTITY
+var helper_check_elapsed := 0.0
+var helper_alive := true
 
 var predictor := Predictor.new()
 
@@ -34,11 +36,15 @@ func _init() -> void:
 
 func update(delta: float) -> void:
 	var newest_stamp_usec := -1
+	# The ~2 ms bridge cadence delivers a burst per frame; only the newest
+	# conclusive packet decides the outcome, so drain the queue and parse
+	# newest-first instead of JSON-decoding every packet.
+	var packets: Array[PackedByteArray] = []
 	for i in range(mini(socket.get_available_packet_count(), 512)):
 		var packet := socket.get_packet()
-		if socket.get_packet_ip() != "127.0.0.1" or packet.size() > 512:
-			continue
-		var message = JSON.parse_string(packet.get_string_from_utf8())
+		if socket.get_packet_ip() == "127.0.0.1" and packet.size() <= 512: packets.append(packet)
+	for i in range(packets.size() - 1, -1, -1):
+		var message = JSON.parse_string(packets[i].get_string_from_utf8())
 		if not message is Dictionary or message.get("v", 0) != 1:
 			continue
 		if not message.get("valid", false):
@@ -46,7 +52,7 @@ func update(delta: float) -> void:
 				continue # brief contention is not a disconnect; watchdog still applies
 			valid = false
 			status = "XR: " + str(message.get("status", "unavailable"))
-			continue
+			break
 		var next_sequence := int(message.get("sequence", -1))
 		if next_sequence <= sequence:
 			continue
@@ -57,7 +63,7 @@ func update(delta: float) -> void:
 		if not pose.is_finite() or absf(pose.length_squared() - 1.0) > 0.02:
 			valid = false
 			status = "XR: invalid orientation"
-			continue
+			break
 		sequence = next_sequence
 		raw_orientation = pose.normalized()
 		sample_time_usec = Time.get_ticks_usec()
@@ -67,10 +73,15 @@ func update(delta: float) -> void:
 		newest_stamp_usec = int(round(float(driver_ms) * 1000.0)) if float(driver_ms) >= 0.0 else sample_time_usec
 		valid = true
 		status = live_status
+		break
 	if valid and Time.get_ticks_usec() - sample_time_usec > 300000:
 		valid = false
 		status = "XR: stale tracking / holding last pose"
-	if helper_pid > 0 and not OS.is_process_running(helper_pid):
+	helper_check_elapsed += delta
+	if helper_check_elapsed >= 1.0 and helper_pid > 0:
+		helper_check_elapsed = 0.0
+		helper_alive = OS.is_process_running(helper_pid)
+	if helper_pid > 0 and not helper_alive:
 		valid = false
 		status = "XR: helper stopped; select simulation or retry tracking"
 	var angles := raw_orientation.get_euler()

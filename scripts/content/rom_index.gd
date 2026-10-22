@@ -21,6 +21,9 @@ var link_reader: DirAccess = DirAccess.open("user://")
 
 func canonical(path: String) -> String:
 	var resolved := ProjectSettings.globalize_path(path).simplify_path()
+	# Link checks need any real filesystem DirAccess; user:// can be missing.
+	if link_reader==null: link_reader=DirAccess.open(resolved)
+	if link_reader==null: return resolved
 	# Resolve symlink ancestors too (EmuDeck commonly links the ROM root to SD).
 	for attempt in range(32):
 		var probe := resolved
@@ -54,7 +57,7 @@ func start(path: String) -> void:
 		message="ROM folder unavailable. Reconnect its SD card or choose another library folder."
 		return
 	if Folders.unsupported(path.get_file()):
-		message="This console is not supported yet. Choose the main ROM folder or a SNES, NES, Mega Drive, Master System or Game Gear folder."
+		message="This console is not supported yet. Choose the main ROM folder or one supported console's folder."
 		return
 	pending.append({"path":resolved,"supported":not Folders.system(path.get_file()).is_empty()}); scanning=true
 

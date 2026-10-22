@@ -105,6 +105,10 @@ func sync_content_height() -> void:
 	# This lets wrapped titles and descriptions grow the row without a size loop.
 	custom_minimum_size.y=maxf(56,content_margin.get_combined_minimum_size().y)
 
+# Shared: refresh() runs ten times a second per row while the menu is open.
+static var FILL_SELECTED := MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0)
+static var FILL_IDLE := MenuSkin.box(Color("92969c"),Color.TRANSPARENT,0,0)
+
 func refresh() -> void:
 	disabled=item.get("disabled",false)
 	value_label.text=formatted_value()
@@ -116,7 +120,7 @@ func refresh() -> void:
 	track.visible=item.kind=="number"
 	if meter!=null: meter.visible=track.visible
 	if track.visible:
-		track.add_theme_stylebox_override("fill",MenuSkin.box(MenuSkin.AMBER if selected_now else Color("92969c"),Color.TRANSPARENT,0,0))
+		track.add_theme_stylebox_override("fill",FILL_SELECTED if selected_now else FILL_IDLE)
 		track.value=inverse_lerp(float(item.min),float(item.max),float(item.getter.call()))
 		if range_min_label!=null:
 			range_min_label.text=format_limit(float(item.min))
@@ -137,6 +141,8 @@ func formatted_value() -> String:
 	if item.kind == "choice": return str(item.choices[int(value)])
 	match item.get("unit",""):
 		"percent": return "%d%%" % roundi(float(value)*100)
+		# Share of the allowed range, so the strongest setting reads 100%.
+		"strength": return "%d%%" % roundi(float(value)/float(item.max)*100)
 		"m": return "%.2f m" % value
 		"m/s": return "%.1f m/s" % value
 		"mm": return "%d mm" % roundi(float(value)*1000)
@@ -164,6 +170,7 @@ func changed_from_default() -> bool:
 func format_limit(value: float) -> String:
 	match item.get("unit",""):
 		"percent": return compact_number(value*100.0)+"%"
+		"strength": return compact_number(value/float(item.max)*100.0)+"%"
 		"mm", "ms": return compact_number(value*1000.0)+" "+str(item.unit)
 		"degrees": return compact_number(value)+"°"
 		"x": return compact_number(value)+"×"
