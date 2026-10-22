@@ -116,6 +116,7 @@ func refresh() -> void:
 	track.visible=item.kind=="number"
 	if meter!=null: meter.visible=track.visible
 	if track.visible:
+		track.add_theme_stylebox_override("fill",MenuSkin.box(MenuSkin.AMBER if selected_now else Color("92969c"),Color.TRANSPARENT,0,0))
 		track.value=inverse_lerp(float(item.min),float(item.max),float(item.getter.call()))
 		if range_min_label!=null:
 			range_min_label.text=format_limit(float(item.min))

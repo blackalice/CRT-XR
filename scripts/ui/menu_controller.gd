@@ -158,6 +158,8 @@ func _ready() -> void:
 		button.focus_mode = Control.FOCUS_NONE
 		button.pressed.connect(func(): switch_category(index-category))
 		sidebar.add_child(button); sidebar_buttons.append(button)
+	# Keep category IDs stable while putting the everyday route first.
+	sidebar.move_child(sidebar_buttons[7],1)
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation",8)
@@ -182,7 +184,16 @@ func _ready() -> void:
 	search_field.placeholder_text="Search games…  (Ctrl+F)"
 	search_field.text_changed.connect(update_search)
 	content.add_child(search_field); search_field.hide()
-	content.add_child(scroll)
+	var scroll_frame := Control.new()
+	scroll_frame.size_flags_vertical=Control.SIZE_EXPAND_FILL
+	content.add_child(scroll_frame)
+	scroll_frame.add_child(scroll)
+	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var edges := preload("res://scripts/ui/scroll_edges.gd").new()
+	edges.scroll=scroll
+	edges.panel=self
+	scroll_frame.add_child(edges)
+	edges.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	column = VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.add_theme_constant_override("separation",6)
@@ -858,17 +869,18 @@ func refresh_labels() -> void:
 	if mode=="pause":
 		subtitle.text = host.emulator.rom_path.get_file() if host.emulator.loaded else status_title
 		subtitle.tooltip_text=status_detail
-	elif mode=="help": subtitle.text="CRT XR · Help"
+	elif mode=="help": subtitle.text="Game library" if help_title=="Full game title" else "CRT XR · Help"
 	elif mode=="music_browser": subtitle.text=music_dir+" · Page %d" % [music_page+1]
 	elif mode=="radio_url": subtitle.text="Direct MP3 streams · On-screen keys or keyboard"
 	elif mode=="browser": subtitle.text = library.current_dir
 	elif mode=="library":
-		subtitle.text = ("Finding your games… %d found · You can browse while we look" % rom_index.total()) if rom_index.scanning else ("%d games · %d consoles · Ready to play" % [rom_index.total(),rom_index.games.values().filter(func(games): return not games.is_empty()).size()] if rom_index.total()>0 else "SNES · NES · Mega Drive · Master System · Game Gear")
+		subtitle.text = ("Finding your games… %d found · You can browse while we look" % rom_index.total()) if rom_index.scanning else (count_caption(rom_index.total(),"game")+" · "+count_caption(rom_index.games.values().filter(func(games): return not games.is_empty()).size(),"console")+" · Ready to play" if rom_index.total()>0 else "SNES · NES · Mega Drive · Master System · Game Gear")
 	elif mode=="games":
 		var count: int = game_entries().size()
-		subtitle.text = "%d games · Page %d of %d" % [count,game_page+1,maxi(1,ceili(float(count)/GAMES_PER_PAGE))]
+		subtitle.text = count_caption(count,"game")
+		if count>GAMES_PER_PAGE: subtitle.text += " · Page %d of %d" % [game_page+1,ceili(float(count)/GAMES_PER_PAGE)]
 	elif mode in ["recent","favourites"]:
-		subtitle.text = "%d games" % history_paths().size()
+		subtitle.text = count_caption(history_paths().size(),"game")
 	elif mode=="launch": subtitle.text = launch_path.get_file().get_basename()
 	elif mode=="library_tools": subtitle.text = host.default_rom_dir if not host.default_rom_dir.is_empty() else "Choose the main roms folder, once"
 	elif mode=="settings":
@@ -879,11 +891,12 @@ func refresh_labels() -> void:
 	else: subtitle.text = "CRT XR"
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0 and notification_context==state_key(): help_label.text = notification
+	elif mode=="help": help_label.text=""
 	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in Recently played or a system list and press X. B returns."
 	elif mode=="library" and not rom_index.message.is_empty(): help_label.text=rom_index.message
 	elif mode=="library" and host.default_rom_dir.is_empty(): help_label.text="Choose Set up your ROM library and select your main ROM folder. Your supported consoles appear here automatically."
 	elif mode=="library" and not rom_index.scanning and rom_index.total()==0: help_label.text="No supported cartridges here yet. Check Library locations. Use uncompressed SNES, NES or Sega cartridges; archives and discs are not supported."
-	elif row!=null: help_label.text = str(row.item.label)+" — "+str(row.item.get("help",""))
+	elif row!=null: help_label.text = str(row.item.get("help",""))
 	else: help_label.text = library.message if mode=="browser" else "Nothing to select. B returns."
 	if preview and row!=null: compact.text = "▸  %s    ‹  %s  ›" % [row.item.label,row.formatted_value()]
 	refresh_hints(row)
@@ -891,6 +904,9 @@ func refresh_labels() -> void:
 func preview_available() -> bool:
 	if mode!="settings": return false
 	return items.any(func(item): return item.get("visual",false) and not item.get("disabled",false) and item.kind!="action")
+
+func count_caption(count: int, noun: String) -> String:
+	return "%d %s%s" % [count,noun,"" if count==1 else "s"]
 
 func refresh_hints(row) -> void:
 	var pad := input_kind=="controller"
@@ -911,8 +927,8 @@ func refresh_hints(row) -> void:
 		if preview: parts.append("B Settings" if pad else "Backspace Settings")
 		hints.text=" · ".join(parts)
 	elif mode in ["games","recent","favourites"]:
-		hints.text="↑↓ Select · ←→ Jump 10 · "+("A Open" if pad else "Enter Open")
-		if row!=null and row.item.has("rom_path"): hints.text+=" · X Favourite"
+		hints.text="↑↓ Select · "+("A Open" if pad else "Enter Open")
+		if row!=null and row.item.has("rom_path"): hints.text+=" · X Favourite · "+("Y Full title" if search_query.is_empty() else "Y Clear search")
 	elif mode=="browser": hints.text="↑↓ Select · "+("A Open · B Back · RB Set folder" if pad else "Enter Open · Backspace Back")
 	elif mode=="help": hints.text="↑↓ Scroll · "+("B Back" if pad else "Backspace Back")
 	elif mode=="library": hints.text="D-pad Select · A Open · B Back · RB Refresh" if pad else "Arrows Select · Enter Open · Backspace Back · R Refresh"
@@ -1089,7 +1105,7 @@ func handle(event: InputEvent) -> bool:
 			JOY_BUTTON_B: back()
 			JOY_BUTTON_Y:
 				if mode=="browser": open_default()
-				elif mode in ["games","recent","favourites"] and not search_query.is_empty(): search_field.text=""; update_search("")
+				elif mode in ["games","recent","favourites"]: game_title_action()
 				else: reset_option()
 			JOY_BUTTON_X:
 				if mode=="browser": open_cards()
@@ -1140,7 +1156,9 @@ func handle(event: InputEvent) -> bool:
 			match event.physical_keycode:
 				KEY_ENTER,KEY_SPACE: activate()
 				KEY_BACKSPACE: back()
-				KEY_Y: reset_option()
+				KEY_Y:
+					if mode in ["games","recent","favourites"]: game_title_action()
+					else: reset_option()
 				KEY_X:
 					if mode in ["games","recent","favourites"]: toggle_favourite()
 					else: toggle_preview()
@@ -1266,6 +1284,13 @@ func undo_picture_preset() -> void:
 func open_help(title: String, copy: String) -> void:
 	remember(); help_origin=snapshot(); help_title=title; help_copy=copy
 	mode="help"; clear_input(); render()
+
+func game_title_action() -> void:
+	if not search_query.is_empty():
+		search_field.text=""; update_search(""); return
+	var row=selected_row()
+	if row!=null and row.item.has("rom_path"):
+		open_help("Full game title",str(row.item.label))
 
 func apply_accessibility() -> void:
 	host.power_on.reduced_motion=host.menu_reduced_motion

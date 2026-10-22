@@ -50,5 +50,16 @@ func run():
 			var longer=m.rows.filter(func(row):return row.item.id=="game:/fixture/long.sfc")[0]
 			check(inside(longer,longer.title_label) and inside(longer,longer.detail_label),"Long title grows its row and contains its caption: "+kind+str(large))
 			await capture("games-"+kind+("-large" if large else ""))
+			m.rom_index.games.snes=[{"path":"/fixture/very-long.sfc","label":"A complete cartridge title with a very long subtitle ".repeat(5)+"(Europe) (Revision 12)"}]
+			m.render(); m.select("game:/fixture/very-long.sfc",false); await settle()
+			var full=m.selected_row()
+			check(m.subtitle.text=="1 game","Single-game list uses singular count and omits pagination")
+			check(inside(full,full.detail_label),"Very long titles keep their caption inside the row")
+			var full_title: String=full.item.label
+			m.game_title_action(); await settle()
+			check(m.mode=="help" and m.help_copy==full_title,"Full title is available in a scrollable view")
+			await capture("full-title-"+kind+("-large" if large else ""))
+			m.back(); await settle()
+			check(m.selected_id=="game:/fixture/very-long.sfc","Full title returns to the same cartridge")
 	app.free(); await settle()
 	print("MENU LAYOUT COMPLETE: ",failures," failures"); quit(1 if failures else 0)

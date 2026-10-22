@@ -4,6 +4,7 @@ func configure(definition: Dictionary) -> void:
 	super.configure(definition)
 	# Game titles use the whole text column; the chevron keeps its natural width.
 	value_label.custom_minimum_size.x=18
+	title_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	detail_label=Label.new(); detail_label.text=item.get("detail","")
 	detail_label.add_theme_font_size_override("font_size",18)
 	detail_label.add_theme_color_override("font_color",MenuSkin.MUTED)
@@ -11,3 +12,7 @@ func configure(definition: Dictionary) -> void:
 	detail_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	words.add_child(detail_label)
 	sync_content_height()
+
+func refresh() -> void:
+	super.refresh()
+	tooltip_text=str(item.label)

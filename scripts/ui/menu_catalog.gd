@@ -169,7 +169,7 @@ func pages(category: int) -> Array:
 			var audio = h.emulator.tv_audio
 			var audio_rows: Array=[
 				{"id":"audio.mode","label":"Sound mode","kind":"choice","choices":["Original","TV speakers","TV in room"],"default":2,"visual":false,"getter":func(): return audio.mode,"setter":func(value): audio.mode=value; audio.apply(); menu.refresh(),"help":"Original bypasses processing. TV speakers adds cabinet character. TV in room adds reflections and head-relative panning."},
-				number("audio.room_amount","Room amount",audio,"room_amount",0,.25,.01,audio.DEFAULTS.room_amount,"percent","Quiet, short room reflections.",audio.apply,false),
+				number("audio.room_amount","Room amount",audio,"room_amount",0,.25,.01,audio.DEFAULTS.room_amount,"percent","Adds short reflections around the TV.",audio.apply,false),
 				number("audio.speaker_character","Speaker character",audio,"speaker_character",0,1,.05,audio.DEFAULTS.speaker_character,"percent","Narrows stereo and softens bass and treble.",audio.apply,false),
 				number("audio.directional_strength","Directional strength",audio,"directional_strength",0,1,.05,audio.DEFAULTS.directional_strength,"percent","Keeps the sound towards the TV as your head turns.",audio.apply,false)]
 			for index in [1,2,3]:
@@ -190,14 +190,14 @@ func pages(category: int) -> Array:
 			var duck_amount=number("music.duck_amount","Game volume dip",music,"duck_amount",0,1,.05,.5,"percent","How much to reduce the chosen game volume while music plays. Fades smoothly.",music.apply,false)
 			if not music.duck_game:
 				duck_amount.disabled=true; duck_amount.disabled_reason="Enable Dip game during music first."
-			return [page("TV sound",audio_rows),page("Ducking",[duck_toggle,duck_amount]),page("Music & radio",[
+			return [page("TV sound",audio_rows),page("Music balance",[duck_toggle,duck_amount]),page("Music & radio",[
 				action("music.file","Choose music / album",menu.open_music_browser,"Browse local storage or an SD card. Music keeps playing in menus."),
 				action("music.replay","Play last MP3",func(): music.play_last_file(); menu.notify(music.status),"Continues the saved track and position without changing the game.",music.last_file.is_empty()),
 				action("music.url","Radio stream URL",menu.edit_radio_url,"Enter a direct MP3 stream URL. Station webpages, AAC and HLS are not supported.",false,"Edit"),
 				action("music.radio","Play radio",func(): music.play_station(music.station_url); menu.notify(music.status),"Streams a direct MP3 radio station with a bounded audio buffer.",music.station_url.is_empty()),
 				action("music.stop","Stop music",func(): music.stop(); menu.notify(music.status),"Stops music or radio. Leaves game sound unchanged."),
 				number("music.volume","Music volume",music,"volume",0,1,.05,.45,"percent","Independent music level. Continues while the game is paused.",music.apply,false),
-				toggle("music.loop","Repeat album",music,"loop",true,"Repeat the folder after its last track. Off stops at the album end.",music.apply,false)]),page("Atmosphere",[
+				toggle("music.loop","Repeat album",music,"loop",true,"Repeat the folder after its last track. Off stops at the album end.",music.apply,false)]),page("Music space",[
 				number("music.reverb","Music room reverb",music,"reverb",0,.3,.01,.12,"percent","Short, subtle reflections from the room; zero disables the effect.",music.apply,false),
 				number("music.directional","Music direction",music,"directional",0,1,.05,.8,"percent","Sound stays beside the TV as you turn your head. Zero keeps normal stereo.",music.apply,false),
 				number("music.side","Radio position",music,"side",-2,2,.1,-1.1,"m","Position left or right of the TV, independent of the game speakers.",music.apply,false)])]

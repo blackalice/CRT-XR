@@ -29,8 +29,8 @@ static func create() -> Theme:
 	theme.set_stylebox("disabled","Button",box(Color("1d2025")))
 	theme.set_stylebox("normal","LineEdit",box(Color("23272d")))
 	theme.set_stylebox("focus","LineEdit",box(Color.TRANSPARENT,AMBER,2))
-	theme.set_stylebox("scroll","VScrollBar",box(Color("24272c"),Color.TRANSPARENT,0,3))
-	theme.set_stylebox("grabber","VScrollBar",box(Color("777064"),Color.TRANSPARENT,0,3))
+	theme.set_stylebox("scroll","VScrollBar",box(Color("24272c"),Color.TRANSPARENT,0,5))
+	theme.set_stylebox("grabber","VScrollBar",box(Color("92969c"),Color.TRANSPARENT,0,5))
 	theme.set_stylebox("grabber_highlight","VScrollBar",box(AMBER,Color.TRANSPARENT,0,3))
 	theme.set_stylebox("grabber_pressed","VScrollBar",box(AMBER,Color.TRANSPARENT,0,3))
 	return theme

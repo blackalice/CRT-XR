@@ -12,20 +12,22 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 
 | Category | Subsections |
 |---|---|
+| Quick settings | TV distance; height; recenter; picture preset; game volume; music volume |
 | View | Placement; Display |
 | Picture | Presets; CRT; Screen fit; Colour; Signal |
-| Audio | TV sound; Ducking; Music & radio; Atmosphere |
+| Audio | TV sound; Music balance; Music & radio; Music space |
 | Room | Lighting; Materials; Placement & fade |
 | Controls & XR | Controller; Tracking; Advanced calibration |
 | Saved setups | Setup slots; Per-game picture |
 | About & Help | About, controls, device status, troubleshooting, credits, diagnostics and reset; Accessibility |
-| Quick settings | TV distance; height; recenter; picture preset; game volume; music volume |
 
 Up/down selects, left/right adjusts immediately, A toggles switches or opens actions,
 and Y resets only the selected option. There is no edit lock. LB/RB changes category;
 LT/RT changes subsection once per trigger press. Category and subsection selection use
 a quiet category fill and section underline; the focused setting gets the strongest amber border.
+Quick settings appears first in the sidebar; category shortcuts follow that visual order.
 Subsections stay on one line with input-specific navigation hints beside them.
+Scroll edges fade only where more content is available, alongside a clearer scrollbar.
 
 For keyboard users, arrows select/adjust, Enter activates, Backspace returns, Q/E or
 Tab changes category, and Z/C changes subsection. Hints follow the last-used input
@@ -46,8 +48,11 @@ and UI processing stop while closed.
 ## Feedback, previews and accessibility
 
 Compact adjustment arrows reserve their space beside the value so tracks stay aligned.
-Rows grow around wrapped text; game titles use the available width, with system captions
-inside the same row. Long descriptive values appear below their labels. Numeric rows
+Only the focused slider uses amber; other tracks are muted. Contextual help explains
+the effect without repeating the row title. Rows grow around wrapped text; game titles
+use up to three lines, with system captions
+inside the same row. Y opens a scrollable full-title view (or clears an active search);
+pointer users can also hover for the full title. Long descriptive values appear below their labels. Numeric rows
 show the minimum and maximum beside the track; a full Scanlines track explicitly means the 70% maximum. A dot
 marks values changed from their defaults. Presets include a look description and active
 checkmark; manual edits show Custom. Picture → Presets offers Undo picture preset.
@@ -79,7 +84,8 @@ the library shows supported system cards, Recent, Favourites and Library locatio
 Folder, drive and SD-card management remain inside Library locations. Select the main
 ROM folder containing `snes`, `megadrive`, etc. with R1, rather than a single
 system folder. System lists include subfolders, use natural title sorting, and
-remember page/selection/scroll. Left/right or L1/R1 changes pages of 50 games;
+remember page/selection/scroll. Counts use singular/plural labels, and page numbers
+appear only when there is more than one page. Left/right or L1/R1 changes pages of 50 games;
 B returns to the system selector. Jump to letter opens a controller-friendly A–Z/# grid
 and jumps across pages; missing letters are disabled. Ctrl+F focuses keyboard search;
 Down or Enter returns to the list. X remains Favourite and J opens the alphabet when
