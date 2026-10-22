@@ -125,7 +125,7 @@ On Steam Deck, use Steam's **Gamepad With Joystick Trackpad** layout. On Windows
 | Move TV closer / farther | Right stick, when enabled | Page Up / Page Down |
 | Screenshot | Pause menu | F6 |
 
-Music sits above the usual pause-menu actions without taking the default selection. Left/right selects its transport controls or seeks on the timeline; down returns to the menu below. Game controls follow each supported console's layout.
+Continue or library setup leads the home screen. Quick settings opens TV placement, recenter, picture presets and both volume controls. Music uses a compact strip when idle or paused and expands its transport and timeline during playback. Left/right selects playback controls or seeks; up/down moves between music and game actions. Game controls follow each supported console's layout.
 
 ## Updates, help and feedback
 
@@ -136,7 +136,7 @@ On Steam Deck, run the installer from a newer complete package to update the exi
 - [Development and builds](docs/DEVELOPMENT.md)
 - [Pre-launch checklist](docs/PRE-LAUNCH-CHECKLIST.md) · [Detailed beta review](docs/BETA-REVIEW.md)
 
-For a bug report, use **General → Copy diagnostics** and include your device, Desktop/Gaming Mode, mono/SBS, and steps to reproduce. Review logs before sharing: they can contain local paths or radio URLs.
+For a bug report, use **About & Help → Copy diagnostics** and include your device, Desktop/Gaming Mode, mono/SBS, and steps to reproduce. Review logs before sharing: they can contain local paths or radio URLs.
 
 ## Credits and licensing
 

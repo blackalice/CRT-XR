@@ -20,6 +20,8 @@ func run():
  check(app.menu.visible and app.menu_overlays[0].visible and app.menu_overlays[1].visible,"Menu opens in both SBS eyes")
  check(app.menu_overlays[0].texture==app.menu_overlays[1].texture,"Both eyes share the same menu texture")
  app.menu.select("home.settings");await press(JOY_BUTTON_A)
+ check(app.menu.category==7,"Settings opens on everyday Quick settings")
+ UI.page(app,0,0);await settle()
  await press(JOY_BUTTON_LEFT_SHOULDER)
  check(app.menu.category==app.menu.CATEGORIES.size()-1 and app.menu.selected_row().is_visible_in_tree(),"L1 wraps categories and focuses a visible row")
  await press(JOY_BUTTON_RIGHT_SHOULDER)

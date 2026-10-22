@@ -3,6 +3,7 @@ extends Node
 const DURATION := 0.70
 const SOUND = preload("res://assets/audio/crt-power-on.wav")
 var enabled := true
+var reduced_motion := false
 var sound_level := 0.60
 var started := false
 var elapsed := 0.0
@@ -32,7 +33,7 @@ func begin(force := false) -> void:
 	if started and not force: return
 	started=true
 	cue.stop()
-	if not enabled:
+	if not enabled or reduced_motion:
 		set_progress(1.0); return
 	elapsed=0.0
 	set_progress(0.0)

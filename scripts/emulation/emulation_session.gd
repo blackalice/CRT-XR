@@ -20,6 +20,7 @@ var display_aspect := 4.0 / 3.0
 var fps := 60.0
 var accumulator := 0.0
 var texture: ImageTexture
+var last_frame: Image
 var player := AudioStreamPlayer.new()
 var tv_audio := preload("res://scripts/emulation/tv_audio.gd").new()
 var playback: AudioStreamGeneratorPlayback
@@ -210,6 +211,7 @@ func update_texture(force := false, preview: Dictionary = {}) -> void:
 	else:
 		texture.update(image)
 	# Reuse the CPU image already uploaded for presentation; never read the GPU.
+	last_frame=image
 	frame_presented.emit(image)
 
 func input_mask() -> int:
@@ -299,6 +301,11 @@ func save_to(path: String, description: String) -> bool:
 		report(str(core.last_error()), true)
 		return false
 	var envelope := {"format": 1, "rom": rom_hash, "core": core_identity, "state": state, "saved_at": int(Time.get_unix_time_from_system()), "game": rom_path.get_file()}
+	if last_frame!=null:
+		var thumbnail := last_frame.duplicate()
+		var width := mini(256,roundi(192.0*display_aspect))
+		thumbnail.resize(width,maxi(1,roundi(width/display_aspect)),Image.INTERPOLATE_NEAREST)
+		envelope["thumbnail"]=thumbnail.save_png_to_buffer()
 	if not write_bytes_atomic(path, var_to_bytes(envelope)):
 		return false
 	report("%s • %s • %s" % [description,rom_path.get_file().get_basename(),state_time(path)])
@@ -336,6 +343,7 @@ func stop() -> void:
 	loaded = false
 	paused = false
 	texture = null
+	last_frame = null
 	game_changed.emit(false)
 
 func _exit_tree() -> void:

@@ -5,25 +5,27 @@ This update is local only. The installed Steam Deck build has not changed.
 ## Pause menu and settings
 
 LB + RB + Start or Escape opens the menu. Without a game, Home shows Continue last game,
-Game library, Settings and Exit. Continue is disabled when its cartridge is unavailable.
+Game library (or Set up library), Quick settings, Music, Settings and Exit. Continue is selected when its cartridge is available; otherwise library setup is selected. Idle or paused music stays compact; active playback expands transport and timeline below the game actions.
 With a game loaded, the pause menu provides Resume, Choose game, Save state, Load state,
-Screenshot, Settings and Exit. R3 recentres. B returns one level; at the root it saves
+Screenshot, Quick settings, Music, Settings and Exit. R3 recentres. B returns one level; at the root it saves
 and restores the previous pause state. Failed saves keep the menu open with an error.
 
 | Category | Subsections |
 |---|---|
 | View | Placement; Display |
 | Picture | Presets; CRT; Screen fit; Colour; Signal |
-| Audio & Room | Audio; Lighting; Materials; Placement & fade |
+| Audio | TV sound; Ducking; Music & radio; Atmosphere |
+| Room | Lighting; Materials; Placement & fade |
 | Controls & XR | Controller; Tracking; Advanced calibration |
 | Saved setups | Setup slots; Per-game picture |
-| General | General (reset all settings) |
+| About & Help | About, controls, device status, troubleshooting, credits, diagnostics and reset; Accessibility |
+| Quick settings | TV distance; height; recenter; picture preset; game volume; music volume |
 
 Up/down selects, left/right adjusts immediately, A toggles switches or opens actions,
 and Y resets only the selected option. There is no edit lock. LB/RB changes category;
 LT/RT changes subsection once per trigger press. Category and subsection selection use
-quiet fills; the focused setting gets the strongest amber border and arrow marker.
-Subsections appear in one compact tab area with input-specific navigation hints.
+a quiet category fill and section underline; the focused setting gets the strongest amber border.
+Subsections stay on one line with input-specific navigation hints beside them.
 
 For keyboard users, arrows select/adjust, Enter activates, Backspace returns, Q/E or
 Tab changes category, and Z/C changes subsection. Hints follow the last-used input
@@ -35,15 +37,36 @@ the selected sound mode while emulation remains paused. Original bypasses the ef
 TV speakers enables speaker character; TV in room additionally enables room amount
 and directional strength.
 
-The selected row has a contrasting background, amber border and arrow marker.
+The selected row has a contrasting background and amber border.
 The fixed help area explains it; values show suitable units. Picture pages state
 whether changes are global or belong to the loaded game. Everything uses the
 same 960×720 menu texture in both eyes, without extra 3D passes. The menu viewport
 and UI processing stop while closed.
 
+## Feedback, previews and accessibility
+
+Compact adjustment arrows reserve their space beside the value so tracks stay aligned.
+Rows grow around wrapped text; game titles use the available width, with system captions
+inside the same row. Long descriptive values appear below their labels. Numeric rows
+show the minimum and maximum beside the track; a full Scanlines track explicitly means the 70% maximum. A dot
+marks values changed from their defaults. Presets include a look description and active
+checkmark; manual edits show Custom. Picture → Presets offers Undo picture preset.
+Changes persist when closing the menu, with Saved feedback only after a successful write.
+
+New manual and automatic saves include a small game-frame thumbnail with the existing
+game title and UTC timestamp. Loading or overwriting a manual save shows its preview and
+selects Cancel first. Older saves remain readable and can lack thumbnails. Continue also
+shows the automatic resume preview. Preview capture reuses the presented CPU frame.
+
+About & Help includes scrollable controls, troubleshooting, device status, full credits
+and diagnostics. Device status stays separate from the selected action’s help. Accessibility
+provides larger text, stronger contrast, reduced animation and optional quiet menu sounds.
+Focus transitions only change colour; the UI remains a sharp shared 2D texture.
+Controller shortcuts use drawn button icons and follow the last input method.
+
 ## Compact adjustment preview
 
-The visible Adjust with preview button, X, or A on a visual value opens a bottom strip.
+The Preview button, X, or A on a visual value opens a bottom strip.
 Moving between settings does not automatically hide the full panel. Left/right adjusts,
 up/down selects adjacent visual settings in that subsection, Y resets and X/B
 returns. Category/subsection inputs are ignored. The game remains paused, while
@@ -51,8 +74,9 @@ picture, lighting and real head tracking continue updating immediately.
 
 ## ROM library
 
-Choose game scans the saved root and shows supported systems with game counts,
-plus recent game, default folder, SD cards and manual browsing. Select the main
+The empty library shows one setup action and explanation. Once games are found,
+the library shows supported system cards, Recent, Favourites and Library locations.
+Folder, drive and SD-card management remain inside Library locations. Select the main
 ROM folder containing `snes`, `megadrive`, etc. with R1, rather than a single
 system folder. System lists include subfolders, use natural title sorting, and
 remember page/selection/scroll. Left/right or L1/R1 changes pages of 50 games;
@@ -71,7 +95,7 @@ ROM extensions remain .sfc, .smc, .swc and .fig. No files are moved or deleted.
 
 Saved setups lists three named slots with Empty/Saved status. Open a slot for
 Save, Load, Name for next save and Undo last setup load. The initial labels are
-Everyday, Evening and Showcase; optional names use keyboard entry. Saving an
+Everyday, Evening and Showcase. Names, folder paths and radio URLs support an on-screen controller keyboard with case, space, delete and cursor controls, as well as a physical keyboard. Saving an
 existing setup asks for confirmation, with Cancel selected first. Cancelling a
 rename leaves its prior name alone. Renaming takes effect when that setup is saved.
 
@@ -101,7 +125,7 @@ settings are read without requiring a migration. No ROMs or saves are deleted.
 
 ## Startup and recovery
 
-Without a game to autostart, launch opens the shared pause menu with Choose game selected. A missing
+Without a game to autostart, launch selects Continue when the last cartridge is available, otherwise library setup. A missing
 last-game path or SD folder keeps its saved location and explains how to reconnect
 or choose another folder. A ROM load failure returns to the chooser with details.
 

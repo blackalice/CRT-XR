@@ -30,6 +30,12 @@ var taking_screenshot := false
 var last_screenshot_path := ""
 var notices: Array[Label] = []
 var notice_time := 0.0
+var picture_preset_id := ""
+var picture_preset_signature := ""
+var menu_large_text := false
+var menu_high_contrast := false
+var menu_reduced_motion := false
+var menu_sounds := false
 var emulator: Node
 var music: Node
 var power_on: Node
@@ -344,11 +350,15 @@ func start_application() -> void:
 
 func apply_settings(config: ConfigFile) -> void:
 	SettingsStore.migrate_view_fov(config)
+	picture_preset_id=str(config.get_value("menu","picture_preset_id",""))
+	picture_preset_signature=str(config.get_value("menu","picture_preset_signature",""))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds"]: set(key,bool(config.get_value("accessibility",key,false)))
 	for key in music.DEFAULTS: music.set(key,config.get_value("music",key,music.DEFAULTS[key]))
 	music.apply()
 	metrics_visible=bool(config.get_value("preferences","metrics_visible",false))
 	power_on.enabled=bool(config.get_value("atmosphere","power_on",true))
 	power_on.sound_level=float(config.get_value("atmosphere","power_sound",0.60))
+	power_on.reduced_motion=menu_reduced_motion
 	power_on.apply()
 	for key in emulator.tv_audio.DEFAULTS:
 		emulator.tv_audio.set(key,config.get_value("audio",key,emulator.tv_audio.DEFAULTS[key]))
@@ -624,6 +634,7 @@ func close_settings() -> void:
 		menu.show_error("Settings could not be saved. Check free space and user-folder permissions. Your changes are still here.")
 		return
 	menu.error_label.hide()
+	show_notice("Saved")
 	clear_menu_gamepad()
 	settings_panel.hide()
 	emulator.gamepad.set_menu_active(false)
@@ -801,7 +812,8 @@ func reset_all_options() -> void:
 	for index in range(5): SettingsDefaults.apply(self,index)
 	emulator.tv_audio.reset_defaults()
 	music.reset_defaults()
-	power_on.enabled=true; power_on.sound_level=.60; power_on.apply()
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds"]: set(key,false)
+	power_on.enabled=true; power_on.sound_level=.60; power_on.reduced_motion=false; power_on.apply()
 	rebuild_settings()
 	show_notice("All settings reset to defaults")
 
@@ -917,6 +929,8 @@ func capture_settings() -> ConfigFile:
 	if provider is LinuxTracking: xr_fov=vertical_fov
 	else: desktop_fov=vertical_fov
 	var config := ConfigFile.new()
+	config.set_value("menu","picture_preset_id",picture_preset_id)
+	config.set_value("menu","picture_preset_signature",picture_preset_signature)
 	config.set_value("view","desktop_fov",desktop_fov)
 	config.set_value("view","xr_fov",xr_fov)
 	for key in music.DEFAULTS: config.set_value("music",key,music.get(key))
@@ -925,6 +939,7 @@ func capture_settings() -> ConfigFile:
 	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds"]: config.set_value("accessibility",key,get(key))
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
 	config.set_value("view", "right_stick_distance", right_stick_distance)
 	config.set_value("view", "distance_speed", distance_speed)

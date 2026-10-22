@@ -83,9 +83,10 @@ func pages(category: int) -> Array:
 			fitting.append(action("picture.restore_fit","Restore full-picture fit",func():
 				w.picture.reset_fields(w.picture.FIT_FIELDS); w.picture.keep_aspect=true; refresh.call(); menu.refresh(),"Resets all fitting controls; leaves CRT and colour settings alone."))
 			var presets: Array = []
-			for pair in [["showcase","Deck Showcase (PAL)"],["clean","Clean source"],["rgb","RGB CRT"],["auto","Auto composite"],["pal","PAL composite"],["ntsc","NTSC composite"]]:
+			for pair in [["showcase","Deck Showcase (PAL)","Warm PAL colour and pronounced scanlines."],["clean","Clean source","Crisp source pixels; scanlines and phosphor effects off."],["rgb","RGB CRT","Clean RGB colour with a defined CRT beam."],["auto","Auto composite","Composite character matched to the game’s frame rate."],["pal","PAL composite","Soft PAL colour blending and analog texture."],["ntsc","NTSC composite","NTSC colour bleed and classic composite artifacts."]]:
 				var preset: String = pair[0]
-				presets.append(action("preset."+preset,pair[1],func(): h.apply_picture_preset(preset),"Applies a starting point for CRT, colour and signal settings."))
+				presets.append(action("preset."+preset,pair[1],func(): menu.apply_preset(preset),pair[2],false,"✓ Active" if menu.applied_preset()==preset else "Apply"))
+			if menu.picture_undo!=null: presets.append(action("preset.undo","Undo picture preset",menu.undo_picture_preset,"Restore the picture from before the last preset."))
 			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference; Auto uses the game rate."}]
 			signal_rows.append_array(picture_fields(w.picture.COLOR_FIELDS.slice(6)))
 			return [page("Presets",presets),page("CRT",crt),page("Screen fit",fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
@@ -141,8 +142,29 @@ func pages(category: int) -> Array:
 				{"id":"setups.pergame","label":"Remember picture per game","kind":"toggle","default":h.Showcase.PER_GAME_PICTURE,"visual":false,"getter":func(): return h.remember_game_picture,"setter":h.set_remember_game_picture,"help":"Fitting, CRT and colour belong to the game; room and view stay global."},
 				action("setups.global","Use global picture for this game",h.forget_game_picture,"Removes this game's picture override; future global picture changes apply.",h.active_game_key.is_empty())])]
 		6:
-			return [page("General",[action("system.version","CRT XR",func(): menu.notify("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))),"First beta candidate. See BETA-REVIEW.md for validation and remaining release gates.",false,str(ProjectSettings.get_setting("application/config/version"))),action("system.diagnostics","Copy diagnostics",func():
-				DisplayServer.clipboard_set("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))+" | "+OS.get_name()+" | Godot "+str(Engine.get_version_info().string)+" | "+DisplayServer.get_name()); menu.notify("Version and platform details copied; no ROM or music paths included."),"Copies version/platform information for a bug report."),action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")])]
+			return [page("About & Help",[
+				action("system.version","CRT XR",func(): menu.notify("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))),"A little CRT room for your XR glasses.",false,str(ProjectSettings.get_setting("application/config/version"))),
+				action("system.device","Device status",func(): menu.open_help("Device status",menu.status_title+"\n\n"+menu.status_detail),"Current display and tracking status."),
+				action("system.controls","Controls",func(): menu.open_help("Controls","Menu: LB + RB + Start / Escape. Recenter: R3 / R. Navigate: D-pad / arrows. Select: A / Enter. Back: B / Backspace. Categories: LB/RB; sections: LT/RT. Reset option: Y. Picture preview: X."),"Controller and keyboard shortcuts."),
+				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting","Tracking unavailable? Retry glasses in Controls & XR → Tracking, or choose fixed view. Double image? Match the glasses’ SBS mode with View → Display. Missing games? Check Library locations and use uncompressed supported cartridges. No radio? Use a direct MP3 stream URL. Save failed? Check free space and folder permissions."),"Help with glasses, games, audio and saving."),
+				action("system.credits","Credits & licences",func(): menu.open_help("Credits & licences",FileAccess.get_file_as_string("res://THIRD_PARTY.md")),"Godot, libretro, and the artists and developers behind CRT XR."),
+				action("system.diagnostics","Copy diagnostics",func():
+					DisplayServer.clipboard_set("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))+" | "+OS.get_name()+" | Godot "+str(Engine.get_version_info().string)+" | "+DisplayServer.get_name()); menu.notify("Version and platform details copied; no ROM or music paths included."),"Copies version/platform information for a bug report."),
+				action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")]),page("Accessibility",[
+				toggle("access.large","Larger menu text",h,"menu_large_text",false,"Larger text and taller rows; lists scroll to keep focus visible.",menu.apply_accessibility,false),
+				toggle("access.contrast","Stronger menu contrast",h,"menu_high_contrast",false,"Brighter text and clearer borders on a dark background.",menu.apply_accessibility,false),
+				toggle("access.motion","Reduced animation",h,"menu_reduced_motion",false,"Instant focus changes and no TV warm-up animation.",menu.apply_accessibility,false),
+				toggle("access.sounds","Menu sounds",h,"menu_sounds",false,"Quiet feedback for focus and confirmation.",unchanged,false)])]
+		7:
+			var quick: Array = []
+			for source in pages(0)[0].rows:
+				if source.id in ["view.distance","view.height_offset","view.recenter"]:
+					var copy: Dictionary=source.duplicate(); copy.id="quick."+source.id; quick.append(copy)
+			quick.append({"id":"quick.preset","label":"Picture preset","kind":"choice","choices":["Custom","Deck Showcase (PAL)","Clean source","RGB CRT","Auto composite","PAL composite","NTSC composite"],"getter":func(): return menu.PRESET_IDS.find(menu.applied_preset())+1,"setter":func(value):
+				menu.apply_preset(menu.PRESET_IDS[value-1] if value>0 else ("ntsc" if menu.applied_preset()=="showcase" else "showcase")),"help":"Choose a starting look. Manual picture adjustments show Custom.","visual":true})
+			quick.append(number("quick.game_volume","Game volume",h.music,"game_volume",0,1,.05,1,"percent","Independent game volume.",h.music.apply,false))
+			quick.append(number("quick.music_volume","Music volume",h.music,"volume",0,1,.05,.45,"percent","Independent music volume.",h.music.apply,false))
+			return [page("Everyday",quick)]
 		2:
 			var audio = h.emulator.tv_audio
 			var audio_rows: Array=[
@@ -164,16 +186,18 @@ func pages(category: int) -> Array:
 			audio_rows.append(action("atmosphere.preview","Preview TV power-on",h.preview_power_on,"Closes settings and replays the picture and sound effect.",not h.power_on.enabled))
 			var music = h.music
 			audio_rows.push_front(number("music.game_volume","Game volume",music,"game_volume",0,1,.05,1,"percent","Independent of music volume. Game sound pauses with emulation.",music.apply,false))
-			audio_rows.push_front(toggle("music.duck_game","Dip game during music",music,"duck_game",false,"Automatically lowers game audio while music is audible; restores it when paused or stopped.",music.apply,false))
-			audio_rows.insert(1,number("music.duck_amount","Game volume dip",music,"duck_amount",0,1,.05,.5,"percent","How much to reduce the chosen game volume while music plays. Fades smoothly.",music.apply,false))
-			return [page("TV sound",audio_rows),page("Music & radio",[
+			var duck_toggle=toggle("music.duck_game","Dip game during music",music,"duck_game",false,"Automatically lowers game audio while music is audible; restores it when paused or stopped.",func(): music.apply(); menu.refresh(),false)
+			var duck_amount=number("music.duck_amount","Game volume dip",music,"duck_amount",0,1,.05,.5,"percent","How much to reduce the chosen game volume while music plays. Fades smoothly.",music.apply,false)
+			if not music.duck_game:
+				duck_amount.disabled=true; duck_amount.disabled_reason="Enable Dip game during music first."
+			return [page("TV sound",audio_rows),page("Ducking",[duck_toggle,duck_amount]),page("Music & radio",[
 				action("music.file","Choose music / album",menu.open_music_browser,"Browse local storage or an SD card. Music keeps playing in menus."),
 				action("music.replay","Play last MP3",func(): music.play_last_file(); menu.notify(music.status),"Continues the saved track and position without changing the game.",music.last_file.is_empty()),
-				action("music.url","Radio stream URL",menu.edit_radio_url,"Keyboard entry for a direct MP3 stream URL. Station webpages, AAC and HLS are not supported.",false,"Edit"),
+				action("music.url","Radio stream URL",menu.edit_radio_url,"Enter a direct MP3 stream URL. Station webpages, AAC and HLS are not supported.",false,"Edit"),
 				action("music.radio","Play radio",func(): music.play_station(music.station_url); menu.notify(music.status),"Streams a direct MP3 radio station with a bounded audio buffer.",music.station_url.is_empty()),
 				action("music.stop","Stop music",func(): music.stop(); menu.notify(music.status),"Stops music or radio. Leaves game sound unchanged."),
 				number("music.volume","Music volume",music,"volume",0,1,.05,.45,"percent","Independent music level. Continues while the game is paused.",music.apply,false),
-				toggle("music.loop","Repeat album",music,"loop",true,"Repeat the folder after its last track. Off stops at the album end.",music.apply,false)]),page("Music atmosphere",[
+				toggle("music.loop","Repeat album",music,"loop",true,"Repeat the folder after its last track. Off stops at the album end.",music.apply,false)]),page("Atmosphere",[
 				number("music.reverb","Music room reverb",music,"reverb",0,.3,.01,.12,"percent","Short, subtle reflections from the room; zero disables the effect.",music.apply,false),
 				number("music.directional","Music direction",music,"directional",0,1,.05,.8,"percent","Sound stays beside the TV as you turn your head. Zero keeps normal stereo.",music.apply,false),
 				number("music.side","Radio position",music,"side",-2,2,.1,-1.1,"m","Position left or right of the TV, independent of the game speakers.",music.apply,false)])]

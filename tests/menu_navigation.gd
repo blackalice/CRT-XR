@@ -27,7 +27,7 @@ func run():
             if e is InputEventJoypadButton or e is InputEventJoypadMotion:InputMap.action_erase_event(action,e)
     app=load("res://scenes/main.tscn").instantiate();root.add_child(app);app.use_tracking(false);await settle()
     var m=app.menu
-    check(m.items.map(func(i):return i.id)==["transport.choose","home.continue","home.library","home.settings","home.exit"],"Startup has its own home menu")
+    check(m.items.map(func(i):return i.id)==["home.continue","home.library","home.quick","transport.choose","home.settings","home.exit"],"Startup has its own home menu")
     check(m.selected_id=="home.library" and row("home.continue").disabled,"No-game startup selects Library and disables unavailable Continue")
     m.open_settings();page(0,0);m.select("view.distance",false);app.distance=3.0
     await button(JOY_BUTTON_DPAD_RIGHT)

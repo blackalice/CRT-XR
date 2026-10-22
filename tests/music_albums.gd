@@ -40,6 +40,10 @@ func run():
  app.menu.select("transport.play"); app.menu.activate()
  for i in range(4): await process_frame
  check(music.player.stream_paused,"Controller activation pauses music from the main menu")
+ check(not app.menu.items.any(func(i):return i.id=="transport.seek"),"Paused playback collapses to a compact music strip")
+ app.menu.select("transport.play");app.menu.activate()
+ for i in range(4): await process_frame
+ app.menu.select("transport.play")
  app.menu.navigate(Vector2i.RIGHT)
  check(app.menu.selected_id=="transport.next","Left/right traverses the visible playback buttons")
  app.menu.navigate(Vector2i.DOWN)
@@ -48,8 +52,8 @@ func run():
  check(app.menu.selected_id=="transport.play","Up enters the transport group at Play")
  app.menu.navigate(Vector2i.UP)
  check(app.menu.selected_id=="transport.seek","Up from transport selects the timeline")
- music.seek(1); await create_timer(.08).timeout
- app.menu.adjust(1); await create_timer(.08).timeout
+ music.player.stream_paused=true; music.seek(1)
+ app.menu.adjust(1)
  check(music.position_seconds()>1,"Controller right seeks forward on the timeline")
  music.start_track(0)
  app.menu.select("transport.next"); app.menu.activate()
