@@ -13,6 +13,11 @@ Release candidates are prepared under `dist/release-preparation/v0.1.0-beta.10/`
 acceptance on the Deck, DVD/Blu-ray picture subtitles from real rips, and
 headset readability of the lighter Regular text.
 
+Beta.11 (23 October 2026) adds the OpenTrack UDP tracking source
+(`scripts/tracking/opentrack_tracking.gd`, Controls & XR → Tracking source) and
+EDID matching for XREAL, Nreal, Rokid and RayNeo on the Deck
+(`display-probe.py`). Both await testers with real non-VITURE glasses.
+
 The beta.9 notes below are historical.
 
 ## Beta.9 release preparation
