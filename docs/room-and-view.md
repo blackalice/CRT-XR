@@ -142,13 +142,13 @@ models or textures; `scripts/rendering/room_props.gd`, `shaders/prop_*.gdshader`
   PM dot by default, or 24-hour). It sits where the music's default Radio
   position places the sound.
 - A full-size **VCR** on a lower shelf under the TV, with a cassette door,
-  transport buttons and a dim teal standby clock. Its display is ready to report
-  playback later. The shelf is a plain board resting on the table's lower rails
+  transport buttons and a dim teal display: the time, or the tape counter while a
+  video plays (minutes and seconds, then hours and minutes). The shelf is a plain board resting on the table's lower rails
   between the legs, toned from the table's own wood and darkened by the tabletop's
   shade; it stays when the VCR is hidden.
-- Three **unbranded game boxes** (a clamshell case under two cardboard cartons)
-  right of the TV. Cover art is original abstract shapes with no titles or logos,
-  muted to stay in the background.
+- Three **game boxes** (a plastic clamshell between two cardboard cartons)
+  right of the TV. Each box uses cover, spine and edge artwork from
+  `artwork/game-boxes/`, lit by the room and screen without emission.
 
 Displays are emissive but add no lights and never blink. Props are built at 2.3×
 real size to match the oversized TV and table, cast no

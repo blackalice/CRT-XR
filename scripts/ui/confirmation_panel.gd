@@ -1,4 +1,5 @@
 extends PanelContainer
+const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 var title_label: Label
 var detail_label: Label
 var thumbnail: TextureRect
@@ -8,6 +9,7 @@ func _ready() -> void:
 	add_child(column)
 	title_label = Label.new()
 	title_label.add_theme_font_size_override("font_size",28)
+	MenuSkin.weigh(title_label,MenuSkin.BOLD)
 	column.add_child(title_label)
 	detail_label = Label.new()
 	detail_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART

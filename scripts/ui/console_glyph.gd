@@ -25,6 +25,11 @@ func _draw() -> void:
 		block(Rect2(2,20,56,26),Color("7a5a33"),3); block(Rect2(6,24,20,18),accent,1)
 		for y in [27,31,35]: draw_line(Vector2(30,y),Vector2(54,y),Color("5c4425"),2)
 		draw_circle(Vector2(49,15),3.5,Color("b9bdc4")); draw_line(Vector2(46,15),Vector2(52,15),ink,1)
+	elif kind=="videos":
+		# A video cassette: shell, label and the two spools behind the window.
+		block(Rect2(3,14,54,33),Color("2a2d33"),4); block(Rect2(9,18,42,9),accent,2)
+		block(Rect2(15,31,30,11),ink,2)
+		for x in [21,39]: draw_circle(Vector2(x,36.5),3.5,Color("8b8f96")); draw_circle(Vector2(x,36.5),1.4,ink)
 	elif kind=="vectrex":
 		block(Rect2(6,12,48,36),Color("e6e4da"),6); block(Rect2(12,17,36,22),Color("1d222b"),3)
 		draw_arc(Vector2(30,28),9,-0.7,PI+0.7,24,accent,1.5,true); block(Rect2(14,42,32,3),accent,1)

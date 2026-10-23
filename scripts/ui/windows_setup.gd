@@ -1,4 +1,5 @@
 extends Control
+const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 ## Explicit display choice and a black curtain across a physical SBS mode change.
 signal xr_ready(size: Vector2i)
 signal desktop_ready
@@ -44,11 +45,13 @@ func _ready() -> void:
 	title.text = "Welcome to CRT XR"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size",32)
+	MenuSkin.weigh(title,MenuSkin.BOLD)
 	column.add_child(title)
 	var instructions := Label.new()
 	instructions.text = "Switch your glasses to SBS before launching CRT XR.\nChoose their display below, then select Open glasses view.\nUse this setup screen on your normal monitor."
 	instructions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	instructions.add_theme_font_size_override("font_size",24)
+	MenuSkin.weigh(instructions,MenuSkin.REGULAR)
 	column.add_child(instructions)
 	selected_screen = get_window().current_screen
 	display_button = add_button("", func(): change_screen(1))
@@ -62,6 +65,7 @@ func _ready() -> void:
 	hint.text = "Display: Left / Right     Select: Up / Down     Open: A / Enter\nIf it stays black, return the glasses to mono and press B / Escape to retry."
 	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	hint.add_theme_font_size_override("font_size",20)
+	MenuSkin.weigh(hint,MenuSkin.REGULAR)
 	column.add_child(hint)
 	get_window().size_changed.connect(resize_canvas)
 	refresh_display()
@@ -73,6 +77,7 @@ func add_button(text: String, action: Callable) -> Button:
 	button.text=text
 	button.custom_minimum_size=Vector2(760,52)
 	button.add_theme_font_size_override("font_size",24)
+	MenuSkin.weigh(button,MenuSkin.SEMIBOLD)
 	var focus := StyleBoxFlat.new()
 	focus.bg_color=Color("49402d")
 	focus.border_color=Color("e8ae59")

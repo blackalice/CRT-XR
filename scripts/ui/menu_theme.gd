@@ -3,6 +3,24 @@ const INK := Color("181b20")
 const TEXT := Color("f2ead9")
 const MUTED := Color("b2b4b7")
 const AMBER := Color("e4b86b")
+const FACE := preload("res://assets/fonts/OpenSans.ttf")
+## Weights: body text and values read lighter than the titles and headings above them.
+const REGULAR := 400
+const SEMIBOLD := 600
+const BOLD := 700
+static var weights := {}
+
+## One shared FontVariation per weight, so labels can be set cheaply.
+static func font(weight: int) -> Font:
+	if not weights.has(weight):
+		var variation := FontVariation.new()
+		variation.base_font = FACE
+		variation.variation_opentype = {TextServerManager.get_primary_interface().name_to_tag("wght"): weight}
+		weights[weight] = variation
+	return weights[weight]
+
+static func weigh(control: Control, weight: int) -> void:
+	control.add_theme_font_override("font", font(weight))
 
 static func box(colour: Color, border := Color.TRANSPARENT, width := 0, padding := 12) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
@@ -15,7 +33,9 @@ static func box(colour: Color, border := Color.TRANSPARENT, width := 0, padding 
 
 static func create() -> Theme:
 	var theme := Theme.new()
+	theme.default_font = font(REGULAR)
 	theme.default_font_size = 22
+	for type in ["Button","LineEdit"]: theme.set_font("font",type,font(SEMIBOLD))
 	for type in ["Label","Button","LineEdit","ItemList"]:
 		theme.set_color("font_color",type,TEXT)
 		theme.set_color("font_focus_color",type,TEXT)

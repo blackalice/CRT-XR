@@ -12,7 +12,7 @@ func configure(definition: Dictionary) -> void:
 	var glyph := Glyph.new(); glyph.kind=item.get("glyph","locations"); glyph.accent=item.get("accent",MenuSkin.AMBER)
 	glyph.custom_minimum_size=Vector2(60,60); glyph.size_flags_vertical=Control.SIZE_SHRINK_CENTER; glyph.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(glyph)
 	var words := VBoxContainer.new(); words.size_flags_horizontal=Control.SIZE_EXPAND_FILL; words.alignment=BoxContainer.ALIGNMENT_CENTER; words.add_theme_constant_override("separation",2); line.add_child(words)
-	title_label=Label.new(); title_label.text=item.label; title_label.add_theme_font_size_override("font_size",24); title_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS; words.add_child(title_label)
+	title_label=Label.new(); title_label.text=item.label; title_label.add_theme_font_size_override("font_size",24); MenuSkin.weigh(title_label,MenuSkin.SEMIBOLD); title_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS; words.add_child(title_label)
 	value_label=Label.new();value_label.add_theme_font_size_override("font_size",20); words.add_child(value_label)
 	value_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	track=ProgressBar.new();track.hide();add_child(track)

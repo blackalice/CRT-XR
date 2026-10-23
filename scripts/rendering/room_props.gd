@@ -1,7 +1,7 @@
 extends RefCounted
 ## Original procedural props for the table set: a clock radio, a VCR and a stack
-## of unbranded game boxes. No external models or textures; detail is drawn by
-## each prop's shader in face UV space. Every prop is one mesh and one material,
+## of game boxes. Detail is drawn by each prop's shader in face UV space, with
+## supplied print textures on all three game boxes. Every prop is one mesh and one material,
 ## casts no shadow, and grounds itself with a soft multiply contact patch.
 ## Sizes are real dimensions times SET_SCALE, matching the oversized TV/table set.
 const SET_SCALE := 2.3
@@ -115,22 +115,36 @@ static func average_colour(texture: Texture2D) -> Color:
 	return total / 16.0
 
 static func game_boxes(parent: Node3D, table_top: float, x: float, z: float) -> Node3D:
-	# A loose stack: one clamshell case under two cardboard cartridge boxes.
-	# Vertex colour: r = art seed, g = kind (0 cardboard, 1 clamshell).
+	# A loose stack: one clamshell case between two cardboard cartridge boxes.
+	# Vertex colour: g = kind (0 cardboard, 1 clamshell), b = artwork selection.
+	# Bottom: cardboard-01; middle: clamshell-01; top: cardboard-02.
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var stack := [[CLAMSHELL_SIZE, 1.0, 0.31, 0.0, Vector2(0.0, 0.0)],
-		[CARTON_SIZE, 0.0, 0.67, -9.0, Vector2(-0.02, 0.08)],
-		[CARTON_SIZE, 0.0, 0.13, 7.0, Vector2(0.03, 0.05)]]
+	# Keep the longer clamshell's centre supported by the smaller bottom carton.
+	var stack := [[CARTON_SIZE, 0.0, 0.67, -9.0, Vector2(-0.02, 0.02), 0.5],
+		[CLAMSHELL_SIZE, 1.0, 0.31, 0.0, Vector2(0.0, 0.0), 0.0],
+		[CARTON_SIZE, 0.0, 0.13, 7.0, Vector2(0.03, 0.05), 1.0]]
 	var height := 0.0
-	var footprint := Vector2.ZERO
 	for item in stack:
 		var size: Vector3 = item[0] * SET_SCALE
 		var placed := Transform3D(Basis(Vector3.UP, deg_to_rad(item[3])), Vector3(item[4].x * SET_SCALE, height + size.y * 0.5, item[4].y * SET_SCALE))
-		box_into(surface, size, placed, Color(item[2], item[1], 0), 0.004 if item[1] < 0.5 else 0.008)
+		box_into(surface, size, placed, Color(item[2], item[1], item[5]), 0.004 if item[1] < 0.5 else 0.008)
 		height += size.y
-		footprint = footprint.max(Vector2(size.x, size.z))
 	var node := prop(parent, "GameBoxes", preload("res://shaders/prop_game_box.gdshader"), surface.commit())
+	var material := node.material_override as ShaderMaterial
+	material.set_shader_parameter("carton_cover", preload("res://artwork/game-boxes/cardboard-01/cover.png"))
+	material.set_shader_parameter("carton_spine", preload("res://artwork/game-boxes/cardboard-01/spine.png"))
+	material.set_shader_parameter("carton_edge", preload("res://artwork/game-boxes/cardboard-01/edge.png"))
+	material.set_shader_parameter("carton2_cover", preload("res://artwork/game-boxes/cardboard-02/cover.png"))
+	material.set_shader_parameter("carton2_spine", preload("res://artwork/game-boxes/cardboard-02/spine.png"))
+	material.set_shader_parameter("carton2_edge", preload("res://artwork/game-boxes/cardboard-02/edge.png"))
+	material.set_shader_parameter("clamshell_cover", preload("res://artwork/game-boxes/clamshell-01/cover.png"))
+	material.set_shader_parameter("clamshell_spine", preload("res://artwork/game-boxes/clamshell-01/spine.png"))
+	material.set_shader_parameter("clamshell_edge", preload("res://artwork/game-boxes/clamshell-01/edge.png"))
 	node.position = Vector3(x, table_top, z)
-	contact_patch(node, footprint, 0.0)
+	# Only the bottom carton touches the table; the patch follows its turn and offset.
+	var base: Array = stack[0]
+	var base_size: Vector3 = base[0] * SET_SCALE
+	var patch := contact_patch(node, Vector2(base_size.x, base_size.z), 0.0)
+	patch.transform = Transform3D(Basis(Vector3.UP, deg_to_rad(base[3])), Vector3(base[4].x * SET_SCALE, 0.0, base[4].y * SET_SCALE))
 	return node

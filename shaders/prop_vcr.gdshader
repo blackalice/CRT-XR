@@ -7,6 +7,8 @@ uniform int minutes = 0;
 uniform bool twelve_hour = true;
 uniform float display_level = 0.35;
 uniform vec2 face_size = vec2(0.99, 0.22);
+// Transport icon beside the counter: 0 none, 1 play, 2 pause, 3 FF, 4 REW.
+uniform int transport = 0;
 varying flat float face;
 
 // Antialiasing width per axis: a face seen at a shallow angle is far more
@@ -14,6 +16,25 @@ varying flat float face;
 float rect(vec2 uv, vec4 bounds, vec2 aa) {
 	vec2 inside = smoothstep(bounds.xy - aa, bounds.xy + aa, uv) * (1.0 - smoothstep(bounds.zw - aa, bounds.zw + aa, uv));
 	return inside.x * inside.y;
+}
+
+// A right-pointing triangle across x0..x1 of a unit cell.
+float triangle(vec2 p, float x0, float x1, float aa) {
+	float along = clamp((p.x - x0) / (x1 - x0), 0.0, 1.0);
+	float d = max(max(x0 - p.x, p.x - x1), abs(p.y - 0.5) - 0.38 * (1.0 - along));
+	return 1.0 - smoothstep(-aa, aa, d);
+}
+
+// Play, pause, fast-forward or rewind, as a VCR display shows them.
+float transport_icon(vec2 p, int kind, float aa) {
+	if (kind == 2) {
+		float bars = min(segment_box(p, vec2(0.32, 0.5), vec2(0.1, 0.36)), segment_box(p, vec2(0.68, 0.5), vec2(0.1, 0.36)));
+		return 1.0 - smoothstep(-aa, aa, bars);
+	}
+	vec2 q = kind == 4 ? vec2(1.0 - p.x, p.y) : p;
+	if (kind == 1) return triangle(q, 0.2, 0.85, aa);
+	if (kind == 3 || kind == 4) return max(triangle(q, 0.02, 0.5, aa), triangle(q, 0.5, 0.98, aa));
+	return 0.0;
 }
 
 void vertex() { face = UV2.x; }
@@ -36,6 +57,10 @@ void fragment() {
 		vec2 digits = clock_digits(vec2(window_uv.x * aspect, window_uv.y), aspect,
 			hour >= 10 ? hour / 10 : (twelve_hour ? -1 : 0), hour % 10, minutes / 10, minutes % 10, max(aa.x, aa.y) * 4.0);
 		vec3 teal = vec3(0.25, 0.95, 0.82);
+		// The transport icon sits in the space left of the counter.
+		vec2 icon_cell = (vec2(window_uv.x * aspect, window_uv.y) - vec2(0.1, 0.34)) / 0.32;
+		if (transport > 0 && icon_cell.x > -0.1 && icon_cell.x < 1.1 && icon_cell.y > -0.1 && icon_cell.y < 1.1)
+			digits.x = max(digits.x, transport_icon(icon_cell, transport, max(aa.x, aa.y) * 4.0 / 0.32));
 		albedo = mix(albedo, vec3(0.006, 0.012, 0.012) + teal * 0.025 * digits.y, window);
 		roughness = mix(roughness, 0.15, window);
 		emission = teal * digits.x * display_level * window;

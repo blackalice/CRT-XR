@@ -3,7 +3,7 @@ from pathlib import Path
 import concurrent.futures, json, os, re, subprocess, tempfile, time, sys
 ROOT=Path(__file__).resolve().parents[1]
 GODOT=os.environ.get("GODOT_BIN") or str(ROOT/"tools/godot/Godot_v4.5.1-stable_win64_console.exe")
-TESTS="smoke emulation multicore gamepad controller_menu menu_navigation menu_improvements menu_layout stereo_menu picture_controls picture_pipeline preferences_startup rom_locations rom_index library_cards play_qol share_and_defaults showcase_defaults music_albums music_resume tv_audio tv_power_on console_prop room_contacts user_data_migration pose_prediction display_probe startup_brand windows_setup".split()
+TESTS="smoke emulation multicore gamepad controller_menu menu_navigation menu_improvements menu_layout stereo_menu picture_controls picture_pipeline preferences_startup rom_locations rom_index library_cards play_qol share_and_defaults showcase_defaults music_albums music_resume tv_audio tv_power_on console_prop room_contacts user_data_migration pose_prediction display_probe startup_brand windows_setup video video_menu ffmpeg_installer".split()
 OUT=ROOT/"build/beta-review";OUT.mkdir(parents=True,exist_ok=True)
 def run(name):
     isolated=tempfile.mkdtemp(prefix=name+"-",dir=OUT)
@@ -15,7 +15,10 @@ def run(name):
         log=result.stdout
         ok=result.returncode==0 and not re.search(r"^FAIL:|SCRIPT ERROR",log,re.M)
         (OUT/(name+".log")).write_text(log,encoding="utf-8")
-        return {"test":name,"passed":ok,"exit_code":result.returncode}
+        # Video suites need FFmpeg and tests/make_video_fixtures.py clips; without
+        # them they skip, and say why, rather than fail.
+        skipped=re.search(r"^CHECKS SKIPPED: (.*)$",log,re.M)
+        return {"test":name,"passed":ok,"exit_code":result.returncode,**({"skipped":skipped.group(1)} if skipped else {})}
     except subprocess.TimeoutExpired as error:
         data=error.stdout or b""
         (OUT/(name+".log")).write_text(data if isinstance(data,str) else data.decode("utf-8",errors="replace"),encoding="utf-8")
@@ -28,6 +31,6 @@ if sys.argv[1:] and (OUT/"results.json").exists():
     updated.update({x["test"]:x for x in results})
     results=[updated[name] for name in TESTS if name in updated]
 (OUT/"results.json").write_text(json.dumps(results,indent=2))
-for result in results:print(("PASS " if result["passed"] else "FAIL ")+result["test"],flush=True)
+for result in results:print(("FAIL " if not result["passed"] else ("SKIP " if "skipped" in result else "PASS "))+result["test"]+(" ("+result["skipped"]+")" if "skipped" in result else ""),flush=True)
 print(f"BETA SUITES: {sum(x['passed'] for x in results)}/{len(results)} passed")
 raise SystemExit(0 if all(x["passed"] for x in results) else 1)
