@@ -1,6 +1,7 @@
 extends "res://scripts/tracking/xr_linux_tracking.gd"
 ## Local SDK path stays outside the exported resources and version control.
 func _init() -> void:
+	real = true
 	valid = false
 	live_status = "VITURE Windows / LIVE 3DoF"
 	var base := ProjectSettings.globalize_path("res://build/windows-tracking") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()

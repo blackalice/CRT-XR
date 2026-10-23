@@ -16,9 +16,13 @@ def gaming_mode(env):
 
 
 def glasses_connected(drm=Path("/sys/class/drm")):
+    import importlib.util
+    # The glasses names live in display-probe.py, shipped beside this script.
+    spec = importlib.util.spec_from_file_location("display_probe", Path(__file__).with_name("display-probe.py"))
+    probe = importlib.util.module_from_spec(spec); spec.loader.exec_module(probe)
     for edid in drm.glob("card*-*/edid"):
         try:
-            if edid.with_name("status").read_text().strip() == "connected" and b"viture" in edid.read_bytes().lower():
+            if edid.with_name("status").read_text().strip() == "connected" and probe.is_glasses_edid(edid.read_bytes()):
                 return True
         except OSError:
             pass

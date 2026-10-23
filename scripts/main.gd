@@ -3,6 +3,7 @@ extends Control
 const Simulated = preload("res://scripts/tracking/simulated_tracking.gd")
 const WindowsTracking = preload("res://scripts/tracking/xr_windows_tracking.gd")
 const LinuxTracking = preload("res://scripts/tracking/xr_linux_tracking.gd")
+const OpenTrackTracking = preload("res://scripts/tracking/opentrack_tracking.gd")
 const PosePrediction = preload("res://scripts/tracking/pose_prediction.gd")
 const CRTWorld = preload("res://scripts/rendering/crt_world.gd")
 const Pattern = preload("res://scripts/content/test_pattern.gd")
@@ -54,6 +55,8 @@ var power_on: Node
 var signal_view: SubViewport
 var was_paused_before_menu := false
 var provider: TrackingProvider = Simulated.new()
+## "glasses" (XR Gaming on Linux, VITURE SDK on Windows) or "opentrack" (UDP 4242).
+var tracking_source := "glasses"
 var needs_center := false
 var tracking_was_valid := false
 var previous_tracking_status := ""
@@ -457,7 +460,13 @@ func apply_settings(config: ConfigFile) -> void:
 	edge_fade = clampf(config.get_value("view", "edge_fade", Showcase.VIEW.edge_fade), 0.0, 0.2)
 	desktop_fov = clampf(config.get_value("view", "desktop_fov", desktop_fov),18.0,70.0)
 	xr_fov = clampf(config.get_value("view", "xr_fov", xr_fov),18.0,70.0)
-	vertical_fov = xr_fov if provider is LinuxTracking else desktop_fov
+	# "glasses" uses the platform's own source (XR Gaming on Linux, the VITURE
+	# SDK on Windows); "opentrack" listens for OpenTrack UDP from another tool.
+	var source := str(config.get_value("tracking", "source", "glasses"))
+	if source != tracking_source:
+		tracking_source = source if source in ["glasses", "opentrack"] else "glasses"
+		if provider.real: use_tracking(true)
+	vertical_fov = xr_fov if provider.real else desktop_fov
 	smoothing = clampf(config.get_value("view", "smoothing", Showcase.VIEW.smoothing), 0.0, 0.15)
 	motion_predict = clampf(config.get_value("view", "motion_predict", Showcase.VIEW.motion_predict), 0.0, 0.08)
 	for axis in ["yaw", "pitch", "roll"]:
@@ -528,11 +537,11 @@ func _process(delta: float) -> void:
 				report.close()
 	var previously_valid := tracking_was_valid
 	provider.update(delta)
-	if previously_valid and not provider.valid and provider is LinuxTracking:
+	if previously_valid and not provider.valid and provider.real:
 		show_notice("Tracking lost — holding the view steady. Open Game for Retry glasses tracking or Fixed view.")
 	if provider.valid and (needs_center or not tracking_was_valid):
 		# Keep the view continuous after a driver reconnect or local reference reset.
-		if provider is LinuxTracking:
+		if provider.real:
 			center = provider.orientation * displayed.inverse()
 		needs_center = false
 	tracking_was_valid = provider.valid
@@ -667,14 +676,22 @@ func recenter() -> void:
 	center = provider.orientation
 	displayed = Quaternion.IDENTITY
 
+## Switches between the glasses' own tracking and OpenTrack UDP, at once if tracking is on.
+func set_tracking_source(source: String) -> void:
+	tracking_source = source
+	if provider.real: use_tracking(true)
+	settings_dirty = true
+
 func use_tracking(real_tracking: bool) -> void:
 	var inversion := Vector3(float(provider.invert_pitch), float(provider.invert_yaw), float(provider.invert_roll))
-	var changed := real_tracking != (provider is LinuxTracking)
+	var changed := real_tracking != provider.real
 	if changed:
-		if provider is LinuxTracking: xr_fov=vertical_fov
+		if provider.real: xr_fov=vertical_fov
 		else: desktop_fov=vertical_fov
 	provider.close()
-	provider = (WindowsTracking.new() if OS.get_name() == "Windows" else LinuxTracking.new()) if real_tracking else Simulated.new()
+	if not real_tracking: provider = Simulated.new()
+	elif tracking_source == "opentrack": provider = OpenTrackTracking.new()
+	else: provider = WindowsTracking.new() if OS.get_name() == "Windows" else LinuxTracking.new()
 	provider.invert_pitch = bool(inversion.x)
 	provider.invert_yaw = bool(inversion.y)
 	provider.invert_roll = bool(inversion.z)
@@ -1047,7 +1064,7 @@ func refresh_startup_status() -> void:
 	for key in ["XDG_CURRENT_DESKTOP","XDG_SESSION_DESKTOP","DESKTOP_SESSION"]:
 		gaming_mode = gaming_mode or OS.get_environment(key).to_lower().contains("gamescope")
 	var state := StartupStatus.describe(emulator.loaded,default_rom_dir,last_game_path,
-		provider is LinuxTracking,provider.valid,provider.status,stereo,get_window().size,gaming_mode,sbs_target_size())
+		provider.real,provider.valid,provider.status,stereo,get_window().size,gaming_mode,sbs_target_size())
 	menu.status_title = state.title
 	menu.status_detail = state.detail + (" " + startup_message if not startup_message.is_empty() else "")
 	if menu.visible: menu.refresh_labels()
@@ -1174,9 +1191,10 @@ func room_preset(preset: String) -> void:
 	world.apply_room_settings()
 
 func capture_settings() -> ConfigFile:
-	if provider is LinuxTracking: xr_fov=vertical_fov
+	if provider.real: xr_fov=vertical_fov
 	else: desktop_fov=vertical_fov
 	var config := ConfigFile.new()
+	config.set_value("tracking", "source", tracking_source)
 	config.set_value("menu","picture_preset_id",picture_preset_id)
 	config.set_value("menu","picture_preset_signature",picture_preset_signature)
 	config.set_value("view","desktop_fov",desktop_fov)

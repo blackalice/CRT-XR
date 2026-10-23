@@ -29,19 +29,27 @@ def sbs_mode(output):
     return min(modes, key=lambda m: abs(float(m["refreshRate"]) - 60)) if modes else None
 
 
-def is_viture(name):
+def display_probe():
+    # The glasses names live in display-probe.py, shipped beside this script.
+    spec = importlib.util.spec_from_file_location("display_probe", Path(__file__).with_name("display-probe.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def is_glasses(name):
     # KScreen JSON omits EDID. Read only the kernel's existing EDID descriptors.
     for path in Path("/sys/class/drm").glob("card*-*/edid"):
         if path.parent.name.endswith("-" + name):
             try:
-                if b"viture" in path.read_bytes().lower():
+                if display_probe().is_glasses_edid(path.read_bytes()):
                     return True
             except OSError:
                 pass
     return False
 
 
-def select_output(config, explicit=None, identify=is_viture):
+def select_output(config, explicit=None, identify=is_glasses):
     candidates = [o for o in config["outputs"] if o.get("connected") and not internal(o)
                   and (o["name"] == explicit if explicit else identify(o["name"]))]
     if len(candidates) != 1:

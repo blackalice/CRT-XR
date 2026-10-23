@@ -8,6 +8,16 @@ Download `CRT-XR-<version>-Windows.zip` from https://github.com/blackalice/CRT-X
 
 Without glasses, choose **Play on this screen without glasses**. No VITURE SDK is needed for this path.
 
+## Other glasses: OpenTrack tracking
+
+The built-in tracking reads VITURE glasses. For other glasses, CRT XR can follow any tool that sends **OpenTrack UDP** (six doubles: x, y, z, yaw, pitch, roll in degrees) to `127.0.0.1` port **4242**:
+
+- [opentrack](https://github.com/opentrack/opentrack) itself, set to output **UDP over network** with IP `127.0.0.1` and port `4242`;
+- [PhoenixHeadTracker](https://github.com/iVideoGameBoss/PhoenixHeadTracker) for XREAL Air glasses;
+- VertoXR, which supports Rokid and RayNeo glasses.
+
+Start the tool, then in CRT XR choose **Controls & XR → Tracking → Tracking source → OpenTrack**. The status reads *OpenTrack UDP / LIVE 3DoF* once poses arrive, and the first pose centres the view. Only this computer can send: CRT XR listens on 127.0.0.1. This path has been tested with simulated packets, not yet with real non-VITURE glasses. OpenTrack has no documented sign convention, so if turning or tilting goes the wrong way, use **Invert yaw/pitch/roll** on the same page. Field of view differs between models; adjust **Vertical field of view** in Controls & XR if the TV seems to slide as you turn. SBS works as with VITURE: switch the glasses to their full side-by-side mode and choose their display.
+
 ## Video playback (optional)
 
 Windows has no built-in FFmpeg. To watch videos, open **Game library → Library locations** and choose **Set up video playback**. CRT XR downloads only FFmpeg's five LGPL video libraries (about 55 MB) from https://github.com/BtbN/FFmpeg-Builds, checks each one and keeps them in its own user-data folder (`%APPDATA%/Godot/app_userdata/CRT XR/ffmpeg`, with a `source.cfg` recording where they came from). Nothing else on the computer changes, and videos play straight away. Then use **Choose a video folder** in the same place.
@@ -20,7 +30,7 @@ Create a folder named **sdk** beside CRT-XR.exe, then copy the **contents of the
 
 Close SpaceWalker before tracking so it does not compete for the same USB device. Connect glasses directly to the PC. **Switch glasses into SBS before launching CRT XR.** Use your normal monitor for setup, choose the glasses display and select **Open glasses view**. CRT XR keeps the view black while moving to that display and waits for a stable, plausible full-SBS mode; its resolution is read from the selected display. The SBS button remains manual.
 
-If the view stays black, return the glasses to mono and press B / Escape to retry. Recheck the selected display and Windows' active display mode. If tracking is unavailable, check the USB connection, SDK files and whether SpaceWalker is closed; **Controls & XR → Tracking** has a retry and fixed-view option. Other brands of glasses are not supported by this VITURE backend. Reconnect/suspend reliability on other computers is not yet established.
+If the view stays black, return the glasses to mono and press B / Escape to retry. Recheck the selected display and Windows' active display mode. If tracking is unavailable, check the USB connection, SDK files and whether SpaceWalker is closed; **Controls & XR → Tracking** has a retry and fixed-view option. Other brands of glasses can use OpenTrack instead (below). Reconnect/suspend reliability on other computers is not yet established.
 
 ## Controls and games
 

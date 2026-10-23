@@ -10,6 +10,9 @@ extends RefCounted
 var angular_velocity := Vector3.ZERO
 
 var orientation := Quaternion.IDENTITY
+## True for providers that follow real glasses (any brand), false for the
+## fixed or simulated view; it chooses the XR field of view and recentering.
+var real := false
 var valid := true
 var status := "Ready"
 var sample_time_usec: int = 0

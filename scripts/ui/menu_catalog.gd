@@ -174,7 +174,11 @@ func pages(category: int) -> Array:
 			return [page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Props",props),page("Placement & fade",groups["Placement & fade"])]
 
 		4:
+			var glasses_source: String = "VITURE glasses" if OS.get_name() == "Windows" else "XR Gaming"
 			var tracking: Array = [
+				{"id":"tracking.source","label":"Tracking source","kind":"choice","choices":[glasses_source,"OpenTrack"],"default":0,
+					"getter":func(): return 1 if h.tracking_source == "opentrack" else 0,"setter":func(value): h.set_tracking_source("opentrack" if int(value) == 1 else "glasses"); menu.refresh(),
+					"help":"OpenTrack lets other glasses track: run a tool that sends OpenTrack UDP to 127.0.0.1 port 4242, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo). If a direction is reversed, invert that axis below."},
 				action("tracking.real","Connect glasses",func(): h.use_tracking(true); menu.refresh(),"Connects or retries the glasses' tracking driver."),
 				action("tracking.fixed","Use fixed view",func(): h.use_tracking(false); h.recenter(); menu.refresh(),"Uses a steady view. On desktop, mouse/keyboard simulation remains available."),
 				toggle("tracking.diagnostics","Metrics overlay",h,"metrics_visible",false,"Shows frame rate, pose and tracking details. Off by default for a clean view. F1 also toggles it.",unchanged,false)]

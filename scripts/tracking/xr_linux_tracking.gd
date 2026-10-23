@@ -14,6 +14,7 @@ var predictor := Predictor.new()
 var live_status := "XRLinuxDriver / LIVE 3DoF"
 
 func _init() -> void:
+	real = true
 	valid = false
 	if OS.get_name() != "Linux":
 		status = "Real tracking requires Linux; select simulation"

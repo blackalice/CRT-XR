@@ -41,6 +41,13 @@ class SteamSessionTests(unittest.TestCase):
             self.assertTrue(session.glasses_connected(drm))
             (connector / "edid").write_bytes(b"Another monitor")
             self.assertFalse(session.glasses_connected(drm))
+            # Other brands' glasses are recognised by name; a 32:9 desktop
+            # monitor with the same 3840x1080 mode is not.
+            for name in [b"XREAL Air 2", b"Nreal Air", b"Rokid Max", b"RayNeo Air 3"]:
+                (connector / "edid").write_bytes(b"\x00\xff" + name)
+                self.assertTrue(session.glasses_connected(drm), name)
+            (connector / "edid").write_bytes(b"Odyssey G9 3840x1080")
+            self.assertFalse(session.glasses_connected(drm))
 
     def test_probe_supervises_both_processes_and_uses_unique_reports(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:

@@ -13,7 +13,7 @@ const SLIDERS := {"TV distance (m)": "distance", "Screen height offset (m)": "he
 	"Glass reflections": "glass_reflections", "Screen curvature (0 = flat)": "screen_curvature"}
 
 static func slider_default(caption: String, app: Node) -> Variant:
-	if caption == "Vertical field of view": return 24.0 if app.provider is LinuxTracking else 50.0
+	if caption == "Vertical field of view": return 24.0 if app.provider.real else 50.0
 	if SLIDERS.has(caption):
 		var key: String = SLIDERS[caption]
 		return VIEW[key] if VIEW.has(key) else PICTURE[key]
@@ -30,7 +30,7 @@ static func apply(app: Node, tab: int) -> void:
 			app.set_remember_game_picture(Showcase.PER_GAME_PICTURE)
 		1:
 			for key in VIEW: app.set(key, VIEW[key])
-			app.vertical_fov = 24.0 if app.provider is LinuxTracking else 50.0
+			app.vertical_fov = 24.0 if app.provider.real else 50.0
 			app.distance_save_delay = -1.0
 			app.fade_material.set_shader_parameter("fade_width", app.edge_fade)
 		2:

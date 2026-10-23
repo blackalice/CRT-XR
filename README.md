@@ -61,7 +61,7 @@ The app is free and early: please [report bugs](https://github.com/blackalice/CR
 | **Steam Deck without glasses** | Mono play. The latest automatic launcher includes this path; final hardware acceptance is still pending. |
 | **Windows** | Portable app for normal-monitor play or SBS glasses. VITURE tracking has been tested locally on Pro 2 and needs the separately supplied VITURE Windows SDK; monitor play does not need it. Vendor SDK DLLs are not bundled. |
 
-The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a compatible XR Gaming driver**. We expect other compatible glasses to work, but **only VITURE Pro 2 has been tested**. Automatic detection currently recognises VITURE; other models may need manual display/profile setup and a compatible driver. SBS and built-in 3DoF alone do not guarantee that CRT XR can access tracking. See [display setup](docs/display-setup.md) and [Gaming Mode handoff notes](docs/SBS-HANDOFF-TEST.md).
+The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a compatible XR Gaming driver**. We expect other compatible glasses to work, but **only VITURE Pro 2 has been tested**. On the Deck, tracking comes from XR Gaming, so glasses it supports should track; CRT XR recognises VITURE, XREAL, Rokid and RayNeo displays by name (only VITURE confirmed on hardware). Other models may need manual display/profile setup. SBS and built-in 3DoF alone do not guarantee that CRT XR can access tracking. See [display setup](docs/display-setup.md) and [Gaming Mode handoff notes](docs/SBS-HANDOFF-TEST.md).
 
 ## Install on Steam Deck
 
@@ -93,7 +93,7 @@ Open **Game library → Library locations** to choose your ROM folder or SD card
 
 Windows uses native Xbox-compatible controller support. **LB + RB + Start** opens the menu (L1 + R1 + Start on the Deck); **R3** recentres. Both platforms use the same TV-distance range; desktop and XR field-of-view calibration are stored separately. Mixed Windows display scaling is handled by the exported app's per-monitor DPI manifest.
 
-Only **VITURE Pro 2** has been tested for Windows tracking. Other brands need a tracking backend; SBS support alone is not sufficient. Public-package setup with a different Windows user and extended reconnect/suspend testing remain beta feedback areas.
+Only **VITURE Pro 2** has been tested for Windows tracking. **Other glasses** can track through **OpenTrack**: run a tool that sends OpenTrack UDP to `127.0.0.1` port `4242` (for example [opentrack](https://github.com/opentrack/opentrack), [PhoenixHeadTracker](https://github.com/iVideoGameBoss/PhoenixHeadTracker) for XREAL Air, or VertoXR for Rokid and RayNeo), then choose **Controls & XR → Tracking → Tracking source → OpenTrack**. This path is untested with real non-VITURE glasses; if a direction is reversed, invert that axis on the same page. SBS works with any glasses that offer a full side-by-side mode. Public-package setup with a different Windows user and extended reconnect/suspend testing remain beta feedback areas.
 
 ## ROM folders
 

@@ -18,6 +18,17 @@ def dimensions(value):
     return size
 
 
+# Glasses name their maker in the display's EDID. VITURE is confirmed on
+# hardware; the other brands' names still need confirming with their glasses.
+# A resolution test would also match 32:9 desktop monitors, so names decide.
+GLASSES_NAMES = (b'viture', b'xreal', b'nreal', b'rokid', b'rayneo')
+
+
+def is_glasses_edid(edid):
+    lowered = edid.lower()
+    return any(name in lowered for name in GLASSES_NAMES)
+
+
 def inventory(root=Path('/sys/class/drm')):
     outputs = []
     for status in sorted(root.glob('card*-*/status')):
@@ -27,7 +38,7 @@ def inventory(root=Path('/sys/class/drm')):
             edid = status.with_name('edid').read_bytes()
             modes = status.with_name('modes').read_text().splitlines()
             outputs.append(dict(connector=status.parent.name, edid_sha256=hashlib.sha256(edid).hexdigest() if edid else '',
-                                known_viture=b'viture' in edid.lower(), advertised_modes=list(dict.fromkeys(modes)),
+                                known_glasses=is_glasses_edid(edid), advertised_modes=list(dict.fromkeys(modes)),
                                 active_mode=None))
         except OSError:
             continue # Hotplug may remove files between reads; retry on the next poll.
@@ -36,7 +47,7 @@ def inventory(root=Path('/sys/class/drm')):
 
 def report(target, root=Path('/sys/class/drm'), connector=''):
     outputs = inventory(root)
-    candidates = [o for o in outputs if (o['connector'] == connector if connector else o['known_viture'])]
+    candidates = [o for o in outputs if (o['connector'] == connector if connector else o['known_glasses'])]
     selected = candidates[0] if len(candidates) == 1 else None
     return dict(schema=1, timestamp=time.time(), expected=list(target), outputs=outputs,
                 selected_connector=selected['connector'] if selected else '',

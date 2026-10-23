@@ -10,6 +10,7 @@ uniform float search = 0.0;            // 0..1 while fast-forwarding or rewindin
 uniform float search_direction = 1.0;  // 1 forward (bars fall), -1 back (bars rise)
 uniform float still = 0.0;             // 1 on a paused (still) frame
 uniform float seed = 0.0;              // advances once per field
+uniform sampler2D frame : source_color, filter_linear, repeat_disable; // the video frame
 const mat3 RGB_YIQ = mat3(vec3(.299,.595716,.211456),vec3(.587,-.274453,-.522591),vec3(.114,-.321263,.311135));
 const mat3 YIQ_RGB = mat3(vec3(1,1,1),vec3(.9563,-.2721,-1.1070),vec3(.6210,-.6474,1.7046));
 
@@ -19,8 +20,8 @@ float smooth_noise(float x) {
 	float f = fract(x);
 	return mix(hash(vec2(i, 3.1)), hash(vec2(i + 1.0, 3.1)), f * f * (3.0 - 2.0 * f));
 }
-vec3 yiq(sampler2D picture, vec2 uv, vec2 pixel) {
-	return RGB_YIQ * texture(picture, clamp(uv, pixel * 0.5, vec2(1.0) - pixel * 0.5)).rgb;
+vec3 yiq(vec2 uv, vec2 pixel) {
+	return RGB_YIQ * texture(frame, clamp(uv, pixel * 0.5, vec2(1.0) - pixel * 0.5)).rgb;
 }
 // A noise bar of the given half-height centred at `centre` (wrapping vertically).
 float bar(float y, float centre, float half_height) {
@@ -49,7 +50,7 @@ void fragment() {
 	float near = 0.0;
 	float wide = 0.0;
 	for (int i = -4; i <= 4; i++) {
-		float y = yiq(TEXTURE, uv + vec2(float(i) * pixel.x, 0.0), pixel).x;
+		float y = yiq(uv + vec2(float(i) * pixel.x, 0.0), pixel).x;
 		wide += y / 9.0;
 		if (abs(i) <= 2) near += y * (i == 0 ? 6.0 : (abs(i) == 1 ? 4.0 : 1.0)) / 16.0;
 	}
@@ -62,7 +63,7 @@ void fragment() {
 	float delay = (2.0 + 2.0 * wear) * pixel.x;
 	for (int i = -5; i <= 5; i++) {
 		vec2 at = uv + vec2(float(i) * 2.0 * pixel.x - delay, 0.0);
-		chroma += yiq(TEXTURE, at, pixel).yz + yiq(TEXTURE, at - vec2(0.0, pixel.y), pixel).yz;
+		chroma += yiq(at, pixel).yz + yiq(at - vec2(0.0, pixel.y), pixel).yz;
 	}
 	chroma *= 0.9 / 22.0;
 	chroma += (vec2(smooth_noise(UV.x * 24.0 + row * 13.0 + field), smooth_noise(UV.x * 24.0 + row * 7.0 - field)) - 0.5) * 0.05 * wear;

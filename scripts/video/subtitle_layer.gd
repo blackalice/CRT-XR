@@ -55,6 +55,7 @@ func set_tape(look: int) -> void:
 func setup(frame: Texture2D, width: int, height: int) -> void:
 	size = Vector2i(width, height)
 	picture.texture = frame
+	tape.set_shader_parameter("frame", frame)
 	picture.size = Vector2(width, height)
 	images.size = Vector2(width, height)
 	var display := Vector2(width, width * DISPLAY_HEIGHT_PER_WIDTH)
