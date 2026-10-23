@@ -85,10 +85,28 @@ static func archive_game(path: String) -> Dictionary:
 	archive_cache[path] = {"stamp": stamp, "game": game}
 	return game
 
-## SHA-256 of the game itself: for a ZIP, of the cartridge inside, so saves are
-## shared with the same game unzipped.
+## Hashes of plain files by path, with the size and modified time they were
+## made at: menus ask for a game's resume point on every redraw.
+static var hash_cache := {}
+
+## SHA-256 naming the game's saves: of the file; for a ZIP, of the cartridge
+## inside, so saves are shared with the same game unzipped; for a CHD, of its
+## header, which carries a SHA-1 of the whole disc, so a 300 MB+ image is not
+## read end to end on the main thread.
 static func content_hash(path: String) -> String:
-	if path.get_extension().to_lower() != "zip": return FileAccess.get_sha256(path)
+	var extension := path.get_extension().to_lower()
+	if extension == "chd":
+		var disc := FileAccess.open(path, FileAccess.READ)
+		if disc == null: return ""
+		var hashing := HashingContext.new()
+		hashing.start(HashingContext.HASH_SHA256)
+		hashing.update(disc.get_buffer(4096))
+		return hashing.finish().hex_encode()
+	if extension != "zip":
+		var stamp := [FileAccess.get_modified_time(path), FileAccess.get_size(path)]
+		var known: Dictionary = hash_cache.get(path, {})
+		if known.get("stamp") != stamp: known = {"stamp": stamp, "sha256": FileAccess.get_sha256(path)}; hash_cache[path] = known
+		return known.sha256
 	var game := archive_game(path)
 	if game.is_empty(): return ""
 	if not game.has("sha256"):

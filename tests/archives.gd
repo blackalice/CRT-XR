@@ -62,6 +62,17 @@ func run() -> void:
 	check(Registry.identify(base + "/roms/megacd/USA/Popful Mail.chd") == "segacd", "A CHD in a region folder inside Mega-CD is too")
 	check(Registry.identify(base + "/roms/psx/Final Fantasy VII.chd").is_empty() and Registry.identify(base + "/roms/Loose.chd").is_empty(), "CHDs elsewhere are not offered")
 
+	# A disc's identity comes from its header (which carries the disc's own
+	# SHA-1), never from reading hundreds of megabytes on the main thread.
+	var big := PackedByteArray(); big.resize(64 * 1024 * 1024); big.encode_u32(0, 0x4d436f6d)
+	touch(base + "/roms/segacd/Big Disc.chd", big)
+	var started := Time.get_ticks_msec()
+	var disc_hash := Registry.content_hash(base + "/roms/segacd/Big Disc.chd")
+	check(disc_hash.length() == 64 and Time.get_ticks_msec() - started < 50, "A CHD is named by its header, without reading the whole disc")
+	var plain_rom := ProjectSettings.globalize_path("res://build/crt-xr-probe.gba")
+	check(Registry.content_hash(plain_rom) == FileAccess.get_sha256(plain_rom), "A plain game is named by its file's SHA-256")
+	check(Registry.hash_cache.has(plain_rom), "A plain game's hash is remembered for menu redraws")
+
 	var index := RomIndex.new()
 	index.start(ProjectSettings.globalize_path(base + "/roms"))
 	for i in range(2000):
@@ -89,6 +100,7 @@ func run() -> void:
 	for i in range(60): ran = session.core.run_frame(0) and ran
 	check(ran and session.core.info().width > 0, "The zipped game runs")
 	check(session.save_state() and session.load_state(), "States round-trip for a zipped game")
+	check(session.auto_path() == session.auto_path_for(zipped), "The loaded game's resume point matches the one the menu looks up")
 	session.preview_frame(0, 1)
 	check(session.preview_copy == "ready", "The input preview copy opens the unpacked cartridge")
 	check(session.load_rom(ProjectSettings.globalize_path(base + "/roms/Sega Probe.zip")) and session.system_id == "megadrive", "A zipped Mega Drive .bin plays")

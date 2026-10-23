@@ -112,9 +112,11 @@ func load_rom(path: String) -> bool:
 	rom_path = path
 	content_path = content
 	preview_copy = ""
-	rom_hash = FileAccess.get_sha256(content)
-	# Saves of a zipped game look its hash up again; it is already known.
-	if content != path: Registry.archive_game(path)["sha256"] = rom_hash
+	# A ZIP's cartridge was just unpacked: hash that copy and remember it.
+	if content != path:
+		rom_hash = FileAccess.get_sha256(content)
+		Registry.archive_game(path)["sha256"] = rom_hash
+	else: rom_hash = Registry.content_hash(path)
 	var info: Dictionary = core.info()
 	core_identity = str(info.name)
 	fps = float(info.fps)
@@ -343,6 +345,10 @@ func flush_sram() -> void:
 func state_path(slot := 0) -> String:
 	return save_directory.path_join("%s.slot%d.rst" % [rom_hash, slot])
 
+## The loaded game's resume point, from the hash it was loaded with.
+func auto_path() -> String:
+	return save_directory.path_join(rom_hash+".auto.rst")
+
 static func auto_path_for(path: String) -> String:
 	var system := Registry.identify(path)
 	if system.is_empty(): return ""
@@ -368,7 +374,7 @@ static func state_time(path: String) -> String:
 
 func save_auto() -> bool:
 	if not loaded or auto_saved: return true
-	if not save_to(auto_path_for(rom_path),"Automatic resume saved"): return false
+	if not save_to(auto_path(),"Automatic resume saved"): return false
 	auto_saved=true
 	return true
 
@@ -409,7 +415,7 @@ func load_state(slot := 0) -> bool:
 	return load_from(state_path(slot),"Loaded • Slot %d" % (slot + 1))
 
 func load_auto() -> bool:
-	return load_from(auto_path_for(rom_path),"Continued automatic save")
+	return load_from(auto_path(),"Continued automatic save")
 
 func load_from(path: String, description: String) -> bool:
 	if not loaded: return false

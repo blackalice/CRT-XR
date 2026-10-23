@@ -27,9 +27,11 @@ func _ready() -> void:
 	timer.timeout.connect(refresh); add_child(timer)
 	refresh()
 
+## The first line of a sysfs file. Their reported length (4 KiB) is not their
+## content, so reading the whole length fails; reading one line does not.
 static func read(file: String) -> String:
 	var handle := FileAccess.open(file, FileAccess.READ)
-	return handle.get_as_text().strip_edges() if handle != null else ""
+	return handle.get_line().strip_edges() if handle != null else ""
 
 ## "21:40", or "9:40 pm" when the room clocks use 12 hours.
 func clock() -> String:
