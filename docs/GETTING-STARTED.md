@@ -27,7 +27,7 @@ The real-account upgrade was tested on 17 October 2026: the original shortcut ID
 
 If it stays black, X retries. To leave, return the glasses to mono and press B / Escape. First-install Steam/display behaviour still needs a clean-device test. The tested resolution override for this profile is 3840×1080; Native alone did not work on our Deck.
 
-Open **Game library → Library locations** and choose your main ROM folder, including an SD card. Relevant supported systems appear automatically. Open a game; bring your own uncompressed games for any supported console (see the README list).
+Open **Game library → Library locations** and choose your main ROM folder, including an SD card. Relevant supported systems appear automatically. Open a game; bring your own games for any supported console (see the README list), as plain files or ZIPs.
 
 L1 + R1 + Start opens the menu. Up/down selects, left/right adjusts, A activates and B returns. R3 recentres. Music controls sit above the normal menu actions without taking the default selection.
 
@@ -70,7 +70,7 @@ roms/
 
 CRT XR discovers supported games in subfolders and presents them by system; you do not need to move ROMs into the app folder. Common folder aliases such as `genesis`, `superfamicom`, `sms` and `gg` are recognised. Folder names help discovery, while the supported file type/content chooses the emulator core. You can also select a single supported system folder or browse to a game directly.
 
-Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Only supported, recognised cartridges appear. ROMs must be **uncompressed**; ZIP archives are not scanned as games. Sega CD and Atari Lynx are the two exceptions that need hardware files: put the Sega CD BIOS (`bios_CD_U.bin`, `bios_CD_E.bin`, `bios_CD_J.bin` as your discs require) and the Lynx boot ROM (`lynxboot.img`) in a `bios` folder next to the CRT XR application — the library tells you what is missing and never rewrites your ROMs. No ROMs are supplied.
+Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Only supported, recognised games appear. Cartridges can be plain files or sit alone in a ZIP (Deflate or stored; 7z and RAR are not read). Sega CD discs can be a `.cue` sheet, a `.bin` carrying the Sega CD header, or a CHD in a Sega CD folder (`segacd`, `megacd`, or a folder inside one). Sega CD and Atari Lynx are the two exceptions that need hardware files: put the Sega CD BIOS (`bios_CD_U.bin`, `bios_CD_E.bin`, `bios_CD_J.bin` as your discs require) and the Lynx boot ROM (`lynxboot.img`) in a `bios` folder next to the CRT XR application — the library tells you what is missing and never rewrites your ROMs. No ROMs are supplied.
 
 In folder and game lists, **left/right jumps ten entries** and holding a direction continues scrolling. Jumps stop at the ends and cross game-list pages. **L1/R1** still changes whole game pages. To change the saved folder later, use **Library locations**.
 

@@ -1508,7 +1508,7 @@ func refresh_labels() -> void:
 	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in any console list and press X."
 	elif mode=="library" and not rom_index.message.is_empty(): help_label.text=rom_index.message
 	elif mode=="library" and host.default_rom_dir.is_empty(): help_label.text="Choose Set up your ROM library and select your main ROM folder. Your supported consoles appear here automatically."
-	elif mode=="library" and not rom_index.scanning and rom_index.total()==0: help_label.text="No supported games here yet. Check Library locations. Use uncompressed cartridges, or a .cue/.bin for Sega CD; ZIP and CHD files are not supported."
+	elif mode=="library" and not rom_index.scanning and rom_index.total()==0: help_label.text="No supported games here yet. Check Library locations. Cartridges can be plain files or ZIPs; Sega CD discs can be .cue/.bin, or CHD in a Sega CD folder. 7z and RAR are not supported."
 	elif row!=null: help_label.text = str(row.item.get("help",""))
 	else: help_label.text = library.message if mode=="browser" else ("Nothing here yet. B goes back." if input_kind=="controller" else "Nothing here yet. Backspace goes back.")
 	if preview and row!=null: compact.text = "▸  %s    ‹  %s  ›" % [row.item.label,row.formatted_value()]

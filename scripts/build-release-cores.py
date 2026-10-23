@@ -1,5 +1,6 @@
 """Build release cores from exact git objects, with per-binary source/toolchain evidence.
-Run with Linux Python 3.9+: python3 scripts/build-release-cores.py [all|linux|windows].
+Run with Linux Python 3.9+: python3 scripts/build-release-cores.py [all|linux|windows] [core ...].
+Naming cores rebuilds only those; the other cores keep their binaries and records.
 Requires make, CMake, GCC/G++, and MinGW-w64 POSIX cross-compilers for Windows.
 """
 from pathlib import Path
@@ -16,9 +17,11 @@ SPECS=[
   'licenses':[['COPYING','Nestopia-LICENSE.txt']]},
  # Genesis Plus GX carries Mega Drive, Master System, Game Gear and Sega CD images.
  # HAVE_CDROM is libretro-common physical-drive (cdrom://) access, not Sega CD emulation;
- # it stays off on both platforms, as does CHD decompression.
- {'core':'genesis_plus_gx','repository':'genesis-plus-gx','revision':'393f70cd64c7334564c19a424c383f53986c13f4','directory':'','makefile':'Makefile.libretro','args':['HAVE_CDROM=0','HAVE_CHD=0'],
-  'licenses':[['LICENSE.txt','Genesis-Plus-GX-LICENSE.txt']]},
+ # it stays off on both platforms. CHD reads Sega CD discs through the bundled
+ # libchdr, LZMA, zlib and zstd sources in libretro/deps.
+ {'core':'genesis_plus_gx','repository':'genesis-plus-gx','revision':'393f70cd64c7334564c19a424c383f53986c13f4','directory':'','makefile':'Makefile.libretro','args':['HAVE_CDROM=0','HAVE_CHD=1'],
+  'licenses':[['LICENSE.txt','Genesis-Plus-GX-LICENSE.txt'],['libretro/deps/libchdr/LICENSE.txt','libchdr-LICENSE.txt'],
+   ['libretro/deps/lzma-19.00/LICENSE','LZMA-SDK-LICENSE.txt'],['libretro/deps/zstd/LICENSE','zstd-LICENSE.txt'],['libretro/deps/zlib-1.2.11/README','zlib-LICENSE.txt']]},
  {'core':'gambatte','repository':'gambatte','revision':'d9d6cd06382d1ced30de34d56d3609452323dab1','directory':'','makefile':'Makefile.libretro',
   'licenses':[['COPYING','Gambatte-LICENSE.txt']]},
  {'core':'mgba','repository':'mgba','revision':'7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6','recipe':'cmake',
@@ -40,6 +43,9 @@ def main():
  target=sys.argv[1] if len(sys.argv)>1 else 'all'
  if target not in ['all','linux','windows']:raise SystemExit('Use all, linux or windows')
  platforms=['linux','windows'] if target=='all' else [target]
+ chosen=sys.argv[2:] or [spec['core'] for spec in SPECS]
+ unknown=set(chosen)-{spec['core'] for spec in SPECS}
+ if unknown:raise SystemExit('Unknown cores: '+', '.join(sorted(unknown)))
  cores=ROOT/'cores';sources=cores/'sources';sources.mkdir(parents=True,exist_ok=True)
  logs=ROOT/'build/core-build-logs';logs.mkdir(parents=True,exist_ok=True)
  backup=ROOT/'archive'/('cores-before-source-build-'+datetime.datetime.now().strftime('%Y%m%d-%H%M%S'))
@@ -47,7 +53,7 @@ def main():
  for p in cores.iterdir():
   if p.is_file() and p.suffix in ['.dll','.so','.json']:shutil.copy2(p,backup/p.name)
  records=[]
- for spec in SPECS:
+ for spec in [spec for spec in SPECS if spec['core'] in chosen]:
   core,repository,revision=spec['core'],spec['repository'],spec['revision']
   repo=ROOT/'tools'/repository
   archive=sources/(repository+'-'+revision+'.tar.gz')
@@ -110,7 +116,8 @@ def main():
     print('Built '+name+' '+digest(destination),flush=True)
  manifest=cores/'core-builds.json'
  previous=json.loads(manifest.read_text(encoding='utf-8')) if manifest.exists() else {'builds':[]}
- previous['builds']=[b for b in previous.get('builds',[]) if b['platform'] not in platforms]+records
+ built={(r['core'],r['platform']) for r in records}
+ previous['builds']=[b for b in previous.get('builds',[]) if (b['core'],b['platform']) not in built]+records
  previous['origin']='Locally built pinned source; each binary records its exact source archive, compiler, flags and SHA-256.'
  previous['build_environment']=Path('/etc/os-release').read_text()
  previous['built_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()

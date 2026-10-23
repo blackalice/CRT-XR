@@ -104,60 +104,6 @@
       "build_log_sha256": "581b407ebb2c14e36ea616dc540a1bd455ec03d38c1f00ff3b70d22081deb5bb"
     },
     {
-      "core": "genesis_plus_gx",
-      "platform": "linux",
-      "source_commit": "393f70cd64c7334564c19a424c383f53986c13f4",
-      "origin": "Local source build",
-      "binary_sha256": "c112eb235d79a972f5061783897a418650cf6c3660dd6eafa58d83c946152e9a",
-      "source_archive": "sources/genesis-plus-gx-393f70cd64c7334564c19a424c383f53986c13f4.tar.gz",
-      "source_sha256": "8230c4a224a3231d778b6963f0fd30d52f273044323dc916db4e4df4a381c111",
-      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
-      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
-      "make_version": "GNU Make 4.3",
-      "make_arguments": [
-        "-C",
-        "<extracted-source>",
-        "-f",
-        "Makefile.libretro",
-        "-j6",
-        "platform=unix",
-        "CC=gcc",
-        "CXX=g++",
-        "GIT_VERSION= 393f70c",
-        "HAVE_CDROM=0",
-        "HAVE_CHD=0"
-      ],
-      "source_date_epoch": "1791565714",
-      "build_log_sha256": "428d773b16a89cc91e450acf0274649277e36dc963c14f82fc00799322f3b376"
-    },
-    {
-      "core": "genesis_plus_gx",
-      "platform": "windows",
-      "source_commit": "393f70cd64c7334564c19a424c383f53986c13f4",
-      "origin": "Local source build",
-      "binary_sha256": "d4b25f639b9ffc89dc3a0470d7d9f20a83c7c9a3fe6017bdab83d072fa4ad318",
-      "source_archive": "sources/genesis-plus-gx-393f70cd64c7334564c19a424c383f53986c13f4.tar.gz",
-      "source_sha256": "8230c4a224a3231d778b6963f0fd30d52f273044323dc916db4e4df4a381c111",
-      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
-      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
-      "make_version": "GNU Make 4.3",
-      "make_arguments": [
-        "-C",
-        "<extracted-source>",
-        "-f",
-        "Makefile.libretro",
-        "-j6",
-        "platform=win",
-        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
-        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
-        "GIT_VERSION= 393f70c",
-        "HAVE_CDROM=0",
-        "HAVE_CHD=0"
-      ],
-      "source_date_epoch": "1791565714",
-      "build_log_sha256": "b67db2c1452af692c75d4ff28b077e1f7c7c3c2bdb8fea32d5334f2eba00be25"
-    },
-    {
       "core": "gambatte",
       "platform": "linux",
       "source_commit": "d9d6cd06382d1ced30de34d56d3609452323dab1",
@@ -520,8 +466,62 @@
       ],
       "source_date_epoch": "1792199643",
       "build_log_sha256": "b18f27974316c89658ac5a2a042f1f03864a34922cb859ab4c63768166c595d3"
+    },
+    {
+      "core": "genesis_plus_gx",
+      "platform": "linux",
+      "source_commit": "393f70cd64c7334564c19a424c383f53986c13f4",
+      "origin": "Local source build",
+      "binary_sha256": "5b1fa76fed9649ecb1f7c998b2395de6909adb4a91f9a457d2e38eb82eec4452",
+      "source_archive": "sources/genesis-plus-gx-393f70cd64c7334564c19a424c383f53986c13f4.tar.gz",
+      "source_sha256": "8230c4a224a3231d778b6963f0fd30d52f273044323dc916db4e4df4a381c111",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile.libretro",
+        "-j6",
+        "platform=unix",
+        "CC=gcc",
+        "CXX=g++",
+        "GIT_VERSION= 393f70c",
+        "HAVE_CDROM=0",
+        "HAVE_CHD=1"
+      ],
+      "source_date_epoch": "1791565714",
+      "build_log_sha256": "95dadcf040c2540abf3680c96296024e2c3f0ac6d6c98d39d1bb118b37b032a6"
+    },
+    {
+      "core": "genesis_plus_gx",
+      "platform": "windows",
+      "source_commit": "393f70cd64c7334564c19a424c383f53986c13f4",
+      "origin": "Local source build",
+      "binary_sha256": "9e4278f548f8f825656a66b1369b5900ede2bd9ac5f2cb72210855d841fd0665",
+      "source_archive": "sources/genesis-plus-gx-393f70cd64c7334564c19a424c383f53986c13f4.tar.gz",
+      "source_sha256": "8230c4a224a3231d778b6963f0fd30d52f273044323dc916db4e4df4a381c111",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile.libretro",
+        "-j6",
+        "platform=win",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= 393f70c",
+        "HAVE_CDROM=0",
+        "HAVE_CHD=1"
+      ],
+      "source_date_epoch": "1791565714",
+      "build_log_sha256": "d9b8943bd1cce47285d54b604ffefa36134ab6235695e57df77be84b5af86e52"
     }
   ],
   "build_environment": "PRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.1 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
-  "built_utc": "2026-10-22T14:52:17.062127+00:00"
+  "built_utc": "2026-10-23T20:13:32.103086+00:00"
 }

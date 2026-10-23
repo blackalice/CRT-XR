@@ -12,6 +12,8 @@ var loaded := false
 var paused := false
 var status := "Test signal / no game loaded"
 var rom_path := ""
+## The file the core opened: rom_path, or its cartridge unpacked from a ZIP.
+var content_path := ""
 var rom_hash := ""
 var core_identity := ""
 var system_id := "snes"
@@ -72,7 +74,7 @@ func load_rom(path: String) -> bool:
 		return false
 	var detected := Registry.identify(path)
 	if detected.is_empty():
-		report("Unsupported cartridge. Use an uncompressed game file for a supported system; .bin needs a SEGA or SEGADISCSYSTEM header.", true)
+		report("Unsupported game file. Use a cartridge for a supported system, alone or in a ZIP; .bin needs a SEGA or SEGADISCSYSTEM header, and CHD discs go in a Sega CD folder.", true)
 		return false
 	var selected_path := Registry.core_path(detected)
 	if not FileAccess.file_exists(selected_path):
@@ -100,12 +102,19 @@ func load_rom(path: String) -> bool:
 		report("Cannot create save directory: " + error_string(error), true)
 		return false
 	Registry.stage_bios(system_id, saves)
-	if not core.load_game(path, saves):
+	var content := Registry.content_file(path)
+	if content.is_empty():
+		report("Could not unpack the game from " + path.get_file() + ". Its ZIP may be damaged or use a compression method other than Deflate.", true)
+		return false
+	if not core.load_game(content, saves):
 		report(str(core.last_error()), true)
 		return false
 	rom_path = path
+	content_path = content
 	preview_copy = ""
-	rom_hash = FileAccess.get_sha256(path)
+	rom_hash = FileAccess.get_sha256(content)
+	# Saves of a zipped game look its hash up again; it is already known.
+	if content != path: Registry.archive_game(path)["sha256"] = rom_hash
 	var info: Dictionary = core.info()
 	core_identity = str(info.name)
 	fps = float(info.fps)
@@ -209,7 +218,7 @@ func prepare_preview_copy() -> void:
 	var directory := ProjectSettings.globalize_path("user://preview/" + system_id)
 	DirAccess.make_dir_recursive_absolute(directory)
 	Registry.stage_bios(system_id, directory)
-	preview_copy = "ready" if core.load_preview(Registry.core_path(system_id), rom_path, directory) else "failed"
+	preview_copy = "ready" if core.load_preview(Registry.core_path(system_id), content_path, directory) else "failed"
 
 func separate_preview_frame(buttons: int, frames: int) -> Dictionary:
 	var started := Time.get_ticks_usec()
@@ -338,7 +347,8 @@ static func auto_path_for(path: String) -> String:
 	var system := Registry.identify(path)
 	if system.is_empty(): return ""
 	var folder: String = "user://saves" if system=="snes" else "user://saves/"+system+"/"+Registry.SYSTEMS[system].core
-	return folder.path_join(FileAccess.get_sha256(path)+".auto.rst")
+	var hash := Registry.content_hash(path)
+	return "" if hash.is_empty() else folder.path_join(hash+".auto.rst")
 
 static func state_details(path: String) -> Dictionary:
 	var file := FileAccess.open(path,FileAccess.READ)

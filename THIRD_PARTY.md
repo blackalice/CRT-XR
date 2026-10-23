@@ -38,6 +38,10 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   Serves Mega Drive, Master System, Game Gear and Sega CD.
   Its custom licence prohibits sale and commercial use; bundled components
   have additional terms reproduced in `cores/Genesis-Plus-GX-LICENSE.txt`.
+  CHD discs are read with the libchdr (BSD-3-Clause), LZMA SDK (public domain),
+  zlib (zlib licence) and zstd (BSD) sources bundled in that tree; their notices
+  are in `cores/libchdr-LICENSE.txt`, `cores/LZMA-SDK-LICENSE.txt`,
+  `cores/zlib-LICENSE.txt` and `cores/zstd-LICENSE.txt`.
   Upstream source revision:
   https://github.com/libretro/Genesis-Plus-GX/tree/393f70cd64c7334564c19a424c383f53986c13f4
 * Gambatte Libretro (Game Boy / Game Boy Color), GPL version 2 (its file headers grant version 2 only),

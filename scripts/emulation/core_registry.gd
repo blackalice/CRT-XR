@@ -1,6 +1,9 @@
 extends RefCounted
 ## Cartridge-first support. Ambiguous .bin files require a Sega header; .cue files resolve their first image.
+## Cartridges may also sit alone in a ZIP; Sega CD discs may be CHD files in a Sega CD folder.
 ## Systems with a "bios_any" list need one of those files in the bios folder next to the application.
+const Archive = preload("res://scripts/content/rom_archive.gd")
+const Folders = preload("res://scripts/content/console_folders.gd")
 const SYSTEMS := {
 	"snes": {"name":"SNES", "core":"snes9x", "extensions":["sfc","smc","swc","fig"], "aspect":4.0/3.0},
 	"nes": {"name":"NES", "core":"nestopia", "extensions":["nes","unf","unif"], "aspect":4.0/3.0},
@@ -22,24 +25,87 @@ const SYSTEMS := {
 static func identify(path: String) -> String:
 	var extension := path.get_extension().to_lower()
 	if extension == "cue": return disc_identify(path)
-	for system in SYSTEMS:
-		if extension != "md" and extension in SYSTEMS[system].extensions: return system
+	if extension == "zip": return archive_game(path).get("system", "")
+	# A CHD's sectors are compressed, so its console folder says what it holds.
+	if extension == "chd": return "segacd" if folder_system(path) == "segacd" else ""
+	var system := extension_system(extension)
+	if not system.is_empty(): return system
 	# .md also means Markdown, so do not list arbitrary documentation as ROMs.
 	if extension in ["bin", "md"]:
 		var file := FileAccess.open(path, FileAccess.READ)
-		if file != null and file.get_length() >= 0x104:
-			if extension == "bin" and tag_at(file, 0x100, "SEGADISCSYSTEM"): return "segacd"
-			file.seek(0x100)
-			if file.get_buffer(4).get_string_from_ascii() == "SEGA":
-				# Genesis Plus GX has no 32X hardware; those images would boot to a black screen.
-				if tag_at(file, 0x100, "SEGA 32X"): return ""
-				return "megadrive"
+		if file != null: return header_system(file.get_buffer(0x110), extension)
 	return ""
 
-static func tag_at(file: FileAccess, offset: int, tag: String) -> bool:
-	if file.get_length() < offset + tag.length(): return false
-	file.seek(offset)
-	return file.get_buffer(tag.length()).get_string_from_ascii() == tag
+static func extension_system(extension: String) -> String:
+	for system in SYSTEMS:
+		if extension != "md" and extension in SYSTEMS[system].extensions: return system
+	return ""
+
+## Mega Drive or Sega CD from the header at 0x100, for .bin and .md files.
+static func header_system(header: PackedByteArray, extension: String) -> String:
+	if header.size() < 0x104: return ""
+	if extension == "bin" and tag_at(header, 0x100, "SEGADISCSYSTEM"): return "segacd"
+	if not tag_at(header, 0x100, "SEGA"): return ""
+	# Genesis Plus GX has no 32X hardware; those images would boot to a black screen.
+	return "" if tag_at(header, 0x100, "SEGA 32X") else "megadrive"
+
+static func tag_at(header: PackedByteArray, offset: int, tag: String) -> bool:
+	if header.size() < offset + tag.length(): return false
+	return header.slice(offset, offset + tag.length()).get_string_from_ascii() == tag
+
+## The console named by the nearest folder above a file, or "".
+static func folder_system(path: String) -> String:
+	var folder := path.get_base_dir()
+	for depth in range(4):
+		var system := Folders.system(folder.get_file())
+		if not system.is_empty() or folder.get_base_dir() == folder: return system
+		folder = folder.get_base_dir()
+	return ""
+
+## Archive lookups by path, with the modified time they were made at: scans,
+## the browser and menus ask about the same ZIPs often.
+static var archive_cache := {}
+
+## The cartridge inside a ZIP as {system, entry, size}, or {} when it holds
+## none. Discs are never read from ZIPs: they would be unpacked whole.
+static func archive_game(path: String) -> Dictionary:
+	var stamp := FileAccess.get_modified_time(path)
+	var cached: Dictionary = archive_cache.get(path, {})
+	if cached.get("stamp", -1) == stamp: return cached.game
+	var game := {}
+	for entry in Archive.entries(path):
+		var extension: String = entry.name.get_extension().to_lower()
+		var system := extension_system(extension)
+		if system.is_empty() and extension in ["bin", "md"] and entry.size <= Archive.HEADER_LIMIT:
+			system = header_system(Archive.read(path, entry.name).slice(0, 0x110), extension)
+			if system == "segacd": system = ""
+		if not system.is_empty() and entry.size <= Archive.PLAY_LIMIT:
+			game = {"system": system, "entry": entry.name, "size": entry.size}
+			break
+	archive_cache[path] = {"stamp": stamp, "game": game}
+	return game
+
+## SHA-256 of the game itself: for a ZIP, of the cartridge inside, so saves are
+## shared with the same game unzipped.
+static func content_hash(path: String) -> String:
+	if path.get_extension().to_lower() != "zip": return FileAccess.get_sha256(path)
+	var game := archive_game(path)
+	if game.is_empty(): return ""
+	if not game.has("sha256"):
+		var bytes := Archive.read(path, game.entry)
+		if bytes.is_empty(): return ""
+		var hashing := HashingContext.new()
+		hashing.start(HashingContext.HASH_SHA256)
+		hashing.update(bytes)
+		game["sha256"] = hashing.finish().hex_encode()
+	return game.sha256
+
+## A file a core can open: the game itself, or its cartridge unpacked from a
+## ZIP into the content cache. "" when it cannot be unpacked.
+static func content_file(path: String) -> String:
+	if path.get_extension().to_lower() != "zip": return path
+	var game := archive_game(path)
+	return "" if game.is_empty() else Archive.extract(path, game.entry)
 
 static func disc_identify(cue_path: String) -> String:
 	var text := FileAccess.get_file_as_string(cue_path)
@@ -57,7 +123,7 @@ static func disc_identify(cue_path: String) -> String:
 			if words.size() < 2: continue
 			name = words[1]
 		var image := FileAccess.open(cue_path.get_base_dir().path_join(name).simplify_path(), FileAccess.READ)
-		var found := image != null and tag_at(image, 0x100, "SEGADISCSYSTEM")
+		var found := image != null and tag_at(image.get_buffer(0x110), 0x100, "SEGADISCSYSTEM")
 		if image != null: image.close()
 		# The first image decides; a PlayStation cue stays an unsupported disc.
 		return "segacd" if found else ""

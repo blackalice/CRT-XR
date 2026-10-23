@@ -36,7 +36,7 @@ If the view stays black, return the glasses to mono and press B / Escape to retr
 
 Xbox/XInput-compatible controllers work directly, without Steam desktop mappings. LB + RB + Start opens settings; R3 recentres. Up/down selects; left/right adjusts; A activates, B returns, Y resets the selected option, X opens compact preview. LB/RB changes categories and LT/RT changes subsections. The right stick adjusts TV distance when enabled.
 
-Choose **Game library → Library locations** and your main ROM folder containing the console subfolders (snes, nes, megadrive, gb, gba and so on). Select **Use this folder for my library**. The browser's **Computer drives** lists local/removable/mapped drives; **Open folder or network path…** accepts D:/roms or \\server\share\roms. Sign in to protected shares in Windows File Explorer first. Music uses the same path entry. No games or music are supplied. ROMs must be uncompressed; ZIP games are not supported.
+Choose **Game library → Library locations** and your main ROM folder containing the console subfolders (snes, nes, megadrive, gb, gba and so on). Select **Use this folder for my library**. The browser's **Computer drives** lists local/removable/mapped drives; **Open folder or network path…** accepts D:/roms or \\server\share\roms. Sign in to protected shares in Windows File Explorer first. Music uses the same path entry. No games or music are supplied. Games can be plain files or ZIPs; Sega CD CHDs go in a `segacd` folder.
 
 Desktop and XR calibration are stored independently. Older Windows preview settings using a 50-degree field of view migrate to 24 degrees for glasses. Distance limits remain 1.2–5 metres; if a formerly small picture becomes very large, move the TV back with the right stick.
 

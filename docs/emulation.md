@@ -5,7 +5,7 @@ in the pause menu; the file determines the core automatically. The new cores
 have been tested locally with original diagnostic cartridges;
 Steam Deck deployment and hardware validation follow separately.
 
-| System | Core | Uncompressed cartridge extensions |
+| System | Core | Cartridge extensions (plain, or alone in a ZIP) |
 |---|---|---|
 | SNES | Snes9x | `.sfc`, `.smc`, `.swc`, `.fig` |
 | NES | Nestopia | `.nes`, `.unf`, `.unif` |
@@ -15,7 +15,7 @@ Steam Deck deployment and hardware validation follow separately.
 | Game Boy / Game Boy Color | Gambatte | `.gb`, `.gbc` |
 | Game Boy Advance | mGBA | `.gba` |
 | PC Engine / TurboGrafx-16 | Beetle PCE Fast | `.pce` |
-| Sega CD / Mega-CD | Genesis Plus GX | `.cue` or `.bin` with the Sega CD header |
+| Sega CD / Mega-CD | Genesis Plus GX | `.cue`, `.bin` with the Sega CD header, or `.chd` in a Sega CD folder |
 | Atari 2600 | Stella | `.a26` |
 | Atari Lynx | Beetle Lynx | `.lynx` |
 | Neo Geo Pocket / Color | Beetle NeoPop | `.ngp`, `.ngpc` |
@@ -24,7 +24,18 @@ Steam Deck deployment and hardware validation follow separately.
 `.md` and `.bin` require a SEGA cartridge header (Mega Drive) or the
 `SEGADISCSYSTEM` header (Sega CD) to avoid treating documents and unrelated
 binary files as games; a `.cue` sheet resolves its first image the same way.
-Archives, CHD, Sega 32X, SuperGrafx, Famicom Disk System, PC Engine CD, mid-game disc changes,
+A CHD's sectors are compressed, so a `.chd` counts as a Sega CD disc when it
+sits in a Sega CD folder (`segacd`, `megacd`, or up to three folders inside one).
+
+A ZIP counts as the first cartridge inside it, read from the archive's directory
+without unpacking; a `.bin` or `.md` inside is unpacked (up to 8 MiB) only to
+check its header. Playing unpacks that one file into `user://cache/content`,
+which holds only the current game. Saves are keyed by the cartridge's own hash,
+so a zipped game and the same game unzipped share battery saves, states and the
+resume point. Discs are never read from ZIPs. Deflate and stored entries are
+supported; 7z, RAR and ZIP64 archives are not.
+
+Sega 32X, SuperGrafx, Famicom Disk System, PC Engine CD, mid-game disc changes,
 analog sticks, light guns, paddles and multiplayer are outside this pass.
 Ordinary cartridges need no BIOS; Sega CD and Atari Lynx read their hardware
 files (`bios_CD_U.bin` and friends, `lynxboot.img`) from a `bios` folder next
@@ -52,7 +63,7 @@ Select a system with A, then a game with A. B returns to systems. Lists are
 naturally sorted and paged in groups of 50; L1/R1 or Left/Right changes pages.
 Each system remembers its current page, selected game and scroll position during
 the session. Manual browsing, recent game, SD-card and default-folder shortcuts
-remain available. Compressed archives are not indexed in this version.
+remain available. Zipped cartridges and Sega CD CHDs are indexed with everything else.
 
 On Deck/Xbox controllers, NES B/A use the bottom/right buttons; left/top are
 turbo B/A. Mega Drive A/B/C use left/bottom/right; X/Y/Z use L1/top/R1 when
