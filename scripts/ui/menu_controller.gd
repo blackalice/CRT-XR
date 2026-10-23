@@ -26,6 +26,9 @@ const SECTION_PLACES := "GO TO"
 ## Lists this long or longer offer Jump to letter.
 const JUMP_MINIMUM := 20
 ## Confirmation answers shown in the danger colour.
+## Save-state slots per game.
+const STATE_SLOTS := 4
+const StatusLine = preload("res://scripts/ui/status_line.gd")
 const DESTRUCTIVE := ["Exit","Delete","Forget","Remove","Reset","Overwrite","Stop","Replace"]
 var location_bar: PanelContainer
 const CATEGORIES := ["View","Picture","Audio","Room","Controls & XR","Saved setups","About & Help","Quick settings","Videos"]
@@ -118,6 +121,9 @@ var rename_preset := -1
 ## Your own room being looked at or renamed (-1 when none).
 var my_room := -1
 var rename_room := -1
+## The save-state page: choosing a slot saves (true) or loads (false).
+var states_saving := true
+var status_line: HBoxContainer
 var help_title := ""
 var help_copy := ""
 var help_origin: Dictionary = {}
@@ -129,6 +135,7 @@ var focus_tween: Tween
 
 func _ready() -> void:
 	theme = MenuSkin.create()
+	host.box_art.art_ready.connect(thumbnail_arrived)
 	sound_player=AudioStreamPlayer.new(); sound_player.volume_db=-28; add_child(sound_player)
 	position = Vector2(36,28)
 	size = Vector2(888,664)
@@ -147,6 +154,8 @@ func _ready() -> void:
 	back_button = Button.new(); back_button.text = "Back  [B]"
 	back_button.focus_mode = Control.FOCUS_NONE
 	back_button.pressed.connect(back)
+	status_line = StatusLine.new(); status_line.host = host
+	top.add_child(status_line)
 	top.add_child(back_button)
 	back_button.flat=true; back_button.add_theme_font_size_override("font_size",16); MenuSkin.weigh(back_button,MenuSkin.REGULAR)
 	back_glyph=preload("res://scripts/ui/button_glyph.gd").new("B"); top.add_child(back_glyph)
@@ -307,6 +316,7 @@ func state_key() -> String:
 		"slot": return "slot:%d" % host.selected_profile
 		"my_preset": return "my_preset:%d" % my_preset
 		"my_room": return "my_room:%d" % my_room
+		"states": return "states:%s" % states_saving
 	return mode
 
 func remember() -> void:
@@ -371,6 +381,7 @@ func back() -> void:
 		"folder_path": restore(folder_path_origin)
 		"rename": mode="my_room" if rename_room>=0 else ("my_preset" if rename_preset>=0 else "slot"); render()
 		"my_preset", "my_room": mode="settings"; render()
+		"states": mode="pause"; render()
 		"music_browser": restore(music_origin)
 		"videos":
 			# Subfolders step back up towards the video folder before leaving it.
@@ -405,7 +416,7 @@ func open_my_room(index: int) -> void:
 ## and your saved rooms, changing the room at once.
 func room_choice(id: String) -> Dictionary:
 	var choices: Array = host.rooms.choices()
-	return {"id":id,"label":"Room","kind":"choice","choices":choices.map(func(pair): return pair[1]),"visual":true,
+	return {"id":id,"label":"Room","kind":"choice","choices":choices.map(func(pair): return pair[1]),"visual":true,"row_icon":"lamp",
 		"getter":func(): return maxi(0,choices.map(func(pair): return pair[0]).find(host.rooms.active())),
 		"setter":func(value):
 			host.rooms.apply(str(choices[int(value)][0]))
@@ -901,6 +912,7 @@ func game_item(path: String, label: String) -> Dictionary:
 	var played: int=host.play_history.last_played(path)
 	if played>0: parts.append("Played "+ago(played))
 	item["detail"]=" · ".join(parts)
+	with_box_art(item,path)
 	return item
 
 ## "just now", "5 minutes ago", "yesterday", "3 days ago" or a date.
@@ -928,6 +940,52 @@ func tile(item: Dictionary, icon: String, emphasis := "") -> Dictionary:
 	if not emphasis.is_empty(): item["emphasis"]=emphasis
 	return item
 
+## Shows a game's box art in its row, when the player's scrapes have some.
+func with_box_art(item: Dictionary, rom_path: String) -> Dictionary:
+	host.box_art.set_root(host.default_rom_dir)
+	if host.box_art.find(rom_path).is_empty(): return item
+	item["thumbnail_path"]=rom_path; item["thumbnail"]=host.box_art.texture(rom_path)
+	item["thumbnail_icon"]="cartridge"; item["thumbnail_size"]=Vector2(56,64)
+	return item
+
+func open_states(saving: bool) -> void:
+	if not host.emulator.loaded: return
+	remember(); clear_input(); states_saving=saving; mode="states"; render()
+
+## The save-state slots, each with its picture and when it was saved.
+func state_items() -> Array:
+	var result: Array=[]
+	for i in range(STATE_SLOTS):
+		var slot: int=i
+		var path: String=host.emulator.state_path(slot)
+		var saved: bool=FileAccess.file_exists(path)
+		var help: String=("Replaces this save with the game as it is now." if saved else "Saves the game as it is now.") if states_saving else ("Returns to this point. Progress since then is lost." if saved else "Nothing is saved here yet.")
+		var item: Dictionary=entry(catalog.action("state.%d" % slot,"Slot %d" % (slot+1),func(): choose_state(slot),help,not states_saving and not saved,""),"","","","Saved "+ago(host.emulator.state_stamp(path)) if saved else "Empty")
+		item["thumbnail_path"]=path; item["thumbnail_icon"]="save"; item["thumbnail_size"]=Vector2(64,48); item["thumbnail"]=state_picture(path)
+		result.append(item)
+	return result
+
+static func state_picture(path: String) -> Texture2D:
+	var details: Dictionary=preload("res://scripts/emulation/emulation_session.gd").state_details(path)
+	if not details.get("thumbnail") is PackedByteArray: return null
+	var image := Image.new()
+	return ImageTexture.create_from_image(image) if image.load_png_from_buffer(details.thumbnail)==OK else null
+
+func choose_state(slot: int) -> void:
+	var path: String=host.emulator.state_path(slot)
+	var game: String=host.emulator.rom_path.get_file().get_basename()
+	if states_saving:
+		if FileAccess.file_exists(path): ask("Overwrite slot %d?" % (slot+1),"Replace the save for %s from %s?" % [game,ago(host.emulator.state_stamp(path))],func(): perform_state_action(true,slot),path)
+		else: perform_state_action(true,slot)
+	elif FileAccess.file_exists(path):
+		ask("Load slot %d?" % (slot+1),"Return to %s as saved %s. Progress since then is lost." % [game,ago(host.emulator.state_stamp(path))],func(): perform_state_action(false,slot),path)
+
+## Step-by-step help for glasses on this platform.
+func glasses_guide() -> String:
+	if OS.get_name()=="Windows":
+		return "1. Switch the glasses to their side-by-side (SBS) mode before starting CRT XR.\n2. On your normal monitor, choose the glasses' display and select Open glasses view.\n3. Head tracking: VITURE glasses need the VITURE Windows SDK in a folder named sdk beside CRT-XR.exe. Other glasses can use a tool that sends OpenTrack, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo); choose Controls & XR → Tracking source → OpenTrack.\n4. R3 or R recentres the view. If turning goes the wrong way, invert that axis in Controls & XR.\n\n\"Fixed view\" means there is no tracking yet: the TV stays still. It is also how CRT XR plays on a normal screen."
+	return "1. Install Decky Loader and its XR Gaming plugin, and check XR Gaming recognises your glasses. CRT XR uses XR Gaming's tracking.\n2. Connect the glasses in mono and start CRT XR from Gaming Mode.\n3. At the prompt, release the button, press A, then press the glasses' SBS button. The view stays black while the glasses switch; the room appears when ready.\n4. R3 recentres the view. If turning goes the wrong way, invert that axis in Controls & XR.\n\nCRT XR recognises VITURE, XREAL, Rokid and RayNeo displays; only VITURE Pro 2 has been tested.\n\n\"Fixed view\" means there is no tracking yet: the TV stays still. Check XR Gaming sees the glasses, then use Controls & XR → Connect glasses."
+
 func toggle_favourite() -> void:
 	var row = selected_row()
 	if row==null or not row.item.has("rom_path"): return
@@ -939,10 +997,10 @@ func state_action(saving: bool) -> void:
 	if not saving:
 		if not FileAccess.file_exists(host.emulator.state_path()):
 			show_error("No manual save yet. Choose Save state first."); return
-		ask("Load manual save?","Current progress will be replaced. %s • Slot 0 • %s" % [host.emulator.rom_path.get_file().get_basename(),host.emulator.state_time(host.emulator.state_path())],func(): perform_state_action(false),host.emulator.state_path())
+		ask("Load manual save?","Current progress will be replaced. %s • Slot 1 • saved %s" % [host.emulator.rom_path.get_file().get_basename(),ago(host.emulator.state_stamp(host.emulator.state_path()))],func(): perform_state_action(false),host.emulator.state_path())
 		return
 	if FileAccess.file_exists(host.emulator.state_path()):
-		ask("Overwrite manual save?", "Replace the save for %s from %s?" % [host.emulator.rom_path.get_file().get_basename(),host.emulator.state_time(host.emulator.state_path())],func(): perform_state_action(true),host.emulator.state_path())
+		ask("Overwrite manual save?", "Replace the save for %s from %s?" % [host.emulator.rom_path.get_file().get_basename(),ago(host.emulator.state_stamp(host.emulator.state_path()))],func(): perform_state_action(true),host.emulator.state_path())
 	else: perform_state_action(true)
 
 func reset_game() -> void:
@@ -950,11 +1008,13 @@ func reset_game() -> void:
 		if host.emulator.reset_game(): host.close_settings(); host.show_notice(host.emulator.status)
 		else: show_error(host.emulator.status))
 
-func perform_state_action(saving: bool) -> void:
-	var succeeded: bool = host.emulator.save_state() if saving else host.emulator.load_state()
+func perform_state_action(saving: bool, slot := 0) -> void:
+	var succeeded: bool = host.emulator.save_state(slot) if saving else host.emulator.load_state(slot)
 	if succeeded:
-		notify(host.emulator.status)
 		host.show_notice(host.emulator.status)
+		# A loaded save is where you want to be: back to the game.
+		if not saving and mode=="states": host.close_settings(); return
+		notify(host.emulator.status)
 	else: show_error(host.emulator.status+". Check the save folder and available storage.")
 	refresh()
 
@@ -1023,8 +1083,11 @@ func music_actions() -> Array:
 		if music.duration()>0:
 			result.push_front({"id":"transport.seek","label":"Track position","kind":"seek","layout":"music_seek","getter":music.position_seconds,"setter":music.seek,"duration":music.duration,"progress":music.progress_text,"help":"Left/right seeks by 10 seconds. Drag or click the timeline to jump through a long mix."})
 	if not music.kind.is_empty() and (not music.player.playing or music.player.stream_paused):
-		result.append(catalog.action("transport.play","▶ Resume music",func(): music.toggle_playback(); refresh(),music.now_playing(),false,"Play"))
+		var resume_music: Dictionary=catalog.action("transport.play","Resume music",func(): music.toggle_playback(); refresh(),music.now_playing(),false,"")
+		resume_music["row_icon"]="play"
+		result.append(resume_music)
 	var browse := catalog.action("transport.choose","Music · Browse albums",open_music_browser,"Choose an album or MP3 from local storage or SD card.")
+	browse["row_icon"]="music"
 	if not result.is_empty() and music.player.playing and not music.player.stream_paused: browse.layout="music_link"
 	result.append(browse)
 	return result
@@ -1057,17 +1120,20 @@ func get_items() -> Array:
 					if not system.is_empty(): parts.append(library.Registry.SYSTEMS[system].name)
 					var played: int = h.play_history.last_played(h.last_game_path)
 					if played > 0: parts.append("played " + ago(played))
-					home.append(entry(catalog.action("home.continue",h.last_game_path.get_file().get_basename(),func(): select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",false,"›"),"","play","primary"," · ".join(parts)))
+					home.append(with_box_art(entry(catalog.action("home.continue",h.last_game_path.get_file().get_basename(),func(): select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",false,"›"),"","play","primary"," · ".join(parts)),h.last_game_path))
 					tiles.insert(0,tile(library_row,"cartridge"))
 				else:
 					home.append(entry(library_row,"","folder" if h.default_rom_dir.is_empty() else "cartridge","primary" if h.default_rom_dir.is_empty() else ""))
+					if h.default_rom_dir.is_empty(): tiles.insert(0,tile(catalog.action("home.glasses","Using glasses",func(): open_help("Using glasses",glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),"glasses"))
 				return home+music_actions()+[room_choice("pause.room")]+tiles
-			var pause_items: Array = [entry(catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded,""),"","play")]
+			var resume: Dictionary = entry(catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded,""),"","play")
+			resume["hero"] = true
+			var pause_items: Array = [resume]
 			pause_items.append_array(music_actions())
 			pause_items.append(room_choice("pause.room"))
 			pause_items.append_array([
-				tile(catalog.unavailable(catalog.action("save_state","Save state",func(): state_action(true),"Saves the current game to state slot 0.",not h.emulator.loaded),"Start a game first."),"save"),
-				tile(catalog.unavailable(catalog.action("load_state","Load state",func(): state_action(false),"Restores state slot 0 for the current game.",not h.emulator.loaded or not FileAccess.file_exists(h.emulator.state_path())),"No saved state yet."),"load"),
+				tile(catalog.unavailable(catalog.action("save_state","Save state",func(): open_states(true),"Choose one of %d slots for this game." % STATE_SLOTS,not h.emulator.loaded),"Start a game first."),"save"),
+				tile(catalog.unavailable(catalog.action("load_state","Load state",func(): open_states(false),"Return to one of this game's saves.",not h.emulator.loaded or range(STATE_SLOTS).all(func(slot): return not FileAccess.file_exists(h.emulator.state_path(slot)))),"No saved state yet."),"load"),
 				tile(catalog.action("reset_game","Reset game",reset_game,"Presses the console's reset button. Battery saves and save states are kept.",not h.emulator.loaded),"refresh"),
 				tile(catalog.action("screenshot","Screenshot",h.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),"camera"),
 				tile(catalog.action("games","Choose game",open_library,"Open your recent game, default ROM folder or SD card."),"cartridge"),
@@ -1120,6 +1186,7 @@ func get_items() -> Array:
 				var location: String = path
 				result.append(entry(catalog.action("volume:"+location,location.get_file(),func(): open_folder(location),location,false,"›"),"SD CARDS","sd"))
 			return result
+		"states": return state_items()
 		"my_room":
 			var saved: bool=h.rooms.saved(my_room)
 			return [catalog.unavailable(catalog.action("room_mine.apply","Use this room",func(): h.rooms.apply("mine.%d" % my_room); h.rebuild_settings(); refresh(); notify(h.rooms.name(my_room)+" in use"),"Changes the lighting, floor and props. The picture stays as it is.",not saved),"Nothing is saved here yet."),
@@ -1259,7 +1326,7 @@ func render() -> void:
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Your game library","library_tools":"Library locations","videos":"Videos","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else ""}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Your game library","library_tools":"Library locations","videos":"Videos","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if states_saving else "Load state"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm": confirm_panel.describe("",confirmation.detail,confirmation.get("preview",""))
 	rename_field.visible = mode in ["rename","radio_url","folder_path","video_search"]
@@ -1427,6 +1494,7 @@ func refresh_labels() -> void:
 		if category==1: subtitle.text=context+" · "+preset_caption()
 		elif category==2 and subsection==2: subtitle.text=host.music.status
 		else: subtitle.text="• marks a setting you've changed"
+	elif mode=="states": subtitle.text = host.emulator.rom_path.get_file().get_basename()+" · %d slots" % STATE_SLOTS
 	elif mode=="my_room": subtitle.text = "Room %d · %s" % [my_room+1,"✓ In use" if host.rooms.active()=="mine.%d" % my_room else ("Saved" if host.rooms.saved(my_room) else "Empty")]
 	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [my_preset+1,"✓ Active" if applied_preset()=="mine.%d" % my_preset else ("Saved" if my_preset_saved(my_preset) else "Empty")]
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
@@ -1977,7 +2045,8 @@ func style_rows() -> void:
 	for row in rows:
 		if row.item.get("layout","") in ["transport","card"]: continue
 		var compact: bool = row.item.get("compact",false)
-		row.title_label.add_theme_font_size_override("font_size",(23 if host.menu_large_text else 20) if compact else (27 if host.menu_large_text else 24))
+		var hero: bool=row.item.get("hero",false)
+		row.title_label.add_theme_font_size_override("font_size",(23 if host.menu_large_text else 20) if compact else ((32 if host.menu_large_text else 29) if hero else (27 if host.menu_large_text else 24)))
 		row.value_label.add_theme_font_size_override("font_size",(21 if host.menu_large_text else 18) if compact else (25 if host.menu_large_text else 22))
 		row.sync_content_height()
 		if host.menu_high_contrast:

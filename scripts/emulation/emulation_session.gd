@@ -363,7 +363,7 @@ func save_auto() -> bool:
 	return true
 
 func save_state(slot := 0) -> bool:
-	return save_to(state_path(slot),"Saved • Slot %d" % slot)
+	return save_to(state_path(slot),"Saved • Slot %d" % (slot + 1))
 
 func save_to(path: String, description: String) -> bool:
 	if not loaded: return false
@@ -379,7 +379,7 @@ func save_to(path: String, description: String) -> bool:
 		envelope["thumbnail"]=thumbnail.save_png_to_buffer()
 	if not write_bytes_atomic(path, var_to_bytes(envelope)):
 		return false
-	report("%s • %s • %s" % [description,rom_path.get_file().get_basename(),state_time(path)])
+	report("%s • %s" % [description,rom_path.get_file().get_basename()])
 	return true
 
 ## The console's reset button: the game restarts; battery saves and states are kept.
@@ -396,7 +396,7 @@ func reset_game() -> bool:
 	return true
 
 func load_state(slot := 0) -> bool:
-	return load_from(state_path(slot),"Loaded • Slot %d" % slot)
+	return load_from(state_path(slot),"Loaded • Slot %d" % (slot + 1))
 
 func load_auto() -> bool:
 	return load_from(auto_path_for(rom_path),"Continued automatic save")
@@ -415,7 +415,7 @@ func load_from(path: String, description: String) -> bool:
 	skip_delta = true
 	auto_saved=false
 	update_texture(true)
-	report("%s • %s • %s" % [description,rom_path.get_file().get_basename(),state_time(path)])
+	report("%s • %s" % [description,rom_path.get_file().get_basename()])
 	return true
 
 func stop() -> void:

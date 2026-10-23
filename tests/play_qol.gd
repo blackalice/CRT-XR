@@ -67,7 +67,7 @@ func run():
 	menu.back()
 	check(app.emulator.core.save_state()==current and app.emulator.paused,"Cancelled load preserves progress and pause")
 	menu.state_action(false); menu.confirmed()
-	check(menu.notification.contains("Slot 0") and menu.notification.contains("UTC"),"Successful load identifies slot and save time")
+	check(menu.notification.contains("Loaded • Slot 1"),"Successful load names the slot, counted from 1 like the slot page")
 	app.emulator.auto_saved=false
 	DirAccess.make_dir_absolute(ProjectSettings.globalize_path(app.emulator.auto_path_for(rom)+".tmp"))
 	app.request_exit()

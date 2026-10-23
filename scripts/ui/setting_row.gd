@@ -41,6 +41,7 @@ func configure(definition: Dictionary) -> void:
 	add_child(content_margin)
 	content=VBoxContainer.new(); content.add_theme_constant_override("separation",8)
 	content.mouse_filter=Control.MOUSE_FILTER_IGNORE; content_margin.add_child(content)
+	if item.get("hero",false): content.alignment=BoxContainer.ALIGNMENT_CENTER
 	var line := HBoxContainer.new(); line.add_theme_constant_override("separation",16)
 	line.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(line)
 	# The outline carries focus; do not reserve a competing arrow column.
@@ -48,11 +49,14 @@ func configure(definition: Dictionary) -> void:
 	var emphasis := str(item.get("emphasis",""))
 	var tint := MenuSkin.AMBER if emphasis=="primary" else (DANGER if emphasis=="danger" else MenuSkin.MUTED)
 	if item.has("thumbnail_path"):
-		var slot := Control.new(); slot.custom_minimum_size=Vector2(64,48); slot.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+		# Video frames fill a 4:3 slot; box art and saves fit theirs whole.
+		var slot_size: Vector2 = item.get("thumbnail_size",Vector2(64,48))
+		var slot := Control.new(); slot.custom_minimum_size=slot_size; slot.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 		slot.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(slot)
-		var placeholder := RowIcon.new("video",tint); placeholder.position=Vector2(17,9); slot.add_child(placeholder)
-		thumbnail=TextureRect.new(); thumbnail.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; thumbnail.stretch_mode=TextureRect.STRETCH_SCALE
-		thumbnail.size=Vector2(64,48); thumbnail.mouse_filter=Control.MOUSE_FILTER_IGNORE; slot.add_child(thumbnail)
+		var placeholder := RowIcon.new(str(item.get("thumbnail_icon","video")),tint); placeholder.position=(slot_size-Vector2(30,30))*0.5; slot.add_child(placeholder)
+		thumbnail=TextureRect.new(); thumbnail.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+		thumbnail.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED if item.has("thumbnail_size") else TextureRect.STRETCH_SCALE
+		thumbnail.size=slot_size; thumbnail.mouse_filter=Control.MOUSE_FILTER_IGNORE; slot.add_child(thumbnail)
 		set_thumbnail(item.get("thumbnail"))
 	elif item.has("row_icon"): line.add_child(RowIcon.new(str(item.row_icon),tint))
 	words=VBoxContainer.new(); words.add_theme_constant_override("separation",3)
@@ -127,7 +131,8 @@ func sync_content_height() -> void:
 	if content_margin==null or not content_margin.visible: return
 	# Read the containers' natural minimum, never their allocated height.
 	# This lets wrapped titles and descriptions grow the row without a size loop.
-	custom_minimum_size.y=maxf(44 if item.get("compact",false) else 56,content_margin.get_combined_minimum_size().y)
+	# A hero row (Resume) stands taller than the rows around it.
+	custom_minimum_size.y=maxf(44 if item.get("compact",false) else (72 if item.get("hero",false) else 56),content_margin.get_combined_minimum_size().y)
 
 # Shared: refresh() runs ten times a second per row while the menu is open.
 static var FILL_SELECTED := MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0)

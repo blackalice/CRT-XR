@@ -48,6 +48,8 @@ var picture_preset_signature := ""
 var room_preset_id := ""
 var room_preset_signature := ""
 var rooms = preload("res://scripts/ui/room_presets.gd").new()
+## Box art from the player's own scrapes, for game rows and Continue.
+var box_art: Node
 var menu_large_text := false
 var menu_high_contrast := false
 var menu_reduced_motion := false
@@ -407,6 +409,9 @@ func start_application() -> void:
 	menu_view.gui_embed_subwindows = true
 	add_child(menu_view)
 	rooms.host = self
+	box_art = preload("res://scripts/content/box_art.gd").new()
+	box_art.name = "BoxArt"
+	add_child(box_art)
 	build_settings()
 	music.restore_resume()
 	for panel in panels:

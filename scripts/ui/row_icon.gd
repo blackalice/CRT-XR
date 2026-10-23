@@ -3,6 +3,9 @@ extends Control
 ## action) before its text is read. Drawn locally like the console glyphs.
 var kind := "folder"
 var colour := Color("b2b4b7")
+## For the battery icon: charge left (0..1) and whether it is charging.
+var level := 1.0
+var charging := false
 
 func _init(icon_kind := "folder", tint := Color("b2b4b7")) -> void:
 	kind = icon_kind
@@ -101,3 +104,21 @@ func _draw() -> void:
 			draw_line(Vector2(15, 4), Vector2(15, 15), c, 3, true)
 		"stop":
 			block(Rect2(8, 8, 14, 14), c, 2)
+		"lamp":
+			# A lampshade on a stand, for the room.
+			draw_colored_polygon(PackedVector2Array([Vector2(9, 5), Vector2(21, 5), Vector2(25, 15), Vector2(5, 15)]), c)
+			draw_line(Vector2(15, 15), Vector2(15, 24), c, 2.5, true)
+			block(Rect2(9, 24, 12, 3), c, 1)
+		"battery":
+			# Outline, terminal and a fill for the charge left.
+			draw_rect(Rect2(2, 6, 23, 12), c, false, 2)
+			block(Rect2(25, 9.5, 3, 5), c, 1)
+			block(Rect2(4.5, 8.5, 18.0 * clampf(level, 0.0, 1.0), 7), c, 1)
+			if charging:
+				draw_colored_polygon(PackedVector2Array([Vector2(15, 7), Vector2(10, 13), Vector2(14, 13), Vector2(12, 18), Vector2(18, 11), Vector2(14, 11)]), Color("e4b86b"))
+		"glasses":
+			for x in [3.0, 16.0]:
+				draw_rect(Rect2(x, 10, 11, 9), c, false, 2.5)
+			draw_line(Vector2(14, 13), Vector2(16, 13), c, 2.5, true)
+			draw_line(Vector2(3, 12), Vector2(1, 9), c, 2, true)
+			draw_line(Vector2(27, 12), Vector2(29, 9), c, 2, true)
