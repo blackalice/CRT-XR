@@ -162,7 +162,6 @@ func pages(category: int) -> Array:
 					"unit":"m" if group=="Placement & fade" else ("percent" if key in ["warmth","shadow_strength","cabinet_ao_strength","cabinet_grain_strength","spill_strength"] else "x"),
 					"getter":func(): return w.get(key),"setter":func(value): h.set_room_value(key,value),"help":tips.get(key,"Moves the room lamp while the TV stays stationary.")})
 			groups.Lighting.append(toggle("room.shadows","Lamp shadows",w,"shadows",true,"Controls live shadows on unbaked objects. The TV and table keep their soft baked contact shading.",w.apply_room_settings))
-			groups.Lighting.append(action("room.presets","Lighting presets",func(): menu.open_room_presets(),"Choose Warm bedroom, Bright inspection or Dim XR."))
 			groups.Materials.push_front({"id":"room.floor_style","label":"Floor","kind":"choice","choices":w.FLOOR_STYLES,"default":h.Showcase.ROOM.floor_style,"visual":true,
 				"getter":func(): return w.floor_style,"setter":func(value): w.floor_style=value; w.apply_room_settings(),
 				"help":"90s confetti carpet, a plain wool carpet with natural wear, or wooden floorboards."})
@@ -171,7 +170,12 @@ func pages(category: int) -> Array:
 				toggle("room.clock_24_hour","24-hour clock",w,"clock_24_hour",false,"Shows the clock radio and VCR time in 24-hour format.",w.apply_room_settings),
 				toggle("room.vcr","VCR",w,"show_vcr",true,"A video recorder on the shelf under the TV. Its display shows the time, or the tape counter while a video plays.",w.apply_room_settings),
 				toggle("room.game_boxes","Game boxes",w,"show_game_boxes",true,"A small stack of game boxes beside the TV.",w.apply_room_settings)]
-			return [page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Props",props),page("Placement & fade",groups["Placement & fade"])]
+			var presets: Array = [menu.room_choice("room.preset")]
+			for i in range(h.rooms.COUNT):
+				var index: int = i
+				var state := "✓ Active" if h.rooms.active()=="mine.%d" % index else ("Saved" if h.rooms.saved(index) else "Empty")
+				presets.append(action("room.mine.%d" % index,h.rooms.name(index),func(): menu.open_my_room(index),"Your own room: apply it, save the current room here, rename or delete.",false,state))
+			return [page("Presets",presets),page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Props",props),page("Placement & fade",groups["Placement & fade"])]
 
 		4:
 			var glasses_source: String = "VITURE glasses" if OS.get_name() == "Windows" else "XR Gaming"
@@ -255,6 +259,7 @@ func pages(category: int) -> Array:
 				if id.is_empty(): menu.restore_custom_picture()
 				elif id.begins_with("mine."): menu.apply_my_preset(int(id.get_slice(".",1)))
 				else: menu.apply_preset(id),"help":"Choose a look. Custom brings back your own tuned picture; save your own on Picture → Presets.","visual":true})
+			quick.append(menu.room_choice("quick.room"))
 			quick.append(number("quick.game_volume","Game volume",h.music,"game_volume",0,1,.05,1,"percent","Independent game volume.",h.music.apply,false))
 			quick.append(number("quick.music_volume","Music volume",h.music,"volume",0,1,.05,.45,"percent","Independent music volume.",h.music.apply,false))
 			return [page("Everyday",quick)]

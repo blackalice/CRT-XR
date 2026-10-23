@@ -122,6 +122,8 @@ func run():
 	check(state.title=="Last game unavailable" and state.detail.contains("Reconnect"),"Missing library paths retain a reconnect instruction")
 	state = Startup.describe(true,"","",true,false,"XR: stale tracking",true,Vector2i(3840,1080),true)
 	check(state.title=="Tracking unavailable" and state.detail.contains("held steady") and state.detail.contains("Retry"),"Lost tracking explains the steady view and retry path")
+	state = Startup.describe(false,"","",true,false,"",false,Vector2i(1280,800),false)
+	check(state.title=="Fixed view" and state.detail.contains("Connect glasses"),"Without glasses in mono, a still view is described calmly, not as a fault")
 	state = Startup.describe(true,"","",true,true,"LIVE",true,Vector2i(1920,1080),true)
 	check(state.title=="Check SBS resolution" and state.detail.contains("Native"),"Gaming Mode resolution mismatch gets explicit Native-resolution guidance")
 	var defaults := ConfigFile.new()

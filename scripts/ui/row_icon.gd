@@ -70,3 +70,34 @@ func _draw() -> void:
 			draw_line(Vector2(18.5, 18.5), Vector2(25, 25), c, 3.5, true)
 		"page":
 			draw_polyline(PackedVector2Array([Vector2(11, 7), Vector2(19, 15), Vector2(11, 23)]), c, 3, true)
+		"play":
+			draw_colored_polygon(PackedVector2Array([Vector2(9, 6), Vector2(25, 15), Vector2(9, 24)]), c)
+		"save", "load":
+			# A floppy disk; loading adds an arrow out of it.
+			block(Rect2(5, 5, 20, 20), c, 3)
+			block(Rect2(10, 5, 10, 7), ink, 1)
+			block(Rect2(9, 16, 12, 9), ink, 1)
+			if kind == "load":
+				draw_line(Vector2(15, 24), Vector2(15, 18), c, 2, true)
+				draw_polyline(PackedVector2Array([Vector2(12, 21), Vector2(15, 18), Vector2(18, 21)]), c, 2, true)
+		"camera":
+			block(Rect2(4, 9, 22, 15), c, 3)
+			block(Rect2(10, 6, 9, 5), c, 2)
+			draw_circle(Vector2(15, 16.5), 5, ink)
+			draw_circle(Vector2(15, 16.5), 2.5, c)
+		"gear":
+			for i in range(8):
+				var angle := TAU * i / 8.0
+				draw_line(Vector2(15, 15) + Vector2.from_angle(angle) * 6, Vector2(15, 15) + Vector2.from_angle(angle) * 11, c, 4, true)
+			draw_circle(Vector2(15, 15), 7.5, c)
+			draw_circle(Vector2(15, 15), 3, ink)
+		"sliders":
+			for row in range(3):
+				var y := 8.0 + row * 7.0
+				draw_line(Vector2(5, y), Vector2(25, y), c, 2, true)
+				draw_circle(Vector2([11.0, 19.0, 14.0][row], y), 3.2, c)
+		"exit":
+			draw_arc(Vector2(15, 16), 9, -PI * 0.3, PI * 1.3, 24, c, 3, true)
+			draw_line(Vector2(15, 4), Vector2(15, 15), c, 3, true)
+		"stop":
+			block(Rect2(8, 8, 14, 14), c, 2)

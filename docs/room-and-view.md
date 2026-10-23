@@ -78,7 +78,7 @@ not loaded into generative image tools or visually inspected by the assistant.
 | Game | ROM browser, last game, pause, states, test signal, input-delay preview |
 | View | Distance, screen height, stick binding and speed, scale, stereo, fullscreen, IPD, convergence, FOV, soft edges, smoothing |
 | Picture | Scanlines, phosphor mask and glow, glass reflection, screen curvature |
-| Room | Lighting presets, ambient/lamp/fill energy, warmth, lamp position, floor style and brightness, props (clock radio, 24-hour clock, VCR, game boxes), fade distances, shadows |
+| Room | Room presets (built-in moods and three of your own), ambient/lamp/fill energy, warmth, lamp position, floor style and brightness, props (clock radio, 24-hour clock, VCR, game boxes), fade distances, shadows |
 | Setup | Tracking provider, axis inversion, diagnostic overlay |
 
 ## Lighting and furniture
@@ -86,7 +86,11 @@ not loaded into generative image tools or visually inspected by the assistant.
 The default Deck Showcase uses a dark room with stronger screen spill.
 Warm bedroom remains available with more ambient/front fill. Bright inspection
 makes the cabinet easier to inspect; Dim XR keeps a
-small pool of light around it. Sliders update immediately. Save settings & close
+small pool of light around it. These moods change lighting only. **Room → Presets** also
+keeps three rooms of your own (lighting, shadows, floor and props): save the current room
+into a slot, rename or delete it. The **Room** switch in the pause menus and Quick settings
+moves through Custom, the moods and your rooms with left/right; Custom brings back the room
+you tuned yourself. Sliders update immediately. Save settings & close
 persists changes. Fade start/end always retain at least a 0.5 m transition.
 
 Room's expanded light controls include **Shadow darkness** (default 0.60;

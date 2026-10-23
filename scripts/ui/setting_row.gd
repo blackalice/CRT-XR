@@ -151,7 +151,8 @@ func refresh() -> void:
 			range_max_label.text=format_limit(float(item.max))
 	if unavailable_label!=null:
 		unavailable_label.text=str(item.get("disabled_reason","")) if disabled else ""
-		unavailable_label.visible=not unavailable_label.text.is_empty()
+		# Tiles stay one line; greyed out says enough beside its neighbour.
+		unavailable_label.visible=not unavailable_label.text.is_empty() and item.get("layout","")!="tile"
 	tooltip_text=str(item.get("disabled_reason",item.get("help","")))
 	title_label.modulate=Color("85878b") if disabled else Color.WHITE
 	value_label.modulate=title_label.modulate

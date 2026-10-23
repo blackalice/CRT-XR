@@ -18,6 +18,8 @@ func _ready() -> void:
 
 func describe(title: String, detail: String, state_path := "") -> void:
 	title_label.text = title
+	# A confirmation's question is the menu heading; the card holds the detail.
+	title_label.visible = not title.is_empty()
 	detail_label.text = detail
 
 	thumbnail.hide()

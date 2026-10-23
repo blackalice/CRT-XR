@@ -27,8 +27,22 @@ func run():
             if e is InputEventJoypadButton or e is InputEventJoypadMotion:InputMap.action_erase_event(action,e)
     app=load("res://scenes/main.tscn").instantiate();root.add_child(app);app.use_tracking(false);await settle()
     var m=app.menu
-    check(m.items.map(func(i):return i.id)==["home.library","home.quick","transport.choose","home.settings","home.exit"],"Startup has its own home menu")
+    check(m.items.map(func(i):return i.id)==["home.library","transport.choose","pause.room","home.quick","home.settings","home.exit"],"Startup has its own home menu")
     check(m.selected_id=="home.library","No-game startup hides Continue and selects Library")
+    # Tiles: a two-column grid after the full-width rows.
+    var tiled=m.items.filter(func(i):return i.get("layout","")=="tile").map(func(i):return i.id)
+    check(tiled==["home.quick","home.settings","home.exit"],"Quick settings, Settings and Exit are tiles: %s"%[tiled])
+    m.select("pause.room",false);m.navigate(Vector2i(0,1))
+    check(m.selected_id=="home.quick","Down from a full-width row enters the grid at its first tile")
+    m.navigate(Vector2i(1,0))
+    check(m.selected_id=="home.settings","Right moves to the tile beside it")
+    m.navigate(Vector2i(1,0))
+    check(m.selected_id=="home.settings","Right stops at the edge of the grid")
+    m.navigate(Vector2i(0,1))
+    check(m.selected_id=="home.exit","Down from the right column falls back to the tile below on the left (%s)"%m.selected_id)
+    m.navigate(Vector2i(0,-1));m.navigate(Vector2i(0,-1))
+    check(m.selected_id=="pause.room","Up out of the grid returns to the row above it (%s)"%m.selected_id)
+    m.select("home.library",false)
     m.open_settings();page(0,0);m.select("view.distance",false);app.distance=3.0
     await button(JOY_BUTTON_DPAD_RIGHT)
     check(is_equal_approx(app.distance,3.1) and m.category==0,"Right adjusts immediately")

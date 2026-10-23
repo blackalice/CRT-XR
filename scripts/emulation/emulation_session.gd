@@ -347,6 +347,10 @@ static func state_details(path: String) -> Dictionary:
 	if not value is Dictionary or value.get("format")!=1 or not value.get("state") is PackedByteArray: return {}
 	return value
 
+## When a state was saved (Unix time), or 0 when unknown.
+static func state_stamp(path: String) -> int:
+	return int(state_details(path).get("saved_at", FileAccess.get_modified_time(path)))
+
 static func state_time(path: String) -> String:
 	var value := state_details(path)
 	var stamp := int(value.get("saved_at",FileAccess.get_modified_time(path)))

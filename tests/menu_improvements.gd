@@ -30,7 +30,7 @@ func run():
 	check(m.sidebar.get_child(1)==m.sidebar_buttons[7],"Quick settings is first in the sidebar")
 	m.switch_category(1); check(m.category==0,"Next category from Quick settings follows sidebar order")
 	m.switch_category(-1); check(m.category==7,"Previous category from View returns to Quick settings")
-	check(m.items.map(func(i):return i.id)==["quick.view.distance","quick.view.height_offset","quick.view.recenter","quick.preset","quick.game_volume","quick.music_volume"],"Quick settings exposes all six everyday controls")
+	check(m.items.map(func(i):return i.id)==["quick.view.distance","quick.view.height_offset","quick.view.recenter","quick.preset","quick.room","quick.game_volume","quick.music_volume"],"Quick settings exposes all seven everyday controls")
 	m.select("quick.view.distance",false); await settle()
 	var distance=m.selected_row(); var track_width: float=distance.track.size.x
 	m.select("quick.view.height_offset",false); await settle()
@@ -112,6 +112,6 @@ func run():
 	m.back(); check(FileAccess.get_sha256(app.emulator.state_path())==hash,"Cancelling overwrite preserves the save")
 	m.state_action(false); check(m.confirm_panel.thumbnail.visible,"Load shows the existing save thumbnail")
 	m.back(); app.emulator.auto_saved=false; app.emulator.save_auto(); m.select_file(app.emulator.rom_path); await settle()
-	check(m.mode=="launch" and m.column.get_children().any(func(child):return child is PanelContainer and child.get("thumbnail")!=null),"Continue offers an automatic-save preview")
+	check(m.mode=="launch" and m.column.find_children("*","PanelContainer",true,false).any(func(child):return child.get("thumbnail")!=null),"Continue offers an automatic-save preview")
 	app.free(); await settle()
 	print("MENU IMPROVEMENTS COMPLETE: ",failures," failures"); quit(1 if failures else 0)

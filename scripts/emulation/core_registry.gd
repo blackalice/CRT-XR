@@ -9,13 +9,13 @@ const SYSTEMS := {
 	"gamegear": {"name":"Game Gear", "core":"genesis_plus_gx", "extensions":["gg"], "aspect":10.0/9.0},
 	"gameboy": {"name":"Game Boy / Color", "core":"gambatte", "extensions":["gb","gbc"], "aspect":10.0/9.0},
 	"gba": {"name":"Game Boy Advance", "core":"mgba", "extensions":["gba"], "aspect":240.0/160.0},
-	"pcengine": {"name":"PC Engine / TurboGrafx-16", "core":"mednafen_pce_fast", "extensions":["pce"], "aspect":4.0/3.0},
+	"pcengine": {"name":"PC Engine / TurboGrafx-16", "short":"PC Engine", "core":"mednafen_pce_fast", "extensions":["pce"], "aspect":4.0/3.0},
 	"segacd": {"name":"Sega CD / Mega-CD", "core":"genesis_plus_gx", "extensions":[], "aspect":4.0/3.0,
 		"bios_any":["bios_CD_U.bin","bios_CD_E.bin","bios_CD_J.bin"]},
 	"atari2600": {"name":"Atari 2600", "core":"stella", "extensions":["a26"], "aspect":4.0/3.0},
 	"atarilynx": {"name":"Atari Lynx", "core":"mednafen_lynx", "extensions":["lynx"], "aspect":160.0/102.0,
 		"bios_any":["lynxboot.img"]},
-	"ngpc": {"name":"Neo Geo Pocket / Color", "core":"mednafen_ngp", "extensions":["ngp","ngpc","ngc"], "aspect":16.0/15.0},
+	"ngpc": {"name":"Neo Geo Pocket / Color", "short":"Neo Geo Pocket", "core":"mednafen_ngp", "extensions":["ngp","ngpc","ngc"], "aspect":16.0/15.0},
 	"vectrex": {"name":"Vectrex", "core":"vecx", "extensions":["vec"], "aspect":4.0/3.0}
 }
 

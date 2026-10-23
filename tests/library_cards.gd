@@ -41,7 +41,7 @@ func run():
 	await press(menu,JOY_BUTTON_DPAD_LEFT)
 	check(menu.selected_id=="library.system.megadrive","Left selects the adjacent console")
 	await press(menu,JOY_BUTTON_A)
-	check(menu.mode=="games" and menu.items.size()==2 and menu.rows[1].item.get("layout")=="game" and menu.items[0].id=="games.jump","A opens only that console's games with descriptive rows")
+	check(menu.mode=="games" and menu.items.size()==1 and menu.rows[0].item.get("layout")=="game","A opens only that console's games with descriptive rows; a short list skips Jump to letter")
 	await press(menu,JOY_BUTTON_B)
 	check(menu.selected_id=="library.system.megadrive","Back restores the exact console card")
 	menu.select("library.locations"); await press(menu,JOY_BUTTON_A)

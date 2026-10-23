@@ -23,6 +23,10 @@ var install_rendered := 0
 const SECTION_HERE := "THIS FOLDER"
 const SECTION_INSIDE := "CONTENTS"
 const SECTION_PLACES := "GO TO"
+## Lists this long or longer offer Jump to letter.
+const JUMP_MINIMUM := 20
+## Confirmation answers shown in the danger colour.
+const DESTRUCTIVE := ["Exit","Delete","Forget","Remove","Reset","Overwrite","Stop","Replace"]
 var location_bar: PanelContainer
 const CATEGORIES := ["View","Picture","Audio","Room","Controls & XR","Saved setups","About & Help","Quick settings","Videos"]
 var host
@@ -111,6 +115,9 @@ const MY_PRESET_COUNT := 3
 var picture_undo: ConfigFile
 var my_preset := 0
 var rename_preset := -1
+## Your own room being looked at or renamed (-1 when none).
+var my_room := -1
+var rename_room := -1
 var help_title := ""
 var help_copy := ""
 var help_origin: Dictionary = {}
@@ -299,6 +306,7 @@ func state_key() -> String:
 		"games": return "games:%s:%s:%d" % [host.default_rom_dir,library_system,game_page]
 		"slot": return "slot:%d" % host.selected_profile
 		"my_preset": return "my_preset:%d" % my_preset
+		"my_room": return "my_room:%d" % my_room
 	return mode
 
 func remember() -> void:
@@ -359,10 +367,10 @@ func back() -> void:
 		"games", "recent", "favourites": mode="library"; render()
 		"alphabet": mode=alphabet_origin; render()
 		"launch": restore(launch_origin)
-		"slot", "room_presets": mode="settings"; render()
+		"slot": mode="settings"; render()
 		"folder_path": restore(folder_path_origin)
-		"rename": mode="my_preset" if rename_preset>=0 else "slot"; render()
-		"my_preset": mode="settings"; render()
+		"rename": mode="my_room" if rename_room>=0 else ("my_preset" if rename_preset>=0 else "slot"); render()
+		"my_preset", "my_room": mode="settings"; render()
 		"music_browser": restore(music_origin)
 		"videos":
 			# Subfolders step back up towards the video folder before leaving it.
@@ -390,8 +398,32 @@ func confirmed() -> void:
 	restore(return_state)
 	callback.call()
 
-func open_room_presets() -> void:
-	remember(); clear_input(); mode="room_presets"; render()
+func open_my_room(index: int) -> void:
+	remember(); clear_input(); my_room=index; mode="my_room"; render()
+
+## The room quick switch: left/right moves through Custom, the built-in moods
+## and your saved rooms, changing the room at once.
+func room_choice(id: String) -> Dictionary:
+	var choices: Array = host.rooms.choices()
+	return {"id":id,"label":"Room","kind":"choice","choices":choices.map(func(pair): return pair[1]),"visual":true,
+		"getter":func(): return maxi(0,choices.map(func(pair): return pair[0]).find(host.rooms.active())),
+		"setter":func(value):
+			host.rooms.apply(str(choices[int(value)][0]))
+			host.rebuild_settings(),
+		"help":"Warm bedroom, Bright inspection, Dim XR or a room you saved under Room → Presets. Custom is your own tuned room."}
+
+func save_my_room(index: int) -> void:
+	var title: String=host.rooms.name(index)
+	var callback := func():
+		if host.rooms.save(index)!=OK: show_error("Room could not be saved. Check free space and user-folder permissions."); return
+		refresh(); notify("Saved · "+title)
+	if host.rooms.saved(index): ask("Overwrite this room?","Replace “%s” with the current room?" % title,callback)
+	else: callback.call()
+
+func delete_my_room(index: int) -> void:
+	var title: String=host.rooms.name(index)
+	ask("Delete this room?","Remove “%s”? The room you're in does not change." % title,func():
+		host.rooms.delete(index); mode="settings"; refresh(); notify("Deleted · "+title))
 
 func open_slot(slot: int) -> void:
 	remember(); clear_input(); host.selected_profile=slot; mode="slot"; render()
@@ -410,6 +442,10 @@ func setup_name() -> String:
 	return str(config.get_value("meta","name",host.PROFILE_NAMES[host.selected_profile]))
 
 func save_draft_name() -> void:
+	if rename_room>=0:
+		if host.rooms.rename(rename_room,rename_field.text)!=OK: show_error("Room could not be renamed. Check user-folder permissions."); return
+		var title: String=host.rooms.name(rename_room)
+		rename_room=-1; mode="my_room"; clear_input(); render(); notify("Renamed · "+title); return
 	if rename_preset>=0: rename_my_preset(rename_preset,rename_field.text); return
 	draft_names[host.selected_profile] = rename_field.text.strip_edges().left(32)
 	mode="slot"; clear_input(); render()
@@ -459,7 +495,7 @@ func library_items() -> Array:
 		var id: String=system
 		var count: int=rom_index.games.get(id,[]).size()
 		if count==0: continue
-		result.append(card(catalog.action("library.system."+id,library.Registry.SYSTEMS[id].name,func(): open_system(id),"Open all %s cartridges in your library. Folders for other consoles stay out of this view." % library.Registry.SYSTEMS[id].name,false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
+		result.append(card(catalog.action("library.system."+id,library.Registry.SYSTEMS[id].get("short",library.Registry.SYSTEMS[id].name),func(): open_system(id),"Open all %s cartridges in your library. Folders for other consoles stay out of this view." % library.Registry.SYSTEMS[id].name,false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
 	if videos_shown(): result.append(videos_card("YOUR CONSOLES"))
 	if h.default_rom_dir.is_empty():
 		result.push_front(card(catalog.action("library.setup","Set up your ROM library",open_library_tools,"Choose the folder containing snes, nes, megadrive and your other systems. Subfolders are included automatically."),"START HERE","locations",MenuSkin.AMBER,"LIBRARY SETUP"))
@@ -507,7 +543,7 @@ func library_tool_items() -> Array:
 		result.append(entry(catalog.action("library.default","Choose your ROM folder",browse_folders,"Browse to the main roms folder (the one containing snes, nes, megadrive and so on), then choose Use this folder.",false,"›"),rom,"folder","primary","Pick it once; every supported console inside is found for you."))
 	else:
 		var games: int=rom_index.total()
-		result.append(entry(catalog.action("library.default","Change ROM folder",browse_folders,"Pick a different main ROM folder. Your files stay where they are.",false,"›"),rom,"folder","",h.default_rom_dir+(" · "+count_caption(games,"game") if games>0 else "")))
+		result.append(entry(catalog.action("library.default","Change ROM folder",browse_folders,"Pick a different main ROM folder. Your files stay where they are.",false,"›"),rom,"folder","",short_path(h.default_rom_dir)+(" · "+count_caption(games,"game") if games>0 else "")))
 		result.append(entry(catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the ROM folder for added or removed games.",false,""),rom,"refresh"))
 		result.append(entry(catalog.action("library.clear","Forget ROM folder",func(): set_default(""),"Forget the folder without changing any files.",false,""),rom,"clear","danger"))
 	var videos := "VIDEOS · OPTIONAL"
@@ -517,7 +553,7 @@ func library_tool_items() -> Array:
 			result.append(entry(catalog.action("library.video_folder","Choose a video folder",open_video_folder_picker,"Optional. Pick a folder of MP4 or MKV files to watch on the TV; they appear after your consoles.",false,"›"),videos,"video","","MP4 and MKV files, shown after your consoles"))
 		else:
 			var count: int=h.video_library.count(h.video_dir)
-			result.append(entry(catalog.action("library.video_folder","Change video folder",open_video_folder_picker,"Pick a different video folder. Your files stay where they are.",false,"›"),videos,"video","",h.video_dir+" · "+count_caption(count,"video")))
+			result.append(entry(catalog.action("library.video_folder","Change video folder",open_video_folder_picker,"Pick a different video folder. Your files stay where they are.",false,"›"),videos,"video","",short_path(h.video_dir)+" · "+count_caption(count,"video")))
 			result.append(entry(catalog.action("library.video_clear","Remove video folder",func(): set_video_folder(""),"Hides Videos from the library. Your files are not changed.",false,""),videos,"clear","danger"))
 		if FfmpegInstaller.installed():
 			result.append(entry(catalog.action("library.ffmpeg_remove","Remove downloaded video libraries",func():
@@ -623,7 +659,7 @@ func video_items() -> Array:
 			row["action"]=func(): play_video(path,seconds)
 			row["help"]="Carry on from "+VideoLibrary.clock(seconds)+"."
 			result.append(row)
-		result.append(entry(catalog.action("videos.search","Search videos…",open_video_search,"Find a video anywhere in your video folder. With a keyboard, Ctrl+F searches as you type.",false,""),"FIND","search","","",true))
+		if input_kind!="keyboard": result.append(entry(catalog.action("videos.search","Search videos…",open_video_search,"Find a video anywhere in your video folder. With a keyboard, Ctrl+F searches as you type.",false,""),"FIND","search","","",true))
 	if video_view_dir!=host.video_dir: result.append_array(up_entry("videos.up",video_view_dir,open_videos))
 	var entries: Array=host.video_library.list(video_view_dir)
 	video_page=clampi(video_page,0,maxi(0,(entries.size()-1)/VIDEOS_PER_PAGE))
@@ -699,8 +735,8 @@ func video_pause_items() -> Array:
 		"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); video.set_tape(h.video_tape); h.save_library(),
 		"help":"Plays videos as if from a VHS tape, with noise bars when you fast-forward or rewind. Applies to every video; also in Videos → VCR."}
 	var items: Array=[resume,timeline,
-		catalog.action("video.restart","Start from the beginning",func(): video.seek_to(0.0); h.was_paused_before_menu=false; h.close_settings(),"Plays this video again from the start."),
-		style_row,tape_row]
+		style_row,tape_row,room_choice("pause.room")]
+	var restart := tile(catalog.action("video.restart","Start over",func(): video.seek_to(0.0); h.was_paused_before_menu=false; h.close_settings(),"Plays this video again from the start."),"refresh")
 	var subtitles: PackedStringArray=video.subtitle_names()
 	if not subtitles.is_empty():
 		items.append({"id":"video.subtitles","label":"Subtitles","kind":"choice","choices":["Off"]+Array(subtitles),"default":0,
@@ -710,12 +746,12 @@ func video_pause_items() -> Array:
 		items.append({"id":"video.audio","label":"Audio track","kind":"choice","choices":Array(tracks),"default":0,
 			"getter":func(): return int(video.info.get("audio_track",0)),"setter":func(value): video.select_audio_track(int(value)),
 			"help":"Language or commentary track. X changes it while watching."})
-	items.append_array([catalog.action("video.choose","Choose video",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else ""),"Pick another video from your video folder."),
-		catalog.action("video.stop","Stop video",func(): h.stop_video(); open_pause(),"Saves your place and returns the TV to its test signal."),
-		catalog.action("games","Game library",open_library,"Recent, Favourites, consoles and videos."),
-		catalog.action("quick","Quick settings",func(): category=7; subsection=0; open_settings(),"Everyday picture, placement and volume controls."),
-		catalog.action("settings","Settings",open_settings,"Adjust the view, picture, room, controls and saved setups."),
-		catalog.action("exit","Exit CRT XR",func(): ask("Exit CRT XR?","Your place in this video and your settings will be saved.",h.request_exit),"Close the application.")])
+	items.append_array([restart,tile(catalog.action("video.choose","Choose video",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else ""),"Pick another video from your video folder."),"video"),
+		tile(catalog.action("video.stop","Stop video",func(): h.stop_video(); open_pause(),"Saves your place and returns the TV to its test signal."),"stop"),
+		tile(catalog.action("games","Game library",open_library,"Recent, Favourites, consoles and videos."),"cartridge"),
+		tile(catalog.action("quick","Quick settings",func(): category=7; subsection=0; open_settings(),"Everyday picture, placement and volume controls."),"sliders"),
+		tile(catalog.action("settings","Settings",open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear"),
+		tile(catalog.action("exit","Exit CRT XR",func(): ask("Exit CRT XR?","Your place in this video and your settings will be saved.",h.request_exit),"Close the application."),"exit","danger")])
 	return items
 
 ## Folder picker for the video folder: folders only, with the videos inside shown as a count.
@@ -862,7 +898,34 @@ func game_item(path: String, label: String) -> Dictionary:
 		parts.append(library.Registry.SYSTEMS[system].name if not system.is_empty() else "Game")
 	if not FileAccess.file_exists(path): parts.append("Storage unavailable")
 	elif RomIndex.Folders.system(folder).is_empty(): parts.append(folder)
+	var played: int=host.play_history.last_played(path)
+	if played>0: parts.append("Played "+ago(played))
 	item["detail"]=" · ".join(parts)
+	return item
+
+## "just now", "5 minutes ago", "yesterday", "3 days ago" or a date.
+static func ago(unix: int) -> String:
+	var seconds := int(Time.get_unix_time_from_system()) - unix
+	if seconds < 60: return "just now"
+	if seconds < 3600: return "%d minute%s ago" % [seconds / 60, "" if seconds / 60 == 1 else "s"]
+	if seconds < 86400: return "%d hour%s ago" % [seconds / 3600, "" if seconds / 3600 == 1 else "s"]
+	var days := seconds / 86400
+	if days == 1: return "yesterday"
+	if days < 14: return "%d days ago" % days
+	var date := Time.get_date_dict_from_unix_time(unix)
+	return "%d %s" % [date.day, ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][date.month - 1]]
+
+## The end of a long folder path, so it fits on one line: "…/snes/rpgs".
+static func short_path(path: String, keep := 2) -> String:
+	var parts := path.replace("\\", "/").split("/", false)
+	if parts.size() <= keep + 1: return path
+	return "…/" + "/".join(parts.slice(parts.size() - keep))
+
+## A compact action in a two-column grid of tiles. Actions you go to sit in
+## tiles; rows you adjust with left/right, and panels, stay full width.
+func tile(item: Dictionary, icon: String, emphasis := "") -> Dictionary:
+	item.merge({"layout":"tile","row_icon":icon,"compact":true,"value":""}, true)
+	if not emphasis.is_empty(): item["emphasis"]=emphasis
 	return item
 
 func toggle_favourite() -> void:
@@ -937,6 +1000,8 @@ func music_browser_items() -> Array:
 			else: show_error(host.music.status),"Play from this track, then continue through the folder. "+str(tag.album),false,"›"),SECTION_INSIDE,"music")
 		if not str(tag.artist).is_empty(): row["layout"]="game"; row["detail"]=str(tag.artist)
 		entries.append(row)
+	if entries.is_empty():
+		entries.append(entry(catalog.unavailable(catalog.action("music.empty","No music in this folder",func(): pass,"",true,""),"Open a folder of MP3 albums, or choose a place under Go to."),SECTION_INSIDE,"music"))
 	music_page=clampi(music_page,0,maxi(0,(entries.size()-1)/50))
 	if music_page>0: result.append(entry(catalog.action("music.previous","Previous page",func(): music_page-=1; clear_input(); render(),"",false,""),SECTION_INSIDE,"up"))
 	result.append_array(entries.slice(music_page*50,(music_page+1)*50))
@@ -979,33 +1044,43 @@ func get_items() -> Array:
 		"pause":
 			if h.video.loaded: return video_pause_items()
 			if not h.emulator.loaded:
-				var home: Array = [catalog.action("home.continue","Continue last game",func(): select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",h.last_game_path.is_empty() or not FileAccess.file_exists(h.last_game_path),h.last_game_path.get_file().get_basename() if not h.last_game_path.is_empty() else "No recent game"),
-					catalog.action("home.library","Game library",open_library,"Choose your main ROM folder or SD card. Your supported games appear automatically." if h.default_rom_dir.is_empty() else "Recent, Favourites and supported consoles."),
-					catalog.action("home.settings","Settings",open_settings,"Adjust the view, picture, audio and room."),
-					catalog.action("home.exit","Exit",func(): ask("Exit CRT XR?","Your settings will be saved.",h.request_exit),"Close CRT XR.")]
-				home.insert(2,catalog.action("home.quick","Quick settings",func(): category=7; subsection=0; open_settings(),"TV position, recenter, picture preset and volumes."))
-				if h.default_rom_dir.is_empty(): home[1].label="Set up library"
-				home=home.slice(0,3)+music_actions()+home.slice(3)
-				if home[0].disabled: home.remove_at(0)
-				return home
-			var pause_items: Array = [
-			catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded),
-			catalog.action("games","Choose game",open_library,"Open your recent game, default ROM folder or SD card."),
-			catalog.action("save_state","Save state",func(): state_action(true),"Saves the current game to state slot 0.",not h.emulator.loaded),
-			catalog.action("load_state","Load state",func(): state_action(false),"Restores state slot 0 for the current game.",not h.emulator.loaded or not FileAccess.file_exists(h.emulator.state_path())),
-			catalog.action("reset_game","Reset game",reset_game,"Presses the console's reset button. Battery saves and save states are kept.",not h.emulator.loaded),
-			catalog.action("screenshot","Screenshot",h.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),
-			catalog.action("settings","Settings",open_settings,"Adjust the view, picture, room, controls and saved setups."),
-			catalog.action("exit","Exit CRT XR",func(): ask("Exit CRT XR?","An automatic resume point, settings and cartridge SRAM will be saved.",h.request_exit),"Close the application.")]
-			pause_items.insert(2,catalog.action("quick","Quick settings",func(): category=7; subsection=0; open_settings(),"Everyday picture, placement and volume controls."))
-			pause_items=pause_items.slice(0,-1)+music_actions()+pause_items.slice(-1)
+				var home: Array = []
+				var tiles: Array = [
+					tile(catalog.action("home.quick","Quick settings",func(): category=7; subsection=0; open_settings(),"TV position, recenter, picture preset and volumes."),"sliders"),
+					tile(catalog.action("home.settings","Settings",open_settings,"Adjust the view, picture, audio and room."),"gear"),
+					tile(catalog.action("home.exit","Exit",func(): ask("Exit CRT XR?","Your settings will be saved.",h.request_exit),"Close CRT XR."),"exit","danger")]
+				var library_row: Dictionary = catalog.action("home.library","Set up library" if h.default_rom_dir.is_empty() else "Game library",open_library,"Choose your main ROM folder or SD card. Your supported games appear automatically." if h.default_rom_dir.is_empty() else "Recent, Favourites and supported consoles.",false,"›")
+				if not h.last_game_path.is_empty() and FileAccess.file_exists(h.last_game_path):
+					# The last game leads, with what it is and when it was played.
+					var parts: Array[String] = ["Continue"]
+					var system: String = library.Registry.identify(h.last_game_path)
+					if not system.is_empty(): parts.append(library.Registry.SYSTEMS[system].name)
+					var played: int = h.play_history.last_played(h.last_game_path)
+					if played > 0: parts.append("played " + ago(played))
+					home.append(entry(catalog.action("home.continue",h.last_game_path.get_file().get_basename(),func(): select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",false,"›"),"","play","primary"," · ".join(parts)))
+					tiles.insert(0,tile(library_row,"cartridge"))
+				else:
+					home.append(entry(library_row,"","folder" if h.default_rom_dir.is_empty() else "cartridge","primary" if h.default_rom_dir.is_empty() else ""))
+				return home+music_actions()+[room_choice("pause.room")]+tiles
+			var pause_items: Array = [entry(catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded,""),"","play")]
+			pause_items.append_array(music_actions())
+			pause_items.append(room_choice("pause.room"))
+			pause_items.append_array([
+				tile(catalog.unavailable(catalog.action("save_state","Save state",func(): state_action(true),"Saves the current game to state slot 0.",not h.emulator.loaded),"Start a game first."),"save"),
+				tile(catalog.unavailable(catalog.action("load_state","Load state",func(): state_action(false),"Restores state slot 0 for the current game.",not h.emulator.loaded or not FileAccess.file_exists(h.emulator.state_path())),"No saved state yet."),"load"),
+				tile(catalog.action("reset_game","Reset game",reset_game,"Presses the console's reset button. Battery saves and save states are kept.",not h.emulator.loaded),"refresh"),
+				tile(catalog.action("screenshot","Screenshot",h.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),"camera"),
+				tile(catalog.action("games","Choose game",open_library,"Open your recent game, default ROM folder or SD card."),"cartridge"),
+				tile(catalog.action("quick","Quick settings",func(): category=7; subsection=0; open_settings(),"Everyday picture, placement and volume controls."),"sliders"),
+				tile(catalog.action("settings","Settings",open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear"),
+				tile(catalog.action("exit","Exit CRT XR",func(): ask("Exit CRT XR?","An automatic resume point, settings and cartridge SRAM will be saved.",h.request_exit),"Close the application."),"exit","danger")])
 			return pause_items
 		"launch": return [
-			catalog.action("launch.continue","Continue",func(): launch_game(launch_path,true),launch_path.get_file()+" • Automatic save • "+h.emulator.state_time(h.emulator.auto_path_for(launch_path))),
+			catalog.action("launch.continue","Continue",func(): launch_game(launch_path,true),launch_path.get_file().get_basename()+" · resume point saved "+ago(h.emulator.state_stamp(h.emulator.auto_path_for(launch_path)))),
 			catalog.action("launch.fresh","Start fresh",func(): launch_game(launch_path,false),"Start from the title screen. Cartridge battery saves and manual states are kept."),
 			catalog.action("launch.cancel","Back",back,"Return without starting this game.")]
 		"recent", "favourites":
-			var result: Array = [catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",history_paths().is_empty())]
+			var result: Array = [catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",history_paths().is_empty())] if history_paths().size() > JUMP_MINIMUM else []
 			var paths: Array = history_paths()
 			for path in paths: result.append(game_item(path,path.get_file().get_basename()))
 			return result
@@ -1014,7 +1089,7 @@ func get_items() -> Array:
 		"library": return library_items()
 		"library_tools": return library_tool_items()
 		"games":
-			var result: Array = [catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",game_entries().is_empty())]
+			var result: Array = [catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",game_entries().is_empty())] if game_entries().size() > JUMP_MINIMUM else []
 			var games: Array = game_entries()
 			for game in games.slice(game_page*GAMES_PER_PAGE,(game_page+1)*GAMES_PER_PAGE):
 				var path: String = game.path
@@ -1045,12 +1120,12 @@ func get_items() -> Array:
 				var location: String = path
 				result.append(entry(catalog.action("volume:"+location,location.get_file(),func(): open_folder(location),location,false,"›"),"SD CARDS","sd"))
 			return result
-		"room_presets":
-			var result: Array = []
-			for pair in [["warm","Warm bedroom"],["bright","Bright inspection"],["dim","Dim XR"]]:
-				var preset: String = pair[0]
-				result.append(catalog.action("lighting."+preset,pair[1],func(): h.room_preset(preset); notify("Lighting preset applied"),"Changes room illumination and distance fade. Picture settings stay as they are."))
-			return result
+		"my_room":
+			var saved: bool=h.rooms.saved(my_room)
+			return [catalog.unavailable(catalog.action("room_mine.apply","Use this room",func(): h.rooms.apply("mine.%d" % my_room); h.rebuild_settings(); refresh(); notify(h.rooms.name(my_room)+" in use"),"Changes the lighting, floor and props. The picture stays as it is.",not saved),"Nothing is saved here yet."),
+				catalog.action("room_mine.save","Save current room here",func(): save_my_room(my_room),"Stores the current lighting, shadows, floor and props in this room."),
+				catalog.unavailable(catalog.action("room_mine.rename","Rename",func(): rename_room=my_room; rename_preset=-1; mode="rename"; entry_initialized=false; clear_input(); render(); focus_entry(),"Use the on-screen keys or a physical keyboard.",not saved),"Save a room here first."),
+				catalog.unavailable(catalog.action("room_mine.delete","Delete",func(): delete_my_room(my_room),"Removes this room. The room you're in does not change.",not saved),"Nothing is saved here yet.")]
 		"slot":
 			var saved := FileAccess.file_exists(h.profile_path()) or FileAccess.file_exists(h.profile_path()+".bak")
 			return [catalog.action("slot.save","Save current setup",save_setup,"Stores current room, view and picture in this slot."),
@@ -1066,7 +1141,10 @@ func get_items() -> Array:
 				catalog.unavailable(catalog.action("mine.delete","Delete",func(): delete_my_preset(my_preset),"Removes this preset. Your current picture does not change.",not saved),"Nothing is saved here yet.")]
 		"rename": return text_keys()+[catalog.action("rename.save","Use this name",save_draft_name,"Renames this preset now." if rename_preset>=0 else "The new name is stored when you save the setup."),catalog.action("rename.cancel","Cancel",back,"Leave the name unchanged.")]
 		# Dialog titles lead with their verb ("Overwrite this setup?"), which names the button.
-		"confirm": return [catalog.action("cancel","Cancel",back,"Keep things as they are.",false,""),catalog.action("confirm",str(confirmation.title).get_slice(" ",0),confirmed,confirmation.detail,false,"")]
+		"confirm":
+			var answer: Dictionary = catalog.action("confirm",str(confirmation.title).get_slice(" ",0).trim_suffix("?"),confirmed,confirmation.detail,false,"")
+			if answer.label in DESTRUCTIVE: answer["emphasis"]="danger"
+			return [catalog.action("cancel","Cancel",back,"Keep things as they are.",false,""),answer]
 	return []
 
 func render() -> void:
@@ -1086,6 +1164,9 @@ func render() -> void:
 	var transport_grid: HBoxContainer
 	var group_row := -1
 	var group_index := 0
+	var tiles: GridContainer
+	var tile_items: Array = items.filter(func(entry): return entry.get("layout","")=="tile")
+	var tile_number := 0
 	for item in items:
 		var parent: Container=column
 		if item.get("layout","") in ["transport","music_seek","music_link","video_resume","video_seek"]:
@@ -1096,11 +1177,7 @@ func render() -> void:
 				column.add_child(panel)
 				music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",4); panel.add_child(music_layout)
 				var badge := Label.new(); badge.text="NOW PLAYING" if watching else "MUSIC PLAYER"; badge.add_theme_font_size_override("font_size",16); MenuSkin.weigh(badge,MenuSkin.BOLD); badge.add_theme_color_override("font_color",MenuSkin.AMBER); music_layout.add_child(badge)
-				if watching:
-					var title := Label.new(); title.text=host.video.path.get_file().get_basename(); title.add_theme_font_size_override("font_size",20); MenuSkin.weigh(title,MenuSkin.SEMIBOLD)
-					title.autowrap_mode=TextServer.AUTOWRAP_OFF; title.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-					music_layout.add_child(title)
-				elif not host.music.kind.is_empty():
+				if not watching and not host.music.kind.is_empty():
 					music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
 					music_heading.autowrap_mode=TextServer.AUTOWRAP_OFF; music_heading.max_lines_visible=2; music_heading.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 					music_layout.add_child(music_heading)
@@ -1118,6 +1195,11 @@ func render() -> void:
 				grid=GridContainer.new();grid.columns=2;grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);column.add_child(grid)
 			parent=grid
 			item["nav_row"]=group_row+group_index/2; item["nav_col"]=group_index%2; group_index+=1
+		if item.get("layout","")=="tile":
+			if tiles==null:
+				tiles=GridContainer.new(); tiles.columns=2; tiles.add_theme_constant_override("h_separation",8); tiles.add_theme_constant_override("v_separation",6); column.add_child(tiles)
+			parent=tiles
+			item["tile_index"]=tile_number; item["tile_count"]=tile_items.size(); tile_number+=1
 		if item.get("layout","") in ["letter","key"]:
 			if grid==null:
 				grid=GridContainer.new(); grid.columns=10 if item.get("layout","")=="key" else 6; grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); column.add_child(grid)
@@ -1129,11 +1211,12 @@ func render() -> void:
 			section=item.section
 			var header := Label.new(); header.text=section; header.add_theme_font_size_override("font_size",16); MenuSkin.weigh(header,MenuSkin.BOLD); header.add_theme_color_override("font_color",MenuSkin.MUTED)
 			column.add_child(header)
-		if item.id in ["exit","home.exit"]:
+		if item.id in ["exit","home.exit"] and item.get("layout","")!="tile":
 			var divider := HSeparator.new()
 			column.add_child(divider)
 		var row = MusicIcon.new() if item.get("layout","")=="transport" else (MusicTimeline.new() if item.kind=="seek" else (LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))))
 		parent.add_child(row); row.configure(item)
+		if item.get("layout","")=="tile": row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		row.selected.connect(select)
 		row.adjust_requested.connect(func(id,delta):
 			select(id,false)
@@ -1147,7 +1230,7 @@ func render() -> void:
 		rows.append(row)
 	sidebar.visible = mode=="settings" and not preview
 	sidebar_panel.visible = sidebar.visible
-	section_bar.visible = mode=="settings" and not preview
+	section_bar.visible = mode=="settings" and not preview and catalog.pages(category).size() > 1
 	section_rule.visible = section_bar.visible
 	for i in range(sidebar_buttons.size()):
 		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("3b3329") if i==category else Color.TRANSPARENT,i==category))
@@ -1176,15 +1259,16 @@ func render() -> void:
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"CRT XR" if host.emulator.loaded or host.video.loaded else "Welcome to CRT XR","library":"Your game library","library_tools":"Library locations","videos":"Videos","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Your game library","library_tools":"Library locations","videos":"Videos","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else ""}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
-	if mode=="confirm": confirm_panel.describe(confirmation.title,confirmation.detail,confirmation.get("preview",""))
+	if mode=="confirm": confirm_panel.describe("",confirmation.detail,confirmation.get("preview",""))
 	rename_field.visible = mode in ["rename","radio_url","folder_path","video_search"]
 	rename_field.max_length=2048 if mode in ["radio_url","folder_path"] else (64 if mode=="video_search" else 32)
 	rename_field.placeholder_text="D:/roms or //server/share/roms" if mode=="folder_path" else "Direct MP3 stream URL" if mode=="radio_url" else ("Part of a video's name" if mode=="video_search" else "Name · Use on-screen keys or type")
 	if mode=="rename" and not entry_initialized:
-		rename_field.text = my_preset_name(rename_preset) if rename_preset>=0 else str(draft_names.get(host.selected_profile,setup_name())); entry_initialized=true
+		rename_field.text = host.rooms.name(rename_room) if rename_room>=0 else (my_preset_name(rename_preset) if rename_preset>=0 else str(draft_names.get(host.selected_profile,setup_name()))); entry_initialized=true
 	if mode=="rename" and rename_preset>=0: heading.text="Name your preset"
+	if mode=="rename" and rename_room>=0: heading.text="Name your room"
 	if mode=="my_preset": heading.text=my_preset_name(my_preset)
 	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites","videos"] and not preview
 	search_field.placeholder_text="Search videos…  (Ctrl+F)" if mode=="videos" else "Search games…  (Ctrl+F)"
@@ -1216,7 +1300,16 @@ func render() -> void:
 	select(selected_id,false)
 	style_rows()
 	if mode=="launch":
-		var preview_panel := Confirmation.new(); column.add_child(preview_panel); preview_panel.describe("Automatic resume",host.emulator.state_time(host.emulator.auto_path_for(launch_path)),host.emulator.auto_path_for(launch_path))
+		var hero := HBoxContainer.new(); hero.add_theme_constant_override("separation",16)
+		column.add_child(hero)
+		var preview_panel := Confirmation.new(); preview_panel.custom_minimum_size.x=400; hero.add_child(preview_panel)
+		var auto: String=host.emulator.auto_path_for(launch_path)
+		preview_panel.describe("Where you left off","Saved "+ago(host.emulator.state_stamp(auto)),auto)
+		preview_panel.thumbnail.custom_minimum_size=Vector2(368,276)
+		var actions := VBoxContainer.new(); actions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; actions.alignment=BoxContainer.ALIGNMENT_CENTER
+		actions.add_theme_constant_override("separation",8); hero.add_child(actions)
+		for row in rows: column.remove_child(row); actions.add_child(row)
+		select(selected_id,false)
 	if mode=="help":
 		var article := Label.new(); article.text=help_copy; article.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; article.add_theme_font_size_override("font_size",24 if host.menu_large_text else 22); column.add_child(article)
 	if mode=="library" and not rom_index.scanning: scan_preferred_id=""
@@ -1310,7 +1403,9 @@ func refresh_labels() -> void:
 	elif host.video.loaded: context="Editing the global picture · games, videos and test signal"
 	else: context="Editing the global picture · games and test signal"
 	if mode=="pause":
-		subtitle.text = host.video.path.get_file() if host.video.loaded else (host.emulator.rom_path.get_file() if host.emulator.loaded else status_title)
+		if host.video.loaded: subtitle.text = "Video · paused" if host.video.paused else "Video"
+		elif host.emulator.loaded: subtitle.text = library.Registry.SYSTEMS.get(host.emulator.system_id, {}).get("name", "Game") + " · paused"
+		else: subtitle.text = status_title
 		subtitle.tooltip_text=status_detail
 	elif mode=="help": subtitle.text="Game library" if help_title=="Full game title" else "CRT XR · Help"
 	elif mode=="music_browser": subtitle.text=music_dir+" · Page %d" % [music_page+1]
@@ -1330,8 +1425,9 @@ func refresh_labels() -> void:
 	elif mode=="library_tools": subtitle.text = "Where CRT XR finds your games and videos · Your files stay where they are"
 	elif mode=="settings":
 		if category==1: subtitle.text=context+" · "+preset_caption()
-		elif category==2: subtitle.text=["Game volume and TV sound", "Lower game audio while music plays", host.music.status, "Place music in the room"][subsection]
-		else: subtitle.text="Global settings · Changed options show •"
+		elif category==2 and subsection==2: subtitle.text=host.music.status
+		else: subtitle.text="• marks a setting you've changed"
+	elif mode=="my_room": subtitle.text = "Room %d · %s" % [my_room+1,"✓ In use" if host.rooms.active()=="mine.%d" % my_room else ("Saved" if host.rooms.saved(my_room) else "Empty")]
 	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [my_preset+1,"✓ Active" if applied_preset()=="mine.%d" % my_preset else ("Saved" if my_preset_saved(my_preset) else "Empty")]
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
 	else: subtitle.text = ""
@@ -1357,6 +1453,12 @@ func preview_available() -> bool:
 func count_caption(count: int, noun: String) -> String:
 	return "%d %s%s" % [count,noun,"" if count==1 else "s"]
 
+## The pause menu's heading: the game or video by name, or a welcome.
+func playing_title() -> String:
+	if host.video.loaded: return host.video.path.get_file().get_basename()
+	if host.emulator.loaded: return host.emulator.rom_path.get_file().get_basename()
+	return "Welcome to CRT XR"
+
 func refresh_hints(row) -> void:
 	var pad := input_kind=="controller"
 	hints.controller=pad
@@ -1376,6 +1478,7 @@ func refresh_hints(row) -> void:
 		if row!=null:
 			if row.item.kind=="toggle": parts.append("←→ Change")
 			elif row.item.kind!="action": parts.append("←→ Adjust")
+			elif str(row.item.get("value",""))=="Apply": parts.append("A Apply" if pad else "Enter Apply")
 			else: parts.append(open)
 			if row.item.has("default"): parts.append("Y Reset")
 		if preview: parts.append("B Settings" if pad else "Backspace Settings")
@@ -1427,6 +1530,24 @@ func navigate(next: Vector2i) -> void:
 	for i in range(rows.size()):
 		if rows[i].item.id==selected_id: index=i
 	if index<0: return
+	if rows[index].item.get("layout","")=="tile":
+		var position: int=rows[index].item.tile_index
+		var count: int=rows[index].item.tile_count
+		var first: int=index-position
+		if next.x!=0:
+			var beside := position+next.x
+			if beside>=0 and beside<count and beside/2==position/2 and not rows[first+beside].disabled: select(rows[first+beside].item.id)
+			return
+		if next.y!=0:
+			# Step a grid row at a time; prefer the same column, else the other.
+			var line := position/2+next.y
+			while line>=0 and line*2<count:
+				for option in [line*2+position%2, line*2+1-position%2]:
+					if option<count and not rows[first+option].disabled:
+						select(rows[first+option].item.id); return
+				line+=next.y
+			# Past the grid: carry on from its first or last tile.
+			index=first if next.y<0 else first+count-1
 	if next.y!=0:
 		var candidate := index+next.y
 		if rows[index].item.get("layout","")=="transport":
@@ -1479,7 +1600,7 @@ func adjust(delta: int) -> void:
 	if row!=null and row.item.kind=="seek":
 		row.item.setter.call(float(row.item.getter.call())+10*delta); row.refresh(); return
 	if row==null or row.disabled: return
-	if mode!="settings" and not (mode=="pause" and str(row.item.id).begins_with("video.")): return
+	if mode!="settings" and not (mode=="pause" and (str(row.item.id).begins_with("video.") or row.item.id=="pause.room")): return
 	var item: Dictionary = row.item
 	match item.kind:
 		"number": item.setter.call(clampf(snappedf(float(item.getter.call())+delta*float(item.step),float(item.step)),item.min,item.max))

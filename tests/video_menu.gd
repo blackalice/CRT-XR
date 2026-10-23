@@ -143,7 +143,7 @@ func run() -> void:
 
 	activate("library.videos")
 	var labels: Array = menu.items.filter(func(entry): return entry.get("section", "") == menu.SECTION_INSIDE).map(func(entry): return entry.label)
-	check(menu.mode == "videos" and labels == ["Season 1", "Episode 2", "Episode 10", "long_43_25"] and "videos.search" in ids(), "The video list, with search: %s" % [labels])
+	check(menu.mode == "videos" and labels == ["Season 1", "Episode 2", "Episode 10", "long_43_25"] and ("videos.search" in ids()) == (menu.input_kind != "keyboard"), "The video list, with one search: a row for a controller, the field for a keyboard: %s" % [labels])
 	var thumbnail_row = null
 	for i in range(400):
 		for row in menu.rows:
@@ -161,7 +161,7 @@ func run() -> void:
 	menu.run_video_search()
 	check(str(item("video:" + season.path_join("Pilot.mp4")).get("detail", "")).contains("Season 1"), "Search reaches subfolders and says where each video is")
 	activate("videos.clear_search")
-	check(menu.search_query.is_empty() and "videos.search" in ids(), "Clearing the search returns to the folder")
+	check(menu.search_query.is_empty() and ("videos.search" in ids()) == (menu.input_kind != "keyboard"), "Clearing the search returns to the folder")
 	check(item("video:" + long).detail == "1:00", "Each video shows its length (%s)" % item("video:" + long).get("detail"))
 	activate("videos.folder:" + season)
 	check(ids() == ["videos.up", "video:" + season.path_join("Pilot.mp4")], "Subfolders open in place with a way back up")

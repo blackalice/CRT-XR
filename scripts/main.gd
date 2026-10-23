@@ -44,6 +44,10 @@ var video_bars: Array = []
 var notice_time := 0.0
 var picture_preset_id := ""
 var picture_preset_signature := ""
+## The room preset in use and the room it set, as for picture presets.
+var room_preset_id := ""
+var room_preset_signature := ""
+var rooms = preload("res://scripts/ui/room_presets.gd").new()
 var menu_large_text := false
 var menu_high_contrast := false
 var menu_reduced_motion := false
@@ -57,6 +61,8 @@ var menu_haptics := false
 ## How strong those ticks are, 10% to 100% of the motors' range.
 var haptic_strength := 0.8
 var menu_depth_view: Node
+## The settings as the menu opened, so closing it only says "Saved" after a change.
+var settings_on_open := ""
 var emulator: Node
 var video: Node
 var music: Node
@@ -400,6 +406,7 @@ func start_application() -> void:
 	menu_view.disable_3d = true
 	menu_view.gui_embed_subwindows = true
 	add_child(menu_view)
+	rooms.host = self
 	build_settings()
 	music.restore_resume()
 	for panel in panels:
@@ -443,6 +450,8 @@ func apply_settings(config: ConfigFile) -> void:
 	SettingsStore.migrate_view_fov(config)
 	picture_preset_id=str(config.get_value("menu","picture_preset_id",""))
 	picture_preset_signature=str(config.get_value("menu","picture_preset_signature",""))
+	room_preset_id=str(config.get_value("menu","room_preset_id",""))
+	room_preset_signature=str(config.get_value("menu","room_preset_signature",""))
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,bool(config.get_value("accessibility",key,false)))
 	menu_depth = bool(config.get_value("accessibility","menu_depth",true))
 	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
@@ -771,6 +780,7 @@ func toggle_settings() -> void:
 		video.set_paused(true, true)
 		remember_video_position()
 	emulator.gamepad.set_menu_active(true)
+	settings_on_open = capture_settings().encode_to_text()
 	settings_panel.show()
 	menu.open_pause()
 	refresh_startup_status()
@@ -781,7 +791,8 @@ func close_settings() -> void:
 		menu.show_error("Settings could not be saved. Check free space and user-folder permissions. Your changes are still here.")
 		return
 	menu.error_label.hide()
-	show_notice("Saved")
+	if not settings_on_open.is_empty() and capture_settings().encode_to_text() != settings_on_open: show_notice("Settings saved")
+	settings_on_open = ""
 	clear_menu_gamepad()
 	settings_panel.hide()
 	emulator.gamepad.set_menu_active(false)
@@ -1223,6 +1234,8 @@ func capture_settings() -> ConfigFile:
 	config.set_value("tracking", "source", tracking_source)
 	config.set_value("menu","picture_preset_id",picture_preset_id)
 	config.set_value("menu","picture_preset_signature",picture_preset_signature)
+	config.set_value("menu","room_preset_id",room_preset_id)
+	config.set_value("menu","room_preset_signature",room_preset_signature)
 	config.set_value("view","desktop_fov",desktop_fov)
 	config.set_value("view","xr_fov",xr_fov)
 	for key in music.DEFAULTS: config.set_value("music",key,music.get(key))
