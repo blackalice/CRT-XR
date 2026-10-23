@@ -47,6 +47,7 @@ const OSD_PLAY := "PLAY ►"
 const TAPES := ["Off", "VHS", "Worn VHS"]
 var tape := 0
 var search_time := 0.0
+var search_direction := 1
 var tape_fields := 0.0
 const OSD_FLASH_SECONDS := 3.0
 const OSD_SEEK_SECONDS := 1.5
@@ -154,19 +155,24 @@ func field_rate() -> float:
 	var fps := float(info.get("fps", 30.0))
 	return 50.0 if absf(fps - 25.0) < 0.5 or absf(fps - 50.0) < 0.5 else 60.0
 
-func set_paused(value: bool) -> void:
-	if loaded and value != paused:
-		osd_steady = "PAUSE" if value else ""
-		if value: osd_time = 0.0
+## `quiet` pauses for the menu: no clunk and no PAUSE on the picture, since
+## the menu itself shows the video is paused.
+func set_paused(value: bool, quiet := false) -> void:
+	var changed := loaded and value != paused
+	if changed:
+		osd_steady = "PAUSE" if value and not quiet else ""
+		if value or quiet: osd_time = 0.0
 		else: flash_osd(OSD_PLAY, OSD_FLASH_SECONDS)
-		mechanism.emit("pause" if value else "resume")
+		if not quiet: mechanism.emit("pause" if value else "resume")
 	paused = value
+	if changed: update_osd()
 	player.stream_paused = paused or priming > 0.0
 	if loaded: report(("Paused / " if paused else "Playing / ") + path.get_file())
 
 func seek_by(seconds: float) -> void:
 	if loaded: flash_osd("FF ►►" if seconds > 0.0 else "REW ◄◄", OSD_SEEK_SECONDS)
 	search_time = OSD_SEEK_SECONDS
+	search_direction = 1 if seconds > 0.0 else -1
 	if loaded: mechanism.emit("search")
 	subtitle_layer.tape.set_shader_parameter("search_direction", 1.0 if seconds > 0.0 else -1.0)
 	seek_to(clock + seconds)
@@ -258,6 +264,13 @@ func cues_at(time: float) -> Array:
 	if subtitle_choice < 0: return []
 	if not subtitle_options[subtitle_choice].has("file"): return decoder.subtitles_at(time)
 	return file_cues.filter(func(cue): return cue.start <= time and time < cue.end)
+
+## What the VCR's display shows beside the counter: 0 nothing, 1 play,
+## 2 pause, 3 fast-forward, 4 rewind.
+func transport() -> int:
+	if not loaded or ended: return 0
+	if search_time > 0.0: return 3 if search_direction > 0 else 4
+	return 2 if paused else 1
 
 ## True while the picture plays through a tape, or text is drawn over it.
 func layered() -> bool:

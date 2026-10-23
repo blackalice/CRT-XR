@@ -121,11 +121,21 @@ func run() -> void:
 	var at := cards.find("library.videos")
 	check(at > 0 and str(cards[at - 1]).begins_with("library.system.") and cards[at + 1] == "library.locations", "Videos follows the consoles: %s" % [cards])
 	check(item("library.videos").value == "4 videos" and item("library.videos").glyph == "videos", "The card counts the videos")
-	var pages: Array = menu.catalog.pages(1)
-	var video_page: Array = pages.filter(func(page): return page.title == "Video")
-	var video_rows: Array = video_page[0].rows.map(func(row): return row.id) if video_page.size() == 1 else []
-	check(["video.default_style", "video.lines", "video.interlace", "video.subtitles_default", "video.tape", "video.vcr_sounds", "video.osd", "video.hardware", "video.own_picture", "video.reset_picture"].all(func(id): return id in video_rows) and not "video.picture_note" in video_rows,
-		"Picture settings gain a Video page with shape, lines, interlacing, subtitles, decoding and the video picture: %s" % [video_rows])
+	# Videos has its own category, after Room: Picture, VCR and Playback tabs.
+	check(not menu.catalog.pages(1).any(func(page): return page.title == "Video"), "Picture no longer carries the video settings")
+	var tabs: Dictionary = {}
+	for page in menu.catalog.pages(8): tabs[page.title] = page.rows.map(func(row): return row.id)
+	check(tabs.keys() == ["Picture", "VCR", "Playback"]
+		and tabs.Picture == ["video.own_picture", "video.reset_picture", "video.default_style", "video.lines", "video.interlace"]
+		and tabs.VCR == ["video.tape", "video.osd", "video.vcr_sounds"]
+		and tabs.Playback == ["video.subtitles_default", "video.hardware", "video.folder"], "Videos settings: %s" % [tabs])
+	check(menu.sidebar_buttons[8].get_index() == menu.sidebar_buttons[3].get_index() + 1, "Videos sits after Room in the sidebar")
+	menu.open_settings(); menu.category = 3; menu.render()
+	menu.switch_category(1)
+	check(menu.category == 8, "Next category from Room is Videos")
+	menu.switch_category(1)
+	check(menu.category == 4, "and then Controls & XR")
+	menu.open_library()
 	if OS.get_name() == "Windows":
 		var setup: Array = menu.video_setup_items("VIDEOS · OPTIONAL")
 		check(setup.size() == 1 and setup[0].id == "library.ffmpeg_setup" and setup[0].emphasis == "primary" and str(setup[0].detail).contains("MB"),
@@ -221,6 +231,12 @@ func run() -> void:
 	menu.adjust(1)
 	check(app.video.style == 2 and app.video_library.style(long) == 2, "Left/right changes the picture shape from the menu and remembers it")
 	menu.adjust(-1)
+	# Opening the menu pauses quietly: no clunk and no PAUSE on the picture.
+	var clunks: Array = []
+	app.video.mechanism.connect(func(event): clunks.append(event))
+	app.close_settings()
+	app.toggle_settings()
+	check(app.video.paused and app.video.osd_text() != "PAUSE" and clunks.is_empty(), "Opening the menu pauses the video without the VCR's pause (%s, %s)" % [app.video.osd_text(), clunks])
 	# Picture pages say plainly which picture they change.
 	menu.category = 1; menu.subsection = 0; menu.open_settings()
 	check(menu.subtitle.text.begins_with("Editing the video picture · all videos"), "Picture settings say they are editing the video picture (%s)" % menu.subtitle.text)

@@ -24,7 +24,7 @@ const SECTION_HERE := "THIS FOLDER"
 const SECTION_INSIDE := "CONTENTS"
 const SECTION_PLACES := "GO TO"
 var location_bar: PanelContainer
-const CATEGORIES := ["View","Picture","Audio","Room","Controls & XR","Saved setups","About & Help","Quick settings"]
+const CATEGORIES := ["View","Picture","Audio","Room","Controls & XR","Saved setups","About & Help","Quick settings","Videos"]
 var host
 var catalog := Catalog.new()
 var library := Library.new()
@@ -175,7 +175,7 @@ func _ready() -> void:
 	body.add_child(sidebar_panel)
 	sidebar = VBoxContainer.new()
 	sidebar.custom_minimum_size.x = 170
-	sidebar.add_theme_constant_override("separation",4)
+	sidebar.add_theme_constant_override("separation",2)
 	sidebar_panel.add_child(sidebar)
 	# A header lined up with the category names, with its shortcut chip on the right.
 	var category_header := HBoxContainer.new(); category_header.custom_minimum_size.y=32
@@ -192,7 +192,7 @@ func _ready() -> void:
 		var button := Button.new()
 		button.text = CATEGORIES[i]
 		button.add_theme_font_size_override("font_size",20)
-		button.custom_minimum_size.y = 36
+		button.custom_minimum_size.y = 32
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		for style in ["normal","pressed"]: button.add_theme_stylebox_override(style,sidebar_box(Color.TRANSPARENT))
 		button.add_theme_stylebox_override("hover",sidebar_box(Color("2a2e34")))
@@ -201,6 +201,7 @@ func _ready() -> void:
 		sidebar.add_child(button); sidebar_buttons.append(button)
 	# Keep category IDs stable while putting the everyday route first.
 	sidebar.move_child(sidebar_buttons[7],1)
+	sidebar.move_child(sidebar_buttons[8],sidebar_buttons[3].get_index()+1)
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation",8)
@@ -271,6 +272,8 @@ func _ready() -> void:
 func sidebar_box(colour: Color, chosen := false) -> StyleBoxFlat:
 	var style := MenuSkin.box(colour,MenuSkin.AMBER,0,6)
 	style.content_margin_left=12; style.content_margin_right=12
+	# Nine categories must fit beside a page with three lines of help.
+	style.content_margin_top=3; style.content_margin_bottom=3
 	if chosen: style.border_width_left=3; style.content_margin_left=11
 	return style
 
@@ -323,7 +326,10 @@ func switch_category(delta: int) -> void:
 	if mode!="settings" or preview: return
 	remember(); clear_input()
 	sections[category] = subsection
-	category = posmod(category+delta,CATEGORIES.size())
+	# Step through the sidebar as it reads, not through the category ids.
+	var order: Array = sidebar_buttons.duplicate()
+	order.sort_custom(func(a, b): return a.get_index() < b.get_index())
+	category = sidebar_buttons.find(order[posmod(order.find(sidebar_buttons[category])+delta,order.size())])
 	subsection = int(sections.get(category,0))
 	render()
 
@@ -691,7 +697,7 @@ func video_pause_items() -> Array:
 		"help":"Left/right moves 10 seconds and repeats while held; drag or click the timeline to jump. The TV follows as you scrub."}
 	var tape_row := {"id":"video.tape","label":"Tape look","kind":"choice","choices":VideoSession.TAPES,"default":0,
 		"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); video.set_tape(h.video_tape); h.save_library(),
-		"help":"Plays videos as if from a VHS tape, with noise bars when you fast-forward or rewind. Applies to every video; also in Picture → Video."}
+		"help":"Plays videos as if from a VHS tape, with noise bars when you fast-forward or rewind. Applies to every video; also in Videos → VCR."}
 	var items: Array=[resume,timeline,
 		catalog.action("video.restart","Start from the beginning",func(): video.seek_to(0.0); h.was_paused_before_menu=false; h.close_settings(),"Plays this video again from the start."),
 		style_row,tape_row]

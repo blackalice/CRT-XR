@@ -1,7 +1,8 @@
 # Video playback plan
 
 Status, 23 October 2026: phases 1–4 and 6–7 implemented, plus subtitles,
-interlaced video and library extras. Phases 1–4 run on the Deck (SteamOS 3.8.28,
+interlaced video, library extras and the VCR (on-screen text, tape look and
+mechanism sounds). Phases 1–4 run on the Deck (SteamOS 3.8.28,
 system FFmpeg 7.1). Phase 5 (long-play acceptance in the glasses) is being
 tested over time by the owner.
 
@@ -26,6 +27,22 @@ Since phase 4:
 - **Library extras.** Continue watching (list section and library card), search
   across the video folder (keyboard or on-screen keys) and cached thumbnails made
   on a background thread.
+- **The VCR.** Videos play as if from the recorder under the TV:
+  - *On-screen text*: green PLAY, PAUSE, FF, REW and STOP in VCR OSD Mono, drawn
+    into the picture through the subtitle layer so the CRT treats it like the
+    programme. Pauses the menu causes are quiet: no text and no clunk.
+  - *Tape look* (Off, VHS, Worn VHS): `shaders/vhs_tape.gdshader` runs on the
+    decoded frame inside the same layer, before the composite pass. It softens and
+    sharpens luma, smears and delays chroma, adds timebase wobble, grain, the
+    head-switching tear and (worn) dropouts; seeks roll noise bars, and a worn
+    tape's pause shivers. The VCR's text stays clean on top. Off costs nothing:
+    the picture skips the layer whenever it has nothing to draw.
+  - *Mechanism sounds*: clunks for play, pause, resume and stop and a looping
+    FF/REW whir, synthesised by `scripts/make-vcr-sounds.py` (original, CC0).
+  - The VCR prop's display shows the tape counter with a transport icon
+    (play, pause, FF, REW).
+  - Settings live in their own **Videos** category (Picture, VCR, Playback), and
+    the tape look is also in the video's Start menu.
 - **Fixes.** The video picture profile was saved as the global picture when
   per-game picture was off (the default); video-to-video switching; CRT effects
   hidden at 480 lines (240 is now the default).
@@ -59,7 +76,7 @@ Phase 4 as built: VA-API on Linux, D3D11VA on Windows, chosen through FFmpeg's
 own `av1` decoder on the GPU (dav1d has no GPU path). Software takes over when
 the device or codec cannot be used, or when a GPU frame fails mid-stream. The
 sound player starts only once decoded sound exists, so a slow GPU start never
-runs the mixer dry. The setting is Picture → Video → Hardware video decoding.
+runs the mixer dry. The setting is Videos → Playback → Hardware video decoding.
 
 Development: `python tests/make_video_fixtures.py <ffmpeg>` makes the clips;
 `crt-xr-video-test build/video-fixtures` (native) and `tests/video.gd` (Godot)
@@ -226,8 +243,10 @@ a 4:3 frame, so `picture.source_aspect` stays 4:3 and the existing fitting in
   `scripts/ui/music_timeline.gd`.
 - **Resume:** per file (path, size, modification time) in `user://video_resume.cfg`;
   "Continue from 42:10" on reopening. Saved on pause, stop, quit and every 30 s.
-- **Settings** (Picture page, while a video is loaded): "Display style",
-  "Video lines" 480/240 and "Hardware video decoding" on/off. Picture preferences
+- **Settings** (as built: a **Videos** category, after Room, with Picture, VCR and
+  Playback tabs; before a video folder is chosen it offers setup): picture shape,
+  240/480 lines, interlacing, tape look, VCR text and sounds, subtitles, hardware
+  decoding and the video folder. Picture preferences
   use a separate video profile, defaulting to auto composite, the way
   `change_game_preferences` keeps game and test-signal settings apart.
 

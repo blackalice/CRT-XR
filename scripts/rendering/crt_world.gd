@@ -39,6 +39,9 @@ var shown_minute := -1
 ## Seconds into the playing video, shown on the VCR as its tape counter; -1
 ## while no video plays, when the VCR shows the time like the clock radio.
 var vcr_counter := -1
+## The transport icon beside the counter (see VideoSession.transport()).
+var vcr_transport := 0
+var shown_transport := 0
 var shown_counter := -2
 var room_environment: Environment
 var key_light: SpotLight3D
@@ -157,6 +160,9 @@ func _build_props(support: Node3D) -> void:
 	video_recorder = Props.vcr(television, shelf_top, cabinet.get_center().x, front - 0.1 - Props.VCR_SIZE.z * Props.SET_SCALE * 0.5)
 
 func _update_prop_clocks(delta: float) -> void:
+	if video_recorder != null and vcr_transport != shown_transport:
+		shown_transport = vcr_transport
+		(video_recorder.material_override as ShaderMaterial).set_shader_parameter("transport", vcr_transport)
 	if video_recorder != null and vcr_counter != shown_counter:
 		shown_counter = vcr_counter
 		if vcr_counter >= 0: _show_tape_counter(vcr_counter)

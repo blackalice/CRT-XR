@@ -14,6 +14,8 @@ const SEARCH_HOLD := 0.6
 ## Quieter than the programme: it is a box on the shelf, not the TV's speaker.
 const LEVEL_DB := -8.0
 var enabled := true
+## The video session, so a search ending on a paused tape stays quiet.
+var video: Node
 var volume_db := 0.0
 var clunk := AudioStreamPlayer.new()
 var whir := AudioStreamPlayer.new()
@@ -37,7 +39,8 @@ func mechanism(event: String) -> void:
 	if event == "search":
 		search()
 		return
-	if not enabled or not SOUNDS.has(event): return
+	# Quitting stops the video after this node has left the tree; stay silent.
+	if not enabled or not SOUNDS.has(event) or not is_inside_tree(): return
 	if event in ["stop", "pause"] and whir.playing: end_search(false)
 	clunk.stream = SOUNDS[event]
 	clunk.volume_db = volume_db + LEVEL_DB
@@ -45,7 +48,7 @@ func mechanism(event: String) -> void:
 
 ## Starts or prolongs the FF/REW whir; it winds down a moment after the last seek.
 func search() -> void:
-	if not enabled: return
+	if not enabled or not is_inside_tree(): return
 	search_time = SEARCH_HOLD
 	set_process(true)
 	if whir.playing and (spin == null or not spin.is_running()): return
@@ -66,7 +69,7 @@ func end_search(then_resume := true) -> void:
 	spin.tween_property(whir, "pitch_scale", 0.5, 0.18).set_ease(Tween.EASE_IN)
 	spin.tween_property(whir, "volume_db", -60.0, 0.18)
 	spin.chain().tween_callback(whir.stop)
-	if then_resume: mechanism("resume")
+	if then_resume and not (video != null and video.paused): mechanism("resume")
 
 func stop_all() -> void:
 	search_time = 0.0

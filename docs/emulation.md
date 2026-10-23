@@ -187,7 +187,8 @@ the tape counter while a video plays.
 
 **Picture.** Videos have their own picture settings, starting from *Auto
 composite*: 25 and 50 fps sources look like PAL, film and 30/60 fps like NTSC.
-**Picture → Video** holds the rest:
+The **Videos** settings category (after Room) holds the rest. **Picture** has
+*Video picture* (videos' own picture, or the same as games) and:
 - *Picture shape for new videos*: **Letterbox** (the whole widescreen picture),
   **14:9** (the broadcast compromise), **Fill 4:3** (crops the sides) or **Stretch**.
   Each video remembers its own shape; Y changes it while watching.
@@ -196,7 +197,8 @@ composite*: 25 and 50 fps sources look like PAL, film and 30/60 fps like NTSC.
 - *Interlaced video*, for DVD rips and TV recordings: **Field motion** shows each
   field in turn, 50 or 60 a second, for the smooth motion of broadcast TV;
   **Blend** mixes the two fields into one picture.
-- *Hardware video decoding* uses the GPU (VA-API on the Deck) and falls back to
+- **Playback** has *Subtitles for new videos*, the *Video folder*, and *Hardware
+  video decoding*, which uses the GPU (VA-API on the Deck) and falls back to
   software by itself.
 
 **Subtitles** are drawn into the picture, so they look like broadcast or DVD
@@ -208,9 +210,10 @@ for new videos* turns on the first option automatically.
 
 **VCR text.** Like a video recorder, the picture shows green **PLAY ►**, **PAUSE**,
 **FF ►►**, **REW ◄◄** and **STOP** in the top corner, drawn through the CRT. Turn it
-off with *Picture → Video → VCR on-screen text*.
+off with *Videos → VCR → On-screen text*. Pausing for the menu stays quiet. The
+VCR under the TV shows the tape counter and a play, pause, FF or REW symbol.
 
-**Tape look.** *Picture → Video → Tape look* plays videos as if from a VHS tape:
+**Tape look.** *Videos → VCR → Tape look* (also in the Start menu) plays videos as if from a VHS tape:
 softer detail with the recorder's edge sharpening, smeared and late colour, wobbling
 lines and a torn bottom edge, with noise bars rolling through while you fast-forward
 or rewind. *Worn VHS* adds more noise, short dropouts and a shaky pause. The VCR's
@@ -218,7 +221,7 @@ text stays clean on top, as a real recorder draws it after the tape.
 
 **VCR sounds.** The recorder clunks as a video starts, pauses, resumes and stops, and
 its motor whirs while you fast-forward or rewind. They follow the game volume; turn
-them off with *Picture → Video → VCR sounds*.
+them off with *Videos → VCR → Mechanism sounds*.
 
 **Finding your place.** Each video remembers where you stopped (not in the first
 10 seconds or the last 30) and offers **Continue** or **Start from the beginning**.

@@ -55,11 +55,12 @@ func picture_fields(fields: Array) -> Array:
 		result.append(item)
 	return result
 
-func video_rows() -> Array:
+## Videos → Picture: which picture videos use, and how a video fills the tube.
+func video_picture_rows() -> Array:
 	var h = host
 	return [{"id":"video.own_picture","label":"Video picture","kind":"choice","choices":["Own settings","Same as games"],"default":0,
 			"getter":func(): return 0 if h.video_own_picture else 1,"setter":func(value): h.set_video_own_picture(int(value)==0); menu.refresh(),
-			"help":"Own settings: every video shares one picture, starting from Auto composite so videos look like broadcast TV. While a video plays, the other Picture pages change it. Same as games: videos use your global picture."},
+			"help":"Own settings: every video shares one picture, starting from Auto composite so videos look like broadcast TV. While a video plays, the Picture settings change it. Same as games: videos use your global picture."},
 		unavailable(action("video.reset_picture","Reset video picture",func(): menu.ask("Reset the video picture?","Videos go back to your global picture with Auto composite. Games are not affected.",h.reset_video_picture),
 			"Starts the video picture again from your global picture, with Auto composite.",not h.video_own_picture,""),"Videos use your global picture."),
 		{"id":"video.default_style","label":"Picture shape for new videos","kind":"choice","choices":VideoSession.STYLES,"default":0,
@@ -70,22 +71,31 @@ func video_rows() -> Array:
 			"help":"240 lines is one broadcast field, the line structure a CRT shows, so scanlines and the phosphor mask are visible. 480 is sharper, but its lines are too fine to show on the virtual tube. Applies from the next video you open."},
 		{"id":"video.interlace","label":"Interlaced video","kind":"choice","choices":["Field motion · TV","Blend"],"default":0,
 			"getter":func(): return h.video_interlace,"setter":func(value): h.video_interlace=int(value); h.video.set_interlace(h.video_interlace); h.save_library(),
-			"help":"For interlaced recordings such as DVDs and TV captures. Field motion shows each field in turn, 50 or 60 a second, for the smooth motion of broadcast TV. Blend mixes the two fields into one picture."},
-		{"id":"video.subtitles_default","label":"Subtitles for new videos","kind":"toggle","default":false,
-			"getter":func(): return h.video_subtitles,"setter":func(value): h.video_subtitles=bool(value); h.save_library(),
-			"help":"Turns on a video's first subtitles when you open it. A choice you make for a video is remembered for that video."},
-		{"id":"video.tape","label":"Tape look","kind":"choice","choices":["Off","VHS","Worn VHS"],"default":0,
+			"help":"For interlaced recordings such as DVDs and TV captures. Field motion shows each field in turn, 50 or 60 a second, for the smooth motion of broadcast TV. Blend mixes the two fields into one picture."}]
+
+## Videos → VCR: the recorder the videos play from.
+func vcr_rows() -> Array:
+	var h = host
+	return [{"id":"video.tape","label":"Tape look","kind":"choice","choices":["Off","VHS","Worn VHS"],"default":0,
 			"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); h.video.set_tape(h.video_tape); h.save_library(),
-			"help":"Plays videos as if from a VHS tape: softer detail, smeared colour, wobbling lines and a torn bottom edge, with noise bars when you fast-forward or rewind. Worn VHS adds more noise, dropouts and a shaky pause."},
-		{"id":"video.vcr_sounds","label":"VCR sounds","kind":"toggle","default":true,
-			"getter":func(): return h.video_vcr_sounds,"setter":func(value): h.video_vcr_sounds=bool(value); h.vcr_sounds.enabled=h.video_vcr_sounds; h.save_library(),
-			"help":"The recorder's clunks for play, pause and stop, and its motor whirring while you fast-forward or rewind."},
-		{"id":"video.osd","label":"VCR on-screen text","kind":"toggle","default":true,
+			"help":"Plays videos as if from a VHS tape: softer detail, smeared colour, wobbling lines and a torn bottom edge, with noise bars when you fast-forward or rewind. Worn VHS adds more noise, dropouts and a shaky pause. Also in the Start menu while watching."},
+		{"id":"video.osd","label":"On-screen text","kind":"toggle","default":true,
 			"getter":func(): return h.video_osd,"setter":func(value): h.video_osd=bool(value); h.video.osd_enabled=h.video_osd; h.video.update_osd(); h.save_library(),
 			"help":"Shows PLAY, PAUSE, FF and REW in green VCR lettering on the picture, like a video recorder."},
+		{"id":"video.vcr_sounds","label":"Mechanism sounds","kind":"toggle","default":true,
+			"getter":func(): return h.video_vcr_sounds,"setter":func(value): h.video_vcr_sounds=bool(value); h.vcr_sounds.enabled=h.video_vcr_sounds; h.save_library(),
+			"help":"The recorder's clunks for play, pause and stop, and its motor whirring while you fast-forward or rewind. They follow the game volume."}]
+
+## Videos → Playback: subtitles, decoding and where the videos are.
+func playback_rows() -> Array:
+	var h = host
+	return [{"id":"video.subtitles_default","label":"Subtitles for new videos","kind":"toggle","default":false,
+			"getter":func(): return h.video_subtitles,"setter":func(value): h.video_subtitles=bool(value); h.save_library(),
+			"help":"Turns on a video's first subtitles when you open it. A choice you make for a video is remembered for that video."},
 		{"id":"video.hardware","label":"Hardware video decoding","kind":"toggle","default":true,
 			"getter":func(): return h.video_hardware,"setter":func(value): h.video_hardware=bool(value); h.save_library(),
-			"help":"Decodes on the GPU (VA-API on Steam Deck), leaving the CPU for the room and tracking. Falls back to software by itself when a file or GPU cannot use it. Applies from the next video."}]
+			"help":"Decodes on the GPU (VA-API on Steam Deck), leaving the CPU for the room and tracking. Falls back to software by itself when a file or GPU cannot use it. Applies from the next video."},
+		action("video.folder","Video folder",func(): menu.open_video_folder_picker(),"Choose where CRT XR looks for videos. Subfolders are included.",false,h.video_dir)]
 
 func pages(category: int) -> Array:
 	var h = host
@@ -134,7 +144,6 @@ func pages(category: int) -> Array:
 			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference. Auto picks PAL or NTSC from the game's or video's frame rate."}]
 			signal_rows.append_array(picture_fields(w.picture.COLOR_FIELDS.slice(6)))
 			var picture_pages := [page("Presets",presets),page("CRT",crt),page("Screen fit",fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
-			if menu.videos_shown(): picture_pages.append(page("Video",video_rows()))
 			return picture_pages
 		3:
 			var groups := {"Lighting":[],"Materials":[],"Placement & fade":[]}
@@ -203,7 +212,7 @@ func pages(category: int) -> Array:
 				slots.append(action("slot.%d" % i,str(config.get_value("meta","name",h.PROFILE_NAMES[i])),func(): menu.open_slot(slot),"Stores view, room and picture settings; does not switch display mode or tracking.",false,"Saved" if saved else "Empty"))
 			if h.profile_undo!=null: slots.append(action("setups.undo","Undo last setup load",h.undo_profile,"Restore the setup from before loading Deck Showcase or a saved slot."))
 			return [page("Setup slots",slots),page("Per-game picture",[
-				{"id":"setups.pergame","label":"Remember picture per game","kind":"toggle","default":h.Showcase.PER_GAME_PICTURE,"visual":false,"getter":func(): return h.remember_game_picture,"setter":h.set_remember_game_picture,"help":"Each game keeps its own fitting, CRT and colour; room and view stay global. Off: games use the global picture. Videos have their own setting under Picture → Video."},
+				{"id":"setups.pergame","label":"Remember picture per game","kind":"toggle","default":h.Showcase.PER_GAME_PICTURE,"visual":false,"getter":func(): return h.remember_game_picture,"setter":h.set_remember_game_picture,"help":"Each game keeps its own fitting, CRT and colour; room and view stay global. Off: games use the global picture. Videos have their own setting under Videos → Picture."},
 				unavailable(action("setups.global","Use global picture for this game",h.forget_game_picture,"Removes this game's picture override; future global picture changes apply.",h.active_game_key.is_empty() or h.active_game_key==h.VIDEO_PROFILE),"Start a game with its own picture first.")])]
 		6:
 			return [page("About & Help",[
@@ -219,6 +228,10 @@ func pages(category: int) -> Array:
 				toggle("access.contrast","Stronger menu contrast",h,"menu_high_contrast",false,"Brighter text and clearer borders on a dark background.",menu.apply_accessibility,false),
 				toggle("access.motion","Reduced animation",h,"menu_reduced_motion",false,"Instant focus changes and no TV warm-up animation.",menu.apply_accessibility,false),
 				toggle("access.sounds","Menu sounds",h,"menu_sounds",false,"Quiet feedback for focus and confirmation.",unchanged,false)])]
+		8:
+			if not menu.videos_shown():
+				return [page("Videos",[action("videos.setup","Set up videos",menu.open_library_tools,"Choose a video folder in Library locations. Its videos appear after your consoles, and their settings appear here.",false,"›")])]
+			return [page("Picture",video_picture_rows()),page("VCR",vcr_rows()),page("Playback",playback_rows())]
 		7:
 			var quick: Array = []
 			for source in pages(0)[0].rows:

@@ -338,6 +338,7 @@ func start_application() -> void:
 	video.audio_source = emulator.player
 	vcr_sounds = preload("res://scripts/video/vcr_sounds.gd").new()
 	vcr_sounds.enabled = video_vcr_sounds
+	vcr_sounds.video = video
 	add_child(vcr_sounds)
 	# The mechanism follows the game volume, like the video's own sound.
 	video.mechanism.connect(func(event):
@@ -495,6 +496,7 @@ func _process(delta: float) -> void:
 			flash_video_bar()
 	var bar_allowed: bool = video.loaded and not settings_panel.visible
 	world.vcr_counter = int(video.clock) if video.loaded else -1
+	world.vcr_transport = video.transport()
 	for bar in video_bars:
 		bar.track(video.path.get_file().get_basename(), video.clock, float(video.info.get("duration", 0.0)), video.paused, delta, bar_allowed)
 	for notice in notices: notice.visible = notice_time > 0.0
@@ -725,7 +727,7 @@ func toggle_settings() -> void:
 	if emulator.loaded: emulator.set_paused(true)
 	if video.loaded:
 		was_paused_before_menu = video.paused
-		video.set_paused(true)
+		video.set_paused(true, true)
 		remember_video_position()
 	emulator.gamepad.set_menu_active(true)
 	settings_panel.show()
@@ -743,7 +745,7 @@ func close_settings() -> void:
 	settings_panel.hide()
 	emulator.gamepad.set_menu_active(false)
 	if emulator.loaded: emulator.set_paused(was_paused_before_menu)
-	if video.loaded and not video.ended: video.set_paused(was_paused_before_menu)
+	if video.loaded and not video.ended: video.set_paused(was_paused_before_menu, true)
 	if not is_instance_valid(sbs_prompt): power_on.begin()
 
 func preview_power_on() -> void:
