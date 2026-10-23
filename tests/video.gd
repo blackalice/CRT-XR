@@ -21,6 +21,14 @@ func play_for(session: Node, seconds: float) -> void:
 		session._process(step)
 		await process_frame
 
+## Lets the decoder thread deliver its first frame before the clock runs: a
+## GPU decoder can take a moment to start, more so with other suites running.
+func wait_for_first_frame(session: Node) -> void:
+	var deadline := Time.get_ticks_msec() + 5000
+	while session.texture == null and Time.get_ticks_msec() < deadline:
+		if not session.is_processing(): session._process(0.0)
+		await process_frame
+
 ## Real audio output, muted: the picture must follow the sound that is heard.
 func sync_checks() -> void:
 	AudioServer.set_bus_mute(0, true)
@@ -76,6 +84,7 @@ func run() -> void:
 	check(not session.open(FIXTURES + "missing.mp4") and session.status.begins_with("Could not play missing.mp4"), "A missing file is reported by name")
 	check(session.open(FIXTURES + "h264_aac_25.mp4") and events == [true], "Opening a video activates it")
 	check(is_equal_approx(session.field_rate(), 50.0), "25 fps video uses the PAL field rate")
+	await wait_for_first_frame(session)
 	await play_for(session, 0.5)
 	check(textures.size() == 1 and textures[0].get_width() == 640 and textures[0].get_height() == 240, "Frames arrive as one reused 640x240 texture (one field, CRT scale)")
 	# With real audio output the picture waits for the sound to start, so check
@@ -133,6 +142,8 @@ func run() -> void:
 	check(session.clock > before, "The frame clock runs without sound")
 	# The VCR's green mode text, drawn into the picture like subtitles.
 	session.osd_enabled = true
+	var mechanism: Array = []
+	session.mechanism.connect(func(event): mechanism.append(event))
 	check(session.open(FIXTURES + "h264_aac_25.mp4") and session.osd_text() == "PLAY ►", "Opening a video shows PLAY")
 	await play_for(session, 0.3)
 	check(session.subtitle_layer.osd.text == "PLAY ►" and session.output == session.subtitle_layer.get_texture(), "The VCR text is drawn over the picture the TV shows")
@@ -151,8 +162,36 @@ func run() -> void:
 	session.osd_enabled = false
 	session.set_paused(true)
 	check(session.osd_text() == "" and session.output == session.texture, "With the VCR text off, nothing is drawn")
+	check(mechanism == ["play", "pause", "search", "search", "resume", "pause"], "The VCR mechanism follows play, pause, search and resume: %s" % [mechanism])
+	var sounds: Node = preload("res://scripts/video/vcr_sounds.gd").new()
+	root.add_child(sounds)
+	sounds.mechanism("search")
+	check(sounds.whir.playing and sounds.whir.stream.loop_mode == AudioStreamWAV.LOOP_FORWARD, "Searching starts the looping motor whir")
+	sounds.mechanism("search")
+	sounds._process(sounds.SEARCH_HOLD - 0.1)
+	check(sounds.search_time > 0.0, "Repeated seeks keep the whir running")
+	sounds._process(0.2)
+	check(sounds.search_time <= 0.0 and sounds.clunk.stream == sounds.SOUNDS.resume, "The whir winds down a moment after the last seek, back into play")
+	sounds.enabled = false
+	sounds.stop_all()
+	sounds.mechanism("play")
+	check(not sounds.clunk.playing and not sounds.whir.playing, "VCR sounds can be turned off")
+	sounds.free()
+	# The VHS tape look plays the picture through the tape shader; off is direct.
+	session.set_tape(2)
+	check(session.output == session.subtitle_layer.get_texture() and session.subtitle_layer.picture.material == session.subtitle_layer.tape
+		and is_equal_approx(float(session.subtitle_layer.tape.get_shader_parameter("wear")), 1.0), "Worn VHS plays the picture through a worn tape")
+	session.seek_by(-1.0)
+	session._process(0.05)
+	check(float(session.subtitle_layer.tape.get_shader_parameter("search")) > 0.0 and float(session.subtitle_layer.tape.get_shader_parameter("search_direction")) < 0.0
+		and float(session.subtitle_layer.tape.get_shader_parameter("still")) == 1.0, "Rewinding a paused tape rolls noise bars upward over a still frame")
+	session._process(session.OSD_SEEK_SECONDS + 0.1)
+	check(float(session.subtitle_layer.tape.get_shader_parameter("search")) == 0.0, "The noise bars stop after the search")
+	session.set_tape(0)
+	check(session.output == session.texture and session.subtitle_layer.picture.material == null, "With the tape look off, the picture is direct")
+	mechanism.clear()
 	session.stop()
-	check(events.back() == false and session.decoder == null, "Stopping deactivates the video")
+	check(events.back() == false and session.decoder == null and mechanism == ["stop"], "Stopping deactivates the video, with the stop clunk")
 	session.free()
 
 	# In the real scene: the TV shows the video instead of the test signal.

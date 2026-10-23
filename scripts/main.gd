@@ -122,6 +122,11 @@ var video_interlace := 0
 var video_subtitles := false
 ## Green VCR mode text (PLAY, PAUSE, FF, REW) drawn on the video picture.
 var video_osd := true
+## VHS tape look for videos: 0 off, 1 VHS, 2 worn VHS.
+var video_tape := 0
+## The VCR's mechanism sounds while videos play.
+var video_vcr_sounds := true
+var vcr_sounds: Node
 ## Videos share one picture of their own (true), or use the global picture.
 var video_own_picture := true
 var ffmpeg_installer: Node
@@ -331,6 +336,13 @@ func start_application() -> void:
 	ffmpeg_installer = FfmpegInstaller.new()
 	add_child(ffmpeg_installer)
 	video.audio_source = emulator.player
+	vcr_sounds = preload("res://scripts/video/vcr_sounds.gd").new()
+	vcr_sounds.enabled = video_vcr_sounds
+	add_child(vcr_sounds)
+	# The mechanism follows the game volume, like the video's own sound.
+	video.mechanism.connect(func(event):
+		vcr_sounds.volume_db = emulator.player.volume_db
+		vcr_sounds.mechanism(event))
 	video.content_changed.connect(func(texture): world.picture.set_source(texture, true))
 	video.frame_presented.connect(world.screen_light.set_image)
 	video.frame_presented.connect(world.picture.frame_presented)
@@ -361,6 +373,9 @@ func start_application() -> void:
 	video_interlace = clampi(int(recent.get_value("video", "interlace", 0)), 0, VideoSession.INTERLACE_MODES.size() - 1)
 	video_subtitles = bool(recent.get_value("video", "subtitles", false))
 	video_osd = bool(recent.get_value("video", "osd", true))
+	video_tape = clampi(int(recent.get_value("video", "tape", 0)), 0, 2)
+	video_vcr_sounds = bool(recent.get_value("video", "vcr_sounds", true))
+	if vcr_sounds != null: vcr_sounds.enabled = video_vcr_sounds
 	video_own_picture = bool(recent.get_value("video", "own_picture", true))
 	play_history.read(last_game_path)
 	get_tree().auto_accept_quit = false
@@ -767,6 +782,7 @@ func play_video(path: String, from_seconds := 0.0) -> bool:
 	video.hardware = video_hardware
 	video.interlace = video_interlace
 	video.osd_enabled = video_osd
+	video.set_tape(video_tape)
 	var saved_style := video_library.style(path)
 	video.style = saved_style if saved_style >= 0 else video_style
 	if not video.open(path):
@@ -872,6 +888,8 @@ func save_library() -> Error:
 	recent.set_value("video", "interlace", video_interlace)
 	recent.set_value("video", "subtitles", video_subtitles)
 	recent.set_value("video", "osd", video_osd)
+	recent.set_value("video", "tape", video_tape)
+	recent.set_value("video", "vcr_sounds", video_vcr_sounds)
 	recent.set_value("video", "own_picture", video_own_picture)
 	if recent.has_section_key("video", "lines"): recent.erase_section_key("video", "lines")
 	return SettingsStore.write("user://recent.cfg", recent)

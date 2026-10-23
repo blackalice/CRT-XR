@@ -210,6 +210,16 @@ for new videos* turns on the first option automatically.
 **FF ►►**, **REW ◄◄** and **STOP** in the top corner, drawn through the CRT. Turn it
 off with *Picture → Video → VCR on-screen text*.
 
+**Tape look.** *Picture → Video → Tape look* plays videos as if from a VHS tape:
+softer detail with the recorder's edge sharpening, smeared and late colour, wobbling
+lines and a torn bottom edge, with noise bars rolling through while you fast-forward
+or rewind. *Worn VHS* adds more noise, short dropouts and a shaky pause. The VCR's
+text stays clean on top, as a real recorder draws it after the tape.
+
+**VCR sounds.** The recorder clunks as a video starts, pauses, resumes and stops, and
+its motor whirs while you fast-forward or rewind. They follow the game volume; turn
+them off with *Picture → Video → VCR sounds*.
+
 **Finding your place.** Each video remembers where you stopped (not in the first
 10 seconds or the last 30) and offers **Continue** or **Start from the beginning**.
 The newest part-watched videos appear under **Continue watching**, both at the top

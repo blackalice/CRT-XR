@@ -19,7 +19,6 @@ VCR on-screen text drawn on videos.
 
 * Source: https://www.dafont.com/vcr-osd-mono.font (download retrieved 23 October 2026)
 * SHA-256: `01918d86cb163a715dcb97165b997256734dfcc9f550beeb7c142fa4a064cf1c`
-* Terms: dafont lists the font as "100% Free". The download contains only the
-  font file, with no licence text, and the font's own metadata names the
-  designer but states no licence. Confirm terms with the author before a
-  commercial release.
+* Terms: dafont lists the font as "100% Free", and a comment on the dafont
+  page states it is fully free to use. The download contains only the font
+  file, with no licence text.

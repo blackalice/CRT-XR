@@ -5,6 +5,8 @@ extends SubViewport
 ## to the frame's line count (a 640x240 frame has tall pixels); picture
 ## subtitles arrive already placed in frame pixels. The VCR's green on-screen
 ## display (PLAY, PAUSE, FF, REW) is drawn here too, for the same reason.
+## With a VHS tape look, the picture itself plays through the tape shader
+## first; the VCR's text and subtitles stay clean on top, as a VCR adds them.
 const DISPLAY_HEIGHT_PER_WIDTH := 0.75
 const VCR_FONT := preload("res://assets/fonts/VCR_OSD_MONO.ttf")
 const VCR_GREEN := Color("38ff52")
@@ -14,6 +16,10 @@ var text := Label.new()
 var images := Control.new()
 var osd := Label.new()
 var shown := ""
+## Tape wear for each tape look: off, a good VHS tape, a worn one.
+const TAPE_WEAR := [0.0, 0.35, 1.0]
+var tape := ShaderMaterial.new()
+var tape_look := 0
 
 func _init() -> void:
 	disable_3d = true
@@ -38,6 +44,13 @@ func _init() -> void:
 	osd.add_theme_constant_override("shadow_offset_x", 3)
 	osd.add_theme_constant_override("shadow_offset_y", 3)
 	stage.add_child(osd)
+	tape.shader = preload("res://shaders/vhs_tape.gdshader")
+
+## 0 plays the picture directly; 1 and 2 play it through a good or worn tape.
+func set_tape(look: int) -> void:
+	tape_look = clampi(look, 0, TAPE_WEAR.size() - 1)
+	tape.set_shader_parameter("wear", TAPE_WEAR[tape_look])
+	picture.material = tape if tape_look > 0 else null
 
 func setup(frame: Texture2D, width: int, height: int) -> void:
 	size = Vector2i(width, height)

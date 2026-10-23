@@ -122,6 +122,10 @@ source-code licence. See `docs/crt-model-local.md` for asset handling.
 
 `assets/audio/crt-power-on.wav` is a short edited excerpt from **TV, CRT, turning on off, static, click (2012).wav** by **TRP**, published on [Freesound](https://freesound.org/people/TRP/sounds/616850/) under **CC0 1.0 Universal**. Modification and redistribution, including commercial use, are permitted. Details, source-preview and asset hashes, editing notes, and the licence text are in `third_party/audio/` and included with exported builds under `licenses/audio/`.
 
+## VCR sounds
+
+The VCR mechanism sounds in `assets/audio/vcr/` are original: synthesised by `scripts/make-vcr-sounds.py` from clicks, thunks, a motor and a modelled plastic cabinet, with no recordings. The generator and its sounds are provided under CC0-1.0.
+
 ## Wide wooden table
 
 "Wood Drawer & Tables Set" by brandon_grey (https://sketchfab.com/brandondmc10),
@@ -157,7 +161,7 @@ Only FFmpeg's public headers are vendored, for compiling the loader: 7.1.1 in `n
 
 Open Sans, Copyright 2020 The Open Sans Project Authors, under the SIL Open Font License 1.1. The unmodified variable font is `assets/fonts/OpenSans.ttf`; its licence, pinned source and SHA-256 are in `third_party/fonts/` and included with exported builds under `licenses/fonts/`.
 
-VCR OSD Mono, by Riciery Leal, is used unmodified (`assets/fonts/VCR_OSD_MONO.ttf`) for the green VCR on-screen text on videos. dafont lists it as "100% Free"; the download carries no licence text. Source, retrieval date and SHA-256 are in `third_party/fonts/README.md`.
+VCR OSD Mono, by Riciery Leal, is used unmodified (`assets/fonts/VCR_OSD_MONO.ttf`) for the green VCR on-screen text on videos. dafont lists it as "100% Free", and a comment on its dafont page states it is fully free to use; the download itself carries no licence text. Source, retrieval date and SHA-256 are in `third_party/fonts/README.md`.
 
 ## Super Retro Game Console
 

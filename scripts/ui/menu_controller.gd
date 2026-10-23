@@ -689,9 +689,12 @@ func video_pause_items() -> Array:
 	var timeline := {"id":"video.seek","label":"Position","kind":"seek","layout":"video_seek","getter":func(): return video.clock,"setter":func(value): video.seek_to(float(value)),
 		"duration":func(): return length,"progress":func(): return VideoLibrary.clock(video.clock)+" / "+VideoLibrary.clock(length),
 		"help":"Left/right moves 10 seconds and repeats while held; drag or click the timeline to jump. The TV follows as you scrub."}
+	var tape_row := {"id":"video.tape","label":"Tape look","kind":"choice","choices":VideoSession.TAPES,"default":0,
+		"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); video.set_tape(h.video_tape); h.save_library(),
+		"help":"Plays videos as if from a VHS tape, with noise bars when you fast-forward or rewind. Applies to every video; also in Picture → Video."}
 	var items: Array=[resume,timeline,
 		catalog.action("video.restart","Start from the beginning",func(): video.seek_to(0.0); h.was_paused_before_menu=false; h.close_settings(),"Plays this video again from the start."),
-		style_row]
+		style_row,tape_row]
 	var subtitles: PackedStringArray=video.subtitle_names()
 	if not subtitles.is_empty():
 		items.append({"id":"video.subtitles","label":"Subtitles","kind":"choice","choices":["Off"]+Array(subtitles),"default":0,
@@ -1265,10 +1268,15 @@ func reveal_selected() -> void:
 	if row==null or preview: return
 	# The first row of a section brings its header with it, so the section's
 	# name is never scrolled just out of view; the top row scrolls fully home.
-	if row.get_parent()==column:
-		var index: int=row.get_index()
-		if rows.find(row)==0: scroll.scroll_vertical=0
-		elif index>0 and column.get_child(index-1) is Label: scroll.ensure_control_visible(column.get_child(index-1))
+	# Rows inside a panel (Now playing, the music player) count as the panel:
+	# reaching its first row shows the whole panel, header included.
+	var block: Control=row
+	while block.get_parent()!=column and block.get_parent() is Control: block=block.get_parent()
+	var position: int=rows.find(row)
+	if position==0: scroll.scroll_vertical=0
+	elif block!=row:
+		if not block.is_ancestor_of(rows[position-1]): scroll.ensure_control_visible(block)
+	elif row.get_index()>0 and column.get_child(row.get_index()-1) is Label: scroll.ensure_control_visible(column.get_child(row.get_index()-1))
 	scroll.ensure_control_visible(row)
 
 func refresh_labels() -> void:

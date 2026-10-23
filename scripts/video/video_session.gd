@@ -8,6 +8,8 @@ signal frame_presented(image: Image)
 signal status_changed(message: String)
 signal active_changed(active: bool)
 signal finished
+## The VCR's mechanism at work: "play", "resume", "pause", "search" or "stop".
+signal mechanism(event: String)
 
 const STYLES := ["Letterbox", "14:9", "Fill 4:3", "Stretch"]
 const INTERLACE_MODES := ["Field motion", "Blend"]
@@ -41,6 +43,11 @@ var osd_steady := ""
 var osd_flash := ""
 var osd_time := 0.0
 const OSD_PLAY := "PLAY ►"
+## VHS tape look (0 off, 1 VHS, 2 worn VHS); search bars follow seeks.
+const TAPES := ["Off", "VHS", "Worn VHS"]
+var tape := 0
+var search_time := 0.0
+var tape_fields := 0.0
 const OSD_FLASH_SECONDS := 3.0
 const OSD_SEEK_SECONDS := 1.5
 var status := ""
@@ -88,7 +95,7 @@ func report(message: String) -> void:
 	status_changed.emit(message)
 
 func open(file: String) -> bool:
-	stop()
+	stop(false)
 	if not available():
 		report("Video playback is unavailable: " + unavailable_reason())
 		return false
@@ -113,11 +120,14 @@ func open(file: String) -> bool:
 	restart_audio()
 	osd_steady = ""
 	flash_osd(OSD_PLAY, OSD_FLASH_SECONDS)
+	mechanism.emit("play")
 	active_changed.emit(true)
 	report("Playing / %s (%s, %.3f fps)" % [file.get_file(), info.codec, info.fps])
 	return true
 
-func stop() -> void:
+## Stops playback; `announce` is false when another video is about to start.
+func stop(announce := true) -> void:
+	if loaded and announce and not ended: mechanism.emit("stop")
 	player.stop()
 	playback = null
 	if decoder != null: decoder.close()
@@ -149,12 +159,16 @@ func set_paused(value: bool) -> void:
 		osd_steady = "PAUSE" if value else ""
 		if value: osd_time = 0.0
 		else: flash_osd(OSD_PLAY, OSD_FLASH_SECONDS)
+		mechanism.emit("pause" if value else "resume")
 	paused = value
 	player.stream_paused = paused or priming > 0.0
 	if loaded: report(("Paused / " if paused else "Playing / ") + path.get_file())
 
 func seek_by(seconds: float) -> void:
 	if loaded: flash_osd("FF ►►" if seconds > 0.0 else "REW ◄◄", OSD_SEEK_SECONDS)
+	search_time = OSD_SEEK_SECONDS
+	if loaded: mechanism.emit("search")
+	subtitle_layer.tape.set_shader_parameter("search_direction", 1.0 if seconds > 0.0 else -1.0)
 	seek_to(clock + seconds)
 
 func flash_osd(message: String, seconds: float) -> void:
@@ -245,9 +259,26 @@ func cues_at(time: float) -> Array:
 	if not subtitle_options[subtitle_choice].has("file"): return decoder.subtitles_at(time)
 	return file_cues.filter(func(cue): return cue.start <= time and time < cue.end)
 
-## True while subtitles or the VCR text are drawn over the picture.
+## True while the picture plays through a tape, or text is drawn over it.
 func layered() -> bool:
-	return subtitle_choice >= 0 or not subtitle_layer.osd.text.is_empty()
+	return tape > 0 or subtitle_choice >= 0 or not subtitle_layer.osd.text.is_empty()
+
+func set_tape(look: int) -> void:
+	tape = clampi(look, 0, TAPES.size() - 1)
+	subtitle_layer.set_tape(tape)
+	refresh_output()
+
+## Moves the tape noise on one field at a time; a paused or searching tape
+## keeps moving, so the TV is asked for a fresh picture.
+func update_tape(delta: float) -> void:
+	search_time = maxf(0.0, search_time - delta)
+	if tape == 0: return
+	tape_fields += delta * field_rate()
+	var material: ShaderMaterial = subtitle_layer.tape
+	material.set_shader_parameter("seed", floorf(tape_fields))
+	material.set_shader_parameter("search", clampf(search_time / 0.3, 0.0, 1.0))
+	material.set_shader_parameter("still", 1.0 if paused and not ended else 0.0)
+	if paused and last_frame != null: frame_presented.emit(last_frame)
 
 ## Puts the subtitle layer between the video and the TV while it has something to show.
 func refresh_output() -> void:
@@ -306,6 +337,7 @@ func _process(delta: float) -> void:
 	if osd_time > 0.0:
 		osd_time = maxf(0.0, osd_time - delta)
 		if osd_time == 0.0: update_osd()
+	update_tape(delta)
 	if is_instance_valid(audio_source):
 		player.bus = audio_source.bus
 		player.volume_db = audio_source.volume_db
@@ -350,6 +382,7 @@ func _process(delta: float) -> void:
 		paused = true
 		osd_steady = "STOP"; osd_time = 0.0
 		update_osd()
+		mechanism.emit("stop")
 		player.stream_paused = true
 		report("Finished / " + path.get_file())
 		finished.emit()

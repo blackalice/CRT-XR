@@ -124,7 +124,7 @@ func run() -> void:
 	var pages: Array = menu.catalog.pages(1)
 	var video_page: Array = pages.filter(func(page): return page.title == "Video")
 	var video_rows: Array = video_page[0].rows.map(func(row): return row.id) if video_page.size() == 1 else []
-	check(["video.default_style", "video.lines", "video.interlace", "video.subtitles_default", "video.osd", "video.hardware", "video.own_picture", "video.reset_picture"].all(func(id): return id in video_rows) and not "video.picture_note" in video_rows,
+	check(["video.default_style", "video.lines", "video.interlace", "video.subtitles_default", "video.tape", "video.vcr_sounds", "video.osd", "video.hardware", "video.own_picture", "video.reset_picture"].all(func(id): return id in video_rows) and not "video.picture_note" in video_rows,
 		"Picture settings gain a Video page with shape, lines, interlacing, subtitles, decoding and the video picture: %s" % [video_rows])
 	if OS.get_name() == "Windows":
 		var setup: Array = menu.video_setup_items("VIDEOS · OPTIONAL")
@@ -261,6 +261,18 @@ func run() -> void:
 	check(app.play_video(episode) and app.video.subtitle_choice == -1, "Subtitles start off by default")
 	app.toggle_settings()
 	check("video.subtitles" in ids(), "The pause menu offers subtitles when a video has them")
+	check(ids().find("video.tape") == ids().find("video.style") + 1, "The pause menu offers the tape look under the picture shape")
+	menu.select("video.tape", false)
+	menu.adjust(1)
+	check(app.video_tape == 1 and app.video.tape == 1 and app.video.layered(), "Choosing VHS from the pause menu plays the video through a tape")
+	menu.adjust(-1)
+	check(app.video_tape == 0 and app.video.tape == 0, "And back to off")
+	for i in range(menu.rows.size()):
+		menu.navigate(Vector2i(0, 1)); await process_frame
+	for i in range(menu.rows.size()):
+		menu.navigate(Vector2i(0, -1)); await process_frame
+	await process_frame
+	check(menu.selected_id == "resume" and menu.scroll.scroll_vertical == 0, "Back at the top of the pause menu, the whole Now playing panel shows (scroll %d)" % menu.scroll.scroll_vertical)
 	menu.select("video.subtitles", false)
 	menu.adjust(1)
 	check(app.video.subtitle_choice == 0 and app.video_library.subtitle(episode) == "File · Episode 2.en.srt", "Choosing subtitles turns them on and remembers the choice")
