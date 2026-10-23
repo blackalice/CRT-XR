@@ -42,9 +42,9 @@ func run():
 			page(2); m.select("music.game_volume",false); await settle()
 			await capture("audio-"+kind+("-large" if large else ""))
 			page(1,1); m.select("crt.scanlines",false); await capture("crt-"+kind+("-large" if large else ""))
-			m.open_library(); m.rom_index.cancel()
+			m.games.open_library(); m.rom_index.cancel()
 			m.rom_index.games={"snes":[{"path":"/fixture/mario.sfc","label":"Super Mario World (Europe) (Rev 1)"},{"path":"/fixture/long.sfc","label":"A deliberately long game title with an extended subtitle (Europe) (En,Fr,De,Es,It) (Revision 12)"}]}
-			m.open_system("snes"); m.select("game:/fixture/mario.sfc",false); await settle()
+			m.games.open_system("snes"); m.select("game:/fixture/mario.sfc",false); await settle()
 			var game=m.selected_row()
 			check(game.title_label.get_line_count()==1 and inside(game,game.title_label) and inside(game,game.detail_label),"Normal game title and system caption fit: "+kind+str(large))
 			var longer=m.rows.filter(func(row):return row.item.id=="game:/fixture/long.sfc")[0]
@@ -56,7 +56,7 @@ func run():
 			check(m.subtitle.text=="1 game","Single-game list uses singular count and omits pagination")
 			check(inside(full,full.detail_label),"Very long titles keep their caption inside the row")
 			var full_title: String=full.item.label
-			m.game_title_action(); await settle()
+			m.games.game_title_action(); await settle()
 			check(m.mode=="help" and m.help_copy==full_title,"Full title is available in a scrollable view")
 			await capture("full-title-"+kind+("-large" if large else ""))
 			m.back(); await settle()

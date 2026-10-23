@@ -67,7 +67,7 @@ func run() -> void:
 	check(not rooms.saved(0) and rooms.active() == in_use, "Deleting a room leaves the room you're in (%s)" % in_use)
 
 	# The resume screen shows where you were beside the choices.
-	menu.launch_path = "res://missing.sfc"
+	menu.games.launch_path = "res://missing.sfc"
 	menu.mode = "launch"; menu.render()
 	await process_frame
 	check(menu.rows.size() == 3 and menu.rows[0].get_parent() != menu.column, "The resume screen puts its choices beside the picture")

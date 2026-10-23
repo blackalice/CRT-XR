@@ -66,7 +66,7 @@ func run() -> void:
 	check(float(app.menu_depth_view.materials[0].get_shader_parameter("lift_scale")) > 1.0 and shift(app, 0, "shadow") > 0.0, "Mono lifts with a slight scale-up and a shadow")
 
 	# Library cards lift as a whole, icons and all, on one plane.
-	app.menu.open_library()
+	app.menu.games.open_library()
 	await settle()
 	var cards: Dictionary = app.menu.depth_layout()
 	check(cards.lift.size.x > 0 and not cards.has("pop"), "A selected library card lifts as one piece: %s" % [cards])

@@ -102,11 +102,11 @@ func run() -> void:
 	app.remember_game_picture = false
 	if not app.settings_panel.visible: app.toggle_settings()
 
-	menu.open_library()
+	menu.games.open_library()
 	check(not "library.videos" in ids(), "No Videos card until a folder is chosen")
-	menu.open_library_tools()
+	menu.games.open_library_tools()
 	check("library.video_folder" in ids() and not "library.video_clear" in ids() and item("library.video_folder").section == "VIDEOS · OPTIONAL", "Library locations offers an optional video folder in its own section")
-	menu.open_video_folder_picker(folder)
+	menu.videos.open_video_folder_picker(folder)
 	check(ids()[0] == "video_folder.use" and item("video_folder.use").emphasis == "primary" and ("video_folder.open:" + season) in ids() and str(item("video_folder.use").detail).begins_with("3 videos here"),
 		"The folder picker leads with its action, counts the videos here and lists subfolders")
 	check(menu.location_bar.visible and not menu.subtitle.visible and item("video_folder.open:" + season).section == menu.SECTION_INSIDE and item("video_folder.open:" + season).row_icon == "folder",
@@ -135,9 +135,9 @@ func run() -> void:
 	check(menu.category == 8, "Next category from Room is Videos")
 	menu.switch_category(1)
 	check(menu.category == 4, "and then Controls & XR")
-	menu.open_library()
+	menu.games.open_library()
 	if OS.get_name() == "Windows":
-		var setup: Array = menu.video_setup_items("VIDEOS · OPTIONAL")
+		var setup: Array = menu.videos.video_setup_items("VIDEOS · OPTIONAL")
 		check(setup.size() == 1 and setup[0].id == "library.ffmpeg_setup" and setup[0].emphasis == "primary" and str(setup[0].detail).contains("MB"),
 			"Without FFmpeg, Windows offers to set up video playback and says how big it is")
 
@@ -151,14 +151,14 @@ func run() -> void:
 		if thumbnail_row != null: break
 		await process_frame
 	check(thumbnail_row != null and thumbnail_row.thumbnail.texture.get_size() == Vector2(128, 96), "Thumbnails appear in the list as they are made")
-	menu.open_video_search()
+	menu.videos.open_video_search()
 	menu.rename_field.text = "episode"
-	menu.run_video_search()
+	menu.videos.run_video_search()
 	check(menu.mode == "videos" and ("video:" + folder.path_join("Episode 2.mkv")) in ids() and ("video:" + folder.path_join("Episode 10.mkv")) in ids() and not ("video:" + long) in ids(),
 		"Searching finds matching videos: %s" % [ids()])
-	menu.open_video_search()
+	menu.videos.open_video_search()
 	menu.rename_field.text = "PILOT"
-	menu.run_video_search()
+	menu.videos.run_video_search()
 	check(str(item("video:" + season.path_join("Pilot.mp4")).get("detail", "")).contains("Season 1"), "Search reaches subfolders and says where each video is")
 	activate("videos.clear_search")
 	check(menu.search_query.is_empty() and ("videos.search" in ids()) == (menu.input_kind != "keyboard"), "Clearing the search returns to the folder")
@@ -166,7 +166,7 @@ func run() -> void:
 	activate("videos.folder:" + season)
 	check(ids() == ["videos.up", "video:" + season.path_join("Pilot.mp4")], "Subfolders open in place with a way back up")
 	menu.back()
-	check(menu.mode == "videos" and menu.video_view_dir == folder, "Back steps up to the video folder")
+	check(menu.mode == "videos" and menu.videos.video_view_dir == folder, "Back steps up to the video folder")
 	menu.back()
 	check(menu.mode == "library", "Back again returns to the library")
 
@@ -254,12 +254,12 @@ func run() -> void:
 	check(not app.video.loaded and app.pattern.visible and menu.mode == "pause", "Stop returns the TV to the test signal")
 	check(app.world.picture.mode == global_mode and FileAccess.file_exists(PROFILE), "The video picture is kept even when it matches the global one (mode %d, global %d, profile %s, games dir %s)" % [app.world.picture.mode, global_mode, FileAccess.file_exists(PROFILE), DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("user://games"))])
 
-	menu.open_videos()
+	menu.videos.open_videos()
 	check(item("video:" + long).detail == "1:00 · Resume at 0:25", "The list shows where you stopped")
 	check(ids()[0] == "video.continue:" + long and item("video.continue:" + long).section == "CONTINUE WATCHING", "Continue watching leads the list")
-	menu.open_library()
+	menu.games.open_library()
 	check("library.continue" in ids(), "The library offers Continue watching")
-	menu.open_videos()
+	menu.videos.open_videos()
 	activate("video:" + long)
 	check(menu.mode == "video_launch" and ids() == ["video_launch.continue", "video_launch.fresh", "video_launch.cancel"], "A saved place offers Continue or Start from the beginning")
 	activate("video_launch.continue")
@@ -298,10 +298,10 @@ func run() -> void:
 	app.stop_video()
 
 	app.toggle_settings()
-	menu.open_library_tools()
+	menu.games.open_library_tools()
 	activate("library.video_clear")
 	check(app.video_dir.is_empty(), "Removing the video folder forgets it")
-	menu.open_library()
+	menu.games.open_library()
 	check(not "library.videos" in ids(), "And the Videos card goes away")
 
 	app.remember_game_picture = saved_remember

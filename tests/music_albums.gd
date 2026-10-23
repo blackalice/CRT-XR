@@ -68,7 +68,7 @@ func run():
  check(is_equal_approx(music.duck_gain,1.0),"Muted music does not dip game volume")
  var saved: ConfigFile=app.capture_settings()
  check(saved.get_value("music","duck_game")==true and saved.get_value("music","duck_amount")==.5,"Ducking settings persist globally")
- app.menu.open_music_browser(ProjectSettings.globalize_path(folder))
+ app.menu.music.open_music_browser(ProjectSettings.globalize_path(folder))
  check(app.menu.items[0].id=="music.album" and app.menu.items.any(func(i):return "First café" in i.label),"Folder browser has Play album and readable ID3 titles")
  app.free()
  for i in range(3): await process_frame

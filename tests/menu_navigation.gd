@@ -87,14 +87,14 @@ func run():
     page(3,0);m.select("room.ambient",false);await button(JOY_BUTTON_X)
     check(m.preview,"Room lighting has working compact preview")
     await button(JOY_BUTTON_B)
-    m.open_library();m.rom_index.cancel()
+    m.games.open_library();m.rom_index.cancel()
     var games:Array=[{"path":"/test/1942.sfc","label":"1942"}]
     for i in range(115):games.append({"path":"/test/Alpha%03d.sfc"%i,"label":"Alpha%03d"%i})
-    games.append({"path":"/test/Zelda.sfc","label":"Zelda"});m.rom_index.games={"snes":games};m.open_system("snes");await settle()
+    games.append({"path":"/test/Zelda.sfc","label":"Zelda"});m.rom_index.games={"snes":games};m.games.open_system("snes");await settle()
     m.select("game:/test/Alpha000.sfc",false);await key(KEY_X,120)
     check("/test/Alpha000.sfc" in app.play_history.favourites and m.search_query.is_empty(),"X still favourites instead of entering search")
     await key(KEY_F,102,true);await key(KEY_Z,122)
-    check(m.search_query=="z" and m.game_entries().size()==1 and m.search_field.has_focus(),"First typed search character filters immediately and retains focus")
+    check(m.search_query=="z" and m.games.game_entries().size()==1 and m.search_field.has_focus(),"First typed search character filters immediately and retains focus")
     await key(KEY_DOWN)
     check(not m.search_field.has_focus(),"Down returns from search to controller-style list navigation")
     m.update_search("");m.search_field.text="";m.select("games.jump",false);await key(KEY_J,106)
@@ -108,7 +108,7 @@ func run():
         DirAccess.make_dir_recursive_absolute("res://build/ui-notes-review")
         app.menu_view.get_texture().get_image().save_png("res://build/ui-notes-review/alphabet.png")
     m.select("letter.Z",false);await button(JOY_BUTTON_A)
-    check(m.mode=="games" and m.game_page==2 and m.selected_id=="game:/test/Zelda.sfc","Letter jump reaches games beyond the first page")
+    check(m.mode=="games" and m.games.game_page==2 and m.selected_id=="game:/test/Zelda.sfc","Letter jump reaches games beyond the first page")
     await button(JOY_BUTTON_B);m.open_settings()
     var unique:Dictionary={};var count:=0
     for cat_index in range(m.CATEGORIES.size()):

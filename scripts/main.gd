@@ -442,7 +442,7 @@ func start_application() -> void:
 			if not play_video(arguments[index + 1]): show_notice(video.status)
 	if "--last-game" in arguments and not "--rom" in arguments and not last_game_path.is_empty() and FileAccess.file_exists(last_game_path):
 		if not settings_panel.visible: toggle_settings()
-		menu.select_file(last_game_path)
+		menu.games.select_file(last_game_path)
 	startup_message = settings_store.warning if startup_message.is_empty() else startup_message
 	if not emulator.loaded and not video.loaded and not settings_panel.visible and not "--capture" in arguments:
 		toggle_settings()
@@ -683,7 +683,7 @@ func _input(event: InputEvent) -> void:
 			KEY_F8:
 				if emulator.loaded:
 					toggle_settings()
-					menu.state_action(false)
+					menu.play.state_action(false)
 			KEY_ESCAPE:
 				toggle_settings()
 			KEY_F1:
@@ -812,7 +812,7 @@ func preview_power_on() -> void:
 
 func choose_rom() -> void:
 	if not settings_panel.visible: toggle_settings()
-	menu.open_library()
+	menu.games.open_library()
 
 ## Switches the TV between the test signal and a programme (a game or a video).
 func show_programme(active: bool, rate: float, aspect: float) -> void:

@@ -24,6 +24,16 @@ from existing scrapes (`scripts/content/box_art.gd`), four save slots, a
 battery/time status line and a Using glasses guide. Release notes keep the
 focus on testers with non-VITURE glasses.
 
+After beta.12: zipped cartridges and Sega CD CHD discs play
+(`scripts/content/rom_archive.gd`, `core_registry.gd`; Genesis Plus GX is
+rebuilt with `HAVE_CHD=1`; tests in `tests/archives.gd`). A CHD counts as Sega CD
+only inside a Sega CD folder; real CHD playback still needs a Deck check with a
+Sega CD BIOS. `menu_controller.gd` now keeps layout, rendering, navigation and
+input; page builders and their actions live in helpers it owns: `menu_games.gd`
+(library, browser, lists, launch), `menu_play.gd` (pause/home, save states),
+`menu_videos.gd`, `menu_music.gd`, `menu_pictures.gd` (presets) and
+`menu_keys.gd` (on-screen keyboard), reached as `menu.games.…` and so on.
+
 The beta.9 notes below are historical.
 
 ## Beta.9 release preparation

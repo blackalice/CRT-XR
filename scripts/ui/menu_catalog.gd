@@ -95,7 +95,7 @@ func playback_rows() -> Array:
 		{"id":"video.hardware","label":"Hardware video decoding","kind":"toggle","default":true,
 			"getter":func(): return h.video_hardware,"setter":func(value): h.video_hardware=bool(value); h.save_library(),
 			"help":"Decodes on the GPU (VA-API on Steam Deck), leaving the CPU for the room and tracking. Falls back to software by itself when a file or GPU cannot use it. Applies from the next video."},
-		action("video.folder","Video folder",func(): menu.open_video_folder_picker(),"Choose where CRT XR looks for videos. Subfolders are included.",false,h.video_dir)]
+		action("video.folder","Video folder",func(): menu.videos.open_video_folder_picker(),"Choose where CRT XR looks for videos. Subfolders are included.",false,h.video_dir)]
 
 func pages(category: int) -> Array:
 	var h = host
@@ -133,14 +133,14 @@ func pages(category: int) -> Array:
 			var presets: Array = []
 			for pair in [["showcase","Deck Showcase (PAL)","Warm PAL colour and pronounced scanlines."],["clean","Clean source","Crisp source pixels; scanlines and phosphor effects off."],["rgb","RGB CRT","Clean RGB colour with a defined CRT beam."],["auto","Auto composite","Composite character matched to the game’s frame rate."],["pal","PAL composite","Soft PAL colour blending and analog texture."],["ntsc","NTSC composite","NTSC colour bleed and classic composite artifacts."]]:
 				var preset: String = pair[0]
-				presets.append(action("preset."+preset,pair[1],func(): menu.apply_preset(preset),pair[2],false,"✓ Active" if menu.applied_preset()==preset else "Apply"))
-			if menu.has_custom_picture():
-				presets.append(unavailable(action("preset.custom","Restore my custom picture",menu.restore_custom_picture,"Brings back the picture you had tuned yourself before choosing a preset.",menu.applied_preset().is_empty()),"Your custom picture is already in use."))
-			for i in range(menu.MY_PRESET_COUNT):
+				presets.append(action("preset."+preset,pair[1],func(): menu.pictures.apply_preset(preset),pair[2],false,"✓ Active" if menu.pictures.applied_preset()==preset else "Apply"))
+			if menu.pictures.has_custom_picture():
+				presets.append(unavailable(action("preset.custom","Restore my custom picture",menu.pictures.restore_custom_picture,"Brings back the picture you had tuned yourself before choosing a preset.",menu.pictures.applied_preset().is_empty()),"Your custom picture is already in use."))
+			for i in range(menu.pictures.MY_PRESET_COUNT):
 				var index: int = i
-				var state := "✓ Active" if menu.applied_preset()=="mine.%d" % index else ("Saved" if menu.my_preset_saved(index) else "Empty")
-				presets.append(action("preset.mine.%d" % index,menu.my_preset_name(index),func(): menu.open_my_preset(index),"Your own saved picture: apply, save the current picture here, rename or delete.",false,state))
-			if menu.picture_undo!=null: presets.append(action("preset.undo","Undo picture preset",menu.undo_picture_preset,"Restore the picture from before the last preset."))
+				var state := "✓ Active" if menu.pictures.applied_preset()=="mine.%d" % index else ("Saved" if menu.pictures.my_preset_saved(index) else "Empty")
+				presets.append(action("preset.mine.%d" % index,menu.pictures.my_preset_name(index),func(): menu.pictures.open_my_preset(index),"Your own saved picture: apply, save the current picture here, rename or delete.",false,state))
+			if menu.pictures.picture_undo!=null: presets.append(action("preset.undo","Undo picture preset",menu.pictures.undo_picture_preset,"Restore the picture from before the last preset."))
 			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference. Auto picks PAL or NTSC from the game's or video's frame rate."}]
 			signal_rows.append_array(picture_fields(w.picture.COLOR_FIELDS.slice(6)))
 			var picture_pages := [page("Presets",presets),page("CRT",crt),page("Screen fit",fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
@@ -225,7 +225,7 @@ func pages(category: int) -> Array:
 		6:
 			return [page("About & Help",[
 				action("system.version","CRT XR",func(): menu.notify("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))),"A little CRT room for your XR glasses.",false,str(ProjectSettings.get_setting("application/config/version"))),
-				action("system.glasses","Using glasses",func(): menu.open_help("Using glasses",menu.glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),
+				action("system.glasses","Using glasses",func(): menu.open_help("Using glasses",menu.play.glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),
 				action("system.device","Device status",func(): menu.open_help("Device status",menu.status_title+"\n\n"+menu.status_detail),"Current display and tracking status."),
 				action("system.controls","Controls",func(): menu.open_help("Controls","Menu: L1 + R1 + Start / Escape. Recenter: R3 / R. Navigate: D-pad / arrows. Select: A / Enter. Back: B / Backspace. Categories: L1 / R1 (Q / E); sections: L2 / R2 (Z / C). Reset option: Y. Picture preview: X."),"Controller and keyboard shortcuts."),
 				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting","Tracking unavailable? Retry glasses in Controls & XR → Tracking, or choose fixed view. Double image? Match the glasses’ SBS mode with View → Display. Missing games? Check Library locations. Games can be plain files or ZIPs for a supported console; Sega CD discs can be .cue/.bin or CHD in a Sega CD folder. No radio? Use a direct MP3 stream URL. Save failed? Check free space and folder permissions."),"Help with glasses, games, audio and saving."),
@@ -242,8 +242,8 @@ func pages(category: int) -> Array:
 				toggle("access.haptics","Controller vibration",h,"menu_haptics",false,"A light tick as the selection moves and a firmer one when you confirm.",func(): menu.refresh(),false),
 				unavailable(number("access.haptic_strength","Vibration strength",h,"haptic_strength",0.1,1.0,0.1,0.8,"percent","How strong the ticks feel. The Steam Deck passes on only part of it, so it may need to be higher there.",func(): h.menu_vibrate(1.0, 0.07),false).merged({"disabled":not h.menu_haptics},true),"Turn on Controller vibration first.")])]
 		8:
-			if not menu.videos_shown():
-				return [page("Videos",[action("videos.setup","Set up videos",menu.open_library_tools,"Choose a video folder in Library locations. Its videos appear after your consoles, and their settings appear here.",false,"›")])]
+			if not menu.videos.videos_shown():
+				return [page("Videos",[action("videos.setup","Set up videos",menu.games.open_library_tools,"Choose a video folder in Library locations. Its videos appear after your consoles, and their settings appear here.",false,"›")])]
 			return [page("Picture",video_picture_rows()),page("VCR",vcr_rows()),page("Playback",playback_rows())]
 		7:
 			var quick: Array = []
@@ -251,15 +251,15 @@ func pages(category: int) -> Array:
 				if source.id in ["view.distance","view.height_offset","view.recenter"]:
 					var copy: Dictionary=source.duplicate(); copy.id="quick."+source.id; quick.append(copy)
 			# Custom restores your own tuned picture; saved presets follow the built-in ones.
-			var preset_ids: Array = [""]+menu.PRESET_IDS
-			var preset_names: Array = ["Custom"]+menu.PRESET_NAMES
-			for i in range(menu.MY_PRESET_COUNT):
-				if menu.my_preset_saved(i): preset_ids.append("mine.%d" % i); preset_names.append(menu.my_preset_name(i))
-			quick.append({"id":"quick.preset","label":"Picture preset","kind":"choice","choices":preset_names,"getter":func(): return maxi(0,preset_ids.find(menu.applied_preset())),"setter":func(value):
+			var preset_ids: Array = [""]+menu.pictures.PRESET_IDS
+			var preset_names: Array = ["Custom"]+menu.pictures.PRESET_NAMES
+			for i in range(menu.pictures.MY_PRESET_COUNT):
+				if menu.pictures.my_preset_saved(i): preset_ids.append("mine.%d" % i); preset_names.append(menu.pictures.my_preset_name(i))
+			quick.append({"id":"quick.preset","label":"Picture preset","kind":"choice","choices":preset_names,"getter":func(): return maxi(0,preset_ids.find(menu.pictures.applied_preset())),"setter":func(value):
 				var id: String=preset_ids[value]
-				if id.is_empty(): menu.restore_custom_picture()
-				elif id.begins_with("mine."): menu.apply_my_preset(int(id.get_slice(".",1)))
-				else: menu.apply_preset(id),"help":"Choose a look. Custom brings back your own tuned picture; save your own on Picture → Presets.","visual":true})
+				if id.is_empty(): menu.pictures.restore_custom_picture()
+				elif id.begins_with("mine."): menu.pictures.apply_my_preset(int(id.get_slice(".",1)))
+				else: menu.pictures.apply_preset(id),"help":"Choose a look. Custom brings back your own tuned picture; save your own on Picture → Presets.","visual":true})
 			quick.append(menu.room_choice("quick.room"))
 			quick.append(number("quick.game_volume","Game volume",h.music,"game_volume",0,1,.05,1,"percent","Independent game volume.",h.music.apply,false))
 			quick.append(number("quick.music_volume","Music volume",h.music,"volume",0,1,.05,.45,"percent","Independent music volume.",h.music.apply,false))
@@ -290,9 +290,9 @@ func pages(category: int) -> Array:
 			if not music.duck_game:
 				duck_amount.disabled=true; duck_amount.disabled_reason="Enable Dip game during music first."
 			return [page("TV sound",audio_rows),page("Music balance",[duck_toggle,duck_amount]),page("Music & radio",[
-				action("music.file","Choose music / album",menu.open_music_browser,"Browse local storage or an SD card. Music keeps playing in menus."),
+				action("music.file","Choose music / album",menu.music.open_music_browser,"Browse local storage or an SD card. Music keeps playing in menus."),
 				unavailable(action("music.replay","Play last MP3",func(): music.play_last_file(); menu.refresh(); menu.notify(music.status),"Continues the saved track and position without changing the game.",music.last_file.is_empty()),"No MP3 has been played yet."),
-				action("music.url","Radio stream URL",menu.edit_radio_url,"Enter a direct MP3 stream URL. Station webpages, AAC and HLS are not supported.",false,"Edit"),
+				action("music.url","Radio stream URL",menu.music.edit_radio_url,"Enter a direct MP3 stream URL. Station webpages, AAC and HLS are not supported.",false,"Edit"),
 				unavailable(action("music.radio","Play radio",func(): music.play_station(music.station_url); menu.refresh(); menu.notify(music.status),"Streams a direct MP3 radio station with a bounded audio buffer.",music.station_url.is_empty()),"Add a radio stream URL first."),
 				action("music.stop","Stop music",func(): music.stop(); menu.refresh(); menu.notify(music.status),"Stops music or radio. Leaves game sound unchanged.",music.player.stream==null and not music.connecting),
 				number("music.volume","Music volume",music,"volume",0,1,.05,.45,"percent","Independent music level. Continues while the game is paused.",music.apply,false),

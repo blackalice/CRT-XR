@@ -48,7 +48,7 @@ func run():
 	check(menu.mode=="library_tools" and menu.items.any(func(item): return item.id=="library.sd"),"Library locations retains SD-card and folder tools")
 	await press(menu,JOY_BUTTON_B)
 	check(menu.mode=="library" and menu.selected_id=="library.locations","Back restores the locations card")
-	menu.select("library.system.snes"); menu.refresh_library()
+	menu.select("library.system.snes"); menu.games.refresh_library()
 	for i in range(100):
 		await process_frame
 		if not menu.rom_index.scanning: break

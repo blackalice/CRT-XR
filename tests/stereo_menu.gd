@@ -36,7 +36,7 @@ func run():
  check(app.menu.mode=="library" and app.stereo,"Library preserves SBS")
  await press(JOY_BUTTON_B)
  check(app.menu.mode=="pause" and app.menu.selected_id=="home.library","Library Back restores Choose game")
- app.menu.open_library();app.menu.open_folder(ProjectSettings.globalize_path("res://build"))
+ app.menu.games.open_library();app.menu.games.open_folder(ProjectSettings.globalize_path("res://build"))
  app.menu.select("file:"+ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc"))
  await press(JOY_BUTTON_A)
  check(app.emulator.loaded and not app.menu.visible and not app.emulator.paused,"Controller A loads ROM and starts gameplay")

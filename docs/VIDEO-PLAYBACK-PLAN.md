@@ -223,7 +223,7 @@ a 4:3 frame, so `picture.source_aspect` stays 4:3 and the existing fitting in
 ### Menus and controls (controller first)
 
 - **Opt-in folder:** a new "Video folder" row in Library locations
-  (`open_library_tools()` in `scripts/ui/menu_controller.gd`), using the same
+  (`open_library_tools()` in `scripts/ui/menu_games.gd`), using the same
   folder picker as the ROM folder; stored next to `default_rom_dir` in the
   preferences `main.gd` already writes. There is no default folder, and choosing
   "Remove video folder" hides the feature again.
@@ -233,8 +233,8 @@ a 4:3 frame, so `picture.source_aspect` stays 4:3 and the existing fitting in
   example "YOUR VIDEOS") with a count of files. Note: `library_items()` currently
   returns early with only the setup card when no ROMs are found; that branch must
   still add the Videos card so a video-only user is not locked out.
-- **Video list:** folder navigation modelled on the music browser in
-  `scripts/ui/menu_controller.gd`. Lists `.mp4`, `.m4v` and `.mkv` with duration and
+- **Video list:** folder navigation modelled on the music browser
+  (`scripts/ui/menu_videos.gd`). Lists `.mp4`, `.m4v` and `.mkv` with duration and
   resume point, probed on a worker thread and cached by the folder scan.
 - **Playback:** A play/pause; D-pad left/right seek 10 s; D-pad up/down seek 60 s
   (not L/R, which would fire while the L+R+Start menu chord is pressed); Y cycles

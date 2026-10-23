@@ -7,7 +7,7 @@ func run():
  for i in range(8):await process_frame
  RenderingServer.force_draw(false)
  app.menu_view.get_texture().get_image().save_png("res://build/album-pause.png")
- app.menu.open_music_browser(ProjectSettings.globalize_path("res://build/album-fixture"))
+ app.menu.music.open_music_browser(ProjectSettings.globalize_path("res://build/album-fixture"))
  for i in range(8):await process_frame
  RenderingServer.force_draw(false)
  app.menu_view.get_texture().get_image().save_png("res://build/album-browser.png")

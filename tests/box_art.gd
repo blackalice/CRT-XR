@@ -47,9 +47,9 @@ func run() -> void:
 	app.default_rom_dir = roms
 	if not app.settings_panel.visible: app.toggle_settings()
 	var menu = app.menu
-	var row: Dictionary = menu.game_item(soup, "Super Soup World")
+	var row: Dictionary = menu.games.game_item(soup, "Super Soup World")
 	check(row.get("thumbnail_path", "") == soup and row.get("thumbnail") != null, "Game rows carry their box art")
-	check(not menu.game_item(roms.path_join("snes/Plain Game.sfc"), "Plain Game").has("thumbnail_path"), "Rows without art keep their plain layout")
+	check(not menu.games.game_item(roms.path_join("snes/Plain Game.sfc"), "Plain Game").has("thumbnail_path"), "Rows without art keep their plain layout")
 
 	# The header: time, and the battery where there is one.
 	var status = menu.status_line
@@ -58,6 +58,6 @@ func run() -> void:
 
 	# Glasses help.
 	var about: Array = menu.catalog.pages(6)[0].rows.map(func(item): return item.id)
-	check("system.glasses" in about and menu.glasses_guide().contains("SBS"), "About & Help explains using glasses")
+	check("system.glasses" in about and menu.play.glasses_guide().contains("SBS"), "About & Help explains using glasses")
 	print("BOX ART CHECKS COMPLETE: %d failures" % failures)
 	quit(1 if failures else 0)
