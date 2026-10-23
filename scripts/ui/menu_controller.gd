@@ -1242,6 +1242,19 @@ func reveal_after_layout(revision: int) -> void:
 	await get_tree().process_frame
 	if revision==layout_revision: reveal_selected()
 
+## Where the menu's depth layers sit, in menu-viewport pixels, for
+## scripts/ui/menu_depth.gd: the page and the selected row (clipped to it).
+func depth_layout() -> Dictionary:
+	var layout := {"page": Rect2(), "lift": Rect2(), "page_key": state_key() + ("|preview" if preview else ""), "selected": selected_id}
+	if not visible: return layout
+	if body.visible:
+		var clip := scroll.get_global_rect()
+		layout.page = clip
+		var row = selected_row()
+		if row != null and row.is_visible_in_tree():
+			layout.lift = row.get_global_rect().intersection(clip)
+	return layout
+
 func selected_row():
 	for row in rows:
 		if row.item.id==selected_id: return row
@@ -1256,7 +1269,9 @@ func select(id: String, user_action := true) -> void:
 		if row.item.id==id and not row.disabled: candidate=row
 	if candidate==null: return
 	selecting = true
-	if user_action and selected_id!=id: play_menu_sound()
+	if user_action and selected_id!=id:
+		play_menu_sound()
+		host.menu_vibrate(0.56, 0.04)
 	selected_id = id
 	for row in rows: row.set_selected(row==candidate)
 	if not preview and not search_field.has_focus() and not rename_field.has_focus() and get_viewport().gui_get_focus_owner()!=candidate: candidate.grab_focus()
@@ -1477,6 +1492,7 @@ func activate() -> void:
 	if row==null or row.disabled: return
 	if row.item.kind=="action":
 		play_menu_sound(true)
+		host.menu_vibrate(1.0, 0.07)
 		row.item.action.call()
 	elif row.item.kind=="seek": pass
 	elif row.item.kind=="toggle": adjust(-1 if bool(row.item.getter.call()) else 1)

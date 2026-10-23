@@ -48,6 +48,15 @@ var menu_large_text := false
 var menu_high_contrast := false
 var menu_reduced_motion := false
 var menu_sounds := false
+## The menu floats in front of the TV with lifted selections and a dimmed room.
+var menu_depth := true
+## With menu depth on, the menu bends gently towards you at its sides.
+var menu_curve := false
+## A light controller tick as the menu selection moves, and on confirm.
+var menu_haptics := false
+## How strong those ticks are, 10% to 100% of the motors' range.
+var haptic_strength := 0.8
+var menu_depth_view: Node
 var emulator: Node
 var video: Node
 var music: Node
@@ -402,6 +411,10 @@ func start_application() -> void:
 		overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 		panel.add_child(overlay)
 		menu_overlays.append(overlay)
+	menu_depth_view = preload("res://scripts/ui/menu_depth.gd").new()
+	menu_depth_view.name = "MenuDepth"
+	add_child(menu_depth_view)
+	menu_depth_view.setup(self, menu_overlays, panels)
 	set_stereo(sbs_startup or "--sbs" in OS.get_cmdline_user_args() or "--full-sbs" in OS.get_cmdline_user_args())
 	if "--full-sbs" in OS.get_cmdline_user_args() or sbs_startup:
 		set_stereo(true)
@@ -430,7 +443,9 @@ func apply_settings(config: ConfigFile) -> void:
 	SettingsStore.migrate_view_fov(config)
 	picture_preset_id=str(config.get_value("menu","picture_preset_id",""))
 	picture_preset_signature=str(config.get_value("menu","picture_preset_signature",""))
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds"]: set(key,bool(config.get_value("accessibility",key,false)))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,bool(config.get_value("accessibility",key,false)))
+	menu_depth = bool(config.get_value("accessibility","menu_depth",true))
+	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
 	for key in music.DEFAULTS: music.set(key,config.get_value("music",key,music.DEFAULTS[key]))
 	music.apply()
 	metrics_visible=bool(config.get_value("preferences","metrics_visible",false))
@@ -723,6 +738,15 @@ func adjust_distance(amount: float) -> void:
 
 func toggle_fullscreen() -> void:
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_WINDOWED if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_FULLSCREEN else DisplayServer.WINDOW_MODE_FULLSCREEN)
+
+## A short rumble on every connected controller, when Controller vibration is on.
+## Both motors run at the same strength: Steam Input passes only a faint
+## version through to the Deck's haptics, so a weak motor alone barely registers.
+func menu_vibrate(strength: float, seconds: float) -> void:
+	if not menu_haptics: return
+	var level := clampf(strength * haptic_strength, 0.0, 1.0)
+	for device in Input.get_connected_joypads():
+		Input.start_joy_vibration(device, level, level, seconds)
 
 func set_stereo(value: bool) -> void:
 	if not value and not OS.get_environment("CRT_XR_DISPLAY_STATUS").is_empty():
@@ -1077,7 +1101,9 @@ func reset_all_options() -> void:
 	for index in range(5): SettingsDefaults.apply(self,index)
 	emulator.tv_audio.reset_defaults()
 	music.reset_defaults()
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds"]: set(key,false)
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,false)
+	menu_depth = true
+	haptic_strength = 0.8
 	power_on.enabled=true; power_on.sound_level=.60; power_on.reduced_motion=false; power_on.apply()
 	rebuild_settings()
 	show_notice("All settings reset to defaults")
@@ -1205,7 +1231,7 @@ func capture_settings() -> ConfigFile:
 	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds"]: config.set_value("accessibility",key,get(key))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_depth","menu_curve","haptic_strength"]: config.set_value("accessibility",key,get(key))
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
 	config.set_value("emulation", "separate_preview", emulator.separate_preview)
 	config.set_value("view", "right_stick_distance", right_stick_distance)
