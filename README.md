@@ -6,7 +6,7 @@
 
 <p align="center">
   A little CRT room for your XR glasses.<br>
-  Retro games, head tracking, warm lighting and the radio on in the background.
+  Retro games and your own videos, head tracking, warm lighting and the radio on in the background.
 </p>
 
 <p align="center">
@@ -26,10 +26,11 @@
 
 ## Features
 
-- **A CRT in your space.** A detailed television, wooden table and baked contact shadows, with a dim red clock radio showing the real time, a VCR on a shelf and unbranded game boxes. Switch props off individually and choose 90s confetti carpet (the default), wool carpet or wooden floorboards. The surroundings fade into black to suit XR glasses.
+- **A CRT in your space.** A detailed television, wooden table and baked contact shadows, with a dim red clock radio showing the real time, a VCR on a shelf and a stack of game boxes. Switch props off individually and choose 90s confetti carpet (the default), wool carpet or wooden floorboards. The surroundings fade into black to suit XR glasses.
 - **Stereo and head tracking.** Full side-by-side rendering and rotational **3DoF** tracking let you look around an anchored screen. Adjust its distance, height, size and curvature, then recenter with a stick click.
 - **A picture you can tune and keep.** Scanlines, phosphor detail, glass reflections, PAL/NTSC-inspired signal effects and colour controls. Trying a preset preserves your custom picture; restore it with **Custom**, or save up to three named picture presets. Screen-fitting options keep the full game image inside the tube.
 - **Thirteen classic systems.** SNES, NES, Mega Drive / Genesis, Master System, Game Gear, Game Boy / Game Boy Color, Game Boy Advance, PC Engine / TurboGrafx-16, Sega CD / Mega-CD, Atari 2600, Atari Lynx, Neo Geo Pocket / Color and Vectrex, powered by libretro cores.
+- **Your videos on the tube.** Choose a video folder and your MP4, M4V and MKV files play on the CRT with the same picture, light and sound as games: letterbox, 14:9 or fill for widescreen, subtitles, resume and Continue watching. The VCR joins in with green on-screen text, an optional VHS or worn-tape look and its mechanism sounds. The Steam Deck uses SteamOS's own FFmpeg; Windows downloads FFmpeg's video libraries once, on request.
 - **A library that understands your folders.** Pick your ROM root or SD card and browse supported systems, Recent and Favourites. Unrelated console folders stay out of the way.
 - **Your music, in the room.** Play MP3 albums or direct MP3 web radio with positional sound and optional room reverb. Use the pause-menu transport and seek bar, and optionally lower game audio while music plays. The last track and position are restored, ready for you to press Play.
 - **Responsive play.** Optional input preview in a separate copy of the emulator reduces input delay while keeping game audio intact. **Reset game** in the pause menu emulates the console's reset button and keeps battery saves and save states.
@@ -39,14 +40,14 @@ Bring your own games and music. Supported files are uncompressed cartridges for 
 
 ## Download the beta
 
-**Beta.9 (0.1.0-beta.9)** adds eight systems, a furnished room, saved picture presets and simpler installation. See the [beta.9 release notes](docs/RELEASE-NOTES-beta.9.md) for the full changes and known limits.
+**Beta.10 (0.1.0-beta.10)** adds video playback with a VCR: your own videos on the CRT, VCR on-screen text, a VHS tape look and mechanism sounds, plus clearer menus. See the [beta.10 release notes](docs/RELEASE-NOTES-beta.10.md) for the full changes and known limits ([beta.9 notes](docs/RELEASE-NOTES-beta.9.md)).
 
 Download from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases). Pick **one** app package:
 
 | You have | Download | Then |
 |---|---|---|
-| **Steam Deck** | `CRT-XR-0.1.0-beta.9-SteamDeck.tar.gz` | Extract it in Desktop Mode and double-click **Install CRT XR** |
-| **Windows PC** | `CRT-XR-0.1.0-beta.9-Windows.zip` | Extract it and double-click **CRT-XR.exe** |
+| **Steam Deck** | `CRT-XR-0.1.0-beta.10-SteamDeck.tar.gz` | Extract it in Desktop Mode and double-click **Install CRT XR** |
+| **Windows PC** | `CRT-XR-0.1.0-beta.10-Windows.zip` | Extract it and double-click **CRT-XR.exe** |
 
 Each download opens with a short **HOW TO INSTALL** / **HOW TO START** file. The `…-source-code.tar.gz` file and GitHub's automatic "Source code" links are not apps: they are for rebuilding and licence compliance.
 
@@ -64,7 +65,7 @@ The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a 
 
 ## Install on Steam Deck
 
-1. In **Desktop Mode**, download `CRT-XR-0.1.0-beta.9-SteamDeck.tar.gz` and extract it (right-click → Extract). Sign in to Steam at least once beforehand.
+1. In **Desktop Mode**, download `CRT-XR-0.1.0-beta.10-SteamDeck.tar.gz` and extract it (right-click → Extract). Sign in to Steam at least once beforehand.
 2. In the extracted folder, double-click **Install CRT XR**. Choose **Trust and Launch** if asked. Pick the VITURE Full SBS profile, or Deck / monitor only.
 3. Let setup close Steam. It installs CRT XR, adds or updates its Steam shortcut and artwork, and keeps your settings, saves and custom artwork.
 4. Restart Steam, then **Return to Gaming Mode → Library → Non-Steam → CRT XR**. You can delete the extracted folder.
@@ -85,7 +86,7 @@ Open **Game library → Library locations** to choose your ROM folder or SD card
 
 ## Install on Windows
 
-1. Extract `CRT-XR-0.1.0-beta.9-Windows.zip` to a folder (not inside the ZIP) and double-click **CRT-XR.exe**. It is portable and unsigned: if Windows warns, choose **More info → Run anyway**. Keep the files and folders next to the EXE together. For normal-monitor play, choose **Play on this screen without glasses**; the remaining steps are for glasses.
+1. Extract `CRT-XR-0.1.0-beta.10-Windows.zip` to a folder (not inside the ZIP) and double-click **CRT-XR.exe**. It is portable and unsigned: if Windows warns, choose **More info → Run anyway**. Keep the files and folders next to the EXE together. For normal-monitor play, choose **Play on this screen without glasses**; the remaining steps are for glasses.
 2. For glasses tracking, obtain the **VITURE Windows x86_64 SDK separately** and copy the contents of its `x86_64` folder into a folder named `sdk` beside the EXE. The beta does **not** include proprietary VITURE SDK DLLs; installing SpaceWalker alone does not configure this step. See [Windows setup](docs/WINDOWS-SETUP.md).
 3. Close SpaceWalker so it does not compete for tracking. **Switch the glasses to SBS first**, then launch CRT XR on your normal monitor.
 4. Choose the glasses display and select **Open glasses view**. The app moves under a black curtain and opens when the selected display is ready. For normal-monitor play, choose **Play on this screen without glasses**.
@@ -138,6 +139,16 @@ CRT XR discovers supported games in subfolders and presents them by system; you 
 Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Supported, recognised games appear. ROMs must be **uncompressed**; ZIP archives are not scanned as games. No ROMs are supplied.
 
 PC Engine, Atari 2600, Lynx and Vectrex still need real-game testing beyond diagnostic programs. PC Engine CD, SuperGrafx, Sega 32X and CHD images are unsupported. Sega CD needs the BIOS matching the disc's region; a different region's BIOS can produce a generic load error. See [supported formats and BIOS setup](docs/emulation.md).
+
+## Videos
+
+In **Game library → Library locations**, select **Choose a video folder** and pick the folder holding your videos; subfolders are included. A **Videos** card then appears after your consoles. MP4, M4V and MKV files are listed, with any `.srt` subtitles beside them.
+
+- **Steam Deck:** nothing to install; SteamOS's FFmpeg is used and decoding runs on the GPU.
+- **Windows:** choose **Set up video playback** in Library locations. CRT XR downloads FFmpeg's five LGPL video libraries (about 55 MB) from the public [BtbN builds](https://github.com/BtbN/FFmpeg-Builds), checks them and keeps them in its own user-data folder.
+- **Other Linux systems:** install FFmpeg 7.1 or 8 with your package manager.
+
+While watching, **A** pauses, **D-pad left/right** skips 10 seconds (hold to scrub), **up/down** skips a minute, **Y** changes the picture shape and **X** the audio track; the menu has a scrubbable timeline. Settings are in the **Videos** category: **Picture** (the video picture, shape, lines, interlacing), **VCR** (tape look, on-screen text, sounds) and **Playback** (subtitles, hardware decoding, folder). See [Videos](docs/emulation.md#videos) for details.
 
 ## Controls
 

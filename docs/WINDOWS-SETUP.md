@@ -1,12 +1,16 @@
 # CRT XR — Windows beta setup
 
-Version: 0.1.0-beta.8. Tested with VITURE Pro 2 and an Xbox-compatible controller.
+Version: 0.1.0-beta.10. Tested with VITURE Pro 2 and an Xbox-compatible controller.
 
 ## Extract the app
 
 Download `CRT-XR-<version>-Windows.zip` from https://github.com/blackalice/CRT-XR/releases and extract it to a folder. Double-click **CRT-XR.exe**; it is unsigned, so if Windows warns, choose **More info → Run anyway**. There is nothing to install and Steam is optional. Keep the EXE with the files and folders next to it (`CRT-XR.pck`, the extension DLL, `cores`, `assets`, `tracking`, `docs`, `licenses`).
 
 Without glasses, choose **Play on this screen without glasses**. No VITURE SDK is needed for this path.
+
+## Video playback (optional)
+
+Windows has no built-in FFmpeg. To watch videos, open **Game library → Library locations** and choose **Set up video playback**. CRT XR downloads only FFmpeg's five LGPL video libraries (about 55 MB) from https://github.com/BtbN/FFmpeg-Builds, checks each one and keeps them in its own user-data folder (`%APPDATA%/Godot/app_userdata/CRT XR/ffmpeg`, with a `source.cfg` recording where they came from). Nothing else on the computer changes, and videos play straight away. Then use **Choose a video folder** in the same place.
 
 ## Set up VITURE tracking
 

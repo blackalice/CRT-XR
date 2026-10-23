@@ -1,4 +1,21 @@
-# Current handover: beta.9 release preparation
+# Current handover: beta.10 (video playback)
+
+Updated 23 October 2026. Beta.10 adds video playback with a VCR, merged from the
+`video-playback` branch (PR #1): a native FFmpeg decoder loaded at runtime
+(7.1 and 8.x), the optional Windows FFmpeg download, subtitles, interlacing,
+library extras, VCR on-screen text, the VHS tape look, synthesised VCR sounds and
+a Videos settings category, plus menu typography and contrast work. Design,
+Deck findings and status are in `docs/VIDEO-PLAYBACK-PLAN.md`; user-facing
+changes in `docs/RELEASE-NOTES-beta.10.md`.
+
+Release candidates are prepared under `dist/release-preparation/v0.1.0-beta.10/`
+(START-HERE.md, build record, upload folder). Open items: the owner's long-play
+acceptance on the Deck, DVD/Blu-ray picture subtitles from real rips, and
+headset readability of the lighter Regular text.
+
+The beta.9 notes below are historical.
+
+## Beta.9 release preparation
 
 Updated 22 October 2026 after reviewing the imported Claude Code session
 `d518952e-4052-4c26-a94b-c4a2be670600` and the working tree based on `640d405`.
