@@ -145,6 +145,10 @@ Download archive SHA-256: f5c459f278a3b50dc5c2bf535b8c3b6fd4bb6fc458c836b6402396
 
 [dr_mp3 0.7.4](https://github.com/mackron/dr_libs/blob/master/dr_mp3.h), David Reid, used under MIT-0 (the selected dual-license option). Vendored source and SHA256 are recorded in `third_party/audio/dr_mp3-LICENSE.txt`; exported builds include the notice in `licenses/audio/`. Based on minimp3 (CC0). No music or station recordings are bundled.
 
+## Video playback (FFmpeg headers)
+
+Video playback uses the operating system's own FFmpeg libraries, loaded at runtime (on SteamOS 3.8, FFmpeg 7.1: libavcodec 61, libavformat 61, libavutil 59, libswscale 8, libswresample 5). CRT XR does not compile, link or ship any FFmpeg code, library or codec; if the libraries are missing, videos are simply not offered. Only FFmpeg 7.1.1's public headers are vendored, for compiling the loader, in `native/emulation/third_party/ffmpeg-61/` under the GNU LGPL 2.1 or later (`COPYING.LGPLv2.1` there; source tarball and SHA-256 in its `README.md`). Codec availability and any codec licensing follow the operating system's FFmpeg build.
+
 ## Super Retro Game Console
 
 “Super Retro Game Console” by **ELIZION**, licensed under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). [Original model](https://sketchfab.com/3d-models/super-retro-game-console-d672d0ac1d6a4d238314d6675f8f92b2), [creator](https://sketchfab.com/ELIZION).

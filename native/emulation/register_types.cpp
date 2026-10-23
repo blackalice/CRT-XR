@@ -1,11 +1,12 @@
 #include "retro_core.h"
 #include "radio_mp3.h"
+#include "video_decoder.h"
 #include <godot_cpp/godot.hpp>
 #include <godot_cpp/core/class_db.hpp>
 
 using namespace godot;
 void initialize_crt_xr(ModuleInitializationLevel level) {
-    if (level == MODULE_INITIALIZATION_LEVEL_SCENE) { ClassDB::register_class<RetroCore>(); ClassDB::register_class<RadioMP3Decoder>(); }
+    if (level == MODULE_INITIALIZATION_LEVEL_SCENE) { ClassDB::register_class<RetroCore>(); ClassDB::register_class<RadioMP3Decoder>(); ClassDB::register_class<VideoDecoder>(); }
 }
 void uninitialize_crt_xr(ModuleInitializationLevel) {}
 extern "C" GDExtensionBool GDE_EXPORT crt_xr_library_init(
