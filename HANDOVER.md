@@ -18,6 +18,12 @@ Beta.11 (23 October 2026) adds the OpenTrack UDP tracking source
 EDID matching for XREAL, Nreal, Rokid and RayNeo on the Deck
 (`display-probe.py`). Both await testers with real non-VITURE glasses.
 
+Beta.12 (23 October 2026) adds menu depth and curve in SBS, controller
+vibration, two-column pause tiles, a home Continue row, room presets, box art
+from existing scrapes (`scripts/content/box_art.gd`), four save slots, a
+battery/time status line and a Using glasses guide. Release notes keep the
+focus on testers with non-VITURE glasses.
+
 The beta.9 notes below are historical.
 
 ## Beta.9 release preparation

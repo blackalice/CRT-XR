@@ -1,6 +1,6 @@
 # Public beta release checklist
 
-Updated 23 October 2026 for **0.1.0-beta.11**. These are observed checks and remaining beta limitations; they are not a claim of universal compatibility. Release files are prepared locally; publication is a separate action.
+Updated 23 October 2026 for **0.1.0-beta.12**. These are observed checks and remaining beta limitations; they are not a claim of universal compatibility. Release files are prepared locally; publication is a separate action.
 
 | Area | Verified | Remaining beta coverage |
 |---|---|---|
@@ -25,6 +25,6 @@ Thirteen systems are supported; see [emulation](emulation.md) for extensions and
 ## Publish the prepared candidate
 
 1. Read the release folder's START-HERE.md and BUILD-RECORD.json, including any failed or skipped checks.
-2. Commit the reviewed source and tag the matching snapshot as v0.1.0-beta.11. The corresponding-source archive identifies the exact supplied files even while this checkout is uncommitted. Regenerate the candidate if source changes after packaging.
+2. Commit the reviewed source and tag the matching snapshot as v0.1.0-beta.12. The corresponding-source archive identifies the exact supplied files even while this checkout is uncommitted. Regenerate the candidate if source changes after packaging.
 3. Create a GitHub **prerelease**, paste RELEASE-NOTES.md and upload every file from upload/, including corresponding source and SHA256SUMS.txt. Keep third-party notices inside both app packages.
 4. Confirm public download links work, then post the launch video and beta invitation. No upload or social post is sent automatically.

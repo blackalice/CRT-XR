@@ -1,6 +1,6 @@
 # Getting started with CRT XR
 
-Public beta: 0.1.0-beta.11. VITURE Pro 2 has been tested on Steam Deck and Windows; other hardware remains unverified. No games or music are included.
+Public beta: 0.1.0-beta.12. VITURE Pro 2 has been tested on Steam Deck and Windows; other hardware remains unverified. No games or music are included.
 
 ## Before you start
 

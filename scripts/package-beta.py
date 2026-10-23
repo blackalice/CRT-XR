@@ -1,6 +1,6 @@
 """Arrange, check and archive an exported build for a release download.
-Usage: python scripts/package-beta.py dist/CRT-XR-0.1.0-beta.11-SteamDeck linux [source-archive]
-       python scripts/package-beta.py dist/CRT-XR-0.1.0-beta.11-Windows windows [source-archive]
+Usage: python scripts/package-beta.py dist/CRT-XR-0.1.0-beta.12-SteamDeck linux [source-archive]
+       python scripts/package-beta.py dist/CRT-XR-0.1.0-beta.12-Windows windows [source-archive]
 With a source archive (from package-corresponding-source.py), licenses/SOURCE-ACCESS.md
 is written naming it and its SHA-256; otherwise an existing one is required.
 
