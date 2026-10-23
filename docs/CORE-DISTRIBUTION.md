@@ -1,8 +1,8 @@
-# Emulator distribution review - beta.12
+# Emulator distribution review - beta.13
 
 Reviewed 17 October 2026 for beta.5 and updated 22 October 2026 for the ten-core
 beta.9 collection, against the pinned sources in scripts/build-release-cores.py.
-The beta.10 to beta.12 cores are the same ten builds. FFmpeg is not distributed: Linux uses
+The beta.10 to beta.12 cores are the same ten builds; beta.13 rebuilds Genesis Plus GX from the same pinned source with CHD support (HAVE_CHD=1) and keeps the other nine. FFmpeg is not distributed: Linux uses
 the system's copy, and on Windows the user chooses to download it (THIRD_PARTY.md).
 
 ## In-process copyleft cores

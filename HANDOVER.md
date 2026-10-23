@@ -24,11 +24,15 @@ from existing scrapes (`scripts/content/box_art.gd`), four save slots, a
 battery/time status line and a Using glasses guide. Release notes keep the
 focus on testers with non-VITURE glasses.
 
+Beta.13 (23 October 2026) ships the work below plus a fix for main-thread
+hashing of large discs (CHDs are named by their header; other hashes are cached)
+and the Deck battery read. Sonic CD (CHD) was booted on the Deck with the real
+BIOS. Release notes keep the glasses-testing focus and welcome new users.
+
 After beta.12: zipped cartridges and Sega CD CHD discs play
 (`scripts/content/rom_archive.gd`, `core_registry.gd`; Genesis Plus GX is
 rebuilt with `HAVE_CHD=1`; tests in `tests/archives.gd`). A CHD counts as Sega CD
-only inside a Sega CD folder; real CHD playback still needs a Deck check with a
-Sega CD BIOS. `menu_controller.gd` now keeps layout, rendering, navigation and
+only inside a Sega CD folder; real CHD playback was checked on the Deck with Sonic CD and the US BIOS. `menu_controller.gd` now keeps layout, rendering, navigation and
 input; page builders and their actions live in helpers it owns: `menu_games.gd`
 (library, browser, lists, launch), `menu_play.gd` (pause/home, save states),
 `menu_videos.gd`, `menu_music.gd`, `menu_pictures.gd` (presets) and
