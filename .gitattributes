@@ -18,4 +18,9 @@ LICENSE text eol=lf
 .gitignore text eol=lf
 *.desktop text eol=lf
 *.godot text eol=lf
+# Godot writes these with LF; a CRLF checkout made it re-import (and rewrite) them.
+*.import text eol=lf
+*.uid text eol=lf
+*.tscn text eol=lf
+*.tres text eol=lf
 .gitattributes text eol=lf
