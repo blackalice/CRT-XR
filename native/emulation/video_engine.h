@@ -1,106 +1,94 @@
 #pragma once
+// One FFmpeg major version's decoder. This header and video_engine.cpp are
+// compiled once per supported major, each into its own namespace (set by
+// CRT_XR_FFMPEG_NAMESPACE), because FFmpeg's struct layouts differ between
+// majors. Everything outside reaches it through VideoBackend.
+#include "video_backend.h"
 #include <atomic>
 #include <condition_variable>
-#include <cstdint>
 #include <deque>
 #include <mutex>
-#include <string>
 #include <thread>
-#include <vector>
+
+#ifndef CRT_XR_FFMPEG_NAMESPACE
+#error "Compile video_engine.cpp with CRT_XR_FFMPEG_NAMESPACE set (for example ffmpeg61)"
+#endif
 
 namespace crt_xr {
-// Decodes one video file into a fixed 4:3 RGBA frame for the CRT, and its sound
-// into 48 kHz stereo. FFmpeg is the operating system's copy, loaded at runtime;
-// nothing from it is linked or shipped. A worker thread demuxes, decodes, scales
-// and resamples ahead; the caller collects frames that are due and audio to play.
-class VideoEngine {
+namespace CRT_XR_FFMPEG_NAMESPACE {
+// Loads this major's libraries once; reset() forgets a failure so a later
+// attempt (after the libraries were installed) can succeed.
+bool load(std::string& error);
+void reset();
+std::string version();
+double probe(const std::string& path);
+std::unique_ptr<VideoBackend> create();
+
+// Decodes one video file into a fixed 4:3 RGBA frame for the CRT, its sound into
+// 48 kHz stereo and its subtitles into cues. A worker thread demuxes, decodes,
+// scales and resamples ahead; the caller collects what is due.
+class VideoEngine final : public VideoBackend {
 public:
-    enum Style { LETTERBOX = 0, FOURTEEN_NINE = 1, FILL = 2, STRETCH = 3 };
-    static constexpr int SAMPLE_RATE = 48000;
-    struct AudioTrack {
-        int stream = -1, channels = 0;
-        std::string language, title, codec;
-    };
-    struct Info {
-        int width = 0, height = 0;               // output frame, shown at 4:3
-        int source_width = 0, source_height = 0; // coded size
-        double display_aspect = 4.0 / 3.0;       // including sample aspect ratio
-        double fps = 0.0, duration = 0.0;
-        std::string codec;
-        std::vector<AudioTrack> audio_tracks;
-        int audio_track = -1; // index into audio_tracks; -1 when silent
-        bool hardware_requested = false;
-    };
-    struct Frame {
-        std::vector<std::uint8_t> rgba;
-        double time = 0.0; // seconds from the start of the file
-    };
-    // Loads the system libraries once per process. False when they are missing or
-    // are not the FFmpeg major this build was compiled against.
-    static bool load_libraries(std::string& error);
-    // Length of a file from its header alone, for listings; -1 when unreadable.
-    static double probe_duration(const std::string& path);
-    ~VideoEngine();
-    // `hardware` tries the GPU decoder (VA-API on Linux, D3D11VA on Windows) and
-    // falls back to software, at once or mid-stream, whenever it cannot be used.
-    bool open(const std::string& path, int lines, Style style, bool hardware = false);
-    // "VA-API", "D3D11VA" or "software": how the latest frame was decoded.
-    std::string decoding() const;
-    void close();
-    // Frames due at or before `clock`; returns true when `current` changed.
-    // Late frames are skipped, never shown out of order.
-    bool update(double clock);
-    // Waits for the next decoded frame regardless of time (tests and seeking).
-    bool next(int timeout_ms);
-    void seek(double seconds);
-    // Interleaved stereo samples; returns how many frames were copied.
-    int read_audio(float* out, int frames);
-    int audio_buffered() const;
-    // Time of the next sample read_audio() returns, or -1 before any audio has
-    // been decoded since opening or seeking.
-    double audio_time() const;
-    bool has_audio() const;
-    // Switches tracks and resumes the new one from `seconds`.
-    void set_audio_track(int index, double seconds);
-    void set_style(Style style);
-    Style style() const { return requested_style.load(); }
-    bool finished() const;
-    const Info& info() const { return details; }
-    const Frame& frame() const { return current; }
-    std::string error() const;
-    int dropped() const { return dropped_frames; }
-    // Where the picture sits inside the output frame for a style; the rest is bars.
-    struct Layout { int crop_x = 0, crop_y = 0, crop_width = 0, crop_height = 0, x = 0, y = 0, width = 0, height = 0; };
-    static Layout layout(int source_width, int source_height, double display_aspect, int width, int height, Style style);
+    ~VideoEngine() override;
+    bool open(const std::string& path, int lines, Style style, bool hardware) override;
+    void close() override;
+    bool update(double clock) override;
+    bool next(int timeout_ms) override;
+    void seek(double seconds) override;
+    int read_audio(float* out, int frames) override;
+    int audio_buffered() const override;
+    double audio_time() const override;
+    bool has_audio() const override;
+    void set_audio_track(int index, double seconds) override;
+    void set_subtitle_track(int index, double seconds) override;
+    std::vector<Cue> subtitles_at(double clock) override;
+    void set_style(Style style) override { requested_style = style; }
+    Style style() const override { return requested_style.load(); }
+    void set_interlace(Interlace mode) override { interlace_mode = mode; }
+    bool interlaced() const override { return last_interlaced.load(); }
+    bool finished() const override;
+    const Info& info() const override { return details; }
+    const Frame& frame() const override { return current; }
+    std::string error() const override;
+    int dropped() const override { return dropped_frames; }
+    std::string decoding() const override;
+    // FFmpeg's get_format hook, reached through a typed wrapper in the .cpp.
+    static int choose_format(void* context, const int* formats);
 private:
     void run();
-    bool convert(void* decoded, Frame& out);
+    bool convert(void* decoded, double time);
+    bool scale(void* source, int field, const Layout& place, std::vector<std::uint8_t>& out);
+    void queue(Frame& frame);
     void resample(void* decoded);
+    void decode_subtitle(void* packet);
     bool open_audio(int track);
     void close_audio();
+    bool open_subtitles(int track);
+    void close_subtitles();
     void restart(double target);
     bool open_video(bool hardware);
     bool setup_hardware(void* context, const void* decoder);
     void request_software();
-public:
-    // FFmpeg's get_format hook, reached through a typed wrapper in the .cpp.
-    static int choose_format(void* context, const int* formats);
-private:
     void fail(const std::string& message);
     void* format = nullptr;  // AVFormatContext
     void* codec = nullptr;   // AVCodecContext
     void* scaler = nullptr;  // SwsContext
     void* audio_codec = nullptr; // AVCodecContext
     void* resampler = nullptr;   // SwrContext
-    int stream = -1, audio_stream = -1;
-    // Both streams count from the container's start, so they stay aligned.
-    double time_base = 0.0, audio_time_base = 0.0, start_time = 0.0;
+    void* subtitle_codec = nullptr; // AVCodecContext
+    int stream = -1, audio_stream = -1, subtitle_stream = -1;
+    // All streams count from the container's start, so they stay aligned.
+    double time_base = 0.0, audio_time_base = 0.0, subtitle_time_base = 0.0, start_time = 0.0;
     int resampler_rate = 0, resampler_format = -1, resampler_channels = 0;
     std::vector<float> samples; // interleaved stereo, read from samples_read
     std::size_t samples_read = 0;
     double samples_time = -1.0; // time of samples[samples_read]
     bool track_pending = false;
     int track_target = -1;
+    bool subtitle_pending = false;
+    int subtitle_target = -1;
+    std::vector<Cue> cues; // sorted by start; guarded by lock
+    std::vector<std::uint8_t> blend_scratch;
     const void* video_decoder = nullptr; // AVCodec chosen for the video stream
     void* hardware_device = nullptr; // AVBufferRef
     void* transfer = nullptr;        // AVFrame: GPU frames are copied here once
@@ -110,6 +98,8 @@ private:
     bool gpu_open = false; // the current decoder was opened for the GPU
     double last_frame_time = 0.0;
     std::atomic<bool> decoded_on_gpu{false};
+    std::atomic<bool> last_interlaced{false};
+    std::atomic<Interlace> interlace_mode{FIELDS};
     Info details;
     Frame current;
     std::thread worker;
@@ -129,4 +119,5 @@ private:
     static constexpr int AUDIO_LOW = SAMPLE_RATE / 2;
     static constexpr std::size_t VIDEO_LIMIT = 24;
 };
+}
 }

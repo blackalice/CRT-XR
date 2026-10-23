@@ -10,6 +10,7 @@ const Emulation = preload("res://scripts/emulation/emulation_session.gd")
 const VideoSession = preload("res://scripts/video/video_session.gd")
 const VideoLibrary = preload("res://scripts/video/video_library.gd")
 const VideoBar = preload("res://scripts/ui/video_bar.gd")
+const FfmpegInstaller = preload("res://scripts/video/ffmpeg_installer.gd")
 const Menu = preload("res://scripts/ui/menu_controller.gd")
 var menu: PanelContainer
 const Showcase = preload("res://scripts/presets/showcase.gd")
@@ -115,6 +116,15 @@ var video_dir := ""
 var video_style := 0
 var video_lines := 240
 var video_hardware := true
+## 0 shows interlaced video field by field (TV motion), 1 blends the fields.
+var video_interlace := 0
+## Turn on a video's first subtitle option unless it has its own remembered choice.
+var video_subtitles := false
+## Green VCR mode text (PLAY, PAUSE, FF, REW) drawn on the video picture.
+var video_osd := true
+## Videos share one picture of their own (true), or use the global picture.
+var video_own_picture := true
+var ffmpeg_installer: Node
 var video_library := VideoLibrary.new()
 var video_checkpoint := 0.0
 ## Held D-pad or arrow direction while watching: repeats seeks to scrub.
@@ -137,6 +147,10 @@ var windows_sbs_size := Vector2i.ZERO
 var windows_fixed_start := false
 
 func _ready() -> void:
+	# A previously downloaded FFmpeg (Windows) is found before anything asks
+	# whether video playback is available.
+	FfmpegInstaller.finish_removal()
+	FfmpegInstaller.use_installed()
 	var migration := preload("res://scripts/content/user_data_migration.gd").migrate()
 	if migration.error!=OK: startup_message="Previous settings could not be fully copied. Original data is safe; check storage permissions."
 	Input.use_accumulated_input = false
@@ -314,6 +328,8 @@ func start_application() -> void:
 			if save_library() != OK: show_notice("Could not save the recent game location"))
 	video = VideoSession.new()
 	add_child(video)
+	ffmpeg_installer = FfmpegInstaller.new()
+	add_child(ffmpeg_installer)
 	video.audio_source = emulator.player
 	video.content_changed.connect(func(texture): world.picture.set_source(texture, true))
 	video.frame_presented.connect(world.screen_light.set_image)
@@ -342,6 +358,10 @@ func start_application() -> void:
 	# which hid the scanlines, so it is not carried over.
 	video_lines = 480 if int(recent.get_value("video", "line_count", 240)) == 480 else 240
 	video_hardware = bool(recent.get_value("video", "hardware", true))
+	video_interlace = clampi(int(recent.get_value("video", "interlace", 0)), 0, VideoSession.INTERLACE_MODES.size() - 1)
+	video_subtitles = bool(recent.get_value("video", "subtitles", false))
+	video_osd = bool(recent.get_value("video", "osd", true))
+	video_own_picture = bool(recent.get_value("video", "own_picture", true))
 	play_history.read(last_game_path)
 	get_tree().auto_accept_quit = false
 	get_window().close_requested.connect(request_exit)
@@ -656,6 +676,7 @@ func request_exit() -> void:
 	get_tree().quit()
 
 func _exit_tree() -> void:
+	if video_library != null: video_library.stop_thumbnails()
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 	if is_instance_valid(emulator) and is_instance_valid(settings_panel): save_settings()
 	provider.close()
@@ -744,12 +765,19 @@ func play_video(path: String, from_seconds := 0.0) -> bool:
 	if music.player.playing and not music.player.stream_paused: music.toggle_playback()
 	video.lines = video_lines
 	video.hardware = video_hardware
+	video.interlace = video_interlace
+	video.osd_enabled = video_osd
 	var saved_style := video_library.style(path)
 	video.style = saved_style if saved_style >= 0 else video_style
 	if not video.open(path):
 		startup_message = video.status
 		return false
 	if from_seconds > 0.0: video.seek_to(from_seconds)
+	# A choice made for this video before wins; otherwise the default applies.
+	var remembered = video_library.subtitle(path)
+	var names: PackedStringArray = video.subtitle_names()
+	if remembered is String: video.select_subtitles(names.find(remembered))
+	elif video_subtitles and not names.is_empty(): video.select_subtitles(0)
 	video_checkpoint = 0.0
 	return true
 
@@ -769,6 +797,16 @@ func remember_video_position() -> void:
 func flash_video_bar(note := "") -> void:
 	for bar in video_bars: bar.flash(note)
 
+## Selects subtitle option `index` (wrapping, with off between the last option and
+## the first) for the playing video and remembers it; returns its name.
+func choose_subtitles(index: int) -> String:
+	var names: PackedStringArray = video.subtitle_names()
+	if names.is_empty(): return "none in this video"
+	var choice := posmod(index + 1, names.size() + 1) - 1
+	video.select_subtitles(choice)
+	video_library.set_subtitle(video.path, names[choice] if choice >= 0 else "")
+	return names[choice] if choice >= 0 else "Off"
+
 func video_input(event: InputEvent) -> bool:
 	# Controller first: A pauses, the D-pad seeks (up/down by a minute, so the
 	# L+R+Start menu chord stays free; hold left/right to scrub), Y changes the
@@ -786,7 +824,7 @@ func video_input(event: InputEvent) -> bool:
 		# Held arrows repeat through the keyboard's own echo.
 		if event.echo and not event.physical_keycode in [KEY_LEFT, KEY_RIGHT]: return false
 		action = {KEY_SPACE:"pause",KEY_ENTER:"pause",KEY_LEFT:"back",KEY_RIGHT:"forward",KEY_UP:"forward_long",KEY_DOWN:"back_long",
-			KEY_V:"style",KEY_A:"audio",KEY_BACKSPACE:"menu"}.get(event.physical_keycode,"")
+			KEY_V:"style",KEY_A:"audio",KEY_S:"subtitles",KEY_BACKSPACE:"menu"}.get(event.physical_keycode,"")
 	match action:
 		"pause":
 			if video.ended: video.seek_to(0.0)
@@ -796,6 +834,7 @@ func video_input(event: InputEvent) -> bool:
 			video.seek_by({"back":-10.0,"forward":10.0,"back_long":-60.0,"forward_long":60.0}[action])
 			flash_video_bar()
 		"style": flash_video_bar("Picture shape: " + video.cycle_style())
+		"subtitles": flash_video_bar("Subtitles: " + choose_subtitles(video.subtitle_choice + 1))
 		"audio":
 			var track: String = video.cycle_audio_track()
 			flash_video_bar("Audio: " + track if not track.is_empty() else "This video has one audio track")
@@ -830,6 +869,10 @@ func save_library() -> Error:
 	recent.set_value("video", "style", video_style)
 	recent.set_value("video", "line_count", video_lines)
 	recent.set_value("video", "hardware", video_hardware)
+	recent.set_value("video", "interlace", video_interlace)
+	recent.set_value("video", "subtitles", video_subtitles)
+	recent.set_value("video", "osd", video_osd)
+	recent.set_value("video", "own_picture", video_own_picture)
 	if recent.has_section_key("video", "lines"): recent.erase_section_key("video", "lines")
 	return SettingsStore.write("user://recent.cfg", recent)
 
@@ -925,7 +968,7 @@ func change_game_preferences(active: bool, key := "") -> void:
 		var restore := capture_settings()
 		SettingsStore.copy_sections(picture_baseline,restore,PICTURE_SECTIONS)
 		apply_settings(restore)
-	if key == VIDEO_PROFILE: active_game_key = VIDEO_PROFILE if active else ""
+	if key == VIDEO_PROFILE: active_game_key = VIDEO_PROFILE if active and video_own_picture else ""
 	else: active_game_key = emulator.rom_hash if active and remember_game_picture else ""
 	if not active_game_key.is_empty():
 		var path := "user://games/"+active_game_key+".cfg"
@@ -940,6 +983,25 @@ func change_game_preferences(active: bool, key := "") -> void:
 		apply_settings(merged)
 		if not reader.warning.is_empty(): startup_message = reader.warning
 	settings_dirty = true
+
+## Switches videos between their own picture and the global one, at once if one plays.
+func set_video_own_picture(enabled: bool) -> void:
+	if enabled == video_own_picture: return
+	if video.loaded: change_game_preferences(false)
+	video_own_picture = enabled
+	if video.loaded: change_game_preferences(true, VIDEO_PROFILE)
+	save_library()
+	settings_dirty = true
+
+## Starts the video picture again: the global picture with Auto composite.
+func reset_video_picture() -> void:
+	var playing: bool = video.loaded and active_game_key == VIDEO_PROFILE
+	if playing: change_game_preferences(false)
+	for suffix in ["", ".bak"]:
+		var path: String = "user://games/" + VIDEO_PROFILE + ".cfg" + str(suffix)
+		if FileAccess.file_exists(path): DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	if playing: change_game_preferences(true, VIDEO_PROFILE)
+	show_notice("Video picture reset to Auto composite")
 
 func set_remember_game_picture(enabled: bool) -> void:
 	if enabled == remember_game_picture: return
@@ -1132,7 +1194,10 @@ func capture_settings() -> ConfigFile:
 func save_settings() -> bool:
 	if is_instance_valid(music) and music.save_resume()!=OK: return false
 	var config := capture_settings()
-	if remember_game_picture and not active_game_key.is_empty():
+	# A key is only set while a picture profile is active: a game's (when
+	# per-game picture is on) or the video profile (always). Its picture is
+	# saved to the profile, never into the global settings.
+	if not active_game_key.is_empty():
 		if not save_game_preferences(): return false
 		SettingsStore.copy_sections(picture_baseline, config, PICTURE_SECTIONS)
 	else: picture_baseline = config

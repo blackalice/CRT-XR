@@ -1,4 +1,5 @@
 extends Control
+const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 signal proceed_requested
 
 const READY_EXIT_CODE := 10
@@ -59,6 +60,7 @@ func _ready() -> void:
 	heading.text = "SWITCH TO SBS NOW"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 36)
+	MenuSkin.weigh(heading,MenuSkin.BOLD)
 	heading.add_theme_color_override("font_color",Color("f3ead8"))
 	column.add_child(heading)
 	instructions = Label.new()
@@ -67,11 +69,13 @@ func _ready() -> void:
 		"The game will start automatically when SBS is detected.")
 	instructions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	instructions.add_theme_font_size_override("font_size", 24)
+	MenuSkin.weigh(instructions,MenuSkin.REGULAR)
 	instructions.add_theme_color_override("font_color",Color("f3ead8"))
 	column.add_child(instructions)
 	help = Label.new()
 	help.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	help.add_theme_font_size_override("font_size",18)
+	MenuSkin.weigh(help,MenuSkin.REGULAR)
 	help.add_theme_color_override("font_color",Color("c2bcaf"))
 	help.text = "Keep the glasses connected while changing mode. B / Escape returns to Steam."
 	column.add_child(help)

@@ -57,16 +57,29 @@ func picture_fields(fields: Array) -> Array:
 
 func video_rows() -> Array:
 	var h = host
-	return [{"id":"video.default_style","label":"Picture shape for new videos","kind":"choice","choices":VideoSession.STYLES,"default":0,
+	return [{"id":"video.own_picture","label":"Video picture","kind":"choice","choices":["Own settings","Same as games"],"default":0,
+			"getter":func(): return 0 if h.video_own_picture else 1,"setter":func(value): h.set_video_own_picture(int(value)==0); menu.refresh(),
+			"help":"Own settings: every video shares one picture, starting from Auto composite so videos look like broadcast TV. While a video plays, the other Picture pages change it. Same as games: videos use your global picture."},
+		unavailable(action("video.reset_picture","Reset video picture",func(): menu.ask("Reset the video picture?","Videos go back to your global picture with Auto composite. Games are not affected.",h.reset_video_picture),
+			"Starts the video picture again from your global picture, with Auto composite.",not h.video_own_picture,""),"Videos use your global picture."),
+		{"id":"video.default_style","label":"Picture shape for new videos","kind":"choice","choices":VideoSession.STYLES,"default":0,
 			"getter":func(): return h.video_style,"setter":func(value): h.video_style=int(value); h.save_library(),
 			"help":"Letterbox shows the whole widescreen picture; 14:9 trims the sides a little; Fill 4:3 crops to the tube; Stretch squeezes. Each video remembers its own choice."},
-		{"id":"video.lines","label":"Picture lines","kind":"choice","choices":["240 lines · CRT look","480 lines · sharper"],"default":0,
+		{"id":"video.lines","label":"Picture lines","kind":"choice","choices":["240 · CRT look","480 · sharper"],"default":0,
 			"getter":func(): return 1 if h.video_lines==480 else 0,"setter":func(value): h.video_lines=480 if int(value)==1 else 240; h.save_library(),
 			"help":"240 lines is one broadcast field, the line structure a CRT shows, so scanlines and the phosphor mask are visible. 480 is sharper, but its lines are too fine to show on the virtual tube. Applies from the next video you open."},
+		{"id":"video.interlace","label":"Interlaced video","kind":"choice","choices":["Field motion · TV","Blend"],"default":0,
+			"getter":func(): return h.video_interlace,"setter":func(value): h.video_interlace=int(value); h.video.set_interlace(h.video_interlace); h.save_library(),
+			"help":"For interlaced recordings such as DVDs and TV captures. Field motion shows each field in turn, 50 or 60 a second, for the smooth motion of broadcast TV. Blend mixes the two fields into one picture."},
+		{"id":"video.subtitles_default","label":"Subtitles for new videos","kind":"toggle","default":false,
+			"getter":func(): return h.video_subtitles,"setter":func(value): h.video_subtitles=bool(value); h.save_library(),
+			"help":"Turns on a video's first subtitles when you open it. A choice you make for a video is remembered for that video."},
+		{"id":"video.osd","label":"VCR on-screen text","kind":"toggle","default":true,
+			"getter":func(): return h.video_osd,"setter":func(value): h.video_osd=bool(value); h.video.osd_enabled=h.video_osd; h.video.update_osd(); h.save_library(),
+			"help":"Shows PLAY, PAUSE, FF and REW in green VCR lettering on the picture, like a video recorder."},
 		{"id":"video.hardware","label":"Hardware video decoding","kind":"toggle","default":true,
 			"getter":func(): return h.video_hardware,"setter":func(value): h.video_hardware=bool(value); h.save_library(),
-			"help":"Decodes on the GPU (VA-API on Steam Deck), leaving the CPU for the room and tracking. Falls back to software by itself when a file or GPU cannot use it. Applies from the next video."},
-		action("video.picture_note","Picture for videos",func(): pass,"Videos keep their own picture settings, starting from Auto composite. Adjust them on the other Picture pages while a video is playing.",false,"")]
+			"help":"Decodes on the GPU (VA-API on Steam Deck), leaving the CPU for the room and tracking. Falls back to software by itself when a file or GPU cannot use it. Applies from the next video."}]
 
 func pages(category: int) -> Array:
 	var h = host
@@ -97,7 +110,7 @@ func pages(category: int) -> Array:
 					w.set_curvature(h.screen_curvature)))
 			crt.append_array(picture_fields(w.picture.BEAM_FIELDS))
 			var fitting := picture_fields(w.picture.FIT_FIELDS)
-			fitting.append(toggle("picture.aspect","Preserve game aspect",w.picture,"keep_aspect",true,"Keeps the full game picture at its intended display aspect, including handheld proportions.",refresh))
+			fitting.append(toggle("picture.aspect","Preserve picture shape",w.picture,"keep_aspect",true,"Keeps the whole game or video picture at its intended shape, including handheld proportions. A video's widescreen shape is set by Picture shape.",refresh))
 			fitting.append(toggle("picture.guides","Picture-edge guides",w.picture,"guides",false,"Highlights the game frame edges to check that the full picture is visible.",refresh))
 			fitting.append(action("picture.restore_fit","Restore full-picture fit",func():
 				w.picture.reset_fields(w.picture.FIT_FIELDS); w.picture.keep_aspect=true; refresh.call(); menu.refresh(),"Resets all fitting controls; leaves CRT and colour settings alone."))
@@ -112,7 +125,7 @@ func pages(category: int) -> Array:
 				var state := "✓ Active" if menu.applied_preset()=="mine.%d" % index else ("Saved" if menu.my_preset_saved(index) else "Empty")
 				presets.append(action("preset.mine.%d" % index,menu.my_preset_name(index),func(): menu.open_my_preset(index),"Your own saved picture: apply, save the current picture here, rename or delete.",false,state))
 			if menu.picture_undo!=null: presets.append(action("preset.undo","Undo picture preset",menu.undo_picture_preset,"Restore the picture from before the last preset."))
-			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference; Auto uses the game rate."}]
+			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference. Auto picks PAL or NTSC from the game's or video's frame rate."}]
 			signal_rows.append_array(picture_fields(w.picture.COLOR_FIELDS.slice(6)))
 			var picture_pages := [page("Presets",presets),page("CRT",crt),page("Screen fit",fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
 			if menu.videos_shown(): picture_pages.append(page("Video",video_rows()))
@@ -141,8 +154,8 @@ func pages(category: int) -> Array:
 			var props: Array = [
 				toggle("room.clock_radio","Clock radio",w,"show_clock_radio",true,"A clock radio beside the TV showing the time on a dim red display. Music plays from its side of the room.",w.apply_room_settings),
 				toggle("room.clock_24_hour","24-hour clock",w,"clock_24_hour",false,"Shows the clock radio and VCR time in 24-hour format.",w.apply_room_settings),
-				toggle("room.vcr","VCR",w,"show_vcr",true,"A video recorder on the shelf under the TV; its dim panel shows the standby clock.",w.apply_room_settings),
-				toggle("room.game_boxes","Game boxes",w,"show_game_boxes",true,"A small stack of unbranded game boxes beside the TV.",w.apply_room_settings)]
+				toggle("room.vcr","VCR",w,"show_vcr",true,"A video recorder on the shelf under the TV. Its display shows the time, or the tape counter while a video plays.",w.apply_room_settings),
+				toggle("room.game_boxes","Game boxes",w,"show_game_boxes",true,"A small stack of game boxes beside the TV.",w.apply_room_settings)]
 			return [page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Props",props),page("Placement & fade",groups["Placement & fade"])]
 
 		4:
@@ -171,7 +184,10 @@ func pages(category: int) -> Array:
 				property_row("vertical_fov","Vertical field of view",18,70,.5,"degrees","Advanced camera calibration. The glasses normally use 24 degrees."),
 				property_row("smoothing","Smoothing (seconds)",0,.15,.01,"ms","Tracking smoothing; higher values can feel less immediate."),
 				property_row("motion_predict","Motion prediction (seconds)",0,.08,.005,"ms","Optional lead for recent head movement. Recommended default: 0 ms for raw driver timing. Increase only if tracking feels delayed; too much can feel oversensitive."),
-				unavailable(action("system.signal","Stop game / test signal",func(): h.emulator.stop(); menu.open_pause(),"Stops emulation and restores the calibration pattern.",not h.emulator.loaded),"No game is running.")])]
+				unavailable(action("system.signal","Stop and show test signal",func():
+					if h.video.loaded: h.stop_video()
+					if h.emulator.loaded: h.emulator.stop()
+					menu.open_pause(),"Stops the game or video and shows the calibration pattern.",not h.emulator.loaded and not h.video.loaded),"Nothing is playing.")])]
 		5:
 			var slots: Array = [action("slot.showcase","Deck Showcase",h.load_showcase_setup,"The tuned Deck picture, placement, dark room and TV audio. Display mode, tracking and per-game settings stay as they are; you can undo it.",false,"Built-in")]
 			for i in range(3):
@@ -181,8 +197,8 @@ func pages(category: int) -> Array:
 				slots.append(action("slot.%d" % i,str(config.get_value("meta","name",h.PROFILE_NAMES[i])),func(): menu.open_slot(slot),"Stores view, room and picture settings; does not switch display mode or tracking.",false,"Saved" if saved else "Empty"))
 			if h.profile_undo!=null: slots.append(action("setups.undo","Undo last setup load",h.undo_profile,"Restore the setup from before loading Deck Showcase or a saved slot."))
 			return [page("Setup slots",slots),page("Per-game picture",[
-				{"id":"setups.pergame","label":"Remember picture per game","kind":"toggle","default":h.Showcase.PER_GAME_PICTURE,"visual":false,"getter":func(): return h.remember_game_picture,"setter":h.set_remember_game_picture,"help":"Fitting, CRT and colour belong to the game; room and view stay global."},
-				unavailable(action("setups.global","Use global picture for this game",h.forget_game_picture,"Removes this game's picture override; future global picture changes apply.",h.active_game_key.is_empty()),"Start a game first.")])]
+				{"id":"setups.pergame","label":"Remember picture per game","kind":"toggle","default":h.Showcase.PER_GAME_PICTURE,"visual":false,"getter":func(): return h.remember_game_picture,"setter":h.set_remember_game_picture,"help":"Each game keeps its own fitting, CRT and colour; room and view stay global. Off: games use the global picture. Videos have their own setting under Picture → Video."},
+				unavailable(action("setups.global","Use global picture for this game",h.forget_game_picture,"Removes this game's picture override; future global picture changes apply.",h.active_game_key.is_empty() or h.active_game_key==h.VIDEO_PROFILE),"Start a game with its own picture first.")])]
 		6:
 			return [page("About & Help",[
 				action("system.version","CRT XR",func(): menu.notify("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))),"A little CRT room for your XR glasses.",false,str(ProjectSettings.get_setting("application/config/version"))),

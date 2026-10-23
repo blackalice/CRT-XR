@@ -145,6 +145,82 @@ loaded path is remembered by **Play last game**. Opening the menu pauses
 the game; closing it restores its prior pause state. **Stop game / return to test
 signal** unloads the cartridge and restores the animated test pattern.
 
+## Videos
+
+CRT XR can also play your own videos on the TV, through the same picture, glass,
+screen light and TV sound as games. It is off until you choose a folder.
+
+**Turning it on.** Open **Game library → Library locations** and choose
+**Choose a video folder** under *Videos · optional*. Pick the folder that holds
+your MP4, M4V or MKV files; subfolders are included. A **Videos** card then appears
+after your consoles. **Remove video folder** hides it again; your files are never
+changed.
+
+**What it needs.** Videos are decoded by FFmpeg, which CRT XR does not ship.
+- *Steam Deck (SteamOS)* already includes it; nothing to install.
+- *Windows* has no built-in FFmpeg. Library locations offers **Set up video
+  playback**, which downloads only FFmpeg's five video libraries (LGPL, about
+  55 MB) from [BtbN's FFmpeg builds](https://github.com/BtbN/FFmpeg-Builds), checks
+  each one and keeps them in CRT XR's own data folder. **Remove downloaded video
+  libraries** deletes them (at the next start, as Windows keeps loaded files open).
+- *Other Linux* systems need FFmpeg 7.1 or 8 from the package manager.
+
+Common formats play: H.264, HEVC, AV1, VP9, MPEG-2 and MPEG-4 video; AAC, AC-3,
+E-AC-3, DTS, Opus, Vorbis, FLAC and MP3 sound, mixed down to the TV's stereo.
+
+**Controls while watching**
+
+| Action | Keyboard | Deck/gamepad |
+|---|---|---|
+| Pause / play (after the end: play again) | Space or Enter | A |
+| Back / forward 10 seconds (hold to scrub) | Left / Right | D-pad left / right |
+| Back / forward 1 minute | Down / Up | D-pad down / up |
+| Picture shape | V | Y |
+| Audio track | A | X |
+| Subtitles | S | Menu → Subtitles |
+| Menu | Backspace or Escape | B or Start |
+
+A bar at the bottom shows the title and position whenever you pause or seek, and
+stays while paused. The menu's **Now playing** panel has a timeline you can scrub
+with left/right or drag; the paused picture follows. The VCR on the table shows
+the tape counter while a video plays.
+
+**Picture.** Videos have their own picture settings, starting from *Auto
+composite*: 25 and 50 fps sources look like PAL, film and 30/60 fps like NTSC.
+**Picture → Video** holds the rest:
+- *Picture shape for new videos*: **Letterbox** (the whole widescreen picture),
+  **14:9** (the broadcast compromise), **Fill 4:3** (crops the sides) or **Stretch**.
+  Each video remembers its own shape; Y changes it while watching.
+- *Picture lines*: **240** (one broadcast field, so scanlines and the phosphor mask
+  show) or **480** (sharper, but too fine for the tube's line structure).
+- *Interlaced video*, for DVD rips and TV recordings: **Field motion** shows each
+  field in turn, 50 or 60 a second, for the smooth motion of broadcast TV;
+  **Blend** mixes the two fields into one picture.
+- *Hardware video decoding* uses the GPU (VA-API on the Deck) and falls back to
+  software by itself.
+
+**Subtitles** are drawn into the picture, so they look like broadcast or DVD
+subtitles on the tube. CRT XR offers a video's own subtitle tracks (text such as
+SRT, ASS and MP4 text, or DVD/Blu-ray picture subtitles) and any `.srt` file next
+to it with the same name, such as `Film.srt` or `Film.en.srt`. They start off;
+choose them in the menu or with S, and each video remembers the choice. *Subtitles
+for new videos* turns on the first option automatically.
+
+**VCR text.** Like a video recorder, the picture shows green **PLAY ►**, **PAUSE**,
+**FF ►►**, **REW ◄◄** and **STOP** in the top corner, drawn through the CRT. Turn it
+off with *Picture → Video → VCR on-screen text*.
+
+**Finding your place.** Each video remembers where you stopped (not in the first
+10 seconds or the last 30) and offers **Continue** or **Start from the beginning**.
+The newest part-watched videos appear under **Continue watching**, both at the top
+of the video list and as a card in the library. **Search videos…** finds a video
+anywhere in your folder by part of its name (with a keyboard, Ctrl+F searches as
+you type). Video rows show a small picture from about a tenth of the way in, made
+in the background the first time the list is shown.
+
+Known limits: HDR videos are shown without tone mapping and can look washed out,
+and very large libraries list 50 videos per page.
+
 ## Audio and saves
 
 The core supplies console frame rate and sample rate. NTSC and PAL use those

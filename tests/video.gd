@@ -47,12 +47,28 @@ func sync_checks() -> void:
 	session.queue_free()
 	AudioServer.set_bus_mute(0, false)
 
+## Needs FFmpeg (the system copy, or CRT_XR_FFMPEG_DIR) and the clips from
+## tests/make_video_fixtures.py; without either the suite skips and says why.
+func skip_reason() -> String:
+	var Session := preload("res://scripts/video/video_session.gd")
+	if not Session.available(): return "no FFmpeg: " + Session.unavailable_reason()
+	if not FileAccess.file_exists(ProjectSettings.globalize_path("res://build/video-fixtures/library/long_43_25.mp4")):
+		return "no clips: run python tests/make_video_fixtures.py <ffmpeg>"
+	return ""
+
 func run() -> void:
+	var reason := skip_reason()
+	if not reason.is_empty():
+		print("CHECKS SKIPPED: " + reason)
+		quit(0)
+		return
 	var Session := preload("res://scripts/video/video_session.gd")
 	check(Session.available(), "Video decoder is available (" + Session.unavailable_reason() + ")")
 	var session: Node = Session.new()
 	root.add_child(session)
 	session.set_process(DisplayServer.get_name() != "headless")
+	# The VCR text is checked on its own below; it would otherwise layer the picture.
+	session.osd_enabled = false
 	var events: Array = []
 	session.active_changed.connect(func(active): events.append(active))
 	var textures: Array = []
@@ -85,10 +101,56 @@ func run() -> void:
 		"Audio tracks are named by language, title and format: %s" % [session.track_names()])
 	session.select_audio_track(1)
 	check(int(session.info.audio_track) == 1 and session.decoder.has_audio(), "Selecting the second audio track")
+	# Subtitles: drawn into the picture through the subtitle layer.
+	var outputs: Array = []
+	session.content_changed.connect(func(texture): outputs.append(texture))
+	check(session.open(FIXTURES + "subtitles_srt.mkv") and session.subtitle_names() == PackedStringArray(["ENG · English · SUBRIP"]) and session.subtitle_choice == -1,
+		"Subtitle tracks are named and start off: %s" % [session.subtitle_names()])
+	session.select_subtitles(0)
+	session.seek_to(1.0)
+	await play_for(session, 0.3)
+	check(session.subtitle_layer.text.text == "Hello CRT" and session.output == session.subtitle_layer.get_texture() and outputs.back() == session.subtitle_layer.get_texture(),
+		"The subtitle is drawn over the picture the TV shows (%s)" % session.subtitle_layer.text.text)
+	session.seek_to(2.2)
+	await play_for(session, 0.4)
+	check(session.subtitle_layer.text.text == "Second line\nbreaks here", "Later cues follow the clock")
+	session.select_subtitles(-1)
+	await play_for(session, 0.1)
+	check(session.output == session.texture and session.subtitle_layer.text.text == "", "Turning subtitles off returns the plain picture")
+	check(session.open(FIXTURES + "library/Episode 2.mkv") and session.subtitle_names() == PackedStringArray(["File · Episode 2.en.srt"]), "A subtitle file beside the video is offered")
+	session.select_subtitles(0)
+	session.seek_to(0.9)
+	await play_for(session, 0.2)
+	check(session.subtitle_layer.text.text == "Hello CRT", "Subtitles from a file show at their time")
+	session.interlace = 1
+	check(session.open(FIXTURES + "interlaced_576i_25.mkv"), "An interlaced video opens")
+	await play_for(session, 0.3)
+	check(session.decoder.interlaced(), "Interlaced video is recognised")
+	session.interlace = 0
 	check(session.open(FIXTURES + "silent_169_30.mp4") and not session.decoder.has_audio() and session.playback == null, "A silent file plays on the frame clock")
 	var before: float = session.clock
 	await play_for(session, 0.2)
 	check(session.clock > before, "The frame clock runs without sound")
+	# The VCR's green mode text, drawn into the picture like subtitles.
+	session.osd_enabled = true
+	check(session.open(FIXTURES + "h264_aac_25.mp4") and session.osd_text() == "PLAY ►", "Opening a video shows PLAY")
+	await play_for(session, 0.3)
+	check(session.subtitle_layer.osd.text == "PLAY ►" and session.output == session.subtitle_layer.get_texture(), "The VCR text is drawn over the picture the TV shows")
+	session.set_paused(true)
+	check(session.osd_text() == "PAUSE", "Pausing shows PAUSE")
+	session.seek_by(1.0)
+	check(session.osd_text() == "FF ►►", "Seeking forward shows FF")
+	session.seek_by(-1.0)
+	check(session.osd_text() == "REW ◄◄", "Seeking back shows REW")
+	session._process(session.OSD_SEEK_SECONDS + 0.1)
+	check(session.osd_text() == "PAUSE", "After a seek, a paused tape shows PAUSE again")
+	session.set_paused(false)
+	check(session.osd_text() == "PLAY ►", "Resuming shows PLAY")
+	session._process(session.OSD_FLASH_SECONDS + 0.1)
+	check(session.osd_text() == "" and session.subtitle_layer.osd.text == "" and session.output == session.texture, "The text clears and the plain picture returns")
+	session.osd_enabled = false
+	session.set_paused(true)
+	check(session.osd_text() == "" and session.output == session.texture, "With the VCR text off, nothing is drawn")
 	session.stop()
 	check(events.back() == false and session.decoder == null, "Stopping deactivates the video")
 	session.free()
@@ -99,7 +161,7 @@ func run() -> void:
 	for i in range(4): await process_frame
 	check(app.video.open(FIXTURES + "classic_43_30.mp4"), "The scene opens a video")
 	await play_for(app.video, 0.3)
-	check(app.world.picture.source_texture == app.video.texture and not app.pattern.visible, "The CRT picture shows the video, not the test signal")
+	check(app.world.picture.source_texture == app.video.output and app.video.output != null and not app.pattern.visible, "The CRT picture shows the video, not the test signal")
 	check(is_equal_approx(app.world.picture.source_rate, 60.0) and is_equal_approx(app.world.picture.source_aspect, 4.0 / 3.0), "The picture gets the video's field rate and 4:3 frame")
 	var vcr: ShaderMaterial = app.world.video_recorder.material_override
 	app.video.seek_to(3.0)
@@ -114,7 +176,7 @@ func run() -> void:
 	# Going straight from one video to another must keep the picture on the TV.
 	check(app.video.open(FIXTURES + "h264_aac_25.mp4"), "A second video opens over the first")
 	await play_for(app.video, 0.3)
-	check(app.world.picture.source_texture == app.video.texture and app.video.texture != null and not app.pattern.visible,
+	check(app.world.picture.source_texture == app.video.output and app.video.texture != null and not app.pattern.visible,
 		"The TV shows the second video, not the test signal")
 	app.video.stop()
 	check(app.pattern.visible and app.world.picture.source_texture == app.signal_view.get_texture(), "Stopping returns the TV to the test signal")

@@ -145,9 +145,19 @@ Download archive SHA-256: f5c459f278a3b50dc5c2bf535b8c3b6fd4bb6fc458c836b6402396
 
 [dr_mp3 0.7.4](https://github.com/mackron/dr_libs/blob/master/dr_mp3.h), David Reid, used under MIT-0 (the selected dual-license option). Vendored source and SHA256 are recorded in `third_party/audio/dr_mp3-LICENSE.txt`; exported builds include the notice in `licenses/audio/`. Based on minimp3 (CC0). No music or station recordings are bundled.
 
-## Video playback (FFmpeg headers)
+## Video playback (FFmpeg)
 
-Video playback uses the operating system's own FFmpeg libraries, loaded at runtime (on SteamOS 3.8, FFmpeg 7.1: libavcodec 61, libavformat 61, libavutil 59, libswscale 8, libswresample 5). CRT XR does not compile, link or ship any FFmpeg code, library or codec; if the libraries are missing, videos are simply not offered. Only FFmpeg 7.1.1's public headers are vendored, for compiling the loader, in `native/emulation/third_party/ffmpeg-61/` under the GNU LGPL 2.1 or later (`COPYING.LGPLv2.1` there; source tarball and SHA-256 in its `README.md`). Codec availability and any codec licensing follow the operating system's FFmpeg build.
+Video playback uses FFmpeg's libraries, loaded at runtime; CRT XR does not compile, link or ship any FFmpeg code, library or codec. On SteamOS and other Linux systems it uses the system's own FFmpeg (7.1: libavcodec 61; or 8.x: libavcodec 62). If neither is present, videos are not offered.
+
+On Windows, which has no system FFmpeg, the user can choose **Set up video playback**. CRT XR then downloads only the five libraries it uses (avcodec, avformat, avutil, swscale, swresample) from the LGPL builds published at <https://github.com/BtbN/FFmpeg-Builds>, checks each against its archive's CRC-32 and keeps them in its own user-data folder, with a `source.cfg` recording where they came from. These libraries are FFmpeg's, under the GNU LGPL 2.1 or later; their source and licence are at that address and at <https://ffmpeg.org>. Codec availability and any codec licensing follow the FFmpeg build in use.
+
+Only FFmpeg's public headers are vendored, for compiling the loader: 7.1.1 in `native/emulation/third_party/ffmpeg-61/` and 8.1.3 in `native/emulation/third_party/ffmpeg-62/`, under the GNU LGPL 2.1 or later (`COPYING.LGPLv2.1` in each; source tarballs and SHA-256 in each `README.md`).
+
+## Fonts
+
+Open Sans, Copyright 2020 The Open Sans Project Authors, under the SIL Open Font License 1.1. The unmodified variable font is `assets/fonts/OpenSans.ttf`; its licence, pinned source and SHA-256 are in `third_party/fonts/` and included with exported builds under `licenses/fonts/`.
+
+VCR OSD Mono, by Riciery Leal, is used unmodified (`assets/fonts/VCR_OSD_MONO.ttf`) for the green VCR on-screen text on videos. dafont lists it as "100% Free"; the download carries no licence text. Source, retrieval date and SHA-256 are in `third_party/fonts/README.md`.
 
 ## Super Retro Game Console
 

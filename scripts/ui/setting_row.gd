@@ -23,6 +23,9 @@ var words: VBoxContainer
 var value_group: HBoxContainer
 var meter: HBoxContainer
 var descriptive_value := false
+## Video rows lead with a small picture; it arrives later, so the video icon
+## holds its place until set_thumbnail() is called.
+var thumbnail: TextureRect
 
 func configure(definition: Dictionary) -> void:
 	item=definition
@@ -44,13 +47,20 @@ func configure(definition: Dictionary) -> void:
 	marker=Label.new(); marker.hide(); add_child(marker)
 	var emphasis := str(item.get("emphasis",""))
 	var tint := MenuSkin.AMBER if emphasis=="primary" else (DANGER if emphasis=="danger" else MenuSkin.MUTED)
-	if item.has("row_icon"): line.add_child(RowIcon.new(str(item.row_icon),tint))
+	if item.has("thumbnail_path"):
+		var slot := Control.new(); slot.custom_minimum_size=Vector2(64,48); slot.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+		slot.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(slot)
+		var placeholder := RowIcon.new("video",tint); placeholder.position=Vector2(17,9); slot.add_child(placeholder)
+		thumbnail=TextureRect.new(); thumbnail.expand_mode=TextureRect.EXPAND_IGNORE_SIZE; thumbnail.stretch_mode=TextureRect.STRETCH_SCALE
+		thumbnail.size=Vector2(64,48); thumbnail.mouse_filter=Control.MOUSE_FILTER_IGNORE; slot.add_child(thumbnail)
+		set_thumbnail(item.get("thumbnail"))
+	elif item.has("row_icon"): line.add_child(RowIcon.new(str(item.row_icon),tint))
 	words=VBoxContainer.new(); words.add_theme_constant_override("separation",3)
 	words.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	words.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	words.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(words)
 	title_label=Label.new(); title_label.text=item.label
-	title_label.add_theme_font_size_override("font_size",24)
+	title_label.add_theme_font_size_override("font_size",24); MenuSkin.weigh(title_label,MenuSkin.SEMIBOLD)
 	title_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	title_label.max_lines_visible=3
 	title_label.mouse_filter=Control.MOUSE_FILTER_IGNORE; words.add_child(title_label)
@@ -69,11 +79,15 @@ func configure(definition: Dictionary) -> void:
 		value_label.add_theme_color_override("font_color",MenuSkin.MUTED)
 		words.add_child(value_label)
 	else: value_group.add_child(value_label)
-	if item.kind=="number": value_label.custom_minimum_size.x=106
+	if item.kind=="number":
+		value_label.custom_minimum_size.x=106
+		value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	if item.kind=="choice":
 		value_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 		value_label.custom_minimum_size.x=180
+		value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	if item.kind in ["number","choice"]:
+		# ‹ value › reads as a selector and fills the row's edge like toggle values.
 		for direction in [-1,1]:
 			var arrow := Button.new(); arrow.text="‹" if direction<0 else "›"
 			arrow.custom_minimum_size=Vector2(30,30)
@@ -84,6 +98,7 @@ func configure(definition: Dictionary) -> void:
 			arrow.pressed.connect(func():
 				if not disabled: adjust_requested.emit(item.id,direction))
 			value_group.add_child(arrow); adjust_buttons.append(arrow)
+			if direction<0: value_group.move_child(arrow,0)
 	meter=HBoxContainer.new(); meter.add_theme_constant_override("separation",10)
 	meter.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(meter)
 	range_min_label=Label.new(); range_max_label=Label.new()
@@ -124,7 +139,7 @@ func refresh() -> void:
 	title_label.text=str(item.label)+(" •" if changed_from_default() else "")
 	for button in adjust_buttons:
 		button.visible=true; button.disabled=disabled
-		button.modulate.a=1.0 if selected_now else 0.0
+		button.modulate.a=1.0 if selected_now else 0.35
 		button.mouse_filter=Control.MOUSE_FILTER_STOP if selected_now else Control.MOUSE_FILTER_IGNORE
 	track.visible=item.kind=="number"
 	if meter!=null: meter.visible=track.visible
@@ -189,3 +204,8 @@ func compact_number(value: float) -> String:
 	var result := "%.3f" % value
 	while result.ends_with("0"): result=result.trim_suffix("0")
 	return result.trim_suffix(".")
+
+func set_thumbnail(texture: Texture2D) -> void:
+	if thumbnail == null: return
+	thumbnail.texture = texture
+	thumbnail.visible = texture != null

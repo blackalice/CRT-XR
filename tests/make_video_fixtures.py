@@ -37,12 +37,35 @@ clips = {
     "library/Episode 2.mkv": (picture("320x240", 25) + tone(), x264 + ["-c:a", "aac"]),
     "library/Episode 10.mkv": (picture("320x240", 25) + tone(), x264 + ["-c:a", "aac"]),
     "library/Season 1/Pilot.mp4": (picture("320x240", 25) + tone(), x264 + ["-c:a", "aac"]),
+    # Interlaced 576i: every even line white and every odd line black, so the
+    # top field is all white and the bottom field all black (neutral colour, so
+    # 4:2:0 chroma cannot mix the fields).
+    "interlaced_576i_25.mkv": (["-f", "lavfi", "-i", r"color=c=black:s=720x576:r=25,format=yuv420p,geq=lum='if(mod(Y\,2)\,16\,235)':cb=128:cr=128,setfield=tff,setsar=16/15"] + tone(),
+        ["-c:v", "libx264", "-preset", "veryfast", "-crf", "4", "-flags", "+ildct+ilme", "-x264-params", "tff=1", "-pix_fmt", "yuv420p", "-c:a", "aac"]),
+    # Subtitles: an SRT track in MKV and a mov_text track in MP4, from the same cues.
+    "subtitles_srt.mkv": (picture("640x360", 25) + tone() + ["-i", str(root / "cues.srt")],
+        ["-map", "0:v", "-map", "1:a", "-map", "2:s", "-metadata:s:s:0", "language=eng", "-metadata:s:s:0", "title=English"] + x264 + ["-c:a", "aac", "-c:s", "srt"]),
+    "subtitles_movtext.mp4": (picture("640x360", 25) + tone() + ["-i", str(root / "cues.srt")],
+        ["-map", "0:v", "-map", "1:a", "-map", "2:s", "-metadata:s:s:0", "language=fra"] + x264 + ["-c:a", "aac", "-c:s", "mov_text"]),
 }
+# Cues for the subtitle clips: plain text, italics and a line break.
+root.mkdir(parents=True, exist_ok=True)
+(root / "cues.srt").write_text("""1
+00:00:00,500 --> 00:00:01,500
+Hello CRT
+
+2
+00:00:02,000 --> 00:00:03,000
+<i>Second</i> line
+breaks here
+""")
 for name, (inputs, options, *length) in clips.items():
     (root / name).parent.mkdir(parents=True, exist_ok=True)
     seconds = str(length[0] if length else 4)
     command = [ffmpeg, "-nostdin", "-hide_banner", "-loglevel", "error", "-y"] + inputs + ["-t", seconds] + options + [str(root / name)]
     subprocess.run(command, check=True)
     print("made", root / name)
+# A subtitle file beside a video is offered as one of its subtitle options.
+(root / "library" / "Episode 2.en.srt").write_text((root / "cues.srt").read_text())
 # Other files in a video folder are ignored.
 (root / "library" / "notes.txt").write_text("not a video\n")

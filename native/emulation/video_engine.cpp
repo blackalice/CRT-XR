@@ -28,6 +28,7 @@ extern "C" {
 #define CRT_XR_STR(value) CRT_XR_STR_(value)
 
 namespace crt_xr {
+namespace CRT_XR_FFMPEG_NAMESPACE {
 namespace {
 // Every FFmpeg function used, resolved from the system libraries at runtime.
 #define CRT_XR_FFMPEG_FUNCTIONS(X) \
@@ -35,12 +36,13 @@ namespace {
     X(avutil, av_frame_apply_cropping) X(avutil, av_strerror) X(avutil, av_log_set_level) X(avutil, avutil_version) \
     X(avutil, av_channel_layout_default) X(avutil, av_channel_layout_uninit) X(avutil, av_dict_get) \
     X(avutil, av_hwdevice_ctx_create) X(avutil, av_hwframe_transfer_data) X(avutil, av_buffer_ref) \
-    X(avutil, av_buffer_unref) X(avutil, av_frame_copy_props) \
+    X(avutil, av_buffer_unref) X(avutil, av_frame_copy_props) X(avutil, av_version_info) \
     X(avcodec, avcodec_get_hw_config) X(avcodec, avcodec_default_get_format) X(avcodec, avcodec_find_decoder_by_name) \
     X(avcodec, avcodec_find_decoder) X(avcodec, avcodec_alloc_context3) X(avcodec, avcodec_parameters_to_context) \
     X(avcodec, avcodec_open2) X(avcodec, avcodec_send_packet) X(avcodec, avcodec_receive_frame) \
     X(avcodec, avcodec_flush_buffers) X(avcodec, avcodec_free_context) X(avcodec, avcodec_get_name) \
     X(avcodec, av_packet_alloc) X(avcodec, av_packet_free) X(avcodec, av_packet_unref) X(avcodec, avcodec_version) \
+    X(avcodec, avcodec_decode_subtitle2) X(avcodec, avsubtitle_free) X(avcodec, avcodec_descriptor_get) \
     X(avformat, avformat_open_input) X(avformat, avformat_find_stream_info) X(avformat, av_find_best_stream) \
     X(avformat, av_read_frame) X(avformat, av_seek_frame) X(avformat, avformat_close_input) \
     X(avformat, av_guess_sample_aspect_ratio) X(avformat, av_guess_frame_rate) X(avformat, avformat_version) \
@@ -55,7 +57,7 @@ struct Functions {
 #undef CRT_XR_DECLARE
 } ff;
 
-// Exact majors: struct layouts differ between FFmpeg majors, so a build only
+// Exact majors: struct layouts differ between FFmpeg majors, so this build only
 // accepts the libraries matching the headers it was compiled with.
 struct Library { const char* key; const char* linux_name; const char* windows_name; unsigned major; void* handle; };
 Library libraries[] = {
@@ -66,10 +68,27 @@ Library libraries[] = {
     {"swresample", "libswresample.so." CRT_XR_STR(LIBSWRESAMPLE_VERSION_MAJOR), "swresample-" CRT_XR_STR(LIBSWRESAMPLE_VERSION_MAJOR) ".dll", LIBSWRESAMPLE_VERSION_MAJOR, nullptr},
 };
 
+// On Windows the C runtime keeps its own copy of the environment, which does not
+// see variables Godot sets with OS.set_environment(); read the process's own.
+std::string environment(const char* name) {
+#ifdef _WIN32
+    const std::wstring key = std::filesystem::u8path(name).wstring();
+    const DWORD length = GetEnvironmentVariableW(key.c_str(), nullptr, 0);
+    if (length == 0) return "";
+    std::wstring value(length, L'\0');
+    value.resize(GetEnvironmentVariableW(key.c_str(), value.data(), length));
+    return std::filesystem::path(value).u8string();
+#else
+    const char* value = std::getenv(name);
+    return value ? value : "";
+#endif
+}
+
 void* open_library(const Library& library) {
-    // CRT_XR_FFMPEG_DIR points at a specific copy (development and tests);
-    // otherwise the platform's normal library search finds the system copy.
-    const char* directory = std::getenv("CRT_XR_FFMPEG_DIR");
+    // CRT_XR_FFMPEG_DIR points at a specific copy (a download, development and
+    // tests); otherwise the platform's normal library search finds the system copy.
+    const std::string folder = environment("CRT_XR_FFMPEG_DIR");
+    const char* directory = folder.c_str();
 #ifdef _WIN32
     if (directory && *directory) {
         auto path = std::filesystem::u8path(directory) / library.windows_name;
@@ -83,6 +102,14 @@ void* open_library(const Library& library) {
         if (void* handle = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL)) return handle;
     }
     return dlopen(library.linux_name, RTLD_NOW | RTLD_LOCAL);
+#endif
+}
+
+void close_library(void* handle) {
+#ifdef _WIN32
+    FreeLibrary(static_cast<HMODULE>(handle));
+#else
+    dlclose(handle);
 #endif
 }
 
@@ -118,15 +145,37 @@ int even(double value) { return std::max(2, static_cast<int>(std::lround(value /
 AVPixelFormat pick_format(AVCodecContext* context, const AVPixelFormat* formats) {
     return static_cast<AVPixelFormat>(VideoEngine::choose_format(context, reinterpret_cast<const int*>(formats)));
 }
+
+// ASS events read "ReadOrder,Layer,Style,Name,MarginL,MarginR,MarginV,Effect,Text";
+// keep the text, drop {override} tags and turn \N line breaks into newlines.
+std::string ass_text(const char* line) {
+    std::string event(line), text, out;
+    int commas = 0;
+    std::size_t index = 0;
+    while (index < event.size() && commas < 8) if (event[index++] == ',') ++commas;
+    text = event.substr(index);
+    for (std::size_t i = 0; i < text.size(); ++i) {
+        if (text[i] == '{') { const std::size_t close = text.find('}', i); if (close != std::string::npos) { i = close; continue; } }
+        if (text[i] == '\\' && i + 1 < text.size() && (text[i + 1] == 'N' || text[i + 1] == 'n')) { out += '\n'; ++i; continue; }
+        if (text[i] == '\\' && i + 1 < text.size() && text[i + 1] == 'h') { out += ' '; ++i; continue; }
+        out += text[i];
+    }
+    return out;
+}
 }
 
-bool VideoEngine::load_libraries(std::string& error) {
+bool load(std::string& error) {
     std::lock_guard<std::mutex> guard(load_lock);
     if (load_state == 0) {
         load_state = -1;
+        load_error.clear();
         for (Library& library : libraries) {
             library.handle = open_library(library);
+#ifdef _WIN32
+            if (!library.handle) { load_error = std::string("FFmpeg library not found: ") + library.windows_name; break; }
+#else
             if (!library.handle) { load_error = std::string("FFmpeg library not found: ") + library.linux_name; break; }
+#endif
         }
         if (load_error.empty()) {
 #define CRT_XR_RESOLVE(library, name) \
@@ -151,9 +200,25 @@ bool VideoEngine::load_libraries(std::string& error) {
     return load_state == 1;
 }
 
-double VideoEngine::probe_duration(const std::string& path) {
+void reset() {
+    std::lock_guard<std::mutex> guard(load_lock);
+    if (load_state == 1) return;
+    for (Library& library : libraries) {
+        if (library.handle) close_library(library.handle);
+        library.handle = nullptr;
+    }
+    load_state = 0;
+    load_error.clear();
+}
+
+std::string version() {
+    std::string error;
+    return load(error) ? std::string("FFmpeg ") + ff.av_version_info() + " (libavcodec " + std::to_string(LIBAVCODEC_VERSION_MAJOR) + ")" : "";
+}
+
+double probe(const std::string& path) {
     std::string why;
-    if (!load_libraries(why)) return -1.0;
+    if (!load(why)) return -1.0;
     AVFormatContext* input = nullptr;
     if (ff.avformat_open_input(&input, path.c_str(), nullptr, nullptr) < 0) return -1.0;
     // MP4 and MKV headers carry the duration; only unusual files need a stream scan.
@@ -162,6 +227,8 @@ double VideoEngine::probe_duration(const std::string& path) {
     ff.avformat_close_input(&input);
     return seconds;
 }
+
+std::unique_ptr<VideoBackend> create() { return std::make_unique<VideoEngine>(); }
 
 VideoEngine::~VideoEngine() { close(); }
 
@@ -178,7 +245,7 @@ std::string VideoEngine::error() const {
 bool VideoEngine::open(const std::string& path, int lines, Style style, bool hardware) {
     close();
     std::string why;
-    if (!load_libraries(why)) { fail(why); return false; }
+    if (!load(why)) { fail(why); return false; }
     AVFormatContext* input = nullptr;
     int result = ff.avformat_open_input(&input, path.c_str(), nullptr, nullptr);
     if (result < 0) { fail("Could not open the file: " + describe(result)); return false; }
@@ -212,14 +279,26 @@ bool VideoEngine::open(const std::string& path, int lines, Style style, bool har
     details.width = std::max(640, even(details.height * 4.0 / 3.0));
     for (unsigned index = 0; index < input->nb_streams; ++index) {
         AVStream* candidate = input->streams[index];
-        if (candidate->codecpar->codec_type != AVMEDIA_TYPE_AUDIO) continue;
-        AudioTrack track;
-        track.stream = static_cast<int>(index);
-        track.channels = candidate->codecpar->ch_layout.nb_channels;
-        track.codec = ff.avcodec_get_name(candidate->codecpar->codec_id);
-        track.language = tag(candidate->metadata, "language");
-        track.title = tag(candidate->metadata, "title");
-        details.audio_tracks.push_back(track);
+        const AVCodecParameters* parameters = candidate->codecpar;
+        if (parameters->codec_type == AVMEDIA_TYPE_AUDIO) {
+            AudioTrack track;
+            track.stream = static_cast<int>(index);
+            track.channels = parameters->ch_layout.nb_channels;
+            track.codec = ff.avcodec_get_name(parameters->codec_id);
+            track.language = tag(candidate->metadata, "language");
+            track.title = tag(candidate->metadata, "title");
+            details.audio_tracks.push_back(track);
+        } else if (parameters->codec_type == AVMEDIA_TYPE_SUBTITLE && ff.avcodec_find_decoder(parameters->codec_id)) {
+            SubtitleTrack track;
+            track.stream = static_cast<int>(index);
+            const AVCodecDescriptor* descriptor = ff.avcodec_descriptor_get(parameters->codec_id);
+            track.bitmap = descriptor && (descriptor->props & AV_CODEC_PROP_BITMAP_SUB);
+            track.forced = (candidate->disposition & AV_DISPOSITION_FORCED) != 0;
+            track.codec = ff.avcodec_get_name(parameters->codec_id);
+            track.language = tag(candidate->metadata, "language");
+            track.title = tag(candidate->metadata, "title");
+            details.subtitle_tracks.push_back(track);
+        }
     }
     // FFmpeg's choice honours the file's default flag and the video it belongs to.
     const int best = ff.av_find_best_stream(input, AVMEDIA_TYPE_AUDIO, -1, stream, nullptr, 0);
@@ -232,13 +311,16 @@ bool VideoEngine::open(const std::string& path, int lines, Style style, bool har
     end_of_file = false;
     seek_pending = false;
     track_pending = false;
+    subtitle_pending = false;
     seek_floor = -1.0;
     software_pending = false;
     last_frame_time = 0.0;
+    last_interlaced = false;
     dropped_frames = 0;
     samples.clear();
     samples_read = 0;
     samples_time = -1.0;
+    cues.clear();
     message.clear();
     running = true;
     worker = std::thread(&VideoEngine::run, this);
@@ -269,10 +351,9 @@ bool VideoEngine::setup_hardware(void* data, const void* codec_definition) {
     hardware_name = "VA-API";
 #endif
     // A different device node, or "unavailable" to test the software fallback.
-    if (const char* override_device = std::getenv("CRT_XR_VIDEO_HW_DEVICE")) {
-        if (std::strcmp(override_device, "unavailable") == 0) return false;
-        if (*override_device) device = override_device;
-    }
+    const std::string override_device = environment("CRT_XR_VIDEO_HW_DEVICE");
+    if (override_device == "unavailable") return false;
+    if (!override_device.empty()) device = override_device.c_str();
     hardware_format = -1;
     for (int index = 0;; ++index) {
         const AVCodecHWConfig* config = ff.avcodec_get_hw_config(definition, index);
@@ -373,6 +454,33 @@ void VideoEngine::close_audio() {
     details.audio_track = -1;
 }
 
+bool VideoEngine::open_subtitles(int track) {
+    close_subtitles();
+    auto* input = static_cast<AVFormatContext*>(format);
+    if (track < 0 || track >= static_cast<int>(details.subtitle_tracks.size())) return false;
+    AVStream* text = input->streams[details.subtitle_tracks[track].stream];
+    const AVCodec* decoder = ff.avcodec_find_decoder(text->codecpar->codec_id);
+    AVCodecContext* context = decoder ? ff.avcodec_alloc_context3(decoder) : nullptr;
+    if (!context || ff.avcodec_parameters_to_context(context, text->codecpar) < 0) {
+        if (context) ff.avcodec_free_context(&context);
+        return false;
+    }
+    // Decoders use the packet's own time base for display times.
+    context->pkt_timebase = text->time_base;
+    if (ff.avcodec_open2(context, decoder, nullptr) < 0) { ff.avcodec_free_context(&context); return false; }
+    subtitle_codec = context;
+    subtitle_stream = text->index;
+    subtitle_time_base = av_q2d(text->time_base);
+    return true;
+}
+
+void VideoEngine::close_subtitles() {
+    if (subtitle_codec) { auto* context = static_cast<AVCodecContext*>(subtitle_codec); ff.avcodec_free_context(&context); subtitle_codec = nullptr; }
+    subtitle_stream = -1;
+    std::lock_guard<std::mutex> guard(lock);
+    cues.clear();
+}
+
 void VideoEngine::close() {
     if (worker.joinable()) {
         { std::lock_guard<std::mutex> guard(lock); running = false; }
@@ -380,7 +488,7 @@ void VideoEngine::close() {
         worker.join();
     }
     running = false;
-    if (format) close_audio();
+    if (format) { close_audio(); close_subtitles(); }
     if (transfer) { auto* frame = static_cast<AVFrame*>(transfer); ff.av_frame_free(&frame); transfer = nullptr; }
     if (scaler) { ff.sws_freeContext(static_cast<SwsContext*>(scaler)); scaler = nullptr; }
     if (codec) { auto* context = static_cast<AVCodecContext*>(codec); ff.avcodec_free_context(&context); codec = nullptr; }
@@ -395,65 +503,33 @@ void VideoEngine::close() {
     samples.clear();
     samples_read = 0;
     samples_time = -1.0;
+    cues.clear();
     stream = -1;
 }
 
-VideoEngine::Layout VideoEngine::layout(int source_width, int source_height, double aspect, int width, int height, Style style) {
-    Layout result{0, 0, source_width, source_height, 0, 0, width, height};
-    // The frame always fills a 4:3 tube, whatever its pixel grid (640x240 has
-    // tall pixels), so shapes are compared against the tube, not the grid.
-    const double tube = 4.0 / 3.0;
-    // Fit a picture of `shape` inside the frame; the remainder becomes bars.
-    auto fit = [&](double shape) {
-        if (shape > tube + 1e-3) { result.height = std::min(height, even(height * tube / shape)); result.y = (height - result.height) / 2; }
-        else if (shape < tube - 1e-3) { result.width = std::min(width, even(width * shape / tube)); result.x = (width - result.width) / 2; }
-    };
-    // Trim the centre of the source to `shape`.
-    auto crop = [&](double shape) {
-        if (aspect > shape + 1e-3) { result.crop_width = std::min(source_width, even(source_width * shape / aspect)); result.crop_x = ((source_width - result.crop_width) / 2) & ~1; }
-        else if (aspect < shape - 1e-3) { result.crop_height = std::min(source_height, even(source_height * aspect / shape)); result.crop_y = ((source_height - result.crop_height) / 2) & ~1; }
-    };
-    const double fourteen_nine = 14.0 / 9.0;
-    switch (style) {
-    case LETTERBOX: fit(aspect); break;
-    case FOURTEEN_NINE:
-        // The broadcast compromise: wider sources lose their sides down to 14:9
-        // and keep thin bars; anything narrower is simply letterboxed.
-        if (aspect > fourteen_nine) { crop(fourteen_nine); fit(fourteen_nine); }
-        else fit(aspect);
-        break;
-    case FILL: crop(tube); break;
-    case STRETCH: break;
-    }
-    return result;
-}
-
-bool VideoEngine::convert(void* decoded, Frame& out) {
-    auto* frame = static_cast<AVFrame*>(decoded);
-    if (hardware_format >= 0 && frame->format == hardware_format) {
-        if (!transfer) transfer = ff.av_frame_alloc();
-        auto* copy = static_cast<AVFrame*>(transfer);
-        ff.av_frame_unref(copy);
-        if (ff.av_hwframe_transfer_data(copy, frame, 0) < 0) { request_software(); return false; }
-        ff.av_frame_copy_props(copy, frame);
-        frame = copy;
-        decoded_on_gpu = true;
-    } else decoded_on_gpu = false;
+// Scales the whole frame (field -1) or one field (0 top, 1 bottom) into the
+// layout's place in an output frame; everything around it is drawn black.
+bool VideoEngine::scale(void* source, int field, const Layout& place, std::vector<std::uint8_t>& out) {
+    auto* frame = static_cast<AVFrame*>(source);
     const int width = details.width, height = details.height;
     const std::size_t size = static_cast<std::size_t>(width) * height * 4;
-    if (out.rgba.size() != size) out.rgba.assign(size, 0);
+    if (out.size() != size) out.assign(size, 0);
+    // A field is every other line: start one line down for the bottom field and
+    // step two lines at a time. Chroma planes interleave the same way.
+    const std::uint8_t* planes[AV_NUM_DATA_POINTERS] = {};
+    int strides[AV_NUM_DATA_POINTERS] = {};
+    for (int plane = 0; plane < AV_NUM_DATA_POINTERS; ++plane) {
+        planes[plane] = frame->data[plane];
+        strides[plane] = frame->linesize[plane];
+        if (field >= 0 && frame->data[plane]) { planes[plane] += field * frame->linesize[plane]; strides[plane] *= 2; }
+    }
+    const int rows = field >= 0 ? frame->height / 2 : frame->height;
     // Standard definition sources without colour tags are BT.601, HD ones BT.709.
     int space = SWS_CS_ITU601;
     if (frame->colorspace == AVCOL_SPC_BT709 || (frame->colorspace == AVCOL_SPC_UNSPECIFIED && frame->height > 576)) space = SWS_CS_ITU709;
     else if (frame->colorspace == AVCOL_SPC_BT2020_NCL || frame->colorspace == AVCOL_SPC_BT2020_CL) space = SWS_CS_BT2020;
     const int full_range = frame->color_range == AVCOL_RANGE_JPEG ? 1 : 0;
-    Layout place = layout(frame->width, frame->height, details.display_aspect, width, height, requested_style.load());
-    frame->crop_left = static_cast<std::size_t>(place.crop_x);
-    frame->crop_top = static_cast<std::size_t>(place.crop_y);
-    frame->crop_right = static_cast<std::size_t>(frame->width - place.crop_x - place.crop_width);
-    frame->crop_bottom = static_cast<std::size_t>(frame->height - place.crop_y - place.crop_height);
-    if (ff.av_frame_apply_cropping(frame, AV_FRAME_CROP_UNALIGNED) < 0) return false;
-    auto* context = ff.sws_getCachedContext(static_cast<SwsContext*>(scaler), frame->width, frame->height,
+    auto* context = ff.sws_getCachedContext(static_cast<SwsContext*>(scaler), frame->width, rows,
         static_cast<AVPixelFormat>(frame->format), place.width, place.height, AV_PIX_FMT_RGBA, SWS_BICUBIC, nullptr, nullptr, nullptr);
     if (!context) return false;
     scaler = context;
@@ -461,7 +537,7 @@ bool VideoEngine::convert(void* decoded, Frame& out) {
         ff.sws_getCoefficients(SWS_CS_DEFAULT), 1, 0, 1 << 16, 1 << 16);
     // Bars are black in the signal itself, so the composite pass treats their
     // edges like a real letterboxed broadcast.
-    std::uint8_t* pixels = out.rgba.data();
+    std::uint8_t* pixels = out.data();
     auto black = [&](int x, int y, int span) {
         std::uint8_t* row = pixels + (static_cast<std::size_t>(y) * width + x) * 4;
         for (int i = 0; i < span; ++i, row += 4) { row[0] = row[1] = row[2] = 0; row[3] = 255; }
@@ -473,7 +549,82 @@ bool VideoEngine::convert(void* decoded, Frame& out) {
     }
     std::uint8_t* target[4] = {pixels + (static_cast<std::size_t>(place.y) * width + place.x) * 4, nullptr, nullptr, nullptr};
     const int stride[4] = {width * 4, 0, 0, 0};
-    ff.sws_scale(context, frame->data, frame->linesize, 0, frame->height, target, stride);
+    ff.sws_scale(context, planes, strides, 0, rows, target, stride);
+    return true;
+}
+
+void VideoEngine::queue(Frame& frame) {
+    std::lock_guard<std::mutex> guard(lock);
+    (seek_pending || track_pending ? spare : ready).push_back(std::move(frame));
+}
+
+// Turns a decoded picture into one output frame, or two for interlaced video in
+// field mode (each field in turn at twice the frame rate, as a TV shows it).
+bool VideoEngine::convert(void* decoded, double time) {
+    auto* frame = static_cast<AVFrame*>(decoded);
+    if (hardware_format >= 0 && frame->format == hardware_format) {
+        if (!transfer) transfer = ff.av_frame_alloc();
+        auto* copy = static_cast<AVFrame*>(transfer);
+        ff.av_frame_unref(copy);
+        if (ff.av_hwframe_transfer_data(copy, frame, 0) < 0) { request_software(); return false; }
+        ff.av_frame_copy_props(copy, frame);
+        frame = copy;
+        decoded_on_gpu = true;
+    } else decoded_on_gpu = false;
+    const Layout place = layout(frame->width, frame->height, details.display_aspect, details.width, details.height, requested_style.load());
+    frame->crop_left = static_cast<std::size_t>(place.crop_x);
+    frame->crop_top = static_cast<std::size_t>(place.crop_y);
+    frame->crop_right = static_cast<std::size_t>(frame->width - place.crop_x - place.crop_width);
+    frame->crop_bottom = static_cast<std::size_t>(frame->height - place.crop_y - place.crop_height);
+    if (ff.av_frame_apply_cropping(frame, AV_FRAME_CROP_UNALIGNED) < 0) return false;
+    const bool interlaced = (frame->flags & AV_FRAME_FLAG_INTERLACED) != 0;
+    last_interlaced = interlaced;
+    const double fps = std::max(1.0, details.fps);
+    const double frame_seconds = frame->duration > 0 ? frame->duration * time_base : 1.0 / fps;
+    const double half_frame = 0.5 / fps;
+    auto next_frame = [&]() {
+        Frame next;
+        std::lock_guard<std::mutex> guard(lock);
+        if (!spare.empty()) { next = std::move(spare.front()); spare.pop_front(); }
+        return next;
+    };
+    auto wanted = [&](double at) {
+        std::lock_guard<std::mutex> guard(lock);
+        // After a seek, frames before the target are decoded but not shown.
+        return !seek_pending && !track_pending && at >= seek_floor - half_frame;
+    };
+    if (!interlaced) {
+        if (!wanted(time)) return true;
+        Frame next = next_frame();
+        if (!scale(frame, -1, place, next.rgba)) return false;
+        next.time = time;
+        last_frame_time = time;
+        queue(next);
+        return true;
+    }
+    const bool top_first = (frame->flags & AV_FRAME_FLAG_TOP_FIELD_FIRST) != 0;
+    const int first = top_first ? 0 : 1;
+    if (interlace_mode.load() == BLEND) {
+        // Both fields scaled to the full picture and averaged: no combing at
+        // any line count, at the frame rate.
+        if (!wanted(time)) return true;
+        Frame next = next_frame();
+        if (!scale(frame, first, place, next.rgba) || !scale(frame, 1 - first, place, blend_scratch)) return false;
+        for (std::size_t i = 0; i < next.rgba.size(); ++i) next.rgba[i] = static_cast<std::uint8_t>((next.rgba[i] + blend_scratch[i] + 1) / 2);
+        next.time = time;
+        last_frame_time = time;
+        queue(next);
+        return true;
+    }
+    for (int index = 0; index < 2; ++index) {
+        const double at = time + index * frame_seconds * 0.5;
+        if (!wanted(at)) continue;
+        Frame next = next_frame();
+        if (!scale(frame, index == 0 ? first : 1 - first, place, next.rgba)) return false;
+        next.time = at;
+        last_frame_time = at;
+        queue(next);
+    }
     return true;
 }
 
@@ -528,14 +679,65 @@ void VideoEngine::resample(void* decoded) {
     samples.insert(samples.end(), converted.begin() + skip * 2, converted.begin() + count * 2);
 }
 
+void VideoEngine::decode_subtitle(void* data) {
+    auto* packet = static_cast<AVPacket*>(data);
+    AVSubtitle subtitle{};
+    int got = 0;
+    if (ff.avcodec_decode_subtitle2(static_cast<AVCodecContext*>(subtitle_codec), &subtitle, &got, packet) < 0 || !got) return;
+    const double base = (subtitle.pts != AV_NOPTS_VALUE ? subtitle.pts / static_cast<double>(AV_TIME_BASE)
+        : (packet->pts != AV_NOPTS_VALUE ? packet->pts * subtitle_time_base : 0.0)) - start_time;
+    const double start = base + subtitle.start_display_time / 1000.0;
+    double end = start + 5.0;
+    if (subtitle.end_display_time > subtitle.start_display_time && subtitle.end_display_time != UINT32_MAX) end = base + subtitle.end_display_time / 1000.0;
+    else if (packet->duration > 0) end = base + packet->duration * subtitle_time_base;
+    std::vector<Cue> decoded;
+    for (unsigned index = 0; index < subtitle.num_rects; ++index) {
+        const AVSubtitleRect* rect = subtitle.rects[index];
+        Cue cue;
+        cue.start = start;
+        cue.end = end;
+        if (rect->type == SUBTITLE_ASS && rect->ass) cue.text = ass_text(rect->ass);
+        else if (rect->type == SUBTITLE_TEXT && rect->text) cue.text = rect->text;
+        else if (rect->type == SUBTITLE_BITMAP && rect->w > 0 && rect->h > 0 && rect->data[0] && rect->data[1]) {
+            // Palette-indexed pixels (DVD, Blu-ray and DVB subtitles) to RGBA.
+            const auto* palette = reinterpret_cast<const std::uint32_t*>(rect->data[1]);
+            cue.rgba.resize(static_cast<std::size_t>(rect->w) * rect->h * 4);
+            for (int y = 0; y < rect->h; ++y)
+                for (int x = 0; x < rect->w; ++x) {
+                    const std::uint32_t argb = palette[rect->data[0][y * rect->linesize[0] + x]];
+                    std::uint8_t* pixel = &cue.rgba[(static_cast<std::size_t>(y) * rect->w + x) * 4];
+                    pixel[0] = (argb >> 16) & 255; pixel[1] = (argb >> 8) & 255; pixel[2] = argb & 255; pixel[3] = argb >> 24;
+                }
+            cue.image_width = rect->w; cue.image_height = rect->h;
+            cue.x = rect->x; cue.y = rect->y; cue.width = rect->w; cue.height = rect->h;
+        } else continue;
+        decoded.push_back(std::move(cue));
+    }
+    ff.avsubtitle_free(&subtitle);
+    std::lock_guard<std::mutex> guard(lock);
+    if (seek_pending || subtitle_pending) return;
+    // A picture subtitle with nothing in it clears the one before (Blu-ray style).
+    if (decoded.empty())
+        for (Cue& cue : cues) if (cue.start < start && cue.end > start) cue.end = start;
+    for (Cue& cue : decoded) {
+        auto at = std::upper_bound(cues.begin(), cues.end(), cue.start, [](double when, const Cue& other) { return when < other.start; });
+        cues.insert(at, std::move(cue));
+    }
+}
+
 void VideoEngine::restart(double target) {
-    // Runs on the worker: both decoders forget the old position and the
+    // Runs on the worker: the decoders forget the old position and the
     // resampler drops its delay line, so nothing from before the jump plays.
     auto* input = static_cast<AVFormatContext*>(format);
-    const auto timestamp = static_cast<std::int64_t>((target + start_time) * AV_TIME_BASE);
+    // With subtitles on, start a little earlier: a line that began before the
+    // keyframe the seek lands on would otherwise never be read again. The extra
+    // pictures and sound are decoded but not shown.
+    const double lead = subtitle_codec ? 5.0 : 0.0;
+    const auto timestamp = static_cast<std::int64_t>((std::max(0.0, target - lead) + start_time) * AV_TIME_BASE);
     ff.av_seek_frame(input, -1, timestamp, AVSEEK_FLAG_BACKWARD);
     ff.avcodec_flush_buffers(static_cast<AVCodecContext*>(codec));
     if (audio_codec) ff.avcodec_flush_buffers(static_cast<AVCodecContext*>(audio_codec));
+    if (subtitle_codec) ff.avcodec_flush_buffers(static_cast<AVCodecContext*>(subtitle_codec));
     if (resampler) { auto* context = static_cast<SwrContext*>(resampler); ff.swr_free(&context); resampler = nullptr; }
     resampler_rate = 0;
 }
@@ -546,12 +748,11 @@ void VideoEngine::run() {
     AVPacket* packet = ff.av_packet_alloc();
     AVFrame* decoded = ff.av_frame_alloc();
     bool draining = false;
-    const double half_frame = 0.5 / std::max(1.0, details.fps);
     while (true) {
         {
             std::unique_lock<std::mutex> guard(lock);
             changed.wait(guard, [&] {
-                if (!running || seek_pending || track_pending || software_pending) return true;
+                if (!running || seek_pending || track_pending || software_pending || subtitle_pending) return true;
                 if (end_of_file || ready.size() >= VIDEO_LIMIT) return false;
                 const bool audio_low = audio_codec && static_cast<int>((samples.size() - samples_read) / 2) < AUDIO_LOW;
                 return ready.size() < AHEAD || audio_low;
@@ -566,6 +767,7 @@ void VideoEngine::run() {
                 samples.clear();
                 samples_read = 0;
                 samples_time = -1.0;
+                cues.clear();
                 end_of_file = false;
                 draining = false;
                 seek_floor = target;
@@ -575,23 +777,28 @@ void VideoEngine::run() {
                 restart(target);
                 continue;
             }
-            if (seek_pending || track_pending) {
-                const bool switch_track = track_pending;
-                const int track = track_target;
+            if (seek_pending || track_pending || subtitle_pending) {
+                const bool switch_track = track_pending, switch_subtitles = subtitle_pending, jump = seek_pending;
+                const int track = track_target, subtitles = subtitle_target;
                 seek_pending = false;
                 track_pending = false;
+                subtitle_pending = false;
                 const double target = seek_target;
-                for (Frame& frame : ready) spare.push_back(std::move(frame));
-                ready.clear();
-                samples.clear();
-                samples_read = 0;
-                samples_time = -1.0;
-                end_of_file = false;
-                draining = false;
-                seek_floor = target;
+                if (jump) {
+                    for (Frame& frame : ready) spare.push_back(std::move(frame));
+                    ready.clear();
+                    samples.clear();
+                    samples_read = 0;
+                    samples_time = -1.0;
+                    cues.clear();
+                    end_of_file = false;
+                    draining = false;
+                    seek_floor = target;
+                }
                 guard.unlock();
                 if (switch_track) open_audio(track);
-                restart(target);
+                if (switch_subtitles) { if (subtitles >= 0) open_subtitles(subtitles); else close_subtitles(); }
+                if (jump) restart(target);
                 continue;
             }
         }
@@ -604,6 +811,7 @@ void VideoEngine::run() {
             } else {
                 if (packet->stream_index == stream) ff.avcodec_send_packet(context, packet);
                 else if (audio && packet->stream_index == audio_stream) ff.avcodec_send_packet(audio, packet);
+                else if (subtitle_codec && packet->stream_index == subtitle_stream) decode_subtitle(packet);
                 ff.av_packet_unref(packet);
             }
         }
@@ -628,20 +836,7 @@ void VideoEngine::run() {
             }
             const std::int64_t stamp = decoded->best_effort_timestamp;
             const double time = (stamp == AV_NOPTS_VALUE ? 0.0 : stamp * time_base) - start_time;
-            Frame next;
-            bool wanted;
-            {
-                std::lock_guard<std::mutex> guard(lock);
-                // After a seek, frames before the target are decoded but not shown.
-                wanted = !seek_pending && !track_pending && time >= seek_floor - half_frame;
-                if (wanted && !spare.empty()) { next = std::move(spare.front()); spare.pop_front(); }
-            }
-            if (wanted && convert(decoded, next)) {
-                next.time = time;
-                last_frame_time = time;
-                std::lock_guard<std::mutex> guard(lock);
-                (seek_pending || track_pending ? spare : ready).push_back(std::move(next));
-            }
+            convert(decoded, time);
             ff.av_frame_unref(decoded);
             changed.notify_all();
         }
@@ -708,8 +903,8 @@ bool VideoEngine::has_audio() const {
     return details.audio_track >= 0;
 }
 
-// Queued frames, audio and the end-of-file state belong to the old position;
-// drop them at once so callers never see them while the worker catches up.
+// Queued frames, audio, cues and the end-of-file state belong to the old
+// position; drop them at once so callers never see them while the worker catches up.
 void VideoEngine::seek(double seconds) {
     {
         std::lock_guard<std::mutex> guard(lock);
@@ -720,6 +915,7 @@ void VideoEngine::seek(double seconds) {
         samples.clear();
         samples_read = 0;
         samples_time = -1.0;
+        cues.clear();
         end_of_file = false;
     }
     changed.notify_all();
@@ -735,13 +931,46 @@ void VideoEngine::set_audio_track(int index, double seconds) {
     seek(seconds);
 }
 
-void VideoEngine::set_style(Style value) {
-    // Applies from the next decoded frame; frames already queued keep their style.
-    requested_style = value;
+void VideoEngine::set_subtitle_track(int index, double seconds) {
+    if (index >= static_cast<int>(details.subtitle_tracks.size())) return;
+    {
+        std::lock_guard<std::mutex> guard(lock);
+        subtitle_pending = true;
+        subtitle_target = index;
+        cues.clear();
+    }
+    // A new track re-reads from here, so the line on screen now appears at once.
+    if (index >= 0) seek(seconds);
+    else changed.notify_all();
+}
+
+std::vector<VideoBackend::Cue> VideoEngine::subtitles_at(double clock) {
+    std::vector<Cue> showing;
+    std::lock_guard<std::mutex> guard(lock);
+    // Long-past cues are forgotten; a seek back re-reads them.
+    cues.erase(std::remove_if(cues.begin(), cues.end(), [&](const Cue& cue) { return cue.end < clock - 30.0; }), cues.end());
+    const Layout place = layout(details.source_width, details.source_height, details.display_aspect, details.width, details.height, requested_style.load());
+    for (const Cue& cue : cues) {
+        if (cue.start > clock) break;
+        if (clock >= cue.end) continue;
+        Cue shown = cue;
+        if (!shown.rgba.empty() && place.crop_width > 0 && place.crop_height > 0) {
+            // Picture subtitles are placed in source pixels; follow the picture
+            // shape onto the output frame.
+            const double sx = static_cast<double>(place.width) / place.crop_width, sy = static_cast<double>(place.height) / place.crop_height;
+            shown.x = place.x + static_cast<int>(std::lround((cue.x - place.crop_x) * sx));
+            shown.y = place.y + static_cast<int>(std::lround((cue.y - place.crop_y) * sy));
+            shown.width = std::max(1, static_cast<int>(std::lround(cue.width * sx)));
+            shown.height = std::max(1, static_cast<int>(std::lround(cue.height * sy)));
+        }
+        showing.push_back(std::move(shown));
+    }
+    return showing;
 }
 
 bool VideoEngine::finished() const {
     std::lock_guard<std::mutex> guard(lock);
     return end_of_file && ready.empty() && samples_read == samples.size();
+}
 }
 }

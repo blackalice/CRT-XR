@@ -1,8 +1,34 @@
 # Video playback plan
 
-Status, 23 October 2026: phases 1–4 implemented and running on the Deck
-(SteamOS 3.8.28, system FFmpeg 7.1, release `video20261023b`). Phases 5–7 are
-proposed.
+Status, 23 October 2026: phases 1–4 and 6–7 implemented, plus subtitles,
+interlaced video and library extras. Phases 1–4 run on the Deck (SteamOS 3.8.28,
+system FFmpeg 7.1). Phase 5 (long-play acceptance in the glasses) is being
+tested over time by the owner.
+
+Since phase 4:
+- **FFmpeg 8 (phase 6).** The decoder is compiled once per FFmpeg major, each in
+  its own namespace against that major's headers (`third_party/ffmpeg-61` for 7.1,
+  `ffmpeg-62` for 8.x); `video_backend.cpp` loads the newest the system has. Both
+  pass the full native suite, including GPU decoding.
+- **Windows (phase 7).** Library locations offers *Set up video playback*: it reads
+  the directory of BtbN's LGPL release zip from its end, fetches only the five
+  libraries by byte range (52 of 77 MB for 8.1), checks each CRC-32, installs them
+  in the user folder and loads them without a restart. GitHub's file host refuses
+  suffix ranges, so the size comes from a one-byte range first.
+- **Interlaced video.** Field motion shows each field in turn at the field rate;
+  Blend averages the fields. Both are settings; progressive video is untouched.
+- **Subtitles.** Embedded text (SRT, ASS, mov_text, WebVTT) and picture (DVD, PGS,
+  DVB) tracks, and `.srt` files beside the video, drawn into the picture before
+  the CRT through a subtitle layer. Picture subtitles follow the picture shape.
+  With subtitles on, seeks start up to 5 s early so a line already showing is
+  read again. Picture subtitles have no test clip yet (FFmpeg cannot make one
+  from text).
+- **Library extras.** Continue watching (list section and library card), search
+  across the video folder (keyboard or on-screen keys) and cached thumbnails made
+  on a background thread.
+- **Fixes.** The video picture profile was saved as the global picture when
+  per-game picture was off (the default); video-to-video switching; CRT effects
+  hidden at 480 lines (240 is now the default).
 
 Phase 4 on the Deck, from the release's own smoke test (10 s decoded flat out,
 output 640x240):

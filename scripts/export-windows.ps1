@@ -46,6 +46,8 @@ Copy-Item -LiteralPath (Join-Path $root 'docs/room-and-view.md') -Destination (J
 Copy-Item -LiteralPath (Join-Path $root 'docs/settings-and-startup.md') -Destination (Join-Path $out 'MENU-AND-SETTINGS.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/audio.md') -Destination (Join-Path $out 'AUDIO.md')
 New-Item -ItemType Directory -Force (Join-Path $out 'licenses/audio') | Out-Null
+New-Item -ItemType Directory -Force (Join-Path $out 'licenses/fonts') | Out-Null
+Copy-Item -Path (Join-Path $root 'third_party/fonts/*') -Destination (Join-Path $out 'licenses/fonts')
 Copy-Item -Path (Join-Path $root 'third_party/audio/*') -Destination (Join-Path $out 'licenses/audio')
 $table = Join-Path $root 'build/wood-table'
 if (Test-Path -LiteralPath (Join-Path $table 'table.scn')) {

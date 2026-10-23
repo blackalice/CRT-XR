@@ -14,6 +14,9 @@ const VideoSession = preload("res://scripts/video/video_session.gd")
 const VideoLibrary = preload("res://scripts/video/video_library.gd")
 const VIDEOS_PER_PAGE := 50
 const LocationBar = preload("res://scripts/ui/location_bar.gd")
+const FfmpegInstaller = preload("res://scripts/video/ffmpeg_installer.gd")
+var install_progress := ""
+var install_rendered := 0
 ## File screens share one structure: where you are (the location bar), what
 ## you can do here (THIS FOLDER), what is inside (CONTENTS) and other places
 ## (GO TO). Section names are shown as small headers between rows.
@@ -57,6 +60,8 @@ var hints: HFlowContainer
 var error_label: Label
 var body: HBoxContainer
 var sidebar: VBoxContainer
+var sidebar_panel: PanelContainer
+var section_rule: ColorRect
 var section_bar: HBoxContainer
 var section_tabs: HBoxContainer
 var scroll: ScrollContainer
@@ -129,13 +134,14 @@ func _ready() -> void:
 	layout.add_child(top)
 	heading = Label.new(); heading.text = "CRT XR"
 	heading.add_theme_font_size_override("font_size",32)
+	MenuSkin.weigh(heading,MenuSkin.BOLD)
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	top.add_child(heading)
 	back_button = Button.new(); back_button.text = "Back  [B]"
 	back_button.focus_mode = Control.FOCUS_NONE
 	back_button.pressed.connect(back)
 	top.add_child(back_button)
-	back_button.flat=true; back_button.add_theme_font_size_override("font_size",16)
+	back_button.flat=true; back_button.add_theme_font_size_override("font_size",16); MenuSkin.weigh(back_button,MenuSkin.REGULAR)
 	back_glyph=preload("res://scripts/ui/button_glyph.gd").new("B"); top.add_child(back_glyph)
 	subtitle = Label.new()
 	subtitle.add_theme_color_override("font_color",MenuSkin.MUTED)
@@ -163,11 +169,24 @@ func _ready() -> void:
 	body.add_theme_constant_override("separation",16)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	layout.add_child(body)
+	# Categories sit on their own surface so they read apart from the page.
+	sidebar_panel = PanelContainer.new()
+	sidebar_panel.add_theme_stylebox_override("panel",MenuSkin.box(Color("202328"),Color.TRANSPARENT,0,6))
+	body.add_child(sidebar_panel)
 	sidebar = VBoxContainer.new()
-	sidebar.custom_minimum_size.x = 176
+	sidebar.custom_minimum_size.x = 170
 	sidebar.add_theme_constant_override("separation",4)
-	body.add_child(sidebar)
-	var category_hint := Label.new(); category_hint.name="CategoryHint"; category_hint.add_theme_font_size_override("font_size",16); category_hint.add_theme_color_override("font_color",MenuSkin.MUTED); sidebar.add_child(category_hint)
+	sidebar_panel.add_child(sidebar)
+	# A header lined up with the category names, with its shortcut chip on the right.
+	var category_header := HBoxContainer.new(); category_header.custom_minimum_size.y=32
+	var category_title := Label.new(); category_title.text="CATEGORIES"
+	category_title.add_theme_font_size_override("font_size",14); category_title.add_theme_color_override("font_color",MenuSkin.MUTED)
+	MenuSkin.weigh(category_title,MenuSkin.BOLD)
+	category_title.size_flags_horizontal=Control.SIZE_EXPAND_FILL; category_title.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	var title_margin := MarginContainer.new(); title_margin.add_theme_constant_override("margin_left",12)
+	title_margin.size_flags_horizontal=Control.SIZE_EXPAND_FILL; title_margin.add_child(category_title); category_header.add_child(title_margin)
+	var category_hint := key_hint(); category_hint.name="CategoryHint"; category_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	category_header.add_child(category_hint); sidebar.add_child(category_header)
 	for i in range(CATEGORIES.size()):
 		var index := i
 		var button := Button.new()
@@ -175,7 +194,8 @@ func _ready() -> void:
 		button.add_theme_font_size_override("font_size",20)
 		button.custom_minimum_size.y = 36
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
-		for style in ["normal","hover","pressed"]: button.add_theme_stylebox_override(style,sidebar_box(Color.TRANSPARENT))
+		for style in ["normal","pressed"]: button.add_theme_stylebox_override(style,sidebar_box(Color.TRANSPARENT))
+		button.add_theme_stylebox_override("hover",sidebar_box(Color("2a2e34")))
 		button.focus_mode = Control.FOCUS_NONE
 		button.pressed.connect(func(): switch_category(index-category))
 		sidebar.add_child(button); sidebar_buttons.append(button)
@@ -192,10 +212,12 @@ func _ready() -> void:
 	section_tabs.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	section_tabs.add_theme_constant_override("separation",8)
 	section_bar.add_child(section_tabs)
-	section_hint=Label.new(); section_hint.add_theme_font_size_override("font_size",16)
-	section_hint.add_theme_color_override("font_color",MenuSkin.MUTED)
+	section_hint=key_hint(); section_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	section_hint.tooltip_text="Previous / next section"
 	section_bar.add_child(section_hint)
+	# A baseline under the tabs; the chosen tab's underline sits on it.
+	section_rule=ColorRect.new(); section_rule.color=Color("3a3f46"); section_rule.custom_minimum_size.y=1
+	section_rule.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(section_rule)
 	scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -220,7 +242,7 @@ func _ready() -> void:
 	column.add_theme_constant_override("separation",6)
 	scroll.add_child(column)
 	compact = Label.new()
-	compact.add_theme_font_size_override("font_size",24)
+	compact.add_theme_font_size_override("font_size",24); MenuSkin.weigh(compact,MenuSkin.SEMIBOLD)
 	compact.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	compact.add_theme_color_override("font_color",MenuSkin.AMBER)
 	layout.add_child(compact); compact.hide()
@@ -239,17 +261,30 @@ func _ready() -> void:
 	preview_button.focus_mode=Control.FOCUS_NONE
 	preview_button.pressed.connect(toggle_preview)
 	top.add_child(preview_button)
-	preview_button.flat=true; preview_button.add_theme_font_size_override("font_size",16)
+	preview_button.flat=true; preview_button.add_theme_font_size_override("font_size",16); MenuSkin.weigh(preview_button,MenuSkin.REGULAR)
 	preview_glyph=preload("res://scripts/ui/button_glyph.gd").new("X"); top.add_child(preview_glyph)
 	visibility_changed.connect(func(): set_process(visible))
 	open_pause()
 	hide()
 
 # Left-aligned category labels need side padding without taller buttons.
-func sidebar_box(colour: Color) -> StyleBoxFlat:
-	var style := MenuSkin.box(colour,Color.TRANSPARENT,0,6)
+func sidebar_box(colour: Color, chosen := false) -> StyleBoxFlat:
+	var style := MenuSkin.box(colour,MenuSkin.AMBER,0,6)
 	style.content_margin_left=12; style.content_margin_right=12
+	if chosen: style.border_width_left=3; style.content_margin_left=11
 	return style
+
+## A small key chip, such as "Q / E", so shortcuts read apart from content.
+func key_hint() -> Label:
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size",14)
+	label.add_theme_color_override("font_color",Color("c9cbce"))
+	MenuSkin.weigh(label,MenuSkin.SEMIBOLD)
+	var chip := MenuSkin.box(Color("2c3036"),Color.TRANSPARENT,0,0)
+	chip.set_corner_radius_all(5); chip.content_margin_left=8; chip.content_margin_right=8; chip.content_margin_top=2; chip.content_margin_bottom=2
+	label.add_theme_stylebox_override("normal",chip)
+	label.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
+	return label
 
 func state_key() -> String:
 	match mode:
@@ -328,6 +363,7 @@ func back() -> void:
 			if video_view_dir!=host.video_dir and video_view_dir.begins_with(host.video_dir): open_videos(video_view_dir.get_base_dir())
 			else: mode="library"; render()
 		"video_launch": mode="videos"; render()
+		"video_search": mode="videos"; render()
 		"video_folder": mode="library_tools"; render()
 		"radio_url": mode="settings"; render()
 		"help": restore(help_origin)
@@ -401,6 +437,8 @@ func library_items() -> Array:
 	if rom_index.total()==0:
 		var setup: Array = [card(catalog.action("library.setup","Set up your ROM library" if h.default_rom_dir.is_empty() else "Choose a ROM folder",open_library_tools,"Choose your main ROM folder or SD card. Supported games appear here automatically; your files stay where they are."),"CHOOSE A FOLDER TO GET STARTED","locations",MenuSkin.AMBER,"LIBRARY SETUP")]
 		if videos_shown(): setup.append(videos_card("LIBRARY SETUP"))
+		var resumable: Array=host.video_library.continue_watching(5) if videos_shown() else []
+		if not resumable.is_empty(): setup.append(continue_card(resumable.size(),"LIBRARY SETUP"))
 		return setup
 	var result: Array = []
 	# Quick-access shelves appear once they hold something.
@@ -408,6 +446,8 @@ func library_items() -> Array:
 		card(catalog.action("library.recent","Recently played",func(): open_history("recent"),"Return to your latest games. Unplugged-card entries are kept.",h.play_history.recent.is_empty(),"%d game%s" % [h.play_history.recent.size(),"" if h.play_history.recent.size()==1 else "s"]),"PICK UP & PLAY","recent",MenuSkin.AMBER,"QUICK ACCESS"))
 	if not h.play_history.favourites.is_empty(): result.append(
 		card(catalog.action("library.favourites","Favourites",func(): open_history("favourites"),"Your favourites across every supported console. Press X on a game to add it.",h.play_history.favourites.is_empty(),"%d game%s" % [h.play_history.favourites.size(),"" if h.play_history.favourites.size()==1 else "s"]),"YOUR PERSONAL SHELF","favourites",Color("dfb984"),"QUICK ACCESS"))
+	var watching: Array=host.video_library.continue_watching(5) if videos_shown() else []
+	if not watching.is_empty(): result.append(continue_card(watching.size(),"QUICK ACCESS"))
 	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"]}
 	for system in library.Registry.SYSTEMS:
 		var id: String=system
@@ -464,14 +504,19 @@ func library_tool_items() -> Array:
 		result.append(entry(catalog.action("library.default","Change ROM folder",browse_folders,"Pick a different main ROM folder. Your files stay where they are.",false,"›"),rom,"folder","",h.default_rom_dir+(" · "+count_caption(games,"game") if games>0 else "")))
 		result.append(entry(catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the ROM folder for added or removed games.",false,""),rom,"refresh"))
 		result.append(entry(catalog.action("library.clear","Forget ROM folder",func(): set_default(""),"Forget the folder without changing any files.",false,""),rom,"clear","danger"))
-	if VideoSession.available():
-		var videos := "VIDEOS · OPTIONAL"
+	var videos := "VIDEOS · OPTIONAL"
+	if not VideoSession.available(): result.append_array(video_setup_items(videos))
+	else:
 		if h.video_dir.is_empty():
 			result.append(entry(catalog.action("library.video_folder","Choose a video folder",open_video_folder_picker,"Optional. Pick a folder of MP4 or MKV files to watch on the TV; they appear after your consoles.",false,"›"),videos,"video","","MP4 and MKV files, shown after your consoles"))
 		else:
 			var count: int=h.video_library.count(h.video_dir)
 			result.append(entry(catalog.action("library.video_folder","Change video folder",open_video_folder_picker,"Pick a different video folder. Your files stay where they are.",false,"›"),videos,"video","",h.video_dir+" · "+count_caption(count,"video")))
 			result.append(entry(catalog.action("library.video_clear","Remove video folder",func(): set_video_folder(""),"Hides Videos from the library. Your files are not changed.",false,""),videos,"clear","danger"))
+		if FfmpegInstaller.installed():
+			result.append(entry(catalog.action("library.ffmpeg_remove","Remove downloaded video libraries",func():
+				ask("Remove the video libraries?","Videos stop playing until you set them up again. The files go when CRT XR next starts.",func(): FfmpegInstaller.remove(); notify("Video libraries will be removed when CRT XR restarts.")),
+				"Frees the FFmpeg libraries CRT XR downloaded. Your videos are not touched.",false,""),videos,"clear","danger","",true))
 	var find := "FIND A FOLDER"
 	for candidate in library.Locations.library_candidates(library.home_folder(),library.Locations.sd_cards()):
 		var path: String=candidate
@@ -481,6 +526,42 @@ func library_tool_items() -> Array:
 	if OS.get_name()=="Windows": result.append(entry(catalog.action("library.drives","Computer drives",open_drives,"Choose a drive, then browse to your ROM folder.",false,""),find,"drive","","",true))
 	result.append(entry(catalog.action("library.path","Type a folder or network path…",enter_folder_path,"Enter a drive folder or a network share path; Windows handles sign-in.",false,""),find,"network","","",true))
 	return result
+
+## Windows has no system FFmpeg: offer to fetch just the libraries video needs.
+## Elsewhere, say what to install.
+func video_setup_items(section: String) -> Array:
+	var installer: Node = host.ffmpeg_installer
+	if OS.get_name() != "Windows" or installer == null:
+		return [entry(catalog.unavailable(catalog.action("library.ffmpeg_missing","Video playback needs FFmpeg",func(): pass,
+			"CRT XR plays videos with the system's FFmpeg 7.1 or 8. SteamOS includes it; on other systems install it with the package manager.",true),
+			"Install FFmpeg 7.1 or 8 to watch videos."),section,"video")]
+	if installer.busy:
+		return [entry(catalog.unavailable(catalog.action("library.ffmpeg_setup","Setting up video playback…",func(): pass,"Downloading FFmpeg's video libraries.",true),install_progress),section,"video","","",false)]
+	return [entry(catalog.action("library.ffmpeg_setup","Set up video playback",func():
+		ask("Download the video libraries?","CRT XR fetches FFmpeg's five video libraries (LGPL, "+FfmpegInstaller.size_note()+") from github.com/BtbN/FFmpeg-Builds and keeps them in its own folder. Only these files come down, each one checked; nothing else on this computer changes.",start_ffmpeg_install),
+		"Windows has no built-in FFmpeg. One download ("+FfmpegInstaller.size_note()+") lets you watch MP4 and MKV files on the TV.",false,"›"),
+		section,"video","primary","Downloads FFmpeg's video libraries, "+FfmpegInstaller.size_note())]
+
+func start_ffmpeg_install() -> void:
+	var installer: Node = host.ffmpeg_installer
+	if not installer.progress.is_connected(show_install_progress): installer.progress.connect(show_install_progress)
+	if not installer.finished.is_connected(install_finished): installer.finished.connect(install_finished)
+	install_progress = "Starting…"
+	mode = "library_tools"
+	installer.install()
+	render()
+
+func show_install_progress(done: int, total: int, label: String) -> void:
+	install_progress = ("%.1f of %.1f MB · %s" % [done / 1048576.0, total / 1048576.0, label]) if total > 0 else label
+	# A few redraws a second are plenty for a progress line.
+	if mode == "library_tools" and visible and Time.get_ticks_msec() - install_rendered > 250:
+		install_rendered = Time.get_ticks_msec()
+		remember(); render()
+
+func install_finished(ok: bool, message: String) -> void:
+	if mode == "library_tools" and visible: remember(); render()
+	if ok: notify(message + ". Choose a video folder to start.")
+	else: show_error(message)
 
 func browser_items() -> Array:
 	var here := library.current_dir
@@ -499,29 +580,68 @@ func browser_items() -> Array:
 		result.append(entry(catalog.unavailable(catalog.action("folder.empty","No folders or games here",func(): pass,"",true),"Go up, or pick another place below."),SECTION_INSIDE))
 	return result+place_entries("folder",open_folder,enter_folder_path)
 
-## Videos: just the contents, newest choice first; places live in Library locations.
+## One video as a list row: its length, where you stopped and its thumbnail.
+func video_row(path: String, label: String, section: String, place := "") -> Dictionary:
+	var length: float=host.video_library.duration(path)
+	var resume: float=host.video_library.position(path)
+	var parts: Array[String]=[]
+	if length>0.0: parts.append(VideoLibrary.clock(length))
+	if resume>0.0: parts.append("Resume at "+VideoLibrary.clock(resume))
+	if not place.is_empty(): parts.append(place)
+	var row: Dictionary=entry(catalog.action("video:"+path,label,func(): select_video(path),"Play on the TV. A pauses, the D-pad seeks, Y changes the picture shape.",false,"›"),section,"video")
+	row["layout"]="game"; row["detail"]=" · ".join(parts)
+	row["thumbnail_path"]=path; row["thumbnail"]=host.video_library.thumbnail(path)
+	return row
+
+## Where a video sits under the video folder, for search and continue rows.
+func video_place(path: String) -> String:
+	var folder := path.get_base_dir()
+	return "" if folder==host.video_dir else folder.trim_prefix(host.video_dir+"/")
+
 func video_items() -> Array:
+	if not host.video_library.thumbnail_ready.is_connected(thumbnail_arrived): host.video_library.thumbnail_ready.connect(thumbnail_arrived)
 	var result: Array=[]
+	if not search_query.is_empty():
+		result.append(entry(catalog.action("videos.clear_search","Clear search",func(): search_query=""; search_field.text=""; clear_input(); render(),"Back to your videos.",false,""),"SEARCH","clear","","",true))
+		var found: Array=host.video_library.search(host.video_dir,search_query)
+		var section := "RESULTS FOR “%s”" % search_query
+		for item in found: result.append(video_row(item.path,item.label,section,video_place(item.path)))
+		if found.is_empty(): result.append(entry(catalog.unavailable(catalog.action("videos.none","No videos match",func(): pass,"",true),"Try fewer letters, or clear the search."),section))
+		return result
+	if video_view_dir==host.video_dir:
+		for resume in host.video_library.continue_watching(5):
+			var path: String=resume.path
+			var seconds: float=resume.position
+			var row: Dictionary=video_row(path,path.get_file().get_basename(),"CONTINUE WATCHING",video_place(path))
+			row["id"]="video.continue:"+path
+			row["action"]=func(): play_video(path,seconds)
+			row["help"]="Carry on from "+VideoLibrary.clock(seconds)+"."
+			result.append(row)
+		result.append(entry(catalog.action("videos.search","Search videos…",open_video_search,"Find a video anywhere in your video folder. With a keyboard, Ctrl+F searches as you type.",false,""),"FIND","search","","",true))
 	if video_view_dir!=host.video_dir: result.append_array(up_entry("videos.up",video_view_dir,open_videos))
 	var entries: Array=host.video_library.list(video_view_dir)
 	video_page=clampi(video_page,0,maxi(0,(entries.size()-1)/VIDEOS_PER_PAGE))
 	if video_page>0: result.append(entry(catalog.action("videos.previous","Previous page",func(): video_page-=1; clear_input(); render(),"",false,""),SECTION_INSIDE,"up"))
 	for item in entries.slice(video_page*VIDEOS_PER_PAGE,(video_page+1)*VIDEOS_PER_PAGE):
 		var path: String=item.path
-		if item.folder:
-			result.append(entry(catalog.action("videos.folder:"+path,item.label,func(): open_videos(path),"Open this folder."),SECTION_INSIDE,"folder"))
-			continue
-		var length: float=host.video_library.duration(path)
-		var resume: float=host.video_library.position(path)
-		var parts: Array[String]=[]
-		if length>0.0: parts.append(VideoLibrary.clock(length))
-		if resume>0.0: parts.append("Resume at "+VideoLibrary.clock(resume))
-		var row: Dictionary=entry(catalog.action("video:"+path,item.label,func(): select_video(path),"Play on the TV. A pauses, the D-pad seeks, Y changes the picture shape.",false,"›"),SECTION_INSIDE,"video")
-		row["layout"]="game"; row["detail"]=" · ".join(parts)
-		result.append(row)
+		if item.folder: result.append(entry(catalog.action("videos.folder:"+path,item.label,func(): open_videos(path),"Open this folder."),SECTION_INSIDE,"folder"))
+		else: result.append(video_row(path,item.label,SECTION_INSIDE))
 	if (video_page+1)*VIDEOS_PER_PAGE<entries.size(): result.append(entry(catalog.action("videos.next","Next page",func(): video_page+=1; clear_input(); render(),"",false,""),SECTION_INSIDE,"page"))
 	if entries.is_empty(): result.append(entry(catalog.unavailable(catalog.action("videos.empty","No MP4 or MKV videos here",func(): pass,"Add videos to this folder, or choose another folder in Library locations.",true),"Add MP4 or MKV files to this folder."),SECTION_INSIDE))
 	return result
+
+func thumbnail_arrived(path: String, texture: Texture2D) -> void:
+	for row in rows:
+		if row.item.get("thumbnail_path","")==path: row.set_thumbnail(texture)
+
+## Search with the on-screen keys (controller) or a keyboard.
+func open_video_search() -> void:
+	remember(); clear_input(); mode="video_search"; render()
+	rename_field.text=search_query; focus_entry()
+
+func run_video_search() -> void:
+	search_query=rename_field.text.strip_edges(); search_field.text=search_query
+	video_page=0; mode="videos"; clear_input(); render()
 
 ## Videos are opt-in: shown only once a folder is chosen and FFmpeg is present.
 func videos_shown() -> bool:
@@ -532,8 +652,12 @@ func videos_card(group: String) -> Dictionary:
 	var label := ("%d+ videos" % count) if count>=VideoLibrary.COUNT_LIMIT else "%d video%s" % [count,"" if count==1 else "s"]
 	return card(catalog.action("library.videos","Videos",func(): open_videos(),"Your MP4 and MKV files from "+host.video_dir+", shown on the TV.",false,label),"YOUR VIDEOS","videos",Color("d6a35c"),group)
 
+func continue_card(count: int, group: String) -> Dictionary:
+	return card(catalog.action("library.continue","Continue watching",func(): open_videos(),"Pick up a video where you left off.",false,count_caption(count,"video")),"PICK UP & WATCH","videos",Color("d6a35c"),group)
+
 func open_videos(path := "") -> void:
 	if path.is_empty(): path=host.video_dir
+	search_query=""; search_field.text=""
 	if DirAccess.open(path)==null:
 		show_error("Video folder unavailable. Reconnect its drive or SD card, or choose another folder in Library locations."); return
 	remember(); clear_input(); error_label.hide()
@@ -568,6 +692,11 @@ func video_pause_items() -> Array:
 	var items: Array=[resume,timeline,
 		catalog.action("video.restart","Start from the beginning",func(): video.seek_to(0.0); h.was_paused_before_menu=false; h.close_settings(),"Plays this video again from the start."),
 		style_row]
+	var subtitles: PackedStringArray=video.subtitle_names()
+	if not subtitles.is_empty():
+		items.append({"id":"video.subtitles","label":"Subtitles","kind":"choice","choices":["Off"]+Array(subtitles),"default":0,
+			"getter":func(): return video.subtitle_choice+1,"setter":func(value): h.choose_subtitles(int(value)-1),
+			"help":"Shown on the TV like broadcast subtitles. S changes them while watching; each video remembers its choice."})
 	if tracks.size()>1:
 		items.append({"id":"video.audio","label":"Audio track","kind":"choice","choices":Array(tracks),"default":0,
 			"getter":func(): return int(video.info.get("audio_track",0)),"setter":func(value): video.select_audio_track(int(value)),
@@ -832,6 +961,7 @@ func get_items() -> Array:
 		"music_browser": return music_browser_items()
 		"radio_url": return text_keys()+[catalog.action("radio.save","Use this URL",save_radio_url),catalog.action("radio.cancel","Cancel",back)]
 		"videos": return video_items()
+		"video_search": return text_keys()+[catalog.action("video_search.go","Search",run_video_search,"Show videos whose names contain this."),catalog.action("video_search.cancel","Cancel",back,"Back to your videos.")]
 		"video_folder": return video_folder_items()
 		"video_launch": return [
 			catalog.action("video_launch.continue","Continue",func(): play_video(video_launch_path,h.video_library.position(video_launch_path)),video_launch_path.get_file().get_basename()+" • from "+VideoLibrary.clock(h.video_library.position(video_launch_path))),
@@ -956,13 +1086,13 @@ func render() -> void:
 				panel.add_theme_stylebox_override("panel",MenuSkin.box(Color("222a30"),Color("47535b"),1,12))
 				column.add_child(panel)
 				music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",4); panel.add_child(music_layout)
-				var badge := Label.new(); badge.text="NOW PLAYING" if watching else "MUSIC PLAYER"; badge.add_theme_font_size_override("font_size",16); badge.add_theme_color_override("font_color",MenuSkin.AMBER); music_layout.add_child(badge)
+				var badge := Label.new(); badge.text="NOW PLAYING" if watching else "MUSIC PLAYER"; badge.add_theme_font_size_override("font_size",16); MenuSkin.weigh(badge,MenuSkin.BOLD); badge.add_theme_color_override("font_color",MenuSkin.AMBER); music_layout.add_child(badge)
 				if watching:
-					var title := Label.new(); title.text=host.video.path.get_file().get_basename(); title.add_theme_font_size_override("font_size",20)
+					var title := Label.new(); title.text=host.video.path.get_file().get_basename(); title.add_theme_font_size_override("font_size",20); MenuSkin.weigh(title,MenuSkin.SEMIBOLD)
 					title.autowrap_mode=TextServer.AUTOWRAP_OFF; title.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 					music_layout.add_child(title)
 				elif not host.music.kind.is_empty():
-					music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20)
+					music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
 					music_heading.autowrap_mode=TextServer.AUTOWRAP_OFF; music_heading.max_lines_visible=2; music_heading.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 					music_layout.add_child(music_heading)
 			if item.layout=="transport":
@@ -975,7 +1105,7 @@ func render() -> void:
 				if grid!=null: group_row+=ceili(float(group_index)/2.0)
 				else: group_row=0
 				group=item.group; group_index=0
-				var label := Label.new(); label.text=group; label.add_theme_font_size_override("font_size",16); label.add_theme_color_override("font_color",MenuSkin.MUTED); column.add_child(label)
+				var label := Label.new(); label.text=group; label.add_theme_font_size_override("font_size",16); MenuSkin.weigh(label,MenuSkin.BOLD); label.add_theme_color_override("font_color",MenuSkin.MUTED); column.add_child(label)
 				grid=GridContainer.new();grid.columns=2;grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);column.add_child(grid)
 			parent=grid
 			item["nav_row"]=group_row+group_index/2; item["nav_col"]=group_index%2; group_index+=1
@@ -988,7 +1118,7 @@ func render() -> void:
 			if not section.is_empty():
 				var gap := Control.new(); gap.custom_minimum_size.y=6; column.add_child(gap)
 			section=item.section
-			var header := Label.new(); header.text=section; header.add_theme_font_size_override("font_size",16); header.add_theme_color_override("font_color",MenuSkin.MUTED)
+			var header := Label.new(); header.text=section; header.add_theme_font_size_override("font_size",16); MenuSkin.weigh(header,MenuSkin.BOLD); header.add_theme_color_override("font_color",MenuSkin.MUTED)
 			column.add_child(header)
 		if item.id in ["exit","home.exit"]:
 			var divider := HSeparator.new()
@@ -1007,10 +1137,13 @@ func render() -> void:
 				row.text=item.label; row.add_theme_font_size_override("font_size",18)
 		rows.append(row)
 	sidebar.visible = mode=="settings" and not preview
+	sidebar_panel.visible = sidebar.visible
 	section_bar.visible = mode=="settings" and not preview
+	section_rule.visible = section_bar.visible
 	for i in range(sidebar_buttons.size()):
-		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("353a40") if i==category else Color.TRANSPARENT))
+		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("3b3329") if i==category else Color.TRANSPARENT,i==category))
 		sidebar_buttons[i].add_theme_color_override("font_color",MenuSkin.TEXT if i==category else MenuSkin.MUTED)
+		MenuSkin.weigh(sidebar_buttons[i],MenuSkin.SEMIBOLD if i==category else MenuSkin.REGULAR)
 	if mode=="settings":
 		var pages: Array = catalog.pages(category)
 		for child in section_tabs.get_children(): section_tabs.remove_child(child);child.queue_free()
@@ -1020,9 +1153,12 @@ func render() -> void:
 			tab.text = str(pages[i].title)
 			tab.focus_mode=Control.FOCUS_NONE
 			tab.add_theme_font_size_override("font_size",20 if host.menu_large_text else 18)
-			var tab_style := MenuSkin.box(Color.TRANSPARENT,MenuSkin.TEXT,0,6)
+			MenuSkin.weigh(tab,MenuSkin.SEMIBOLD if i==subsection else MenuSkin.REGULAR)
+			var tab_style := MenuSkin.box(Color.TRANSPARENT,MenuSkin.AMBER,0,6)
 			tab_style.set_corner_radius_all(0)
-			if i==subsection: tab_style.border_width_bottom=2
+			# Reach down to the baseline rule so the underline sits on it.
+			tab_style.expand_margin_bottom=8
+			if i==subsection: tab_style.border_width_bottom=3
 			tab.add_theme_stylebox_override("normal",tab_style)
 			tab.add_theme_stylebox_override("pressed",tab_style)
 			var hover_style: StyleBoxFlat=tab_style.duplicate(); hover_style.bg_color=Color("292d33")
@@ -1031,17 +1167,18 @@ func render() -> void:
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"CRT XR" if host.emulator.loaded or host.video.loaded else "Welcome to CRT XR","library":"Your game library","library_tools":"Library locations","videos":"Videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"CRT XR" if host.emulator.loaded or host.video.loaded else "Welcome to CRT XR","library":"Your game library","library_tools":"Library locations","videos":"Videos","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm": confirm_panel.describe(confirmation.title,confirmation.detail,confirmation.get("preview",""))
-	rename_field.visible = mode in ["rename","radio_url","folder_path"]
-	rename_field.max_length=2048 if mode in ["radio_url","folder_path"] else 32
-	rename_field.placeholder_text="D:/roms or //server/share/roms" if mode=="folder_path" else "Direct MP3 stream URL" if mode=="radio_url" else "Name · Use on-screen keys or type"
+	rename_field.visible = mode in ["rename","radio_url","folder_path","video_search"]
+	rename_field.max_length=2048 if mode in ["radio_url","folder_path"] else (64 if mode=="video_search" else 32)
+	rename_field.placeholder_text="D:/roms or //server/share/roms" if mode=="folder_path" else "Direct MP3 stream URL" if mode=="radio_url" else ("Part of a video's name" if mode=="video_search" else "Name · Use on-screen keys or type")
 	if mode=="rename" and not entry_initialized:
 		rename_field.text = my_preset_name(rename_preset) if rename_preset>=0 else str(draft_names.get(host.selected_profile,setup_name())); entry_initialized=true
 	if mode=="rename" and rename_preset>=0: heading.text="Name your preset"
 	if mode=="my_preset": heading.text=my_preset_name(my_preset)
-	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites"] and not preview
+	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites","videos"] and not preview
+	search_field.placeholder_text="Search videos…  (Ctrl+F)" if mode=="videos" else "Search games…  (Ctrl+F)"
 	if not search_field.visible and search_field.has_focus(): search_field.release_focus()
 	body.visible = not preview
 	compact.visible = preview
@@ -1137,7 +1274,12 @@ func reveal_selected() -> void:
 func refresh_labels() -> void:
 	if is_instance_valid(music_heading): music_heading.text=host.music.now_playing()
 	var row = selected_row()
-	var context: String = "Picture for videos" if host.active_game_key==host.VIDEO_PROFILE else ("Picture for "+host.emulator.rom_path.get_file() if not host.active_game_key.is_empty() else "Global picture")
+	# Picture pages change whichever picture is in use; say which, plainly.
+	var context: String
+	if host.active_game_key==host.VIDEO_PROFILE: context="Editing the video picture · all videos"
+	elif not host.active_game_key.is_empty(): context="Editing %s's picture · this game only" % host.emulator.rom_path.get_file().get_basename()
+	elif host.video.loaded: context="Editing the global picture · games, videos and test signal"
+	else: context="Editing the global picture · games and test signal"
 	if mode=="pause":
 		subtitle.text = host.video.path.get_file() if host.video.loaded else (host.emulator.rom_path.get_file() if host.emulator.loaded else status_title)
 		subtitle.tooltip_text=status_detail
@@ -1164,6 +1306,8 @@ func refresh_labels() -> void:
 	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [my_preset+1,"✓ Active" if applied_preset()=="mine.%d" % my_preset else ("Saved" if my_preset_saved(my_preset) else "Empty")]
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
 	else: subtitle.text = ""
+	# Highlighted when Picture changes belong to one game or to videos, not everything.
+	subtitle.add_theme_color_override("font_color",MenuSkin.AMBER if mode=="settings" and category==1 and not host.active_game_key.is_empty() else MenuSkin.MUTED)
 	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0 and notification_context==state_key(): help_label.text = notification
@@ -1190,7 +1334,7 @@ func refresh_hints(row) -> void:
 	var back_caption := ("Return to game" if host.emulator.loaded else "Close menu") if mode=="pause" else "Back"
 	back_button.text=back_caption+("" if pad else "  [Backspace]")
 	back_glyph.visible=pad
-	sidebar.get_node("CategoryHint").text="L1 / R1 · Categories" if pad else "Q / E · Categories"
+	sidebar.find_child("CategoryHint",true,false).text="L1 / R1" if pad else "Q / E"
 	section_hint.text="L2 / R2" if pad else "Z / C"
 	preview_button.visible=preview_available() and not preview
 	preview_button.text="Preview" if pad else "Preview  [X]"
@@ -1248,7 +1392,7 @@ func navigate_library(next: Vector2i) -> void:
 func navigate(next: Vector2i) -> void:
 	if mode=="help": scroll.scroll_vertical+=next.y*80; return
 	if mode in ["library","alphabet"]: navigate_library(next); return
-	if mode in ["rename","folder_path","radio_url"] and input_kind=="controller":
+	if mode in ["rename","folder_path","radio_url","video_search"] and input_kind=="controller":
 		navigate_keys(next); return
 	var index := -1
 	for i in range(rows.size()):
@@ -1427,16 +1571,17 @@ func handle(event: InputEvent) -> bool:
 		return true
 	if event is InputEventKey:
 		set_input_kind("keyboard")
-		if mode in ["games","recent","favourites"]:
+		if mode in ["games","recent","favourites","videos"]:
 			if event.pressed and not event.echo and event.ctrl_pressed and event.physical_keycode==KEY_F:
 				clear_input(); search_field.grab_focus(); return true
 			if search_field.has_focus():
 				if event.pressed and event.physical_keycode in [KEY_DOWN,KEY_UP,KEY_ENTER,KEY_KP_ENTER]:
 					search_field.release_focus(); select(selected_id,false); return true
 				return false
-		if mode in ["rename","radio_url","folder_path"] and get_viewport().gui_get_focus_owner()==rename_field:
+		if mode in ["rename","radio_url","folder_path","video_search"] and get_viewport().gui_get_focus_owner()==rename_field:
+			if event.pressed and event.physical_keycode in [KEY_ENTER,KEY_KP_ENTER] and mode=="video_search": run_video_search(); return true
 			if event.pressed and event.physical_keycode==KEY_DOWN:
-				select("folder_path.open" if mode=="folder_path" else ("radio.save" if mode=="radio_url" else "rename.save")); return true
+				select({"folder_path":"folder_path.open","radio_url":"radio.save","video_search":"video_search.go"}.get(mode,"rename.save")); return true
 			return false
 		var moves := {KEY_UP:Vector2i.UP,KEY_DOWN:Vector2i.DOWN,KEY_LEFT:Vector2i.LEFT,KEY_RIGHT:Vector2i.RIGHT}
 		if moves.has(event.physical_keycode):
@@ -1499,13 +1644,13 @@ func _process(delta: float) -> void:
 func set_input_kind(kind: String) -> void:
 	if kind==input_kind: return
 	input_kind=kind
-	search_field.visible=kind=="keyboard" and mode in ["games","recent","favourites"]
+	search_field.visible=kind=="keyboard" and mode in ["games","recent","favourites","videos"]
 	if kind=="controller" and search_field.has_focus():
 		search_field.release_focus(); select(selected_id,false)
 	refresh_labels()
 
 func update_search(value: String) -> void:
-	remember(); clear_input(); search_query=value; game_page=0; render()
+	remember(); clear_input(); search_query=value; game_page=0; video_page=0; render()
 
 func game_entries() -> Array:
 	var games: Array=rom_index.games.get(library_system,[])

@@ -42,7 +42,21 @@ func remove_with_backup(path: String) -> void:
 	for suffix in ["", ".bak"]:
 		if FileAccess.file_exists(path + suffix): DirAccess.remove_absolute(ProjectSettings.globalize_path(path + suffix))
 
+## Needs FFmpeg (the system copy, or CRT_XR_FFMPEG_DIR) and the clips from
+## tests/make_video_fixtures.py; without either the suite skips and says why.
+func skip_reason() -> String:
+	var Session := preload("res://scripts/video/video_session.gd")
+	if not Session.available(): return "no FFmpeg: " + Session.unavailable_reason()
+	if not FileAccess.file_exists(ProjectSettings.globalize_path("res://build/video-fixtures/library/long_43_25.mp4")):
+		return "no clips: run python tests/make_video_fixtures.py <ffmpeg>"
+	return ""
+
 func run() -> void:
+	var reason := skip_reason()
+	if not reason.is_empty():
+		print("CHECKS SKIPPED: " + reason)
+		quit(0)
+		return
 	remove_with_backup(RESUME_TEST)
 	var Library := preload("res://scripts/video/video_library.gd")
 	var folder := ProjectSettings.globalize_path(LIBRARY)
@@ -83,6 +97,9 @@ func run() -> void:
 	app.video_library = Library.new(RESUME_TEST)
 	app.video_dir = ""
 	app.default_rom_dir = ""
+	# Per-game picture off (the default) must still keep the video picture apart.
+	var saved_remember: bool = app.remember_game_picture
+	app.remember_game_picture = false
 	if not app.settings_panel.visible: app.toggle_settings()
 
 	menu.open_library()
@@ -106,12 +123,35 @@ func run() -> void:
 	check(item("library.videos").value == "4 videos" and item("library.videos").glyph == "videos", "The card counts the videos")
 	var pages: Array = menu.catalog.pages(1)
 	var video_page: Array = pages.filter(func(page): return page.title == "Video")
-	check(video_page.size() == 1 and video_page[0].rows.map(func(row): return row.id).slice(0, 3) == ["video.default_style", "video.lines", "video.hardware"],
-		"Picture settings gain a Video page with shape, lines and hardware decoding")
+	var video_rows: Array = video_page[0].rows.map(func(row): return row.id) if video_page.size() == 1 else []
+	check(["video.default_style", "video.lines", "video.interlace", "video.subtitles_default", "video.osd", "video.hardware", "video.own_picture", "video.reset_picture"].all(func(id): return id in video_rows) and not "video.picture_note" in video_rows,
+		"Picture settings gain a Video page with shape, lines, interlacing, subtitles, decoding and the video picture: %s" % [video_rows])
+	if OS.get_name() == "Windows":
+		var setup: Array = menu.video_setup_items("VIDEOS · OPTIONAL")
+		check(setup.size() == 1 and setup[0].id == "library.ffmpeg_setup" and setup[0].emphasis == "primary" and str(setup[0].detail).contains("MB"),
+			"Without FFmpeg, Windows offers to set up video playback and says how big it is")
 
 	activate("library.videos")
-	var labels: Array = menu.items.map(func(entry): return entry.label)
-	check(menu.mode == "videos" and labels == ["Season 1", "Episode 2", "Episode 10", "long_43_25"], "The video list: %s" % [labels])
+	var labels: Array = menu.items.filter(func(entry): return entry.get("section", "") == menu.SECTION_INSIDE).map(func(entry): return entry.label)
+	check(menu.mode == "videos" and labels == ["Season 1", "Episode 2", "Episode 10", "long_43_25"] and "videos.search" in ids(), "The video list, with search: %s" % [labels])
+	var thumbnail_row = null
+	for i in range(400):
+		for row in menu.rows:
+			if row.item.get("thumbnail_path", "") == long and row.thumbnail != null and row.thumbnail.texture != null: thumbnail_row = row
+		if thumbnail_row != null: break
+		await process_frame
+	check(thumbnail_row != null and thumbnail_row.thumbnail.texture.get_size() == Vector2(128, 96), "Thumbnails appear in the list as they are made")
+	menu.open_video_search()
+	menu.rename_field.text = "episode"
+	menu.run_video_search()
+	check(menu.mode == "videos" and ("video:" + folder.path_join("Episode 2.mkv")) in ids() and ("video:" + folder.path_join("Episode 10.mkv")) in ids() and not ("video:" + long) in ids(),
+		"Searching finds matching videos: %s" % [ids()])
+	menu.open_video_search()
+	menu.rename_field.text = "PILOT"
+	menu.run_video_search()
+	check(str(item("video:" + season.path_join("Pilot.mp4")).get("detail", "")).contains("Season 1"), "Search reaches subfolders and says where each video is")
+	activate("videos.clear_search")
+	check(menu.search_query.is_empty() and "videos.search" in ids(), "Clearing the search returns to the folder")
 	check(item("video:" + long).detail == "1:00", "Each video shows its length (%s)" % item("video:" + long).get("detail"))
 	activate("videos.folder:" + season)
 	check(ids() == ["videos.up", "video:" + season.path_join("Pilot.mp4")], "Subfolders open in place with a way back up")
@@ -181,22 +221,52 @@ func run() -> void:
 	menu.adjust(1)
 	check(app.video.style == 2 and app.video_library.style(long) == 2, "Left/right changes the picture shape from the menu and remembers it")
 	menu.adjust(-1)
+	# Picture pages say plainly which picture they change.
+	menu.category = 1; menu.subsection = 0; menu.open_settings()
+	check(menu.subtitle.text.begins_with("Editing the video picture · all videos"), "Picture settings say they are editing the video picture (%s)" % menu.subtitle.text)
+	# Same as games: the video switches to the global picture at once, and back.
+	app.set_video_own_picture(false)
+	check(app.active_game_key == "" and app.world.picture.mode == global_mode, "Same as games puts videos on the global picture")
+	menu.open_settings()
+	check(menu.subtitle.text.begins_with("Editing the global picture · games, videos and test signal"), "And the Picture pages say so")
+	app.set_video_own_picture(true)
+	check(app.active_game_key == app.VIDEO_PROFILE and app.world.picture.mode == 3, "Own settings brings the video picture back")
+	menu.open_pause()
 	# Choosing the same picture as the global one must still be remembered for videos.
 	app.world.picture.mode = global_mode
 	activate("video.stop")
 	check(not app.video.loaded and app.pattern.visible and menu.mode == "pause", "Stop returns the TV to the test signal")
-	check(app.world.picture.mode == global_mode and FileAccess.file_exists(PROFILE), "The video picture is kept even when it matches the global one")
+	check(app.world.picture.mode == global_mode and FileAccess.file_exists(PROFILE), "The video picture is kept even when it matches the global one (mode %d, global %d, profile %s, games dir %s)" % [app.world.picture.mode, global_mode, FileAccess.file_exists(PROFILE), DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("user://games"))])
 
 	menu.open_videos()
 	check(item("video:" + long).detail == "1:00 · Resume at 0:25", "The list shows where you stopped")
+	check(ids()[0] == "video.continue:" + long and item("video.continue:" + long).section == "CONTINUE WATCHING", "Continue watching leads the list")
+	menu.open_library()
+	check("library.continue" in ids(), "The library offers Continue watching")
+	menu.open_videos()
 	activate("video:" + long)
 	check(menu.mode == "video_launch" and ids() == ["video_launch.continue", "video_launch.fresh", "video_launch.cancel"], "A saved place offers Continue or Start from the beginning")
 	activate("video_launch.continue")
 	check(app.video.loaded and absf(app.video.clock - 25.0) < 0.2 and app.video.style == 1, "Continue resumes at the saved place in the saved shape")
 	check(app.world.picture.mode == global_mode, "The remembered video picture applies")
+	app.reset_video_picture()
+	check(app.world.picture.mode == 3 and app.active_game_key == app.VIDEO_PROFILE, "Reset video picture starts again from Auto composite")
 	app.toggle_settings()
 	activate("video.restart")
 	check(not app.settings_panel.visible and app.video.clock < 0.2, "Start from the beginning plays from the start")
+	app.stop_video()
+
+	# Subtitles from the pause menu, remembered for the video.
+	var episode := folder.path_join("Episode 2.mkv")
+	check(app.play_video(episode) and app.video.subtitle_choice == -1, "Subtitles start off by default")
+	app.toggle_settings()
+	check("video.subtitles" in ids(), "The pause menu offers subtitles when a video has them")
+	menu.select("video.subtitles", false)
+	menu.adjust(1)
+	check(app.video.subtitle_choice == 0 and app.video_library.subtitle(episode) == "File · Episode 2.en.srt", "Choosing subtitles turns them on and remembers the choice")
+	app.close_settings()
+	app.stop_video()
+	check(app.play_video(episode) and app.video.subtitle_choice == 0, "The video opens with its remembered subtitles")
 	app.stop_video()
 
 	app.toggle_settings()
@@ -206,6 +276,7 @@ func run() -> void:
 	menu.open_library()
 	check(not "library.videos" in ids(), "And the Videos card goes away")
 
+	app.remember_game_picture = saved_remember
 	app.video_dir = saved_video_dir
 	app.default_rom_dir = saved_rom_dir
 	app.save_library()
