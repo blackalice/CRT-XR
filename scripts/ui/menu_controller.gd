@@ -10,6 +10,17 @@ const Catalog = preload("res://scripts/ui/menu_catalog.gd")
 const Library = preload("res://scripts/ui/rom_library.gd")
 const RomIndex = preload("res://scripts/content/rom_index.gd")
 const Confirmation = preload("res://scripts/ui/confirmation_panel.gd")
+const VideoSession = preload("res://scripts/video/video_session.gd")
+const VideoLibrary = preload("res://scripts/video/video_library.gd")
+const VIDEOS_PER_PAGE := 50
+const LocationBar = preload("res://scripts/ui/location_bar.gd")
+## File screens share one structure: where you are (the location bar), what
+## you can do here (THIS FOLDER), what is inside (CONTENTS) and other places
+## (GO TO). Section names are shown as small headers between rows.
+const SECTION_HERE := "THIS FOLDER"
+const SECTION_INSIDE := "CONTENTS"
+const SECTION_PLACES := "GO TO"
+var location_bar: PanelContainer
 const CATEGORIES := ["View","Picture","Audio","Room","Controls & XR","Saved setups","About & Help","Quick settings"]
 var host
 var catalog := Catalog.new()
@@ -53,6 +64,10 @@ var column: VBoxContainer
 var compact: Label
 var confirm_panel: PanelContainer
 var music_dir := ""
+var video_view_dir := ""
+var video_page := 0
+var video_launch_path := ""
+var video_folder_dir := ""
 var music_page := 0
 var music_origin: Dictionary = {}
 var music_heading: Label
@@ -127,6 +142,7 @@ func _ready() -> void:
 	subtitle.add_theme_font_size_override("font_size",20)
 	subtitle.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	layout.add_child(subtitle)
+	location_bar=LocationBar.new(); location_bar.hide(); layout.add_child(location_bar)
 	error_label = Label.new()
 	error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	error_label.max_lines_visible = 2
@@ -239,6 +255,8 @@ func state_key() -> String:
 	match mode:
 		"settings": return "settings:%d:%d" % [category,subsection]
 		"music_browser": return "music:%s:%d" % [music_dir,music_page]
+		"videos": return "videos:%s:%d" % [video_view_dir,video_page]
+		"video_folder": return "video_folder:"+video_folder_dir
 		"browser": return "browser:"+library.current_dir
 		"games": return "games:%s:%s:%d" % [host.default_rom_dir,library_system,game_page]
 		"slot": return "slot:%d" % host.selected_profile
@@ -256,7 +274,7 @@ func refresh() -> void:
 func open_pause() -> void:
 	remember(); clear_input()
 	mode = "pause"; preview = false
-	selected_id = "resume" if host.emulator.loaded else ("home.continue" if FileAccess.file_exists(host.last_game_path) else "home.library")
+	selected_id = "resume" if host.emulator.loaded or host.video.loaded else ("home.continue" if FileAccess.file_exists(host.last_game_path) else "home.library")
 	memory[state_key()] = {"id":selected_id,"scroll":0}
 	render()
 
@@ -305,6 +323,12 @@ func back() -> void:
 		"rename": mode="my_preset" if rename_preset>=0 else "slot"; render()
 		"my_preset": mode="settings"; render()
 		"music_browser": restore(music_origin)
+		"videos":
+			# Subfolders step back up towards the video folder before leaving it.
+			if video_view_dir!=host.video_dir and video_view_dir.begins_with(host.video_dir): open_videos(video_view_dir.get_base_dir())
+			else: mode="library"; render()
+		"video_launch": mode="videos"; render()
+		"video_folder": mode="library_tools"; render()
 		"radio_url": mode="settings"; render()
 		"help": restore(help_origin)
 		"confirm": restore(return_state)
@@ -364,10 +388,20 @@ func card(item: Dictionary, caption: String, glyph: String, accent: Color, group
 	item.merge({"layout":"card","caption":caption,"glyph":glyph,"accent":accent,"group":group})
 	return item
 
+## Library locations rows for the optional video folder; nothing when FFmpeg is missing.
+func video_location_items() -> Array:
+	if not VideoSession.available(): return []
+	var h=host
+	return [catalog.action("library.video_folder","Choose video folder" if h.video_dir.is_empty() else "Change video folder",open_video_folder_picker,
+			h.video_dir if not h.video_dir.is_empty() else "Optional. Pick a folder of MP4 or MKV files to watch on the TV; they appear after your consoles."),
+		catalog.unavailable(catalog.action("library.video_clear","Remove video folder",func(): set_video_folder(""),"Hides Videos from the library. Your files are not changed.",h.video_dir.is_empty()),"No video folder is set.")]
+
 func library_items() -> Array:
 	var h=host
 	if rom_index.total()==0:
-		return [card(catalog.action("library.setup","Set up your ROM library" if h.default_rom_dir.is_empty() else "Choose a ROM folder",open_library_tools,"Choose your main ROM folder or SD card. Supported games appear here automatically; your files stay where they are."),"CHOOSE A FOLDER TO GET STARTED","locations",MenuSkin.AMBER,"LIBRARY SETUP")]
+		var setup: Array = [card(catalog.action("library.setup","Set up your ROM library" if h.default_rom_dir.is_empty() else "Choose a ROM folder",open_library_tools,"Choose your main ROM folder or SD card. Supported games appear here automatically; your files stay where they are."),"CHOOSE A FOLDER TO GET STARTED","locations",MenuSkin.AMBER,"LIBRARY SETUP")]
+		if videos_shown(): setup.append(videos_card("LIBRARY SETUP"))
+		return setup
 	var result: Array = []
 	# Quick-access shelves appear once they hold something.
 	if not h.play_history.recent.is_empty(): result.append(
@@ -380,11 +414,203 @@ func library_items() -> Array:
 		var count: int=rom_index.games.get(id,[]).size()
 		if count==0: continue
 		result.append(card(catalog.action("library.system."+id,library.Registry.SYSTEMS[id].name,func(): open_system(id),"Open all %s cartridges in your library. Folders for other consoles stay out of this view." % library.Registry.SYSTEMS[id].name,false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
+	if videos_shown(): result.append(videos_card("YOUR CONSOLES"))
 	if h.default_rom_dir.is_empty():
 		result.push_front(card(catalog.action("library.setup","Set up your ROM library",open_library_tools,"Choose the folder containing snes, nes, megadrive and your other systems. Subfolders are included automatically."),"START HERE","locations",MenuSkin.AMBER,"LIBRARY SETUP"))
 	var detail := "Choose your main ROM folder" if h.default_rom_dir.is_empty() else "Folders · SD cards · Refresh"
 	result.append(card(catalog.action("library.locations","Library locations",open_library_tools,"Set the main roms folder once. CRT XR finds supported consoles and leaves the files where they are.",false,detail),"MAKE YOURSELF AT HOME","locations",Color("aeb6bf"),"YOUR CONSOLES" if rom_index.total()>0 else "LIBRARY"))
 	return result
+
+## Places a row in a section, with an icon, emphasis and an optional detail line.
+func entry(item: Dictionary, section: String, icon := "", emphasis := "", detail := "", compact := false) -> Dictionary:
+	item["section"]=section
+	if not icon.is_empty(): item["row_icon"]=icon
+	if not emphasis.is_empty(): item["emphasis"]=emphasis
+	if not detail.is_empty(): item["layout"]="game"; item["detail"]=detail
+	if compact: item["compact"]=true
+	return item
+
+## "Up to D:" for the parent of `path`, or nothing at a drive or share root.
+func up_entry(id: String, path: String, callback: Callable) -> Array:
+	var parent := path.get_base_dir()
+	if parent.is_empty() or parent==path: return []
+	var name := parent.get_file() if not parent.get_file().is_empty() else parent
+	return [entry(catalog.action(id,"Up to "+name,callback.bind(parent),"Go to the folder that contains this one.",false,""),SECTION_INSIDE,"up")]
+
+## The other places a file screen can jump to: home, SD cards, drives, a typed path.
+func place_entries(prefix: String, open: Callable, path_entry: Callable, extra: Array = [], typed := true) -> Array:
+	var result: Array=[]
+	for place in extra+[[library.home_folder(),"Home folder","home"]]:
+		var path: String=place[0]
+		if not path.is_empty(): result.append(entry(catalog.action(prefix+".place:"+path,place[1],open.bind(path),path,false,""),SECTION_PLACES,place[2],"","",true))
+	for mount in library.cards():
+		var path: String=mount
+		result.append(entry(catalog.action(prefix+".sd:"+path,"SD card",open.bind(path),path,false,""),SECTION_PLACES,"sd","","",true))
+	if OS.get_name()=="Windows":
+		for drive in library.Locations.computer_drives():
+			var path: String=drive
+			result.append(entry(catalog.action(prefix+".drive:"+path,"Drive "+path.trim_suffix("/"),open.bind(path),"Browse this drive, including mapped network drives.",false,""),SECTION_PLACES,"drive","","",true))
+	if typed: result.append(entry(catalog.action(prefix+".path","Type a folder or network path…",path_entry,"Enter a local folder or a share such as //server/share. Windows handles the sign-in.",false,""),SECTION_PLACES,"network","","",true))
+	return result
+
+func library_tool_items() -> Array:
+	var h=host
+	var result: Array=[]
+	var rom := "ROM LIBRARY"
+	if h.default_rom_dir.is_empty():
+		result.append(entry(catalog.action("library.default","Choose your ROM folder",browse_folders,"Browse to the main roms folder (the one containing snes, nes, megadrive and so on), then choose Use this folder.",false,"›"),rom,"folder","primary","Pick it once; every supported console inside is found for you."))
+	else:
+		var games: int=rom_index.total()
+		result.append(entry(catalog.action("library.default","Change ROM folder",browse_folders,"Pick a different main ROM folder. Your files stay where they are.",false,"›"),rom,"folder","",h.default_rom_dir+(" · "+count_caption(games,"game") if games>0 else "")))
+		result.append(entry(catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the ROM folder for added or removed games.",false,""),rom,"refresh"))
+		result.append(entry(catalog.action("library.clear","Forget ROM folder",func(): set_default(""),"Forget the folder without changing any files.",false,""),rom,"clear","danger"))
+	if VideoSession.available():
+		var videos := "VIDEOS · OPTIONAL"
+		if h.video_dir.is_empty():
+			result.append(entry(catalog.action("library.video_folder","Choose a video folder",open_video_folder_picker,"Optional. Pick a folder of MP4 or MKV files to watch on the TV; they appear after your consoles.",false,"›"),videos,"video","","MP4 and MKV files, shown after your consoles"))
+		else:
+			var count: int=h.video_library.count(h.video_dir)
+			result.append(entry(catalog.action("library.video_folder","Change video folder",open_video_folder_picker,"Pick a different video folder. Your files stay where they are.",false,"›"),videos,"video","",h.video_dir+" · "+count_caption(count,"video")))
+			result.append(entry(catalog.action("library.video_clear","Remove video folder",func(): set_video_folder(""),"Hides Videos from the library. Your files are not changed.",false,""),videos,"clear","danger"))
+	var find := "FIND A FOLDER"
+	for candidate in library.Locations.library_candidates(library.home_folder(),library.Locations.sd_cards()):
+		var path: String=candidate
+		result.append(entry(catalog.action("library.detected:"+path,"Found a ROM folder",func(): open_folder(path),"Open this detected library, then choose Use this folder for my library.",false,"›"),find,"search","",path))
+	result.append(entry(catalog.action("library.browse","Browse this computer",browse_folders,"Start from your ROM folder, or your home folder.",false,""),find,"folder","","",true))
+	result.append(entry(catalog.action("library.sd","SD card",open_cards,"Browse a mounted Steam Deck SD card.",false,""),find,"sd","","",true))
+	if OS.get_name()=="Windows": result.append(entry(catalog.action("library.drives","Computer drives",open_drives,"Choose a drive, then browse to your ROM folder.",false,""),find,"drive","","",true))
+	result.append(entry(catalog.action("library.path","Type a folder or network path…",enter_folder_path,"Enter a drive folder or a network share path; Windows handles sign-in.",false,""),find,"network","","",true))
+	return result
+
+func browser_items() -> Array:
+	var here := library.current_dir
+	var result: Array=[entry(catalog.action("folder.remember","Use this folder for my library",func():
+		set_default(here)
+		if host.default_rom_dir==here: open_library(),"Every supported console in this folder and its subfolders becomes your library. Choose the parent ROM folder, not one console's folder.",false,""),SECTION_HERE,"check","primary","Finds games for every console in here and its subfolders")]
+	result.append_array(up_entry("folder.up",here,open_folder))
+	for item in library.entries:
+		var path: String=item.path
+		if item.folder:
+			var console: String=str(item.system)
+			result.append(entry(catalog.action("file:"+path,item.label,func(): open_folder(path),path,false,console if not console.is_empty() else "›"),SECTION_INSIDE,"folder"))
+		else:
+			result.append(entry(catalog.action("file:"+path,item.label,func(): select_file(path),path,false,str(item.get("system","Game"))),SECTION_INSIDE,"cartridge"))
+	if library.entries.is_empty():
+		result.append(entry(catalog.unavailable(catalog.action("folder.empty","No folders or games here",func(): pass,"",true),"Go up, or pick another place below."),SECTION_INSIDE))
+	return result+place_entries("folder",open_folder,enter_folder_path)
+
+## Videos: just the contents, newest choice first; places live in Library locations.
+func video_items() -> Array:
+	var result: Array=[]
+	if video_view_dir!=host.video_dir: result.append_array(up_entry("videos.up",video_view_dir,open_videos))
+	var entries: Array=host.video_library.list(video_view_dir)
+	video_page=clampi(video_page,0,maxi(0,(entries.size()-1)/VIDEOS_PER_PAGE))
+	if video_page>0: result.append(entry(catalog.action("videos.previous","Previous page",func(): video_page-=1; clear_input(); render(),"",false,""),SECTION_INSIDE,"up"))
+	for item in entries.slice(video_page*VIDEOS_PER_PAGE,(video_page+1)*VIDEOS_PER_PAGE):
+		var path: String=item.path
+		if item.folder:
+			result.append(entry(catalog.action("videos.folder:"+path,item.label,func(): open_videos(path),"Open this folder."),SECTION_INSIDE,"folder"))
+			continue
+		var length: float=host.video_library.duration(path)
+		var resume: float=host.video_library.position(path)
+		var parts: Array[String]=[]
+		if length>0.0: parts.append(VideoLibrary.clock(length))
+		if resume>0.0: parts.append("Resume at "+VideoLibrary.clock(resume))
+		var row: Dictionary=entry(catalog.action("video:"+path,item.label,func(): select_video(path),"Play on the TV. A pauses, the D-pad seeks, Y changes the picture shape.",false,"›"),SECTION_INSIDE,"video")
+		row["layout"]="game"; row["detail"]=" · ".join(parts)
+		result.append(row)
+	if (video_page+1)*VIDEOS_PER_PAGE<entries.size(): result.append(entry(catalog.action("videos.next","Next page",func(): video_page+=1; clear_input(); render(),"",false,""),SECTION_INSIDE,"page"))
+	if entries.is_empty(): result.append(entry(catalog.unavailable(catalog.action("videos.empty","No MP4 or MKV videos here",func(): pass,"Add videos to this folder, or choose another folder in Library locations.",true),"Add MP4 or MKV files to this folder."),SECTION_INSIDE))
+	return result
+
+## Videos are opt-in: shown only once a folder is chosen and FFmpeg is present.
+func videos_shown() -> bool:
+	return not host.video_dir.is_empty() and VideoSession.available()
+
+func videos_card(group: String) -> Dictionary:
+	var count: int = host.video_library.count(host.video_dir)
+	var label := ("%d+ videos" % count) if count>=VideoLibrary.COUNT_LIMIT else "%d video%s" % [count,"" if count==1 else "s"]
+	return card(catalog.action("library.videos","Videos",func(): open_videos(),"Your MP4 and MKV files from "+host.video_dir+", shown on the TV.",false,label),"YOUR VIDEOS","videos",Color("d6a35c"),group)
+
+func open_videos(path := "") -> void:
+	if path.is_empty(): path=host.video_dir
+	if DirAccess.open(path)==null:
+		show_error("Video folder unavailable. Reconnect its drive or SD card, or choose another folder in Library locations."); return
+	remember(); clear_input(); error_label.hide()
+	if path!=video_view_dir: video_page=0
+	video_view_dir=path; mode="videos"; render()
+
+func select_video(path: String) -> void:
+	if not FileAccess.file_exists(path): show_error("Video unavailable. Reconnect its drive or SD card and try again."); return
+	if host.video_library.position(path)>0.0:
+		remember(); video_launch_path=path; clear_input(); mode="video_launch"; render()
+	else: play_video(path,0.0)
+
+func play_video(path: String, from_seconds: float) -> void:
+	if not host.play_video(path,from_seconds): show_error(host.startup_message); return
+	host.was_paused_before_menu=false
+	host.close_settings()
+
+func video_pause_items() -> Array:
+	var h=host
+	var video=h.video
+	var length := float(video.info.get("duration",0.0))
+	var tracks: PackedStringArray=video.track_names()
+	var style_row := {"id":"video.style","label":"Picture shape","kind":"choice","choices":VideoSession.STYLES,"default":h.video_style,
+		"getter":func(): return video.style,"setter":func(value):
+			video.style=int(value); video.decoder.set_style(video.style); h.remember_video_position(),
+		"help":"How a widescreen video fills the 4:3 tube. Y changes it while watching; each video remembers its own."}
+	var resume: Dictionary=catalog.action("resume","Resume",h.close_settings,"Carry on watching from the timeline position. A also pauses and plays while watching. %s · decoding: %s" % [str(video.info.get("codec","")).to_upper(),video.decoding()],false,"▶")
+	resume["layout"]="video_resume"
+	var timeline := {"id":"video.seek","label":"Position","kind":"seek","layout":"video_seek","getter":func(): return video.clock,"setter":func(value): video.seek_to(float(value)),
+		"duration":func(): return length,"progress":func(): return VideoLibrary.clock(video.clock)+" / "+VideoLibrary.clock(length),
+		"help":"Left/right moves 10 seconds and repeats while held; drag or click the timeline to jump. The TV follows as you scrub."}
+	var items: Array=[resume,timeline,
+		catalog.action("video.restart","Start from the beginning",func(): video.seek_to(0.0); h.was_paused_before_menu=false; h.close_settings(),"Plays this video again from the start."),
+		style_row]
+	if tracks.size()>1:
+		items.append({"id":"video.audio","label":"Audio track","kind":"choice","choices":Array(tracks),"default":0,
+			"getter":func(): return int(video.info.get("audio_track",0)),"setter":func(value): video.select_audio_track(int(value)),
+			"help":"Language or commentary track. X changes it while watching."})
+	items.append_array([catalog.action("video.choose","Choose video",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else ""),"Pick another video from your video folder."),
+		catalog.action("video.stop","Stop video",func(): h.stop_video(); open_pause(),"Saves your place and returns the TV to its test signal."),
+		catalog.action("games","Game library",open_library,"Recent, Favourites, consoles and videos."),
+		catalog.action("quick","Quick settings",func(): category=7; subsection=0; open_settings(),"Everyday picture, placement and volume controls."),
+		catalog.action("settings","Settings",open_settings,"Adjust the view, picture, room, controls and saved setups."),
+		catalog.action("exit","Exit CRT XR",func(): ask("Exit CRT XR?","Your place in this video and your settings will be saved.",h.request_exit),"Close the application.")])
+	return items
+
+## Folder picker for the video folder: folders only, with the videos inside shown as a count.
+func open_video_folder_picker(path := "") -> void:
+	if path.is_empty():
+		for candidate in [host.video_dir,OS.get_system_dir(OS.SYSTEM_DIR_MOVIES),library.home_folder()]:
+			if not str(candidate).is_empty() and DirAccess.open(candidate)!=null: path=candidate; break
+	if DirAccess.open(path)==null: show_error("Folder unavailable. Reconnect its drive."); return
+	remember(); clear_input(); error_label.hide()
+	video_folder_dir=path; mode="video_folder"; render()
+
+func video_folder_items() -> Array:
+	var here: Array=host.video_library.list(video_folder_dir)
+	var videos := here.filter(func(item): return not item.folder).size()
+	var result: Array=[entry(catalog.action("video_folder.use","Use this folder for videos",func(): set_video_folder(video_folder_dir),
+		"Videos in this folder and its subfolders appear after your consoles.",false,""),SECTION_HERE,"check","primary",
+		count_caption(videos,"video")+" here · subfolders included")]
+	result.append_array(up_entry("video_folder.up",video_folder_dir,open_video_folder_picker))
+	for item in here:
+		if not item.folder: continue
+		var path: String=item.path
+		result.append(entry(catalog.action("video_folder.open:"+path,item.label,func(): open_video_folder_picker(path),path),SECTION_INSIDE,"folder"))
+	return result+place_entries("video_folder",open_video_folder_picker,func(): pass,[[OS.get_system_dir(OS.SYSTEM_DIR_MOVIES),"Videos folder","video"]],false)
+
+func set_video_folder(path: String) -> void:
+	var previous: String=host.video_dir
+	host.video_dir=path
+	if host.save_library()!=OK:
+		host.video_dir=previous
+		show_error("The video folder could not be saved. Check that user storage is writable."); return
+	host.video_library.refresh()
+	if path.is_empty(): mode="library_tools"; render(); notify("Video folder removed. Your videos are unchanged."); return
+	mode="library"; render(); notify("Videos now appear after your consoles.")
 
 func refresh_library() -> void:
 	var previous := selected_id
@@ -554,37 +780,30 @@ func save_radio_url() -> void:
 	mode="settings"; clear_input(); render(); notify("Radio URL ready. Choose Play radio to listen.")
 
 func music_browser_items() -> Array:
-	var result: Array=[catalog.action("music.up","Parent folder",func(): open_music_browser(music_dir.get_base_dir()))]
-	var locations: Array=[catalog.action("music.path","Open folder or network path…",func(): enter_folder_path(true)),catalog.action("music.home","Music folder",func(): open_music_browser(OS.get_system_dir(OS.SYSTEM_DIR_MUSIC)))]
-	for mount in library.cards():
-		var path: String=mount
-		locations.append(catalog.action("music.sd."+path,"SD card",func(): open_music_browser(path)))
-	if OS.get_name()=="Windows":
-		for drive in library.Locations.computer_drives():
-			locations.append(catalog.action("music.drive."+drive,drive,func(): open_music_browser(drive)))
+	var result: Array=[]
 	var entries: Array=[]
 	var album: Array=host.music.album_tracks(music_dir)
 	if not album.is_empty():
-		result.push_front(catalog.action("music.album","Play this album",func():
+		result.append(entry(catalog.action("music.album","Play this album",func():
 			if host.music.play_album(music_dir): mode="pause"; clear_input(); render()
-			else: show_error(host.music.status),"Play this folder in disc/track order, falling back to natural filenames.",false,"%d tracks" % album.size()))
+			else: show_error(host.music.status),"Play this folder in disc/track order, falling back to natural filenames.",false,""),SECTION_HERE,"album","primary","%d tracks in disc and track order" % album.size()))
+	result.append_array(up_entry("music.up",music_dir,open_music_browser))
 	for name in DirAccess.get_directories_at(music_dir):
 		if name.begins_with("."): continue
 		var path := music_dir.path_join(name)
-		entries.append(catalog.action("music.folder."+path,name+" /",func(): open_music_browser(path)))
+		entries.append(entry(catalog.action("music.folder."+path,name,func(): open_music_browser(path),path),SECTION_INSIDE,"folder"))
 	for tag in album:
 		var path: String=tag.path
-		var label: String=str(tag.title)
-		if not str(tag.artist).is_empty(): label+=" — "+str(tag.artist)
-		entries.append(catalog.action("music.track."+path,label,func():
+		var row: Dictionary=entry(catalog.action("music.track."+path,str(tag.title),func():
 			if host.music.play_file(path): mode="pause"; clear_input(); render()
-			else: show_error(host.music.status),"Play from this track, then continue through the folder. "+str(tag.album)))
+			else: show_error(host.music.status),"Play from this track, then continue through the folder. "+str(tag.album),false,"›"),SECTION_INSIDE,"music")
+		if not str(tag.artist).is_empty(): row["layout"]="game"; row["detail"]=str(tag.artist)
+		entries.append(row)
 	music_page=clampi(music_page,0,maxi(0,(entries.size()-1)/50))
-	if music_page>0: result.append(catalog.action("music.previous","Previous page",func(): music_page-=1; clear_input(); render()))
+	if music_page>0: result.append(entry(catalog.action("music.previous","Previous page",func(): music_page-=1; clear_input(); render(),"",false,""),SECTION_INSIDE,"up"))
 	result.append_array(entries.slice(music_page*50,(music_page+1)*50))
-	if (music_page+1)*50<entries.size(): result.append(catalog.action("music.next","Next page",func(): music_page+=1; clear_input(); render()))
-	result.append_array(locations)
-	return result
+	if (music_page+1)*50<entries.size(): result.append(entry(catalog.action("music.next","Next page",func(): music_page+=1; clear_input(); render(),"",false,""),SECTION_INSIDE,"page"))
+	return result+place_entries("music",open_music_browser,func(): enter_folder_path(true),[[OS.get_system_dir(OS.SYSTEM_DIR_MUSIC),"Music folder","music"]])
 
 func music_actions() -> Array:
 	var result: Array=[]
@@ -612,7 +831,14 @@ func get_items() -> Array:
 	match mode:
 		"music_browser": return music_browser_items()
 		"radio_url": return text_keys()+[catalog.action("radio.save","Use this URL",save_radio_url),catalog.action("radio.cancel","Cancel",back)]
+		"videos": return video_items()
+		"video_folder": return video_folder_items()
+		"video_launch": return [
+			catalog.action("video_launch.continue","Continue",func(): play_video(video_launch_path,h.video_library.position(video_launch_path)),video_launch_path.get_file().get_basename()+" • from "+VideoLibrary.clock(h.video_library.position(video_launch_path))),
+			catalog.action("video_launch.fresh","Start from the beginning",func(): play_video(video_launch_path,0.0),"Your saved place is replaced as you watch."),
+			catalog.action("video_launch.cancel","Back",back,"Return to your videos.")]
 		"pause":
+			if h.video.loaded: return video_pause_items()
 			if not h.emulator.loaded:
 				var home: Array = [catalog.action("home.continue","Continue last game",func(): select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",h.last_game_path.is_empty() or not FileAccess.file_exists(h.last_game_path),h.last_game_path.get_file().get_basename() if not h.last_game_path.is_empty() else "No recent game"),
 					catalog.action("home.library","Game library",open_library,"Choose your main ROM folder or SD card. Your supported games appear automatically." if h.default_rom_dir.is_empty() else "Recent, Favourites and supported consoles."),
@@ -647,19 +873,7 @@ func get_items() -> Array:
 		"settings": return catalog.pages(category)[subsection].rows
 		"help": return []
 		"library": return library_items()
-		"library_tools":
-			var locations: Array = []
-			for candidate in library.Locations.library_candidates(library.home_folder(),library.Locations.sd_cards()):
-				var path: String = candidate
-				locations.append(catalog.action("library.detected:"+path,"Found ROM folder: "+path.trim_prefix(library.home_folder()+"/"),func(): open_folder(path),"Open this detected library, then choose Use this folder for my library. "+path))
-			return locations + [
-			catalog.unavailable(catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the saved ROM folder for added or removed games.",h.default_rom_dir.is_empty()),"Choose a library folder first."),
-			catalog.action("library.default","Set up ROM library" if h.default_rom_dir.is_empty() else "Change ROM library folder",browse_folders,h.default_rom_dir if not h.default_rom_dir.is_empty() else "Browse to the main roms folder (containing snes, nes, megadrive, etc.), then press R1."),
-			catalog.action("library.sd","SD card",open_cards,"Browse a mounted Steam Deck SD card."),
-			catalog.action("library.browse","Browse folders",browse_folders,"Browse folders on this computer."),
-			catalog.action("library.drives","Computer drives",open_drives,"Choose a drive, then browse to your ROM folder.",OS.get_name()!="Windows"),
-			catalog.action("library.path","Open folder or network path…",enter_folder_path,"Enter a drive folder or a network share path; Windows handles sign-in."),
-			catalog.unavailable(catalog.action("library.clear","Clear default folder",func(): set_default(""),"Forget the default folder without changing any files.",h.default_rom_dir.is_empty()),"No library folder is set.")]
+		"library_tools": return library_tool_items()
 		"games":
 			var result: Array = [catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",game_entries().is_empty())]
 			var games: Array = game_entries()
@@ -679,31 +893,18 @@ func get_items() -> Array:
 				var item=catalog.action("letter."+chosen,chosen,func(): jump_to_letter(chosen),"Jump to the first matching game.",not available.has(chosen))
 				item.layout="letter"; result.append(item)
 			return result
-		"browser":
-			var result: Array = []
-			result.append(catalog.action("folder.remember","Use this folder for my library",func():
-				set_default(library.current_dir)
-				if host.default_rom_dir==library.current_dir: open_library(),"Choose the parent ROM folder to include all supported systems and their subfolders. Current folder: "+library.current_dir))
-			if OS.get_name()=="Windows": result.append(catalog.action("folder.drives","Computer drives",open_drives,"Open another drive, including mapped network drives."))
-			result.append(catalog.action("folder.path","Open folder or network path…",enter_folder_path,"Enter a local folder or //server/share/roms."))
-			for entry in library.entries:
-				var path: String = entry.path
-				var folder: bool = entry.folder
-				result.append(catalog.action("file:"+path,entry.label,func():
-					if folder: open_folder(path)
-					else: select_file(path),path,false,(str(entry.system)+" folder" if not str(entry.system).is_empty() else "Folder") if folder else entry.get("system","Game")))
-			result.append(catalog.action("folder.home","Home folder",func(): open_folder(library.home_folder()),"Browse your home folder."))
-			return result
+		"browser": return browser_items()
 		"drives":
-			var result: Array = [catalog.action("drives.path","Open folder or network path…",enter_folder_path,"Use a network share such as //server/share/roms, or enter a drive path.")]
+			var result: Array = []
 			for path in library.Locations.computer_drives():
-				result.append(catalog.action("drive:"+path,path,func(): open_folder(path),"Browse this drive."))
+				result.append(entry(catalog.action("drive:"+path,"Drive "+path.trim_suffix("/"),func(): open_folder(path),"Browse this drive.",false,"›"),"DRIVES","drive"))
+			result.append(entry(catalog.action("drives.path","Type a folder or network path…",enter_folder_path,"Use a network share such as //server/share/roms, or enter a drive path.",false,""),SECTION_PLACES,"network","","",true))
 			return result
 		"volumes":
 			var result: Array = []
 			for path in library.cards():
 				var location: String = path
-				result.append(catalog.action("volume:"+location,location.get_file(),func(): open_folder(location),location))
+				result.append(entry(catalog.action("volume:"+location,location.get_file(),func(): open_folder(location),location,false,"›"),"SD CARDS","sd"))
 			return result
 		"room_presets":
 			var result: Array = []
@@ -739,6 +940,7 @@ func render() -> void:
 	for child in column.get_children(): column.remove_child(child); child.queue_free()
 	rows.clear()
 	var group := ""
+	var section := ""
 	var grid: GridContainer
 	music_heading=null
 	var music_layout: VBoxContainer
@@ -747,14 +949,19 @@ func render() -> void:
 	var group_index := 0
 	for item in items:
 		var parent: Container=column
-		if item.get("layout","") in ["transport","music_seek","music_link"]:
+		if item.get("layout","") in ["transport","music_seek","music_link","video_resume","video_seek"]:
 			if music_layout==null:
+				var watching := str(item.layout).begins_with("video_")
 				var panel := PanelContainer.new()
 				panel.add_theme_stylebox_override("panel",MenuSkin.box(Color("222a30"),Color("47535b"),1,12))
 				column.add_child(panel)
 				music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",4); panel.add_child(music_layout)
-				var badge := Label.new(); badge.text="MUSIC PLAYER"; badge.add_theme_font_size_override("font_size",16); badge.add_theme_color_override("font_color",MenuSkin.AMBER); music_layout.add_child(badge)
-				if not host.music.kind.is_empty():
+				var badge := Label.new(); badge.text="NOW PLAYING" if watching else "MUSIC PLAYER"; badge.add_theme_font_size_override("font_size",16); badge.add_theme_color_override("font_color",MenuSkin.AMBER); music_layout.add_child(badge)
+				if watching:
+					var title := Label.new(); title.text=host.video.path.get_file().get_basename(); title.add_theme_font_size_override("font_size",20)
+					title.autowrap_mode=TextServer.AUTOWRAP_OFF; title.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+					music_layout.add_child(title)
+				elif not host.music.kind.is_empty():
 					music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20)
 					music_heading.autowrap_mode=TextServer.AUTOWRAP_OFF; music_heading.max_lines_visible=2; music_heading.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 					music_layout.add_child(music_heading)
@@ -777,6 +984,12 @@ func render() -> void:
 				grid=GridContainer.new(); grid.columns=10 if item.get("layout","")=="key" else 6; grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); column.add_child(grid)
 			parent=grid
 			item["nav_row"]=group_index/grid.columns; item["nav_col"]=group_index%grid.columns; group_index+=1
+		if item.has("section") and item.section!=section and item.get("layout","")!="card":
+			if not section.is_empty():
+				var gap := Control.new(); gap.custom_minimum_size.y=6; column.add_child(gap)
+			section=item.section
+			var header := Label.new(); header.text=section; header.add_theme_font_size_override("font_size",16); header.add_theme_color_override("font_color",MenuSkin.MUTED)
+			column.add_child(header)
 		if item.id in ["exit","home.exit"]:
 			var divider := HSeparator.new()
 			column.add_child(divider)
@@ -818,7 +1031,7 @@ func render() -> void:
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"CRT XR" if host.emulator.loaded else "Welcome to CRT XR","library":"Your game library","library_tools":"Library locations","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"CRT XR" if host.emulator.loaded or host.video.loaded else "Welcome to CRT XR","library":"Your game library","library_tools":"Library locations","videos":"Videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":"Please confirm","room_presets":"Lighting presets"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm": confirm_panel.describe(confirmation.title,confirmation.detail,confirmation.get("preview",""))
 	rename_field.visible = mode in ["rename","radio_url","folder_path"]
@@ -832,7 +1045,10 @@ func render() -> void:
 	if not search_field.visible and search_field.has_focus(): search_field.release_focus()
 	body.visible = not preview
 	compact.visible = preview
-	subtitle.visible = not preview
+	var place: String = {"browser":library.current_dir,"music_browser":music_dir,"videos":video_view_dir,"video_folder":video_folder_dir}.get(mode,"")
+	location_bar.visible = not place.is_empty() and not preview
+	if location_bar.visible: location_bar.show_path(place,library.home_folder(),library.cards())
+	subtitle.visible = not preview and not location_bar.visible
 	position = Vector2(36,522) if preview else Vector2(36,28)
 	size = Vector2(888,170) if preview else Vector2(888,664)
 	help_label.visible = not preview
@@ -909,17 +1125,26 @@ func select(id: String, user_action := true) -> void:
 
 func reveal_selected() -> void:
 	var row = selected_row()
-	if row!=null and not preview: scroll.ensure_control_visible(row)
+	if row==null or preview: return
+	# The first row of a section brings its header with it, so the section's
+	# name is never scrolled just out of view; the top row scrolls fully home.
+	if row.get_parent()==column:
+		var index: int=row.get_index()
+		if rows.find(row)==0: scroll.scroll_vertical=0
+		elif index>0 and column.get_child(index-1) is Label: scroll.ensure_control_visible(column.get_child(index-1))
+	scroll.ensure_control_visible(row)
 
 func refresh_labels() -> void:
 	if is_instance_valid(music_heading): music_heading.text=host.music.now_playing()
 	var row = selected_row()
-	var context: String = "Picture for "+host.emulator.rom_path.get_file() if not host.active_game_key.is_empty() else "Global picture"
+	var context: String = "Picture for videos" if host.active_game_key==host.VIDEO_PROFILE else ("Picture for "+host.emulator.rom_path.get_file() if not host.active_game_key.is_empty() else "Global picture")
 	if mode=="pause":
-		subtitle.text = host.emulator.rom_path.get_file() if host.emulator.loaded else status_title
+		subtitle.text = host.video.path.get_file() if host.video.loaded else (host.emulator.rom_path.get_file() if host.emulator.loaded else status_title)
 		subtitle.tooltip_text=status_detail
 	elif mode=="help": subtitle.text="Game library" if help_title=="Full game title" else "CRT XR · Help"
 	elif mode=="music_browser": subtitle.text=music_dir+" · Page %d" % [music_page+1]
+	elif mode=="videos": subtitle.text=video_view_dir+(" · Page %d" % [video_page+1] if video_page>0 else "")
+	elif mode=="video_folder": subtitle.text=video_folder_dir
 	elif mode=="radio_url": subtitle.text="Direct MP3 streams · On-screen keys or keyboard"
 	elif mode=="browser": subtitle.text = library.current_dir
 	elif mode=="library":
@@ -931,7 +1156,7 @@ func refresh_labels() -> void:
 	elif mode in ["recent","favourites"]:
 		subtitle.text = count_caption(history_paths().size(),"game")
 	elif mode=="launch": subtitle.text = launch_path.get_file().get_basename()
-	elif mode=="library_tools": subtitle.text = host.default_rom_dir if not host.default_rom_dir.is_empty() else "Choose the main roms folder, once"
+	elif mode=="library_tools": subtitle.text = "Where CRT XR finds your games and videos · Your files stay where they are"
 	elif mode=="settings":
 		if category==1: subtitle.text=context+" · "+preset_caption()
 		elif category==2: subtitle.text=["Game volume and TV sound", "Lower game audio while music plays", host.music.status, "Place music in the room"][subsection]
@@ -939,7 +1164,7 @@ func refresh_labels() -> void:
 	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [my_preset+1,"✓ Active" if applied_preset()=="mine.%d" % my_preset else ("Saved" if my_preset_saved(my_preset) else "Empty")]
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
 	else: subtitle.text = ""
-	subtitle.visible = not preview and not subtitle.text.is_empty()
+	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0 and notification_context==state_key(): help_label.text = notification
 	elif mode=="help": help_label.text=""
@@ -1080,8 +1305,8 @@ func adjust(delta: int) -> void:
 	var row = selected_row()
 	if row!=null and row.item.kind=="seek":
 		row.item.setter.call(float(row.item.getter.call())+10*delta); row.refresh(); return
-	if mode!="settings": return
 	if row==null or row.disabled: return
+	if mode!="settings" and not (mode=="pause" and str(row.item.id).begins_with("video.")): return
 	var item: Dictionary = row.item
 	match item.kind:
 		"number": item.setter.call(clampf(snappedf(float(item.getter.call())+delta*float(item.step),float(item.step)),item.min,item.max))
@@ -1455,8 +1680,9 @@ func apply_accessibility() -> void:
 func style_rows() -> void:
 	for row in rows:
 		if row.item.get("layout","") in ["transport","card"]: continue
-		row.title_label.add_theme_font_size_override("font_size",27 if host.menu_large_text else 24)
-		row.value_label.add_theme_font_size_override("font_size",25 if host.menu_large_text else 22)
+		var compact: bool = row.item.get("compact",false)
+		row.title_label.add_theme_font_size_override("font_size",(23 if host.menu_large_text else 20) if compact else (27 if host.menu_large_text else 24))
+		row.value_label.add_theme_font_size_override("font_size",(21 if host.menu_large_text else 18) if compact else (25 if host.menu_large_text else 22))
 		row.sync_content_height()
 		if host.menu_high_contrast:
 			row.title_label.add_theme_color_override("font_color",Color.WHITE)

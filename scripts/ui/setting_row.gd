@@ -2,6 +2,11 @@ extends Button
 signal selected(id: String)
 signal adjust_requested(id: String, direction: int)
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
+const RowIcon = preload("res://scripts/ui/row_icon.gd")
+## Optional item keys: "row_icon" (see row_icon.gd) leads the row; "emphasis" is
+## "primary" for a screen's main action or "danger" for one that forgets
+## something; "compact" draws a smaller row for secondary places.
+const DANGER := Color("e0907f")
 var item: Dictionary
 var title_label: Label
 var unavailable_label: Label
@@ -28,7 +33,7 @@ func configure(definition: Dictionary) -> void:
 	content_margin=MarginContainer.new()
 	content_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	for side in ["left","right"]: content_margin.add_theme_constant_override("margin_"+side,16)
-	for side in ["top","bottom"]: content_margin.add_theme_constant_override("margin_"+side,10)
+	for side in ["top","bottom"]: content_margin.add_theme_constant_override("margin_"+side,6 if item.get("compact",false) else 10)
 	content_margin.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	add_child(content_margin)
 	content=VBoxContainer.new(); content.add_theme_constant_override("separation",8)
@@ -37,6 +42,9 @@ func configure(definition: Dictionary) -> void:
 	line.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(line)
 	# The outline carries focus; do not reserve a competing arrow column.
 	marker=Label.new(); marker.hide(); add_child(marker)
+	var emphasis := str(item.get("emphasis",""))
+	var tint := MenuSkin.AMBER if emphasis=="primary" else (DANGER if emphasis=="danger" else MenuSkin.MUTED)
+	if item.has("row_icon"): line.add_child(RowIcon.new(str(item.row_icon),tint))
 	words=VBoxContainer.new(); words.add_theme_constant_override("separation",3)
 	words.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	words.size_flags_vertical=Control.SIZE_SHRINK_CENTER
@@ -46,6 +54,7 @@ func configure(definition: Dictionary) -> void:
 	title_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	title_label.max_lines_visible=3
 	title_label.mouse_filter=Control.MOUSE_FILTER_IGNORE; words.add_child(title_label)
+	if emphasis in ["primary","danger"]: title_label.add_theme_color_override("font_color",tint)
 	value_group=HBoxContainer.new(); value_group.add_theme_constant_override("separation",8)
 	value_group.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	value_group.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(value_group)
@@ -103,7 +112,7 @@ func sync_content_height() -> void:
 	if content_margin==null or not content_margin.visible: return
 	# Read the containers' natural minimum, never their allocated height.
 	# This lets wrapped titles and descriptions grow the row without a size loop.
-	custom_minimum_size.y=maxf(56,content_margin.get_combined_minimum_size().y)
+	custom_minimum_size.y=maxf(44 if item.get("compact",false) else 56,content_margin.get_combined_minimum_size().y)
 
 # Shared: refresh() runs ten times a second per row while the menu is open.
 static var FILL_SELECTED := MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0)

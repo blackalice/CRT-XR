@@ -36,6 +36,10 @@ var video_recorder: MeshInstance3D
 var game_boxes: MeshInstance3D
 var clock_elapsed := 1.0
 var shown_minute := -1
+## Seconds into the playing video, shown on the VCR as its tape counter; -1
+## while no video plays, when the VCR shows the time like the clock radio.
+var vcr_counter := -1
+var shown_counter := -2
 var room_environment: Environment
 var key_light: SpotLight3D
 var fill_light: OmniLight3D
@@ -153,6 +157,10 @@ func _build_props(support: Node3D) -> void:
 	video_recorder = Props.vcr(television, shelf_top, cabinet.get_center().x, front - 0.1 - Props.VCR_SIZE.z * Props.SET_SCALE * 0.5)
 
 func _update_prop_clocks(delta: float) -> void:
+	if video_recorder != null and vcr_counter != shown_counter:
+		shown_counter = vcr_counter
+		if vcr_counter >= 0: _show_tape_counter(vcr_counter)
+		else: shown_minute = -1 # back to the time of day straight away
 	clock_elapsed += delta
 	if clock_elapsed < 1.0: return
 	clock_elapsed = 0.0
@@ -161,11 +169,20 @@ func _update_prop_clocks(delta: float) -> void:
 	if minute == shown_minute: return
 	shown_minute = minute
 	for prop in [clock_radio, video_recorder]:
+		if prop == video_recorder and vcr_counter >= 0: continue
 		var material := prop.material_override as ShaderMaterial
 		material.set_shader_parameter("hours", int(now.hour))
 		material.set_shader_parameter("minutes", int(now.minute))
 		material.set_shader_parameter("pm", int(now.hour) >= 12)
 		material.set_shader_parameter("twelve_hour", not clock_24_hour)
+
+## Like a VCR's tape counter: minutes and seconds, then hours and minutes past an hour.
+func _show_tape_counter(seconds: int) -> void:
+	var material := video_recorder.material_override as ShaderMaterial
+	var long := seconds >= 3600
+	material.set_shader_parameter("hours", seconds / 3600 if long else seconds / 60)
+	material.set_shader_parameter("minutes", seconds / 60 % 60 if long else seconds % 60)
+	material.set_shader_parameter("twelve_hour", false)
 
 func _process(_delta: float) -> void:
 	if (show_clock_radio or show_vcr) and clock_radio != null: _update_prop_clocks(_delta)

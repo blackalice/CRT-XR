@@ -1,6 +1,7 @@
 extends RefCounted
 ## Explicit ordered rows and stable IDs; bindings reuse the application's
 ## existing actions and preferences rather than a second settings store.
+const VideoSession = preload("res://scripts/video/video_session.gd")
 var host: Node
 var menu: Control
 
@@ -54,6 +55,19 @@ func picture_fields(fields: Array) -> Array:
 		result.append(item)
 	return result
 
+func video_rows() -> Array:
+	var h = host
+	return [{"id":"video.default_style","label":"Picture shape for new videos","kind":"choice","choices":VideoSession.STYLES,"default":0,
+			"getter":func(): return h.video_style,"setter":func(value): h.video_style=int(value); h.save_library(),
+			"help":"Letterbox shows the whole widescreen picture; 14:9 trims the sides a little; Fill 4:3 crops to the tube; Stretch squeezes. Each video remembers its own choice."},
+		{"id":"video.lines","label":"Picture lines","kind":"choice","choices":["240 lines · CRT look","480 lines · sharper"],"default":0,
+			"getter":func(): return 1 if h.video_lines==480 else 0,"setter":func(value): h.video_lines=480 if int(value)==1 else 240; h.save_library(),
+			"help":"240 lines is one broadcast field, the line structure a CRT shows, so scanlines and the phosphor mask are visible. 480 is sharper, but its lines are too fine to show on the virtual tube. Applies from the next video you open."},
+		{"id":"video.hardware","label":"Hardware video decoding","kind":"toggle","default":true,
+			"getter":func(): return h.video_hardware,"setter":func(value): h.video_hardware=bool(value); h.save_library(),
+			"help":"Decodes on the GPU (VA-API on Steam Deck), leaving the CPU for the room and tracking. Falls back to software by itself when a file or GPU cannot use it. Applies from the next video."},
+		action("video.picture_note","Picture for videos",func(): pass,"Videos keep their own picture settings, starting from Auto composite. Adjust them on the other Picture pages while a video is playing.",false,"")]
+
 func pages(category: int) -> Array:
 	var h = host
 	var w = h.world
@@ -100,7 +114,9 @@ func pages(category: int) -> Array:
 			if menu.picture_undo!=null: presets.append(action("preset.undo","Undo picture preset",menu.undo_picture_preset,"Restore the picture from before the last preset."))
 			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference; Auto uses the game rate."}]
 			signal_rows.append_array(picture_fields(w.picture.COLOR_FIELDS.slice(6)))
-			return [page("Presets",presets),page("CRT",crt),page("Screen fit",fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
+			var picture_pages := [page("Presets",presets),page("CRT",crt),page("Screen fit",fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
+			if menu.videos_shown(): picture_pages.append(page("Video",video_rows()))
+			return picture_pages
 		3:
 			var groups := {"Lighting":[],"Materials":[],"Placement & fade":[]}
 			var tips := {

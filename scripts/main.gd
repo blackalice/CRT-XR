@@ -7,6 +7,9 @@ const PosePrediction = preload("res://scripts/tracking/pose_prediction.gd")
 const CRTWorld = preload("res://scripts/rendering/crt_world.gd")
 const Pattern = preload("res://scripts/content/test_pattern.gd")
 const Emulation = preload("res://scripts/emulation/emulation_session.gd")
+const VideoSession = preload("res://scripts/video/video_session.gd")
+const VideoLibrary = preload("res://scripts/video/video_library.gd")
+const VideoBar = preload("res://scripts/ui/video_bar.gd")
 const Menu = preload("res://scripts/ui/menu_controller.gd")
 var menu: PanelContainer
 const Showcase = preload("res://scripts/presets/showcase.gd")
@@ -15,6 +18,9 @@ const SettingsStore = preload("res://scripts/ui/settings_store.gd")
 const CoreRegistry = preload("res://scripts/emulation/core_registry.gd")
 const StartupStatus = preload("res://scripts/ui/startup_status.gd")
 const PICTURE_SECTIONS := ["crt", "picture"]
+## Picture profile used for every video, kept apart from games and the test signal.
+const VIDEO_PROFILE := "video"
+const VIDEO_CHECKPOINT_SECONDS := 30.0
 const PROFILE_NAMES := ["Everyday", "Evening", "Bright room"]
 var settings_store := SettingsStore.new()
 var picture_baseline := ConfigFile.new()
@@ -32,6 +38,7 @@ signal screenshot_saved(path: String)
 var taking_screenshot := false
 var last_screenshot_path := ""
 var notices: Array[Label] = []
+var video_bars: Array = []
 var notice_time := 0.0
 var picture_preset_id := ""
 var picture_preset_signature := ""
@@ -40,6 +47,7 @@ var menu_high_contrast := false
 var menu_reduced_motion := false
 var menu_sounds := false
 var emulator: Node
+var video: Node
 var music: Node
 var power_on: Node
 var signal_view: SubViewport
@@ -102,6 +110,19 @@ var menu_view: SubViewport
 var menu_overlays: Array[TextureRect] = []
 var play_history := preload("res://scripts/content/play_history.gd").new()
 var last_game_path := ""
+## Videos are opt-in: nothing appears in the library until a folder is chosen.
+var video_dir := ""
+var video_style := 0
+var video_lines := 240
+var video_hardware := true
+var video_library := VideoLibrary.new()
+var video_checkpoint := 0.0
+## Held D-pad or arrow direction while watching: repeats seeks to scrub.
+var video_scrub := 0
+var video_scrub_held := 0.0
+var video_scrub_wait := 0.0
+const SCRUB_DELAY := 0.45
+const SCRUB_REPEAT := 0.15
 var default_rom_dir := "":
 	set(value):
 		default_rom_dir = value
@@ -261,6 +282,9 @@ func start_application() -> void:
 		notice.hide()
 		panel.add_child(notice)
 		notices.append(notice)
+		var bar := VideoBar.new()
+		panel.add_child(bar)
+		video_bars.append(bar)
 	emulator = Emulation.new()
 	add_child(emulator)
 	music=preload("res://scripts/audio/music_player.gd").new()
@@ -283,21 +307,25 @@ func start_application() -> void:
 	emulator.frame_presented.connect(world.picture.frame_presented)
 	emulator.game_changed.connect(func(active):
 		change_game_preferences(active)
-		pattern.visible = not active
-		pattern.set_process(not active)
-		signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active else SubViewport.UPDATE_ALWAYS
+		show_programme(active, emulator.fps, emulator.display_aspect)
 		if active:
-			world.picture.source_rate = emulator.fps
-			world.picture.source_aspect = emulator.display_aspect
-			world.picture.refresh()
 			last_game_path = emulator.rom_path
 			if not play_history.played(last_game_path): show_notice("Could not save recently played games")
-			if save_library() != OK: show_notice("Could not save the recent game location")
-		if not active:
-			world.picture.source_rate = 60.0
-			world.picture.source_aspect = 4.0 / 3.0
-			world.screen_light.set_image(null)
-			world.picture.set_source(signal_view.get_texture()))
+			if save_library() != OK: show_notice("Could not save the recent game location"))
+	video = VideoSession.new()
+	add_child(video)
+	video.audio_source = emulator.player
+	video.content_changed.connect(func(texture): world.picture.set_source(texture, true))
+	video.frame_presented.connect(world.screen_light.set_image)
+	video.frame_presented.connect(world.picture.frame_presented)
+	# The decoder always delivers a 4:3 frame; display styles are applied inside it.
+	video.active_changed.connect(func(active):
+		change_game_preferences(active, VIDEO_PROFILE)
+		show_programme(active, video.field_rate(), 4.0 / 3.0))
+	video.finished.connect(func():
+		# Watched to the end: the next play starts from the beginning.
+		video_library.remember(video.path, float(video.info.duration), float(video.info.duration), video.style)
+		flash_video_bar("Finished · A plays it again · B opens the menu"))
 	emulator.status_changed.connect(func(_message): refresh_startup_status())
 	var defaults := capture_settings()
 	var showcase_defaults := Showcase.config()
@@ -308,6 +336,12 @@ func start_application() -> void:
 	if recent.has_section("library"):
 		last_game_path = str(recent.get_value("library", "last_game", ""))
 		default_rom_dir = str(recent.get_value("library", "default_rom_dir", ""))
+	video_dir = str(recent.get_value("video", "folder", ""))
+	video_style = clampi(int(recent.get_value("video", "style", 0)), 0, VideoSession.STYLES.size() - 1)
+	# "line_count" replaces "lines": the old key held the earlier 480 default,
+	# which hid the scanlines, so it is not carried over.
+	video_lines = 480 if int(recent.get_value("video", "line_count", 240)) == 480 else 240
+	video_hardware = bool(recent.get_value("video", "hardware", true))
 	play_history.read(last_game_path)
 	get_tree().auto_accept_quit = false
 	get_window().close_requested.connect(request_exit)
@@ -339,11 +373,14 @@ func start_application() -> void:
 	for index in range(arguments.size() - 1):
 		if arguments[index] == "--rom":
 			load_game(arguments[index + 1])
+		elif arguments[index] == "--video":
+			# Developer flag until videos are in the library menu.
+			if not play_video(arguments[index + 1]): show_notice(video.status)
 	if "--last-game" in arguments and not "--rom" in arguments and not last_game_path.is_empty() and FileAccess.file_exists(last_game_path):
 		if not settings_panel.visible: toggle_settings()
 		menu.select_file(last_game_path)
 	startup_message = settings_store.warning if startup_message.is_empty() else startup_message
-	if not emulator.loaded and not settings_panel.visible and not "--capture" in arguments:
+	if not emulator.loaded and not video.loaded and not settings_panel.visible and not "--capture" in arguments:
 		toggle_settings()
 	refresh_startup_status()
 	if "--capture" in arguments:
@@ -410,6 +447,21 @@ func apply_settings(config: ConfigFile) -> void:
 
 func _process(delta: float) -> void:
 	notice_time = maxf(0.0, notice_time - delta)
+	if video.loaded and not video.paused:
+		video_checkpoint += delta
+		if video_checkpoint >= VIDEO_CHECKPOINT_SECONDS: remember_video_position()
+	if video.loaded and video_scrub != 0 and not settings_panel.visible:
+		# Holding scrubs: after a short delay, repeat 10 s steps, then 30 s ones.
+		video_scrub_held += delta
+		video_scrub_wait -= delta
+		if video_scrub_held >= SCRUB_DELAY and video_scrub_wait <= 0.0:
+			video_scrub_wait = SCRUB_REPEAT
+			video.seek_by(video_scrub * (30.0 if video_scrub_held > 2.0 else 10.0))
+			flash_video_bar()
+	var bar_allowed: bool = video.loaded and not settings_panel.visible
+	world.vcr_counter = int(video.clock) if video.loaded else -1
+	for bar in video_bars:
+		bar.track(video.path.get_file().get_basename(), video.clock, float(video.info.get("duration", 0.0)), video.paused, delta, bar_allowed)
 	for notice in notices: notice.visible = notice_time > 0.0
 	var menu_open := settings_panel.visible
 	recovery_elapsed += delta
@@ -534,6 +586,9 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	provider.handle_input(event)
+	if video.loaded and video_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		match event.physical_keycode:
 			KEY_PAGEUP: adjust_distance(-0.10)
@@ -593,6 +648,7 @@ func use_tracking(real_tracking: bool) -> void:
 	if changed: vertical_fov = xr_fov if real_tracking else desktop_fov
 
 func request_exit() -> void:
+	remember_video_position()
 	if not emulator.save_auto() or not save_settings():
 		if not settings_panel.visible: toggle_settings()
 		menu.show_error("Could not save before exiting. Check free space and save-folder permissions, then try Exit again.")
@@ -631,6 +687,10 @@ func toggle_settings() -> void:
 	settings_dirty = false
 	was_paused_before_menu = emulator.paused
 	if emulator.loaded: emulator.set_paused(true)
+	if video.loaded:
+		was_paused_before_menu = video.paused
+		video.set_paused(true)
+		remember_video_position()
 	emulator.gamepad.set_menu_active(true)
 	settings_panel.show()
 	menu.open_pause()
@@ -647,6 +707,7 @@ func close_settings() -> void:
 	settings_panel.hide()
 	emulator.gamepad.set_menu_active(false)
 	if emulator.loaded: emulator.set_paused(was_paused_before_menu)
+	if video.loaded and not video.ended: video.set_paused(was_paused_before_menu)
 	if not is_instance_valid(sbs_prompt): power_on.begin()
 
 func preview_power_on() -> void:
@@ -658,9 +719,96 @@ func choose_rom() -> void:
 	if not settings_panel.visible: toggle_settings()
 	menu.open_library()
 
+## Switches the TV between the test signal and a programme (a game or a video).
+func show_programme(active: bool, rate: float, aspect: float) -> void:
+	pattern.visible = not active
+	pattern.set_process(not active)
+	signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active else SubViewport.UPDATE_ALWAYS
+	if active:
+		world.picture.source_rate = rate
+		world.picture.source_aspect = aspect
+		world.picture.refresh()
+	else:
+		world.picture.source_rate = 60.0
+		world.picture.source_aspect = 4.0 / 3.0
+		world.screen_light.set_image(null)
+		world.picture.set_source(signal_view.get_texture())
+
+func play_video(path: String, from_seconds := 0.0) -> bool:
+	startup_message = ""
+	if emulator.loaded:
+		emulator.save_auto()
+		emulator.stop()
+	remember_video_position()
+	# Music would talk over the programme; it stays paused where it was.
+	if music.player.playing and not music.player.stream_paused: music.toggle_playback()
+	video.lines = video_lines
+	video.hardware = video_hardware
+	var saved_style := video_library.style(path)
+	video.style = saved_style if saved_style >= 0 else video_style
+	if not video.open(path):
+		startup_message = video.status
+		return false
+	if from_seconds > 0.0: video.seek_to(from_seconds)
+	video_checkpoint = 0.0
+	return true
+
+func stop_video() -> void:
+	remember_video_position()
+	video.stop()
+
+## Saves where the current video is and its display style; cheap enough to call often.
+func remember_video_position() -> void:
+	video_checkpoint = 0.0
+	if not video.loaded: return
+	var length := float(video.info.duration)
+	var position: float = length if video.ended else video.clock
+	if video_library.remember(video.path, position, length, video.style) != OK:
+		show_notice("Could not save the video position. Check user-folder permissions.")
+
+func flash_video_bar(note := "") -> void:
+	for bar in video_bars: bar.flash(note)
+
+func video_input(event: InputEvent) -> bool:
+	# Controller first: A pauses, the D-pad seeks (up/down by a minute, so the
+	# L+R+Start menu chord stays free; hold left/right to scrub), Y changes the
+	# picture shape, X the audio track.
+	var action := ""
+	if event is InputEventJoypadButton:
+		if event.button_index in [JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT]:
+			var direction := -1 if event.button_index == JOY_BUTTON_DPAD_LEFT else 1
+			if event.pressed: video_scrub = direction; video_scrub_held = 0.0; video_scrub_wait = 0.0
+			elif video_scrub == direction: video_scrub = 0
+		if event.pressed:
+			action = {JOY_BUTTON_A:"pause",JOY_BUTTON_DPAD_LEFT:"back",JOY_BUTTON_DPAD_RIGHT:"forward",JOY_BUTTON_DPAD_UP:"forward_long",
+				JOY_BUTTON_DPAD_DOWN:"back_long",JOY_BUTTON_Y:"style",JOY_BUTTON_X:"audio",JOY_BUTTON_B:"menu",JOY_BUTTON_START:"menu"}.get(event.button_index,"")
+	elif event is InputEventKey and event.pressed:
+		# Held arrows repeat through the keyboard's own echo.
+		if event.echo and not event.physical_keycode in [KEY_LEFT, KEY_RIGHT]: return false
+		action = {KEY_SPACE:"pause",KEY_ENTER:"pause",KEY_LEFT:"back",KEY_RIGHT:"forward",KEY_UP:"forward_long",KEY_DOWN:"back_long",
+			KEY_V:"style",KEY_A:"audio",KEY_BACKSPACE:"menu"}.get(event.physical_keycode,"")
+	match action:
+		"pause":
+			if video.ended: video.seek_to(0.0)
+			else: video.set_paused(not video.paused)
+			flash_video_bar()
+		"back", "forward", "back_long", "forward_long":
+			video.seek_by({"back":-10.0,"forward":10.0,"back_long":-60.0,"forward_long":60.0}[action])
+			flash_video_bar()
+		"style": flash_video_bar("Picture shape: " + video.cycle_style())
+		"audio":
+			var track: String = video.cycle_audio_track()
+			flash_video_bar("Audio: " + track if not track.is_empty() else "This video has one audio track")
+		"menu":
+			video_scrub = 0
+			toggle_settings()
+		_: return false
+	return true
+
 func load_game(path: String) -> bool:
 	startup_message = ""
 	var restore_paused := was_paused_before_menu
+	if video.loaded: stop_video()
 	var opened: bool = emulator.load_rom(path)
 	if not opened:
 		startup_message = "Could not open the game. Check the ROM location and emulator files. " + emulator.status
@@ -678,6 +826,11 @@ func save_library() -> Error:
 	var recent := settings_store.read("user://recent.cfg")
 	recent.set_value("library", "last_game", last_game_path)
 	recent.set_value("library", "default_rom_dir", default_rom_dir)
+	recent.set_value("video", "folder", video_dir)
+	recent.set_value("video", "style", video_style)
+	recent.set_value("video", "line_count", video_lines)
+	recent.set_value("video", "hardware", video_hardware)
+	if recent.has_section_key("video", "lines"): recent.erase_section_key("video", "lines")
 	return SettingsStore.write("user://recent.cfg", recent)
 
 func build_settings() -> void:
@@ -754,7 +907,8 @@ func save_game_preferences() -> bool:
 	var path := "user://games/"+active_game_key+".cfg"
 	var baseline := ConfigFile.new()
 	SettingsStore.copy_sections(picture_baseline,baseline,PICTURE_SECTIONS)
-	if config.encode_to_text() == baseline.encode_to_text():
+	# The video profile is always kept: removing it would bring back its composite default.
+	if config.encode_to_text() == baseline.encode_to_text() and active_game_key != VIDEO_PROFILE:
 		# No override means future global changes also apply to this game.
 		for suffix in ["", ".bak"]:
 			if FileAccess.file_exists(path+suffix) and DirAccess.remove_absolute(ProjectSettings.globalize_path(path+suffix)) != OK:
@@ -765,16 +919,20 @@ func save_game_preferences() -> bool:
 	if error != OK: show_notice("Game picture settings could not be saved. Check free space.")
 	return error == OK
 
-func change_game_preferences(active: bool) -> void:
+func change_game_preferences(active: bool, key := "") -> void:
 	if not active_game_key.is_empty():
 		save_game_preferences()
 		var restore := capture_settings()
 		SettingsStore.copy_sections(picture_baseline,restore,PICTURE_SECTIONS)
 		apply_settings(restore)
-	active_game_key = emulator.rom_hash if active and remember_game_picture else ""
+	if key == VIDEO_PROFILE: active_game_key = VIDEO_PROFILE if active else ""
+	else: active_game_key = emulator.rom_hash if active and remember_game_picture else ""
 	if not active_game_key.is_empty():
 		var path := "user://games/"+active_game_key+".cfg"
 		var defaults := capture_settings()
+		# Video looks like a broadcast or tape feed until the user says otherwise.
+		if active_game_key == VIDEO_PROFILE and not FileAccess.file_exists(path):
+			defaults.set_value("picture", "connection", 3)
 		var reader := SettingsStore.new()
 		var saved := reader.read(path,defaults)
 		var merged := capture_settings()
