@@ -26,7 +26,7 @@
 
 ## Features
 
-- **A CRT in your space.** A detailed television, wooden table and baked contact shadows, with a dim red clock radio showing the real time, a VCR on a shelf and a stack of game boxes. Switch props off individually and choose 90s confetti carpet (the default), wool carpet or wooden floorboards. The surroundings fade into black to suit XR glasses.
+- **A CRT in your space.** A detailed television, wooden table and baked contact shadows, with a dim red clock radio showing the real time, a VCR on a shelf and a stack of game boxes. Switch props off individually and choose 90s confetti carpet (the default), wool carpet or wooden floorboards. Light the room by the TV alone, add rain on the window or a ticking clock, and see the playing game's cover on the table. The surroundings fade into black to suit XR glasses.
 - **Stereo and head tracking.** Full side-by-side rendering and rotational **3DoF** tracking let you look around an anchored screen. Adjust its distance, height, size and curvature, then recenter with a stick click.
 - **A picture you can tune and keep.** Scanlines, phosphor detail, glass reflections, PAL/NTSC-inspired signal effects and colour controls. Trying a preset preserves your custom picture; restore it with **Custom**, or save up to three named picture presets. Screen-fitting options keep the full game image inside the tube.
 - **Thirteen classic systems.** SNES, NES, Mega Drive / Genesis, Master System, Game Gear, Game Boy / Game Boy Color, Game Boy Advance, PC Engine / TurboGrafx-16, Sega CD / Mega-CD, Atari 2600, Atari Lynx, Neo Geo Pocket / Color and Vectrex, powered by libretro cores.
@@ -40,14 +40,14 @@ Bring your own games and music. Cartridges can be plain files or sit alone in a 
 
 ## Download the beta
 
-**Beta.13 (0.1.0-beta.13)** is looking for **testers with XREAL, Rokid, RayNeo or other glasses**, and for first-time users: OpenTrack tracking on Windows, more glasses recognised on the Steam Deck, and an in-app *Using glasses* guide. It adds zipped games and Sega CD discs as CHD, and removes a freeze around disc games. See the [beta.13 release notes](docs/RELEASE-NOTES-beta.13.md); beta.12 added [box art, save slots and room presets](docs/RELEASE-NOTES-beta.12.md), and beta.10 [video playback with a VCR](docs/RELEASE-NOTES-beta.10.md).
+**Beta.14 (0.1.0-beta.14)** is looking for **testers with XREAL, Rokid, RayNeo or other glasses**, and for first-time users: OpenTrack tracking on Windows, more glasses recognised on the Steam Deck, automatic side-by-side switching where the XR Gaming driver supports your glasses, and an in-app *Using glasses* guide. It adds a room lit by the TV alone, room sound, TV moments and your game's cover on the table. See the [beta.14 release notes](docs/RELEASE-NOTES-beta.14.md); beta.13 added [zipped games and Sega CD CHD discs](docs/RELEASE-NOTES-beta.13.md), beta.12 [box art, save slots and room presets](docs/RELEASE-NOTES-beta.12.md), and beta.10 [video playback with a VCR](docs/RELEASE-NOTES-beta.10.md).
 
 Download from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases). Pick **one** app package:
 
 | You have | Download | Then |
 |---|---|---|
-| **Steam Deck** | `CRT-XR-0.1.0-beta.13-SteamDeck.tar.gz` | Extract it in Desktop Mode and double-click **Install CRT XR** |
-| **Windows PC** | `CRT-XR-0.1.0-beta.13-Windows.zip` | Extract it and double-click **CRT-XR.exe** |
+| **Steam Deck** | `CRT-XR-0.1.0-beta.14-SteamDeck.tar.gz` | Extract it in Desktop Mode and double-click **Install CRT XR** |
+| **Windows PC** | `CRT-XR-0.1.0-beta.14-Windows.zip` | Extract it and double-click **CRT-XR.exe** |
 
 Each download opens with a short **HOW TO INSTALL** / **HOW TO START** file. The `…-source-code.tar.gz` file and GitHub's automatic "Source code" links are not apps: they are for rebuilding and licence compliance.
 
@@ -65,7 +65,7 @@ The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a 
 
 ## Install on Steam Deck
 
-1. In **Desktop Mode**, download `CRT-XR-0.1.0-beta.13-SteamDeck.tar.gz` and extract it (right-click → Extract). Sign in to Steam at least once beforehand.
+1. In **Desktop Mode**, download `CRT-XR-0.1.0-beta.14-SteamDeck.tar.gz` and extract it (right-click → Extract). Sign in to Steam at least once beforehand.
 2. In the extracted folder, double-click **Install CRT XR**. Choose **Trust and Launch** if asked. Pick the VITURE Full SBS profile, or Deck / monitor only.
 3. Let setup close Steam. It installs CRT XR, adds or updates its Steam shortcut and artwork, and keeps your settings, saves and custom artwork.
 4. Restart Steam, then **Return to Gaming Mode → Library → Non-Steam → CRT XR**. You can delete the extracted folder.
@@ -78,7 +78,7 @@ No SSH, Steam developer interface or administrator password is needed for CRT XR
 
 Leave XR Gaming’s **virtual display off** for CRT XR. Gaming Mode temporarily enables tracking-only output with compositor effects disabled, then restores the previous driver settings on exit. CRT XR supplies its own SBS rendering and head tracking.
 
-Connect the glasses in **mono**, then launch CRT XR. At the instructions, release the launch button, **press A**, then switch the glasses to **SBS**. The view stays black during the change and the room appears when ready.
+Connect the glasses in **mono**, then launch CRT XR. Put them on and press their **SBS** button: nothing else to press. The view goes dark during the change and the room appears by itself. When you exit, switch them back to 2D and CRT XR closes. Glasses the XR Gaming driver can switch go into SBS and back by themselves.
 
 The tested VITURE profile uses an explicit **3840 × 1080** Steam game resolution; **Native alone did not work on our test Deck**. Setup prepares that profile. If the view stays black, X retries; return the glasses to mono before using B / Escape to leave.
 
@@ -86,7 +86,7 @@ Open **Game library → Library locations** to choose your ROM folder or SD card
 
 ## Install on Windows
 
-1. Extract `CRT-XR-0.1.0-beta.13-Windows.zip` to a folder (not inside the ZIP) and double-click **CRT-XR.exe**. It is portable and unsigned: if Windows warns, choose **More info → Run anyway**. Keep the files and folders next to the EXE together. For normal-monitor play, choose **Play on this screen without glasses**; the remaining steps are for glasses.
+1. Extract `CRT-XR-0.1.0-beta.14-Windows.zip` to a folder (not inside the ZIP) and double-click **CRT-XR.exe**. It is portable and unsigned: if Windows warns, choose **More info → Run anyway**. Keep the files and folders next to the EXE together. For normal-monitor play, choose **Play on this screen without glasses**; the remaining steps are for glasses.
 2. For glasses tracking, obtain the **VITURE Windows x86_64 SDK separately** and copy the contents of its `x86_64` folder into a folder named `sdk` beside the EXE. The beta does **not** include proprietary VITURE SDK DLLs; installing SpaceWalker alone does not configure this step. See [Windows setup](docs/WINDOWS-SETUP.md).
 3. Close SpaceWalker so it does not compete for tracking. **Switch the glasses to SBS first**, then launch CRT XR on your normal monitor.
 4. Choose the glasses display and select **Open glasses view**. The app moves under a black curtain and opens when the selected display is ready. For normal-monitor play, choose **Play on this screen without glasses**.

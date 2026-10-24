@@ -29,6 +29,22 @@ hashing of large discs (CHDs are named by their header; other hashes are cached)
 and the Deck battery read. Sonic CD (CHD) was booted on the Deck with the real
 BIOS. Release notes keep the glasses-testing focus and welcome new users.
 
+Beta.14 (24 October 2026) adds the room atmosphere and lighting work:
+the playing game's cover on the top box (`box_art.gd`), TV moments
+(`scripts/rendering/tv_effects.gd`: channel change, degauss, power-off), room
+sound (`scripts/audio/room_ambience.gd`, synthesised by `make-tv-sounds.py`),
+time-of-day lighting, five complete lighting moods including Lights off
+(`room_presets.gd`), the screen light reworked (`screen_light.gd`: 0-1 glow,
+left and right halves, lights 25 cm ahead of the tube with the tabletop as
+their only shadow caster, a bounce added to the room's ambient), a screen
+bloom in dark rooms (`shaders/screen_halo.gdshader`). For glasses: automatic
+SBS where the XR driver reports it can switch the glasses (`steam-session.py`
+AutoSBS, `driver-sbs.py`; the VITURE Pro 2 on driver 2.11.9 cannot), a fully
+automatic glasses-ready screen (`sbs_prompt.gd`) and a Back to 2D note on exit
+(`sbs_exit.gd`). Help pages render a small markup (`help_article.gd`); About
+CRT XR shows the 'Animated Logo 2' logo rebuilt in 3D (`logo_3d.gd`,
+`make-logo-3d.py`). Release notes keep the glasses-testing focus.
+
 After beta.12: zipped cartridges and Sega CD CHD discs play
 (`scripts/content/rom_archive.gd`, `core_registry.gd`; Genesis Plus GX is
 rebuilt with `HAVE_CHD=1`; tests in `tests/archives.gd`). A CHD counts as Sega CD

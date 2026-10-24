@@ -1,6 +1,6 @@
 # Getting started with CRT XR
 
-Public beta: 0.1.0-beta.13. VITURE Pro 2 has been tested on Steam Deck and Windows; other hardware remains unverified. No games or music are included.
+Public beta: 0.1.0-beta.14. VITURE Pro 2 has been tested on Steam Deck and Windows; other hardware remains unverified. No games or music are included.
 
 ## Before you start
 
@@ -23,7 +23,7 @@ The real-account upgrade was tested on 17 October 2026: the original shortcut ID
 
 **Without glasses:** launch CRT XR normally. It starts in mono on the Deck. No SBS prompt should appear.
 
-**With the tested VITURE setup:** connect the glasses directly in mono, then launch CRT XR. Read the instructions, release the launch button, press A, then switch the glasses to SBS using their button. The app stays black during the switch and reveals the room once the mode and app dimensions settle. There is no need to navigate Steam's flat interface through SBS during this normal flow.
+**With the tested VITURE setup:** connect the glasses directly in mono, then launch CRT XR. Put them on and switch them to SBS using their button; there is nothing else to press. The app goes dark during the switch and reveals the room once the mode and app dimensions settle. When you exit, a note asks you to switch them back to 2D and CRT XR closes when you do. Glasses the XR Gaming driver can switch are switched in and out for you. There is no need to navigate Steam's flat interface through SBS during this normal flow.
 
 If it stays black, X retries. To leave, return the glasses to mono and press B / Escape. First-install Steam/display behaviour still needs a clean-device test. The tested resolution override for this profile is 3840×1080; Native alone did not work on our Deck.
 
