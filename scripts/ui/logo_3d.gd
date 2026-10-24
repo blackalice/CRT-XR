@@ -65,7 +65,6 @@ func build() -> void:
 	flat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	flat.vertex_color_use_as_albedo = true
 	flat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	var light_dir := Vector2(-0.6, -0.8).normalized()  # from the upper left, in After Effects' space
 	var bounds := AABB()
 	var first := true
 	for letter in data.letters:
@@ -77,7 +76,7 @@ func build() -> void:
 		face.material_override = flat
 		holder.add_child(face)
 		var sides := MeshInstance3D.new()
-		sides.mesh = side_mesh(letter, light_dir)
+		sides.mesh = side_mesh(letter)
 		sides.material_override = flat
 		holder.add_child(sides)
 		holder.position = Vector3(float(letter.position[0]), float(letter.position[1]), 0.0)
@@ -98,7 +97,7 @@ static func face_mesh(letter: Dictionary) -> ArrayMesh:
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var colour := Color(float(letter.colour[0]), float(letter.colour[1]), float(letter.colour[2]))
-	for part in [[letter.outline_triangles, Color(0.02, 0.02, 0.025)], [letter.face_triangles, colour]]:
+	for part in [[letter.outline_triangles, Color.BLACK], [letter.face_triangles, colour]]:
 		var points: Array = part[0]
 		surface.set_color(part[1])
 		for i in range(0, points.size(), 2):
@@ -107,10 +106,11 @@ static func face_mesh(letter: Dictionary) -> ArrayMesh:
 	return surface.commit()
 
 ## The extruded sides, one unit deep (z 0 to 1, away from the camera), scaled
-## to the letter's extrusion; shaded by which way each edge faces.
-static func side_mesh(letter: Dictionary, light_dir: Vector2) -> ArrayMesh:
+## to the letter's extrusion. Pure black, as in the original logo.
+static func side_mesh(letter: Dictionary) -> ArrayMesh:
 	var surface := SurfaceTool.new()
 	surface.begin(Mesh.PRIMITIVE_TRIANGLES)
+	surface.set_color(Color.BLACK)
 	for ring in letter.rings:
 		var count: int = ring.size() / 2
 		for i in range(count):
@@ -119,9 +119,6 @@ static func side_mesh(letter: Dictionary, light_dir: Vector2) -> ArrayMesh:
 			var b := Vector2(float(ring[j * 2]), float(ring[j * 2 + 1]))
 			var edge := b - a
 			if edge.length() < 0.01: continue
-			var outward := Vector2(edge.y, -edge.x).normalized()
-			var light := clampf(-outward.dot(light_dir), 0.0, 1.0)
-			surface.set_color(Color(0.05, 0.05, 0.06).lerp(Color(0.26, 0.26, 0.29), light))
 			for corner in [Vector3(a.x, a.y, 0), Vector3(b.x, b.y, 0), Vector3(b.x, b.y, 1), Vector3(a.x, a.y, 0), Vector3(b.x, b.y, 1), Vector3(a.x, a.y, 1)]:
 				surface.add_vertex(corner)
 	return surface.commit()
