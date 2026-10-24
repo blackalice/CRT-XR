@@ -24,6 +24,7 @@ func read(path: String, defaults: ConfigFile = null) -> ConfigFile:
 	if path == "user://settings.cfg" and config.has_section_key("emulation","run_ahead") and config.get_value("emulation","run_ahead") is bool:
 		config.set_value("emulation","run_ahead", 1 if config.get_value("emulation","run_ahead") else 0)
 	migrate_view_fov(config)
+	migrate_screen_glow(config)
 	if defaults == null: return config
 	var result := ConfigFile.new()
 	for section in defaults.get_sections():
@@ -55,6 +56,18 @@ static func write(path: String, config: ConfigFile) -> Error:
 		error = previous.save(path + ".bak")
 		if error != OK: return error
 	return DirAccess.rename_absolute(ProjectSettings.globalize_path(path + ".tmp"), ProjectSettings.globalize_path(path))
+
+## Rooms saved before the screen glow was rescaled (version 2) kept their screen
+## light as 0..0.4, and 0.4 lit almost nothing. The old maximum, the default, now
+## means the new default (0.5); Off stays off.
+const LIGHTING_VERSION := 2
+static func migrate_screen_glow(config: ConfigFile) -> void:
+	if not config.has_section_key("room", "spill_strength"): return
+	if int(config.get_value("room", "lighting_version", 1)) >= LIGHTING_VERSION: return
+	var legacy = config.get_value("room", "spill_strength")
+	if legacy is float or legacy is int:
+		config.set_value("room", "spill_strength", clampf(float(legacy) / 0.4 * 0.5, 0.0, 1.0))
+	config.set_value("room", "lighting_version", LIGHTING_VERSION)
 
 static func migrate_view_fov(config: ConfigFile) -> void:
 	if not config.has_section_key("view","vertical_fov"): return

@@ -42,8 +42,10 @@ No Steam Deck connection, transfer or hardware performance claim was made.
 
 ## Tuning and limitations
 
-Room > Screen light spill (0 = off): default 0.10, maximum 0.40. Start around
-0.10-0.16 in a dim room. Existing saved zero stays off; focus the slider and
+Room > Screen glow (0 = off): default 0.5, maximum 1.0 (a room lit by the TV
+alone, as in the Lights off mood). Energy is 24 × radiance^0.7 × glow per light,
+reaching 3 m with a soft falloff; each light follows its half of the picture.
+Values saved on the old 0–0.4 scale migrate once (0.4 becomes 0.5). Existing saved zero stays off; focus the slider and
 press Y to restore the default. The legacy `crt/screen_spill` global preference
 migrates to `room/spill_strength`, keeping this separate from per-game picture
 preferences. The picture's Phosphor glow remains separate under Picture.

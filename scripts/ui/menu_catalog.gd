@@ -154,7 +154,7 @@ func pages(category: int) -> Array:
 				"shadow_strength":"Darkness of live shadows on unbaked objects. Baked contact shading stays fixed.",
 				"cabinet_ao_strength":"Strength of Blender-baked shading in the TV's joins and recesses.",
 				"cabinet_grain_strength":"Subtle static plastic finish. Fine grain fades at distance to avoid shimmer.",
-				"spill_strength":"Picture-coloured light on the casing and surroundings. Zero disables both lights.",
+				"spill_strength":"Light from the picture on the casing, table and props, in the picture's own colours, left and right. Full glow lights a dark room by the TV alone; zero turns it off.",
 				"floor_brightness":"Brightness of the floor.","fade_begin":"Distance where the small room island begins fading to black.","fade_end":"Distance where the surroundings become fully black."}
 			for field in h.ROOM_FIELDS:
 				var key: String = field[0]

@@ -83,10 +83,15 @@ not loaded into generative image tools or visually inspected by the assistant.
 
 ## Lighting and furniture
 
-The default Deck Showcase uses a dark room with stronger screen spill.
-Warm bedroom remains available with more ambient/front fill. Bright inspection
-makes the cabinet easier to inspect; Dim XR keeps a
-small pool of light around it. These moods change lighting only. **Room → Presets** also
+Five lighting moods, darkest first: **Lights off** (no room light at all; the
+screen's full glow is the only light), **Late night** (the default: the Deck
+Showcase's dim lamp with the screen glowing), **Dim XR** (a small pool of lamp
+light), **Warm bedroom** and **Bright inspection** (for looking over the cabinet).
+Each sets every lighting value (screen glow, ambient, lamp, front fill, warmth,
+shadow darkness, floor brightness and fade), so a mood always looks the same;
+the brighter the room, the less the screen's glow stands out. A room is
+recognised as its mood by its lighting alone, so switching a prop or the floor
+doesn't turn it into Custom. These moods change lighting only. **Room → Presets** also
 keeps three rooms of your own (lighting, shadows, floor and props): save the current room
 into a slot, rename or delete it. The **Room** switch in the pause menus and Quick settings
 moves through Custom, the moods and your rooms with left/right; Custom brings back the room
@@ -190,8 +195,15 @@ calls per eye and no video memory (measured +8 draws for both eyes, +0.016 ms
 GPU per eye on Windows). The floor patch has soft black edges as well as distance fading.
 The self-lit game picture keeps its contrast as the surroundings fade.
 
-**Screen light spill** in Room now uses two native, shadowless lights instead
-of an additive cabinet overlay. It illuminates the inset bezel, furniture and
+**Screen glow** (Room → Materials; 0 = off, 1 = a dark room lit by the TV
+alone) uses two native, shadowless lights instead of an additive cabinet
+overlay. Each takes the colour of its own half of the picture (leaning 70%
+towards its side), so a red left side tints the left of the set. Light follows
+the picture's average linear radiance through a soft curve (radiance^0.7), so
+dark scenes stay dark and a white screen lights the room strongly without
+washing out the casing; it reaches 3 m with a gentle falloff. Settings saved
+before this rescale (`room/lighting_version` below 2) map the old 0–0.4 range
+so the old maximum, the previous default, becomes the new default of 0.5. It illuminates the inset bezel, furniture and
 nearby floor using their existing materials and normals. Point specular
 highlights are disabled so the approximation does not look like two bulbs.
 The lights move with the TV and their reach follows its scale. Picture and

@@ -85,6 +85,10 @@ func run():
 	half.fill_rect(Rect2i(128,0,128,240),Color.RED)
 	check(average_a.is_equal_approx(Light.average_radiance(half,settings)),"Swapping picture halves cannot project or duplicate image detail")
 	check(average_a.is_equal_approx(Vector3(.5,0,.5)),"Emitted colour averages linear light without normalising dark frames to white")
+	half.fill(Color.RED); half.fill_rect(Rect2i(128,0,128,240),Color.BLUE)
+	var sides: Array[Vector3] = Light.half_radiance(half,settings)
+	check(sides[0].x > .99 and sides[0].z < .01 and sides[1].z > .99 and sides[1].x < .01,"Each light sees its own half: red left, blue right")
+	check(Light.glow_energy(0.0) == 0.0 and Light.glow_energy(0.5) < Light.glow_energy(0.1) * 5.0 * 0.7,"Dark stays dark, and a white screen doesn't flare (soft curve)")
 	var dim := Light.average_radiance(image(Color(.5,.5,.5)),settings)
 	check(dim.x < .23 and dim.x > .20,"Display gamma is applied before light averaging")
 	settings.brightness = .5
@@ -94,8 +98,8 @@ func run():
 	var excluded := await settle(Color.WHITE)
 	check(excluded.r < .01,"Receiver mask excludes picture, glass and unrelated geometry")
 	patch.layers = Light.RECEIVER_LAYER
-	patch.position.x = 3
-	camera.position.x = 3
+	patch.position.x = 4.5
+	camera.position.x = 4.5
 	var distant := await settle(Color.WHITE)
 	check(distant.r < .01,"Light stays local to the TV")
 	patch.position = Vector3(.72,0,.06)
@@ -121,7 +125,7 @@ func run():
 	settings.brightness = 1
 	light.scale = Vector3.ONE*1.5
 	light._process(0)
-	check(is_equal_approx(light.lights[0].omni_range,2.475),"Light reach follows the virtual TV scale")
+	check(is_equal_approx(light.lights[0].omni_range,Light.GLOW_RANGE*1.5),"Light reach follows the virtual TV scale")
 	light.scale = Vector3.ONE
 	# Performance of sampling only: no rendering/readback included.
 	var source := image(Color(.4,.6,.8))

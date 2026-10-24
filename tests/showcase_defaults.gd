@@ -8,6 +8,8 @@ func run():
 	var app=load("res://scenes/main.tscn").instantiate(); root.add_child(app); app.use_tracking(false)
 	var original := ConfigFile.new()
 	check(original.load("res://tests/fixtures/deck_showcase.cfg")==OK,"Captured Deck reference loads")
+	# Captured before the screen glow was rescaled; read it as saved settings are.
+	app.SettingsStore.migrate_screen_glow(original)
 	var actual: ConfigFile=app.capture_settings()
 	var mismatch: Array[String]=[]
 	for section in original.get_sections():

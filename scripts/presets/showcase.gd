@@ -22,7 +22,7 @@ const CRT := {
 	"screen_curvature": 0.7
 }
 const ROOM := {
-	"spill_strength": 0.4,
+	"spill_strength": 0.5,
 	"ambient": 0.05,
 	"key_energy": 0.3,
 	"fill_energy": 0.1,
@@ -85,6 +85,7 @@ static func config() -> ConfigFile:
 	var result := ConfigFile.new()
 	for key in VIEW: result.set_value("view","scale" if key=="tv_scale" else key,VIEW[key])
 	for key in ROOM: result.set_value("room",key,ROOM[key])
+	result.set_value("room","lighting_version",2)
 	var names := {"phosphor_mask":"mask","phosphor_glow":"glow","glass_reflections":"glass","screen_curvature":"curvature"}
 	for key in CRT: result.set_value("crt",names.get(key,key),CRT[key])
 	for key in PICTURE: result.set_value("picture",key,PICTURE[key])

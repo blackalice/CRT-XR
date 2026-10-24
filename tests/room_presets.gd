@@ -18,6 +18,13 @@ func run() -> void:
 	for i in range(6): await process_frame
 	var rooms = app.rooms
 	for index in range(rooms.COUNT): rooms.delete(index)
+	check(rooms.active() == "late" and rooms.label(rooms.active()) == "Late night", "The default room is the Late night mood, not Custom")
+	rooms.apply("dark")
+	check(rooms.active() == "dark" and app.world.ambient == 0.0 and app.world.key_energy == 0.0 and app.world.fill_energy == 0.0 and app.world.spill_strength == 1.0,
+		"Lights off leaves only the screen's full glow")
+	app.world.show_vcr = false; app.world.apply_room_settings()
+	check(rooms.active() == "dark", "Switching a prop doesn't stop the room counting as its mood")
+	app.world.show_vcr = true
 	# A hand-tuned room first.
 	app.world.ambient = 0.33
 	app.world.apply_room_settings()
@@ -44,7 +51,7 @@ func run() -> void:
 	check(rooms.active() == "mine.0" and app.world.floor_style == 2 and not app.world.show_vcr and is_equal_approx(app.world.ambient, 0.33),
 		"Your room brings back its lighting, floor and props")
 	var choices: Array = rooms.choices().map(func(pair): return pair[1])
-	check(choices == ["Custom", "Warm bedroom", "Bright inspection", "Dim XR", "Late night"], "The switch lists Custom, the moods and your rooms: %s" % [choices])
+	check(choices == ["Custom", "Lights off", "Late night", "Dim XR", "Warm bedroom", "Bright inspection", "Late night"], "The switch lists Custom, the moods and your rooms: %s" % [choices])
 	check(app.capture_settings().get_value("menu", "room_preset_id") == "mine.0", "The room in use is remembered with the settings")
 
 	# The switch: Room → Presets, Quick settings and every pause menu.
@@ -71,5 +78,13 @@ func run() -> void:
 	menu.mode = "launch"; menu.render()
 	await process_frame
 	check(menu.rows.size() == 3 and menu.rows[0].get_parent() != menu.column, "The resume screen puts its choices beside the picture")
+	# Rooms saved before the glow was rescaled keep their meaning.
+	for pair in [[0.4, 0.5], [0.2, 0.25], [0.0, 0.0]]:
+		var legacy := ConfigFile.new(); legacy.set_value("room", "spill_strength", pair[0])
+		app.SettingsStore.migrate_screen_glow(legacy)
+		check(is_equal_approx(float(legacy.get_value("room", "spill_strength")), pair[1]) and legacy.get_value("room", "lighting_version") == 2, "An old screen light of %.2f becomes %.2f" % pair)
+	var current := ConfigFile.new(); current.set_value("room", "spill_strength", 0.8); current.set_value("room", "lighting_version", 2)
+	app.SettingsStore.migrate_screen_glow(current)
+	check(is_equal_approx(float(current.get_value("room", "spill_strength")), 0.8), "A rescaled room is never migrated twice")
 	print("ROOM PRESET CHECKS COMPLETE: %d failures" % failures)
 	quit(1 if failures else 0)

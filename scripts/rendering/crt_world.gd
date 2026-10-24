@@ -234,7 +234,7 @@ func has_shadow_casters() -> bool:
 	return false
 
 func set_spill_strength(value: float) -> void:
-	spill_strength = clampf(value, 0.0, 0.4)
+	spill_strength = clampf(value, 0.0, 1.0)
 	screen_light.set_strength(spill_strength)
 
 func apply_room_settings() -> void:

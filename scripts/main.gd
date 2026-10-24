@@ -91,8 +91,8 @@ var distance_save_delay := -1.0
 ## Room settings that are on or off, besides shadows.
 const ROOM_SWITCHES := ["show_clock_radio", "clock_24_hour", "show_vcr", "show_game_boxes", "show_game_cover", "follow_clock", "crt_whine"]
 const ROOM_FIELDS := [
-	["spill_strength", "Screen light spill (0 = off)", 0.0, 0.4, 0.02],
-	["ambient", "Ambient fill", 0.0, 1.5, 0.05],
+	["spill_strength", "Screen glow (0 = off)", 0.0, 1.0, 0.05],
+	["ambient", "Ambient fill", 0.0, 1.5, 0.02],
 	["key_energy", "Warm lamp brightness", 0.0, 8.0, 0.1],
 	["fill_energy", "Front fill brightness", 0.0, 4.0, 0.1],
 	["warmth", "Light warmth", 0.0, 1.0, 0.05],
@@ -465,6 +465,7 @@ func start_application() -> void:
 
 func apply_settings(config: ConfigFile) -> void:
 	SettingsStore.migrate_view_fov(config)
+	SettingsStore.migrate_screen_glow(config)
 	picture_preset_id=str(config.get_value("menu","picture_preset_id",""))
 	picture_preset_signature=str(config.get_value("menu","picture_preset_signature",""))
 	room_preset_id=str(config.get_value("menu","room_preset_id",""))
@@ -1261,12 +1262,10 @@ func set_room_value(property: String, value: float) -> void:
 	if property == "fade_end": world.fade_begin = minf(world.fade_begin, value - 0.5)
 	world.apply_room_settings()
 
+## Applies a built-in lighting mood (RoomPresets.MOODS).
 func room_preset(preset: String) -> void:
-	var values: Array = [0.45, 4.5, 1.6, 0.70, 1.15, 4.5, 9.0]
-	if preset == "bright": values = [0.85, 5.0, 2.3, 0.40, 1.25, 6.0, 12.0]
-	elif preset == "dim": values = [0.15, 2.5, 0.5, 0.80, 0.8, 3.5, 7.0]
-	var keys := ["ambient", "key_energy", "fill_energy", "warmth", "floor_brightness", "fade_begin", "fade_end"]
-	for i in keys.size(): world.set(keys[i], values[i])
+	var values: Dictionary = rooms.MOODS.get(preset, rooms.MOODS.late)
+	for key in values: world.set(key, values[key])
 	world.apply_room_settings()
 
 func capture_settings() -> ConfigFile:
@@ -1296,6 +1295,7 @@ func capture_settings() -> ConfigFile:
 	for setting in ROOM_FIELDS: config.set_value("room", setting[0], world.get(setting[0]))
 	config.set_value("room", "shadows", world.shadows)
 	config.set_value("room", "floor_style", world.floor_style)
+	config.set_value("room", "lighting_version", SettingsStore.LIGHTING_VERSION)
 	config.set_value("room", "ambience", world.ambience)
 	config.set_value("room", "ambience_level", world.ambience_level)
 	for key in ROOM_SWITCHES:
