@@ -1,6 +1,7 @@
 extends SceneTree
 ## Atmosphere: the playing game's cover on the table box, the channel change,
-## degauss and power-off on the tube, room sound and the time-of-day room.
+## degauss and power-off on the tube, room sound, the time-of-day room and the
+## bloom around the tube in the dark.
 ## With a screen (not --headless) it also saves pictures to build/tv-atmosphere.
 const World = preload("res://scripts/rendering/crt_world.gd")
 var failures := 0
@@ -122,13 +123,31 @@ func run() -> void:
 	var mood: Array = World.time_of_day(float(now.hour) + float(now.minute) / 60.0)
 	check(is_equal_approx(world.room_environment.ambient_light_energy, world.ambient * mood[0]), "On, the room shifts around your lighting by the hour")
 
+	world.follow_clock = false
+
+	# 6. Bloom around the tube, only in a dark room.
+	var light = world.screen_light
+	app.room_preset("dark")
+	check(is_equal_approx(light.bloom, world.screen_bloom) and light.halo != null, "Lights off shows the full bloom")
+	app.room_preset("bright")
+	check(light.bloom == 0.0, "A lit room has no bloom")
+	app.room_preset("late")
+	check(light.bloom > 0.4 * world.screen_bloom, "Late night keeps most of it")
+	world.screen_bloom = 0.0; world.apply_room_settings()
+	check(light.bloom == 0.0 and not light.halo.visible, "Bloom can be switched off")
+	world.screen_bloom = 0.5; world.set_spill_strength(0.0); world.apply_room_settings()
+	check(light.is_processing() and light.lights[0].light_energy == 0.0, "With the glow off the bloom still follows the picture")
+	world.set_spill_strength(0.5); world.follow_clock = true
+
 	# Settings round-trip, and they belong to the room (presets save them).
-	world.show_game_cover = false
+	world.show_game_cover = false; world.screen_bloom = 0.8
 	var config: ConfigFile = app.capture_settings()
+	world.screen_bloom = 0.5
 	world.ambience = 0; world.ambience_level = 0.5; world.crt_whine = false; world.follow_clock = false; world.show_game_cover = true
 	effects.channel_change = false; effects.power_off_effect = false
 	app.apply_settings(config)
 	check(world.ambience == 3 and is_equal_approx(world.ambience_level, 0.3) and world.crt_whine and world.follow_clock and not world.show_game_cover, "Room sound, whine, time of day and the cover setting are saved")
+	check(is_equal_approx(world.screen_bloom, 0.8), "Screen bloom is saved")
 	check(effects.channel_change and effects.power_off_effect, "The channel change and power-off settings are saved")
 	check(app.rooms.room_only().get_value("room", "ambience") == 3, "Room presets include the room sound")
 	app.menu.open_settings(); app.menu.category = 3

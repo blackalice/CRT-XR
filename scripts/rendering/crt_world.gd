@@ -10,6 +10,8 @@ var imported_screen: Dictionary = {}
 var distance_fade := ShaderMaterial.new()
 var spill_strength: float = Showcase.ROOM.spill_strength
 var screen_light := preload("res://scripts/rendering/screen_light.gd").new()
+## The soft bloom around the tube; it fades out as the room's own lights come up.
+var screen_bloom: float = Showcase.ROOM.screen_bloom
 const ImportedCRT = preload("res://scripts/rendering/imported_crt.gd")
 const BedroomSet = preload("res://scripts/rendering/bedroom_set.gd")
 var ambient: float = Showcase.ROOM.ambient
@@ -142,7 +144,31 @@ func build(signal_texture: Texture2D) -> void:
 	glass.position = screen.position + Vector3(0, 0, 0.006)
 	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	television.add_child(glass)
+	_build_halo()
 	apply_room_settings()
+
+func _build_halo() -> void:
+	var size := Vector2(float(imported_screen.width), float(imported_screen.height)) if not imported_screen.is_empty() else Vector2(1.32, 0.99)
+	var reach := 0.24
+	var halo := MeshInstance3D.new()
+	halo.name = "ScreenHalo"
+	var quad := QuadMesh.new()
+	quad.size = size + Vector2.ONE * reach * 2.0
+	halo.mesh = quad
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var material := ShaderMaterial.new()
+	material.shader = load("res://shaders/screen_halo.gdshader")
+	material.set_shader_parameter("screen_half", size * 0.5)
+	material.set_shader_parameter("reach", reach)
+	# After the glass, so the bloom adds over everything around the tube.
+	material.render_priority = 2
+	halo.material_override = material
+	# Just in front of the casing's face, so its own bezel lip never hides it.
+	var front := float(imported_screen.cabinet_bounds.end.z) if not imported_screen.is_empty() else 0.015
+	halo.position = Vector3(ImportedCRT.SCREEN_ANCHOR.x, ImportedCRT.SCREEN_ANCHOR.y, maxf(front, ImportedCRT.SCREEN_ANCHOR.z + 0.008) + 0.004)
+	halo.visible = false
+	television.add_child(halo)
+	screen_light.halo = halo
 
 func _build_props(support: Node3D) -> void:
 	# Free tabletop either side of the TV: clock radio left, where the music's
@@ -293,6 +319,12 @@ func _apply_lighting() -> void:
 	fill_light.light_energy = fill_energy * mood[1]
 	key_light.light_color = Color.WHITE.lerp(Color("ffd29b"), warm)
 	fill_light.light_color = Color("c8dfff").lerp(Color("fff0d6"), warm * 0.6)
+	screen_light.set_bloom(screen_bloom * room_darkness(ambient * mood[0], key_energy * mood[1], fill_energy * mood[1]))
+
+## 1 in a room lit by the TV alone, falling to 0 once the room's own lights are
+## up (about Dim XR); the eye only sees a bloom around a bright tube in the dark.
+static func room_darkness(ambient_energy: float, lamp: float, fill: float) -> float:
+	return 1.0 - smoothstep(0.0, 0.8, ambient_energy + lamp * 0.1 + fill * 0.2)
 
 ## The playing game's cover on the top box, or its own print when there is none.
 func set_game_cover(texture: Texture2D) -> void:

@@ -23,6 +23,7 @@ const CRT := {
 }
 const ROOM := {
 	"spill_strength": 0.5,
+	"screen_bloom": 0.5,
 	"ambient": 0.05,
 	"key_energy": 0.3,
 	"fill_energy": 0.1,

@@ -92,6 +92,7 @@ var distance_save_delay := -1.0
 const ROOM_SWITCHES := ["show_clock_radio", "clock_24_hour", "show_vcr", "show_game_boxes", "show_game_cover", "follow_clock", "crt_whine"]
 const ROOM_FIELDS := [
 	["spill_strength", "Screen glow (0 = off)", 0.0, 1.0, 0.05],
+	["screen_bloom", "Screen bloom in the dark (0 = off)", 0.0, 1.0, 0.05],
 	["ambient", "Ambient fill", 0.0, 1.5, 0.02],
 	["key_energy", "Warm lamp brightness", 0.0, 8.0, 0.1],
 	["fill_energy", "Front fill brightness", 0.0, 4.0, 0.1],

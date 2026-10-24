@@ -209,6 +209,18 @@ highlights are disabled so the approximation does not look like two bulbs.
 The lights move with the TV and their reach follows its scale. Picture and
 glass are excluded from the receiver mask; the existing distance fade remains.
 
+**Screen bloom in the dark** (Room → Materials; default 0.5, 0 = off) is the
+soft halo your eyes see around a bright tube in a dark room. It is a single
+additive quad just in front of the casing's face (`shaders/screen_halo.gdshader`):
+clear over the picture, brightest at the tube's edge and fading out about
+24 cm beyond it, in the colours of the picture's left and right halves (the
+same samples and curve as the screen glow, so it costs no extra sampling). It
+scales with the room's darkness: full with the room lights off, most of it in
+Late night, little in Dim XR and none in brighter rooms or by day when the
+room follows the clock. It fades out when seen from a steep angle and goes dark
+with the power-off. It is not a full-screen bloom pass, which would cost a
+pass per eye on the Deck and bloom everything else too.
+
 A jittered 16×12 grid samples the emulator's existing CPU presentation image at
 20 Hz, applies the picture's colour grading per sample, and averages in linear
 emitted-light space. The mean is scaled by picture coverage and smoothed with

@@ -21,6 +21,10 @@ const SIDE_BIAS := 0.7
 var lights: Array[OmniLight3D] = []
 ## 0 (off) to 1 (a dark room lit by the TV alone).
 var strength := 0.5
+## The soft bloom around the tube (shaders/screen_halo.gdshader), 0 to 1,
+## already scaled down for a lit room; it shares this light's picture samples.
+var halo: MeshInstance3D
+var bloom := 0.0
 var power_level := 1.0
 var grading: Dictionary = {}
 var picture_area := 0.8
@@ -36,6 +40,7 @@ var sample_count := 0
 var sampling_usec := 0
 var applied: Array[Vector3] = [-Vector3.ONE, -Vector3.ONE] # radiance last written to each light
 var applied_scale := Vector3.ZERO # range scale, power level, strength last written
+var applied_bloom := -1.0
 
 func _ready() -> void:
 	name = "ScreenLight"
@@ -64,13 +69,25 @@ func set_image(image: Image) -> void:
 
 func set_strength(value: float) -> void:
 	strength = clampf(value, 0.0, 1.0)
-	set_process(strength > 0.0)
 	if strength <= 0.0:
-		current = Vector3.ZERO
-		side_current = [Vector3.ZERO, Vector3.ZERO]
 		for light in lights:
 			light.light_energy = 0.0
 			light.hide()
+	_follow_picture()
+
+func set_bloom(value: float) -> void:
+	bloom = clampf(value, 0.0, 1.0)
+	if halo != null and bloom <= 0.0: halo.hide()
+	applied_bloom = -1.0
+	_follow_picture()
+
+## Samples the picture while the glow or the bloom needs it.
+func _follow_picture() -> void:
+	var needed := strength > 0.0 or bloom > 0.0
+	set_process(needed)
+	if not needed:
+		current = Vector3.ZERO
+		side_current = [Vector3.ZERO, Vector3.ZERO]
 	else:
 		elapsed = SAMPLE_PERIOD
 
@@ -105,7 +122,7 @@ static func half_radiance(image: Image, settings: Dictionary) -> Array[Vector3]:
 	return [totals[0] / 96.0, totals[1] / 96.0]
 
 func _process(delta: float) -> void:
-	if strength <= 0.0: return
+	if strength <= 0.0 and bloom <= 0.0: return
 	elapsed += delta
 	if elapsed >= SAMPLE_PERIOD and not grading.is_empty():
 		elapsed = fmod(elapsed,SAMPLE_PERIOD)
@@ -126,8 +143,10 @@ func _process(delta: float) -> void:
 	var range_scale := maxf(object_scale.x,maxf(object_scale.y,object_scale.z))
 	# The smoothing converges asymptotically; skip imperceptible light updates.
 	var scales := Vector3(range_scale, power_level, strength)
-	if (side_current[0] - applied[0]).length() + (side_current[1] - applied[1]).length() < 0.0005 and scales == applied_scale: return
-	applied = side_current.duplicate(); applied_scale = scales
+	if (side_current[0] - applied[0]).length() + (side_current[1] - applied[1]).length() < 0.0005 and scales == applied_scale and bloom == applied_bloom: return
+	applied = side_current.duplicate(); applied_scale = scales; applied_bloom = bloom
+	_show_halo()
+	if strength <= 0.0: return
 	for side in range(2):
 		var light := lights[side]
 		var radiance: Vector3 = side_current[side]
@@ -140,3 +159,17 @@ func _process(delta: float) -> void:
 ## Light from a picture of this peak radiance at full glow.
 static func glow_energy(peak: float) -> float:
 	return GLOW_ENERGY * pow(maxf(peak, 0.0), GLOW_CURVE)
+
+## The bloom takes each half's colour, shaped by the same curve as the glow.
+func _show_halo() -> void:
+	if halo == null: return
+	var level := bloom * power_level
+	halo.visible = level > 0.001
+	if not halo.visible: return
+	var material := halo.material_override as ShaderMaterial
+	material.set_shader_parameter("strength", level)
+	for side in range(2):
+		var radiance: Vector3 = side_current[side]
+		var peak := maxf(radiance.x, maxf(radiance.y, radiance.z))
+		var shaped := radiance / maxf(peak, 0.00001) * pow(peak, GLOW_CURVE)
+		material.set_shader_parameter("left_colour" if side == 0 else "right_colour", shaped)

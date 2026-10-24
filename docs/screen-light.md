@@ -52,6 +52,12 @@ preferences. The picture's Phosphor glow remains separate under Picture.
 Increasing screen spill brightens nearby materials, not the image itself.
 Existing distance blackout and the XR floor island stay in effect.
 
+Room > Screen bloom in the dark shares these samples: `ScreenHalo`, an additive
+quad in front of the casing, takes each half's smoothed radiance through the
+same curve and a level of bloom × the room's darkness × power level
+(`CRTWorld.room_darkness`). The light keeps sampling while either the glow or
+the bloom is on.
+
 This is a diffuse area-source approximation, not ray-traced indirect lighting.
 The sources sit slightly ahead of the curved glass to light the inset bezel.
 They do not cast occlusion shadows or provide a mirror reflection of the tube;

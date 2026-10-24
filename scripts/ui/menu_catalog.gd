@@ -155,12 +155,13 @@ func pages(category: int) -> Array:
 				"cabinet_ao_strength":"Strength of Blender-baked shading in the TV's joins and recesses.",
 				"cabinet_grain_strength":"Subtle static plastic finish. Fine grain fades at distance to avoid shimmer.",
 				"spill_strength":"Light from the picture on the casing, table and props, in the picture's own colours, left and right. Full glow lights a dark room by the TV alone; zero turns it off.",
+				"screen_bloom":"A soft halo around the bright tube, as your eyes see it in a dark room. It fades away as the room's own lights come up, so it shows in Lights off and Late night.",
 				"floor_brightness":"Brightness of the floor.","fade_begin":"Distance where the small room island begins fading to black.","fade_end":"Distance where the surroundings become fully black."}
 			for field in h.ROOM_FIELDS:
 				var key: String = field[0]
-				var group := "Materials" if key in ["cabinet_ao_strength","cabinet_grain_strength","floor_brightness","spill_strength"] else ("Placement" if key in ["lamp_height","lamp_side","fade_begin","fade_end"] else "Lighting")
+				var group := "Materials" if key in ["cabinet_ao_strength","cabinet_grain_strength","floor_brightness","spill_strength","screen_bloom"] else ("Placement" if key in ["lamp_height","lamp_side","fade_begin","fade_end"] else "Lighting")
 				groups[group].append({"id":"room."+key,"label":str(field[1]).replace(" (lower = lighter)","").replace(" (0 = off)",""),"kind":"number","min":field[2],"max":field[3],"step":field[4],"default":h.SettingsDefaults.ROOM[key],"visual":true,
-					"unit":"m" if group=="Placement" else ("percent" if key in ["warmth","shadow_strength","cabinet_ao_strength","cabinet_grain_strength","spill_strength"] else "x"),
+					"unit":"m" if group=="Placement" else ("percent" if key in ["warmth","shadow_strength","cabinet_ao_strength","cabinet_grain_strength","spill_strength","screen_bloom"] else "x"),
 					"getter":func(): return w.get(key),"setter":func(value): h.set_room_value(key,value),"help":tips.get(key,"Moves the room lamp while the TV stays stationary.")})
 			groups.Lighting.append(toggle("room.shadows","Lamp shadows",w,"shadows",true,"Controls live shadows on unbaked objects. The TV and table keep their soft baked contact shading.",w.apply_room_settings))
 			groups.Materials.push_front({"id":"room.floor_style","label":"Floor","kind":"choice","choices":w.FLOOR_STYLES,"default":h.Showcase.ROOM.floor_style,"visual":true,
