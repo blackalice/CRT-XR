@@ -19,12 +19,18 @@ var probe_poll := 0.0
 var probe_stable := 0
 var probe_expected := Vector2i.ZERO
 var probe_phase := ""
+## The launcher's status file while the XR driver switches the glasses to SBS
+## itself (steam-session.py AutoSBS); empty for glasses switched by button.
+var auto_path := ""
+var auto_state := ""
+var heading: Label
 var instructions: Label
 var begin_button: Button
 var prompt_canvas: Control
 
 func _ready() -> void:
 	probe_path = OS.get_environment("CRT_XR_DISPLAY_PROBE")
+	auto_path = OS.get_environment("CRT_XR_AUTO_SBS")
 	var expected := OS.get_environment("CRT_XR_SBS_SIZE").split("x")
 	if expected.size()==2: probe_expected=Vector2i(int(expected[0]),int(expected[1]))
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -56,7 +62,7 @@ func _ready() -> void:
 	column.add_theme_constant_override("separation", 16)
 	panel.add_child(column)
 	column.add_child(preload("res://scripts/ui/startup_brand.gd").logo())
-	var heading := Label.new()
+	heading = Label.new()
 	heading.text = "SWITCH TO SBS NOW"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size", 36)
@@ -103,6 +109,12 @@ func _ready() -> void:
 		if manual_confirmation: begin_button.text="Begin  [A]"
 	if in_place and not manual_confirmation:
 		help.text = "A darkens the screen before switching. B / Escape cancels."
+	if not probe_path.is_empty() and not auto_path.is_empty():
+		heading.text="Switching your glasses to SBS"
+		instructions.text="Your glasses switch to SBS by themselves.
+Your room will appear when they're ready."
+		help.text="Keep the glasses connected. B / Escape returns to Steam."
+		if is_instance_valid(begin_button): begin_button.hide()
 	get_window().size_changed.connect(on_window_size_changed)
 	resize_prompt_canvas()
 
@@ -173,6 +185,25 @@ func arm_probe() -> void:
 	probe_stable=0
 	darken()
 
+## While the driver switches the glasses, the screen darkens on its own; if it
+## cannot, the usual button instructions come back.
+func follow_auto_switch() -> void:
+	var parsed = JSON.parse_string(FileAccess.get_file_as_string(auto_path)) if FileAccess.file_exists(auto_path) else null
+	var state: String = str(parsed.get("state", "")) if parsed is Dictionary else ""
+	auto_state = state
+	# Once the launch A press is released (arm_probe waits for it).
+	if state in ["switching", "on"]: arm_probe()
+	elif state == "failed":
+		auto_path = ""
+		probe_armed = false; darkened = false
+		if is_instance_valid(content): content.show()
+		heading.text = "Switch to SBS with your glasses"
+		instructions.text = "Your glasses didn't switch by themselves.
+1. Press A to darken the view.
+2. Use the glasses' SBS button."
+		help.text = "Your room will appear automatically when ready. B / Escape returns to Steam."
+		if is_instance_valid(begin_button): begin_button.show(); begin_button.grab_focus()
+
 func process_probe(delta: float) -> void:
 	# Steam's launch A press must be released before it can arm this screen.
 	var held := false
@@ -183,6 +214,7 @@ func process_probe(delta: float) -> void:
 	if probe_armed: probe_elapsed+=delta
 	if probe_poll<0.5: return
 	probe_poll=0.0
+	if not auto_path.is_empty(): follow_auto_switch()
 	var screen_size := DisplayServer.screen_get_size(get_window().current_screen)
 	var window_size := get_window().size
 	var data: Dictionary={}
@@ -192,7 +224,7 @@ func process_probe(delta: float) -> void:
 	var matches := probe_matches(data,probe_expected,screen_size,window_size,Time.get_unix_time_from_system())
 	probe_stable=probe_stable+1 if matches and probe_armed else 0
 	var phase := "waiting_for_A" if not probe_armed else ("timeout" if probe_elapsed>=90 else ("matching" if matches else "waiting_for_resolution"))
-	var diagnostic := {"phase":phase,"screen":[screen_size.x,screen_size.y],"window":[window_size.x,window_size.y],"expected":[probe_expected.x,probe_expected.y],"fresh":fresh,"advertised":data.get("advertised",false),"physical_mode_verified":false,"stable_samples":probe_stable}
+	var diagnostic := {"phase":phase,"screen":[screen_size.x,screen_size.y],"window":[window_size.x,window_size.y],"expected":[probe_expected.x,probe_expected.y],"fresh":fresh,"advertised":data.get("advertised",false),"physical_mode_verified":false,"stable_samples":probe_stable,"automatic_sbs":auto_state}
 	var file := FileAccess.open(probe_path+".app.json",FileAccess.WRITE)
 	if file: file.store_string(JSON.stringify(diagnostic))
 	if phase!=probe_phase:

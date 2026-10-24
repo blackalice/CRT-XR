@@ -5,6 +5,7 @@ const WindowsTracking = preload("res://scripts/tracking/xr_windows_tracking.gd")
 const LinuxTracking = preload("res://scripts/tracking/xr_linux_tracking.gd")
 const OpenTrackTracking = preload("res://scripts/tracking/opentrack_tracking.gd")
 const PosePrediction = preload("res://scripts/tracking/pose_prediction.gd")
+const SbsExit = preload("res://scripts/ui/sbs_exit.gd")
 const CRTWorld = preload("res://scripts/rendering/crt_world.gd")
 const Pattern = preload("res://scripts/content/test_pattern.gd")
 const Emulation = preload("res://scripts/emulation/emulation_session.gd")
@@ -759,6 +760,17 @@ func request_exit() -> void:
 	if exiting: return
 	exiting = true
 	if tv_effects.play("power_off"): await tv_effects.finished
+	# Glasses switched by their own button are still in SBS: ask for it before
+	# Steam comes back doubled (glasses the driver switches, it switches back).
+	var probe := OS.get_environment("CRT_XR_DISPLAY_PROBE")
+	if stereo and SbsExit.needed(probe, OS.get_environment("CRT_XR_AUTO_SBS"), Time.get_unix_time_from_system()):
+		if emulator.loaded: emulator.set_paused(true)
+		var note := SbsExit.new()
+		note.probe_path = probe
+		note.z_index = 4096
+		note.done.connect(get_tree().quit)
+		add_child(note)
+		return
 	get_tree().quit()
 
 func _exit_tree() -> void:

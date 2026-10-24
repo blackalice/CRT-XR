@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Request SBS through the installed XR driver's existing control protocol."""
+"""Request SBS through the installed XR driver's existing control protocol.
+
+Only where the driver itself reports it can switch the connected glasses: it
+reports sbs_mode_supported per device. (Checked on 24 October 2026 with driver
+2.11.9: a VITURE Pro 2 reports false, and switches with its own button.)"""
 import argparse
 import importlib.util
 import json
@@ -30,11 +34,19 @@ class DriverSBS:
         state = self.ipc.retrieve_driver_state()
         if not state.get("ui_view", {}).get("driver_running"):
             raise RuntimeError("XR driver is not reporting a fresh heartbeat.")
-        if state.get("connected_device_brand") != "VITURE" or state.get("connected_device_model") != "Pro 2":
-            raise RuntimeError("The verified VITURE Pro 2 is not connected.")
+        if not state.get("connected_device_brand"):
+            raise RuntimeError("The XR driver has no glasses connected.")
         if state.get("sbs_mode_supported") is not True:
             raise RuntimeError("The driver is not reporting SBS support.")
         return state
+
+    def supported(self):
+        """True when the driver says it can switch these glasses; never raises."""
+        try:
+            state = self.state()
+        except (RuntimeError, OSError, ValueError):
+            return False
+        return "sbs" in state.get("ui_view", {}).get("license", {}).get("enabled_features", [])
 
     def enabled(self):
         return bool(self.state().get("sbs_mode_enabled"))
@@ -69,10 +81,21 @@ class DriverSBS:
         raise RuntimeError("The driver did not acknowledge the SBS switch.")
 
 
+def load():
+    """The driver adapter, or None when the XR driver or its API is missing."""
+    try:
+        return DriverSBS()
+    except (RuntimeError, OSError, ImportError):
+        return None
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=["status", "on", "off"])
+    parser.add_argument("mode", choices=["status", "supported", "on", "off"])
     args = parser.parse_args()
     control = DriverSBS()
-    if args.mode != "status": control.set_enabled(args.mode == "on")
-    print(json.dumps({"sbs": control.enabled()}))
+    if args.mode == "supported":
+        print(json.dumps({"supported": control.supported()}))
+    else:
+        if args.mode != "status": control.set_enabled(args.mode == "on")
+        print(json.dumps({"sbs": control.enabled()}))

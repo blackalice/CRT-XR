@@ -34,9 +34,23 @@ class DriverTests(unittest.TestCase):
         self.state["ui_view"]["driver_running"] = False
         with self.assertRaises(RuntimeError): self.control.set_enabled(True)
         self.state["ui_view"]["driver_running"] = True
-        self.state["connected_device_model"] = "Other"
+        self.state["connected_device_brand"] = None
         with self.assertRaises(RuntimeError): self.control.set_enabled(True)
         self.assertFalse(self.path.exists())
+
+    def test_any_brand_the_driver_can_switch(self):
+        self.state["connected_device_brand"], self.state["connected_device_model"] = "XREAL", "One"
+        self.assertTrue(self.control.supported())
+
+    def test_glasses_the_driver_cannot_switch(self):
+        # A VITURE Pro 2 on driver 2.11.9 (24 October 2026): its own button only.
+        self.state["sbs_mode_supported"] = False
+        self.assertFalse(self.control.supported())
+        with self.assertRaises(RuntimeError): self.control.set_enabled(True)
+        self.assertFalse(self.path.exists())
+        self.state["sbs_mode_supported"] = True
+        self.state["ui_view"]["license"]["enabled_features"] = []
+        self.assertFalse(self.control.supported())
 
     def test_pending_request_preserved(self):
         self.path.write_text("another_client=true\n")

@@ -66,12 +66,56 @@ class SteamSessionTests(unittest.TestCase):
         from unittest.mock import MagicMock
         with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:
             watcher=MagicMock();child=MagicMock();child.wait.return_value=0;child.poll.return_value=0
-            with patch.dict(session.os.environ, {"XDG_STATE_HOME":directory,"XDG_CURRENT_DESKTOP":"gamescope"}), patch.object(session.sys,"argv",["steam-session.py"]), patch.object(session,"glasses_connected",return_value=True), patch.object(session.os,"chdir"), patch.object(session.subprocess,"Popen",side_effect=[watcher,child]) as spawn, patch.object(session.signal,"signal"):
+            with patch.dict(session.os.environ, {"XDG_STATE_HOME":directory,"XDG_CURRENT_DESKTOP":"gamescope"}), patch.object(session.sys,"argv",["steam-session.py"]), patch.object(session,"glasses_connected",return_value=True), patch.object(session,"sbs_driver",return_value=None), patch.object(session.os,"chdir"), patch.object(session.subprocess,"Popen",side_effect=[watcher,child]) as spawn, patch.object(session.signal,"signal"):
                 session.main()
             command=spawn.call_args.args[0]
             self.assertIn("--sbs-session-manual",command)
             self.assertIn("--last-game",command)
             self.assertNotIn("--sbs-prompt",command)
+
+    def test_driver_switches_glasses_in_and_out_of_sbs(self):
+        from unittest.mock import MagicMock
+        import json
+        with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:
+            driver = MagicMock(); driver.enabled.return_value = False
+            watcher = MagicMock(); child = MagicMock(); child.wait.return_value = 0; child.poll.return_value = 0
+            with patch.dict(session.os.environ, {"XDG_STATE_HOME": directory, "XDG_CURRENT_DESKTOP": "gamescope"}), patch.object(session.sys, "argv", ["steam-session.py"]), patch.object(session, "glasses_connected", return_value=True), patch.object(session, "sbs_driver", return_value=driver), patch.object(session.os, "chdir"), patch.object(session.subprocess, "Popen", side_effect=[watcher, child]) as spawn, patch.object(session.signal, "signal"):
+                session.main()
+            status = Path(spawn.call_args.kwargs["env"]["CRT_XR_AUTO_SBS"])
+            self.assertEqual(json.loads(status.read_text())["state"], "on")
+            # Into SBS for the session, back to 2D after it, as they were before.
+            self.assertEqual([c.args for c in driver.set_enabled.call_args_list], [(True,), (False,)])
+
+    def test_glasses_already_in_sbs_stay_there(self):
+        from unittest.mock import MagicMock
+        with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:
+            driver = MagicMock(); driver.enabled.return_value = True
+            auto = session.AutoSBS(driver, Path(directory) / "auto-sbs.json")
+            auto.start(); auto.restore()
+            driver.set_enabled.assert_not_called()
+
+    def test_driver_refusal_falls_back_to_the_button(self):
+        from unittest.mock import MagicMock
+        import json
+        with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:
+            driver = MagicMock(); driver.enabled.return_value = False
+            driver.set_enabled.side_effect = [RuntimeError("The driver did not acknowledge the SBS switch."), None]
+            auto = session.AutoSBS(driver, Path(directory) / "auto-sbs.json")
+            auto.start(); auto.thread.join()
+            self.assertEqual(json.loads(auto.status.read_text())["state"], "failed")
+            auto.restore()  # harmless: back to the 2D they were in
+
+    def test_glasses_the_driver_cannot_switch_use_the_button(self):
+        from unittest.mock import MagicMock
+        with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:
+            watcher = MagicMock(); child = MagicMock(); child.wait.return_value = 0; child.poll.return_value = 0
+            with patch.dict(session.os.environ, {"XDG_STATE_HOME": directory, "XDG_CURRENT_DESKTOP": "gamescope"}), patch.object(session.sys, "argv", ["steam-session.py"]), patch.object(session, "glasses_connected", return_value=True), patch.object(session, "sbs_driver", return_value=None), patch.object(session.os, "chdir"), patch.object(session.subprocess, "Popen", side_effect=[watcher, child]) as spawn, patch.object(session.signal, "signal"):
+                session.main()
+            self.assertNotIn("CRT_XR_AUTO_SBS", spawn.call_args.kwargs["env"])
+
+    def test_desktop_asks_the_driver_only_when_it_can_switch(self):
+        self.assertIn("--auto-sbs", session.launch_command(ROOT, {"XDG_CURRENT_DESKTOP": "KDE"}, True, [], auto_sbs=True))
+        self.assertIn("--manual-sbs", session.launch_command(ROOT, {"XDG_CURRENT_DESKTOP": "KDE"}, True, []))
 
     def test_no_glasses_bypasses_sbs_and_preserves_mono_aspect(self):
         with tempfile.TemporaryDirectory(dir=ROOT / "build") as directory:

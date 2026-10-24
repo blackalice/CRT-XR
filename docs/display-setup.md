@@ -61,8 +61,22 @@ capability reporting alone therefore does not establish working mode control on
 this installation. The working driver was preserved. The user switched SBS with
 the button, and the rest of the launch flow then worked.
 
-Automatic hardware requests are now opt-in with `--auto-sbs`; ordinary launches
-and the installed shortcut use the button. A supported SDK/firmware fix still
+Re-checked on 24 October 2026 with driver 2.11.9 (installed 21 October) and
+XR Gaming 1.6.2: the driver now reports `sbs_mode_supported=false` for the
+VITURE Pro 2, and still logs `get_display_mode ... returned -7` on connect, so
+no request was sent. Upstream Breezy Desktop also says SBS must be entered with
+the glasses' buttons. This is a driver/SDK limit for these glasses.
+
+Automatic switching is therefore capability-gated rather than opt-in: the Steam
+launcher asks the driver only when it reports `sbs_mode_supported` and the
+`sbs` feature for whatever glasses are connected (any brand), in Gaming Mode
+(`steam-session.py` AutoSBS, below) and Desktop Mode (`--auto-sbs`). Glasses it
+cannot switch use the button, as before; a driver that claims support but does
+not acknowledge within 12 seconds falls back to the button too. The rest of this
+section is the earlier history.
+
+Earlier, automatic hardware requests were opt-in with `--auto-sbs`; ordinary launches
+and the installed shortcut used the button. A supported SDK/firmware fix still
 needs investigation. No upgrade or firmware change was performed. The adapter
 will not overwrite another client's pending request. An old root-owned recenter
 request blocked initial access; the user completed a one-time password-protected

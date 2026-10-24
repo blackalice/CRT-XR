@@ -78,3 +78,24 @@ Full SBS in the actual Gaming Mode session remains unverified.
 
 Valve documents the non-Steam library workflow in its
 [Desktop FAQ](https://help.steampowered.com/en/faqs/view/671a-4453-e8d2-323c).
+
+## Into and out of SBS automatically
+
+Where the XR driver can switch the connected glasses itself (it reports
+`sbs_mode_supported` with the `sbs` feature), `steam-session.py` asks it for SBS
+as the setup screen opens, exactly as XR Gaming's own SBS toggle does
+(`driver-sbs.py`, the driver's `sbs_mode=enable` control request). The screen
+reads "Switching your glasses to SBS", darkens by itself once the launch A
+press is released, and continues when the SBS mode appears, as it does after
+the button. Its status file (`CRT_XR_AUTO_SBS`, `auto-sbs.json` in the launch's
+diagnostics folder) reads `switching`, `on` or `failed`; on `failed` the
+button instructions return. After CRT XR exits, the launcher switches the
+glasses back to 2D, only if they were in 2D before the launch.
+
+Glasses the driver cannot switch (the VITURE Pro 2 on driver 2.11.9) use their
+button on the way in. On the way out, after the power-off, `scripts/ui/sbs_exit.gd`
+shows "Back to 2D" once in each eye and closes CRT XR as soon as the glasses
+leave SBS: the SBS mode drops out of the display probe's advertised modes for
+two readings in a row. B leaves at once, still in SBS, and it closes anyway
+after a minute. Without it, Steam came back doubled until the button was
+pressed. Desktop Mode, Windows and mono launches never show it.
