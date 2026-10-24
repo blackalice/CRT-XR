@@ -49,6 +49,25 @@ func run() -> void:
 	await settle()
 	check(menu.scroll.scroll_vertical == 0, "A new help page opens at its top, not where the last one was")
 	check(not menu.help_label.visible, "Help pages give the help strip's room to the article")
+	# About: the version row opens it, with the 3D logo floating in front.
+	var about := HelpArticle.parse(menu.catalog.about_page())
+	check(about[0][0] == "logo" and about.any(func(b): return b[0] == "fact" and b[2] == "Website" and b[1] == "stua.rtfoy.co.uk"), "About has the logo, then facts including the website")
+	menu.open_settings(); menu.category = 6; menu.render(); await settle()
+	menu.select("system.version"); menu.activate(); await settle()
+	var logo = menu.column.find_child("Logo3D", true, false)
+	check(menu.mode == "help" and menu.help_title == "About CRT XR" and logo != null, "The version row opens About CRT XR")
+	check(logo != null and menu.depth_layout().lift == logo.get_global_rect().intersection(menu.scroll.get_global_rect()), "In stereo the logo is the page's lifted layer")
+	var Logo3D = preload("res://scripts/ui/logo_3d.gd")
+	var keys := [[0.0, 0.0, 16.7, 42.0], [0.5, 105.0, 30.0, 42.0], [1.0, 0.0, 30.0, 16.7]]
+	check(is_equal_approx(Logo3D.keyed(keys, 0.5), 105.0) and is_equal_approx(Logo3D.keyed(keys, 1.0), 0.0) and is_equal_approx(Logo3D.keyed(keys, 9.0), 0.0), "Keyframes land exactly on their values")
+	var smooth := true
+	var last := -1.0
+	for i in range(51):
+		var value: float = Logo3D.keyed(keys, i / 100.0)
+		smooth = smooth and value >= last - 0.001
+		last = value
+	check(smooth and Logo3D.keyed(keys, 0.05) < 105.0 * 0.1, "After Effects' ease: a slow start, rising steadily to the key")
+	check(logo != null and logo.letters.size() == 5 and logo.view.own_world_3d, "Five letters, built in their own little 3D world")
 	app.free()
 	await settle()
 	print("HELP ARTICLE CHECKS COMPLETE: ", failures, " failures")

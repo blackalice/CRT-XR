@@ -89,3 +89,14 @@ On Linux, preferences are normally in `~/.local/share/godot/app_userdata/CRT XR/
 ## Windows XR release builds
 
 Run `scripts/build-windows-tracking.ps1` (WSL Ubuntu with the MinGW POSIX compiler), then `scripts/export-windows.ps1`. Windows export requires Python and applies the per-monitor DPI manifest after export with a separate PCK. Keep that PCK with the EXE. The VITURE SDK under ignored `sdk/` is for local testing only; public packages exclude proprietary SDK files. End users follow [Windows setup](WINDOWS-SETUP.md). Use the exported EXE for mixed-DPI hardware checks; the unmodified editor executable retains system DPI awareness.
+
+## The animated logo
+
+The About page's 3D logo is rebuilt from the After Effects composition
+'Animated Logo 2'. `assets/logo/animated-logo-2.json` is its export: each
+letter's shape paths, fills, transforms and keyframes with their easing, and
+the null's rotation. `python scripts/make-logo-3d.py` (needs shapely 2.1 or
+later) triangulates the outlines into `assets/logo/logo-3d.json`, which
+`scripts/ui/logo_3d.gd` turns into meshes and animates with After Effects'
+own Bézier easing. The export presets ship that JSON alongside
+`THIRD_PARTY.md`. Re-export the source JSON after changing the composition.

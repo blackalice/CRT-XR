@@ -15,6 +15,8 @@ L1 / R1 | Q / E :: Change category
 L2 / R2 | Z / C :: Change section
 Y :: Reset an option to its default
 X :: Preview the picture"""
+const WEBSITE := "stua.rtfoy.co.uk"
+const PROJECT_PAGE := "github.com/blackalice/CRT-XR"
 const TROUBLESHOOTING_GUIDE := """!! Tracking unavailable
 Retry the glasses in Controls & XR → Tracking, or choose Fixed view.
 
@@ -31,6 +33,22 @@ Use a direct MP3 stream URL.
 Check free space and the save folder's permissions."""
 var host: Node
 var menu: Control
+
+## About CRT XR, in the help page markup: the animated logo, what it is, and who made it.
+func about_page() -> String:
+	return "
+".join([
+		"@@ logo",
+		"A little CRT room for your XR glasses: your games and videos on a 90s TV, in a room you can light, furnish and settle into.",
+		"## About",
+		"Version := " + str(ProjectSettings.get_setting("application/config/version")),
+		"Running on := %s · Godot %s" % [OS.get_name(), Engine.get_version_info().string],
+		"Made by := Stuart Foy",
+		"Website := " + WEBSITE,
+		"Source and updates := " + PROJECT_PAGE,
+		"> CRT XR is free and in beta. Bug reports, results with your glasses and ideas are all welcome on GitHub.",
+		"## Thanks",
+		"Built with Godot and the libretro emulator cores. Their authors and licences are under Credits & licences."])
 
 func action(id: String, label: String, callback: Callable, help := "", disabled := false, value := "›") -> Dictionary:
 	return {"id":id,"label":label,"kind":"action","action":callback,"help":help,"disabled":disabled,"value":value}
@@ -265,7 +283,7 @@ func pages(category: int) -> Array:
 				unavailable(action("setups.global","Use global picture for this game",h.forget_game_picture,"Removes this game's picture override; future global picture changes apply.",h.active_game_key.is_empty() or h.active_game_key==h.VIDEO_PROFILE),"Start a game with its own picture first.")])]
 		6:
 			return [page("About & Help",[
-				action("system.version","CRT XR",func(): menu.notify("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))),"A little CRT room for your XR glasses.",false,str(ProjectSettings.get_setting("application/config/version"))),
+				action("system.version","CRT XR",func(): menu.open_help("About CRT XR",about_page()),"A little CRT room for your XR glasses. About CRT XR, its maker and website.",false,str(ProjectSettings.get_setting("application/config/version"))),
 				action("system.glasses","Using glasses",func(): menu.open_help("Using glasses",menu.play.glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),
 				action("system.device","Device status",func(): menu.open_help("Device status","!! "+menu.status_title+"\n"+menu.status_detail),"Current display and tracking status."),
 				action("system.controls","Controls",func(): menu.open_help("Controls",CONTROLS_GUIDE),"Controller and keyboard shortcuts."),

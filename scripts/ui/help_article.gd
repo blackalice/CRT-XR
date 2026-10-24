@@ -7,6 +7,8 @@ extends RefCounted
 ##   A | Enter :: Text       a control: button chips (pad, then keyboard)
 ##   !! Title                a card; the paragraph after it is its body
 ##   > Text                  a tip, set apart
+##   Label := Value          a fact: a quiet label beside its value
+##   @@ logo                 the animated 3D logo (scripts/ui/logo_3d.gd)
 ##   anything else           a paragraph; consecutive lines join, as in Markdown
 ## Markdown files (THIRD_PARTY.md) read as the same: their `# Title` is
 ## dropped (the page has one), code ticks and link targets are removed, and
@@ -17,7 +19,8 @@ const CHIP := Color("2b3037")
 const RULE := Color("3a3631")
 
 ## Blocks as [kind, text, extra]: kinds heading, step, bullet, control, card,
-## tip and text. Steps carry their number; controls their chips; cards their body.
+## tip, fact, logo and text. Steps carry their number; controls their chips;
+## cards their body; facts their label.
 static func parse(copy: String) -> Array:
 	var blocks: Array = []
 	var paragraph: Array = []
@@ -34,6 +37,12 @@ static func parse(copy: String) -> Array:
 		if stripped.begins_with("## ") or stripped.begins_with("### "):
 			flush(blocks, paragraph, card); card[0] = -1
 			blocks.append(["heading", stripped.trim_prefix("### ").trim_prefix("## "), ""]); continue
+		if stripped == "@@ logo":
+			flush(blocks, paragraph, card); blocks.append(["logo", "", ""]); continue
+		if " := " in stripped:
+			flush(blocks, paragraph, card)
+			var fact := stripped.split(" := ", true, 1)
+			blocks.append(["fact", fact[1], fact[0]]); continue
 		if stripped.begins_with("!! "):
 			flush(blocks, paragraph, card); blocks.append(["card", stripped.trim_prefix("!! "), ""]); card[0] = blocks.size() - 1; continue
 		if stripped.begins_with("> "):
@@ -109,6 +118,21 @@ static func build(copy: String, large: bool) -> Control:
 				if block[2] != "": column.add_child(label(block[2], size - 2, MenuSkin.REGULAR, MenuSkin.MUTED))
 				panel.add_child(column)
 				article.add_child(panel)
+			"logo":
+				var logo := preload("res://scripts/ui/logo_3d.gd").new()
+				logo.name = "Logo3D"
+				logo.custom_minimum_size = Vector2(0, 300)
+				logo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				article.add_child(logo)
+			"fact":
+				var row := HBoxContainer.new()
+				row.add_theme_constant_override("separation", 16)
+				var key := label(block[2], size - 2, MenuSkin.REGULAR, MenuSkin.MUTED)
+				key.custom_minimum_size.x = 250
+				key.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+				row.add_child(key)
+				row.add_child(label(block[1], size, MenuSkin.SEMIBOLD, MenuSkin.TEXT))
+				article.add_child(row)
 			"tip":
 				var tip := PanelContainer.new()
 				var style := MenuSkin.box(Color("2a2620"), Color.TRANSPARENT, 0, 14)
