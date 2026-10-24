@@ -85,9 +85,8 @@ Where the XR driver can switch the connected glasses itself (it reports
 `sbs_mode_supported` with the `sbs` feature), `steam-session.py` asks it for SBS
 as the setup screen opens, exactly as XR Gaming's own SBS toggle does
 (`driver-sbs.py`, the driver's `sbs_mode=enable` control request). The screen
-reads "Switching your glasses to SBS", darkens by itself once the launch A
-press is released, and continues when the SBS mode appears, as it does after
-the button. Its status file (`CRT_XR_AUTO_SBS`, `auto-sbs.json` in the launch's
+says the glasses are switching by themselves and continues when the SBS mode
+appears, as it does after the button. Its status file (`CRT_XR_AUTO_SBS`, `auto-sbs.json` in the launch's
 diagnostics folder) reads `switching`, `on` or `failed`; on `failed` the
 button instructions return. After CRT XR exits, the launcher switches the
 glasses back to 2D, only if they were in 2D before the launch.
@@ -99,3 +98,21 @@ leave SBS: the SBS mode drops out of the display probe's advertised modes for
 two readings in a row. B leaves at once, still in SBS, and it closes anyway
 after a minute. Without it, Steam came back doubled until the button was
 pressed. Desktop Mode, Windows and mono launches never show it.
+
+## Get your glasses ready (startup screen)
+
+With the display probe (Gaming Mode), `scripts/ui/sbs_prompt.gd` needs no
+input: no A to darken, no Begin. It asks for the glasses' SBS button (or says
+the driver is switching them), goes dark as soon as the glasses' SBS mode
+appears after being absent, and starts the room once the probe, screen and
+window all match for four readings. An SBS mode advertised from the very first
+reading never blanks the screen by itself, in case glasses list it while in
+2D. After 20 seconds a tip appears (check the USB connection); dark in SBS for
+20 seconds, a note in each eye points at Steam's per-game resolution. B
+returns to Steam.
+
+Its canvas is 720 high and as wide as the window (16:9 to 32:9). Glasses still
+in 2D show the 3840x1080 window letterboxed in a 1920x540 band, so the wide
+layout (logo and title beside the steps) fills that band instead of a small
+16:9 box in its middle; a 16:9 window stacks them and shrinks to fit. Desktop
+launches without the probe keep A to darken and the supervisor's start gate.

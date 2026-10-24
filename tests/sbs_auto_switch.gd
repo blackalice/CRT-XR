@@ -22,7 +22,7 @@ func probe(path: String, advertised: bool, at := -1.0) -> void:
 
 ## A poll of the prompt, as if half a second passed with A released.
 func poll(prompt) -> void:
-	prompt.waiting_time = 1.0
+	prompt.waiting_time = maxf(prompt.waiting_time, 1.0)
 	prompt.probe_poll = 1.0
 	prompt.process_probe(0.0)
 
@@ -33,33 +33,52 @@ func run() -> void:
 	OS.set_environment("CRT_XR_DISPLAY_PROBE", probe_path)
 	OS.set_environment("CRT_XR_SBS_SIZE", "3840x1080")
 
-	# 1. The driver switches the glasses: the screen says so and darkens by itself.
+	# 1. The driver switches the glasses: the screen says so; nothing to press.
 	OS.set_environment("CRT_XR_AUTO_SBS", status_path)
 	write(status_path, {"state": "switching"})
 	var prompt = Prompt.new()
 	prompt.manual_confirmation = true
 	prompt.in_place = true
 	root.add_child(prompt)
-	check("by themselves" in prompt.instructions.text and not prompt.begin_button.visible, "While the driver switches, the screen says so instead of asking for the button")
-	prompt.process_probe(0.0)
-	check(not prompt.probe_armed, "It waits for the launch A press to be released")
 	poll(prompt)
-	check(prompt.probe_armed and prompt.darkened, "Then it darkens by itself, ready for SBS")
-	# 2. The driver could not: back to the button, with the screen lit again.
+	check("by themselves" in prompt.instructions.text and "Switching" in prompt.status.text, "While the driver switches, the screen says so")
+	check(prompt.begin_button == null and prompt.probe_armed and not prompt.darkened, "Nothing to press, and the screen stays lit in 2D")
+	# 2. The driver could not: the button instead, with a tip saying why.
 	write(status_path, {"state": "failed", "detail": "The driver did not acknowledge the SBS switch."})
 	poll(prompt)
-	check(not prompt.probe_armed and not prompt.darkened and prompt.content.visible, "If the driver can't switch them, the instructions come back")
-	check("SBS button" in prompt.instructions.text and prompt.begin_button.visible and prompt.auto_path.is_empty(), "…asking for the glasses' button, with Begin")
+	check("SBS button" in prompt.instructions.text and prompt.tip.visible and prompt.auto_path.is_empty(), "If the driver can't switch them, it asks for the glasses' button")
 	prompt.free()
-	# 3. Glasses switched by button: the usual instructions, untouched.
+
+	# 3. Button glasses: SBS appearing darkens the screen, and the room follows.
 	OS.unset_environment("CRT_XR_AUTO_SBS")
 	prompt = Prompt.new()
 	prompt.manual_confirmation = true
 	prompt.in_place = true
+	var started := [false]
+	prompt.proceed_requested.connect(func(): started[0] = true)
 	root.add_child(prompt)
 	poll(prompt)
-	check("Switch your glasses to SBS" in prompt.instructions.text and not prompt.probe_armed, "Button glasses keep the A-then-button steps")
+	check("SBS button" in prompt.instructions.text and "Waiting" in prompt.status.text and not prompt.darkened, "Button glasses: press the SBS button, nothing else")
+	probe(probe_path, true)
+	poll(prompt)
+	check(prompt.darkened, "The screen goes dark as soon as the glasses switch")
+	check(not started[0] and not prompt.stereo_note.visible, "…and waits for the display to settle")
+	prompt.waiting_time = prompt.dark_since + Prompt.TIP_AFTER
+	poll(prompt)
+	check(prompt.stereo_note.visible and prompt.stereo_note.get_child_count() == 2, "Dark for a while in SBS: a note in each eye about Steam's resolution")
 	prompt.free()
+	# Listed from the start (already in SBS, or listed in 2D): no darkening by itself.
+	probe(probe_path, true)
+	prompt = Prompt.new()
+	prompt.in_place = true
+	root.add_child(prompt)
+	poll(prompt); poll(prompt)
+	check(not prompt.darkened, "An SBS mode listed from the start doesn't blank a 2D screen")
+	prompt.waiting_time = Prompt.TIP_AFTER
+	poll(prompt)
+	check(prompt.tip.visible and "USB" in prompt.tip_label.text, "Still waiting after a while: a tip on the screen")
+	prompt.free()
+	probe(probe_path, false)
 
 	# 4. Leaving: only button-switched glasses still in SBS need the note.
 	var now := Time.get_unix_time_from_system()

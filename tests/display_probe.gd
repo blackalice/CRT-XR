@@ -20,25 +20,27 @@ func run():
  OS.set_environment("CRT_XR_SBS_SIZE","5120x1440")
  var prompt=Prompt.new()
  prompt.manual_confirmation=true
+ prompt.in_place=true
  root.add_child(prompt)
  assert(prompt.probe_expected==size)
- assert(prompt.prompt_canvas.size==Vector2(1280,720))
- for window in [Vector2(1280,720),Vector2(1920,1080),Vector2(3840,1080),Vector2(5120,1440),Vector2(1280,800)]:
+ # The canvas is as wide as the window allows: 32:9 glasses still in 2D get a wide layout.
+ for window in [Vector2(1280,720),Vector2(1920,1080),Vector2(3840,1080),Vector2(5120,1440),Vector2(1280,800),Vector2(7680,1080)]:
   var layout=Prompt.prompt_layout(window)
-  var content_size=Vector2(1280,720)*layout.scale
-  assert(layout.position.x>=0 and layout.position.y>=0)
-  assert((content_size+layout.position).x<=window.x and (content_size+layout.position).y<=window.y)
-  assert(is_equal_approx(content_size.x/content_size.y,1280.0/720.0))
+  var shown=layout.size*layout.scale
+  assert(layout.position.x>=-0.01 and layout.position.y>=-0.01)
+  assert((shown+layout.position).x<=window.x+0.01 and (shown+layout.position).y<=window.y+0.01)
+  assert(is_equal_approx(layout.size.y,Prompt.CANVAS_HEIGHT))
+  var aspect:float=layout.size.x/layout.size.y
+  assert(aspect>=16.0/9.0-0.01 and aspect<=32.0/9.0+0.01)
+ assert(is_equal_approx(Prompt.prompt_layout(Vector2(3840,1080)).size.x,2560.0))
  assert(is_equal_approx(prompt.prompt_canvas.scale.x,prompt.prompt_canvas.scale.y))
+ # Nothing to press: armed from the start, and A neither arms nor darkens.
+ assert(prompt.probe_armed and not prompt.darkened)
  var event=InputEventJoypadButton.new();event.button_index=JOY_BUTTON_A;event.pressed=true
  prompt._input(event)
- assert(not prompt.probe_armed and not prompt.darkened)
+ assert(not prompt.darkened)
  prompt.on_window_size_changed()
  assert(not prompt.darkened)
- prompt.probe_ready=true
- prompt._input(event)
- assert(prompt.probe_armed and prompt.darkened)
- prompt._input(event)
  prompt.continue_session()
  assert(not prompt.proceeding)
  prompt.free()
