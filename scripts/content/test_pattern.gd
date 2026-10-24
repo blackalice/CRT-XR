@@ -26,7 +26,7 @@ func _draw() -> void:
 	draw_line(Vector2(80, 145), Vector2(176, 145), Color.WHITE)
 	draw_line(Vector2(128, 100), Vector2(128, 190), Color.WHITE)
 	draw_rect(Rect2(14, 14, 228, 212), Color("a9c8c9"), false, 2.0)
-	draw_string(ThemeDB.fallback_font, Vector2(50, 32), "RETROCRT / TEST", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("e2ede4"))
+	draw_string(ThemeDB.fallback_font, Vector2(50, 32), "CRT XR / TEST", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("e2ede4"))
 	draw_string(ThemeDB.fallback_font, Vector2(38, 213), "256 x 240  /  4:3", HORIZONTAL_ALIGNMENT_LEFT, -1, 14, Color("e2ede4"))
 	var x := 24.0 + fmod(elapsed * 36.0, 200.0)
 	draw_rect(Rect2(x, 177, 9, 9), Color("f4c76a"))
