@@ -25,6 +25,7 @@ const SECTION_HERE := "THIS FOLDER"
 const SECTION_INSIDE := "CONTENTS"
 const SECTION_PLACES := "GO TO"
 const StatusLine = preload("res://scripts/ui/status_line.gd")
+const HelpArticle = preload("res://scripts/ui/help_article.gd")
 ## Confirmation answers shown in the danger colour.
 const DESTRUCTIVE := ["Exit","Delete","Forget","Remove","Reset","Overwrite","Stop","Replace"]
 var location_bar: PanelContainer
@@ -285,6 +286,8 @@ func key_hint() -> Label:
 func state_key() -> String:
 	match mode:
 		"settings": return "settings:%d:%d" % [category,subsection]
+		# Each help page keeps its own place; a new one opens at the top.
+		"help": return "help:"+help_title
 		"music_browser": return "music:%s:%d" % [music.music_dir,music.music_page]
 		"videos": return "videos:%s:%d" % [videos.video_view_dir,videos.video_page]
 		"video_folder": return "video_folder:"+videos.video_folder_dir
@@ -739,7 +742,7 @@ func render() -> void:
 	subtitle.visible = not preview and not location_bar.visible
 	position = Vector2(36,522) if preview else Vector2(36,28)
 	size = Vector2(888,170) if preview else Vector2(888,664)
-	help_label.visible = not preview
+	help_label.visible = not preview and mode!="help" # help pages use the room for the article
 	if preview: heading.add_theme_font_size_override("font_size",22)
 	else: heading.add_theme_font_size_override("font_size",32)
 	var saved: Dictionary = memory.get(state_key(),{})
@@ -769,7 +772,7 @@ func render() -> void:
 		for row in rows: column.remove_child(row); actions.add_child(row)
 		select(selected_id,false)
 	if mode=="help":
-		var article := Label.new(); article.text=help_copy; article.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART; article.add_theme_font_size_override("font_size",24 if host.menu_large_text else 22); column.add_child(article)
+		column.add_child(HelpArticle.build(help_copy,host.menu_large_text))
 	if mode=="library" and not rom_index.scanning: scan_preferred_id=""
 	if saved.has("scroll") and not preview: restore_scroll.call_deferred(int(saved.scroll),layout_revision)
 	elif not preview: reveal_after_layout.call_deferred(layout_revision)
@@ -1289,7 +1292,9 @@ func update_search(value: String) -> void:
 
 func open_help(title: String, copy: String) -> void:
 	remember(); help_origin=snapshot(); help_title=title; help_copy=copy
-	mode="help"; clear_input(); render()
+	mode="help"; clear_input()
+	if not memory.has(state_key()): memory[state_key()]={"id":"","scroll":0}
+	render()
 
 
 func apply_accessibility() -> void:

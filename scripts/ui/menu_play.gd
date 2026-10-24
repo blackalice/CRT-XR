@@ -39,11 +39,40 @@ func choose_state(slot: int) -> void:
 	elif FileAccess.file_exists(path):
 		menu.ask("Load slot %d?" % (slot+1),"Return to %s as saved %s. Progress since then is lost." % [game,menu.ago(host.emulator.state_stamp(path))],func(): perform_state_action(false,slot),path)
 
-## Step-by-step help for glasses on this platform.
+## Step-by-step help for glasses on this platform, in the help page markup
+## (scripts/ui/help_article.gd).
 func glasses_guide() -> String:
 	if OS.get_name()=="Windows":
-		return "1. Switch the glasses to their side-by-side (SBS) mode before starting CRT XR.\n2. On your normal monitor, choose the glasses' display and select Open glasses view.\n3. Head tracking: VITURE glasses need the VITURE Windows SDK in a folder named sdk beside CRT-XR.exe. Other glasses can use a tool that sends OpenTrack, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo); choose Controls & XR → Tracking source → OpenTrack.\n4. R3 or R recentres the view. If turning goes the wrong way, invert that axis in Controls & XR.\n\n\"Fixed view\" means there is no tracking yet: the TV stays still. It is also how CRT XR plays on a normal screen."
-	return "1. Install Decky Loader and its XR Gaming plugin, and check XR Gaming recognises your glasses. CRT XR uses XR Gaming's tracking.\n2. Connect the glasses in mono and start CRT XR from Gaming Mode.\n3. At the prompt, release the button, press A, then press the glasses' SBS button. The view stays black while the glasses switch; the room appears when ready.\n4. R3 recentres the view. If turning goes the wrong way, invert that axis in Controls & XR.\n\nCRT XR recognises VITURE, XREAL, Rokid and RayNeo displays; only VITURE Pro 2 has been tested.\n\n\"Fixed view\" means there is no tracking yet: the TV stays still. Check XR Gaming sees the glasses, then use Controls & XR → Connect glasses."
+		return "\n".join([
+			"## Starting in 3D",
+			"1. Switch the glasses to their side-by-side (SBS) mode before starting CRT XR.",
+			"2. On your normal monitor, choose the glasses' display and select Open glasses view.",
+			"## Head tracking",
+			"- VITURE: put the VITURE Windows SDK in a folder named sdk beside CRT-XR.exe.",
+			"- Other glasses: use a tool that sends OpenTrack, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo), then choose Controls & XR → Tracking source → OpenTrack.",
+			"## While playing",
+			"R3 | R :: Recentre the view",
+			"> Turning the wrong way? Invert that axis in Controls & XR.",
+			"!! Fixed view",
+			"There's no tracking yet, so the TV stays still. It's also how CRT XR plays on a normal screen."])
+	return "\n".join([
+		"## Before you start",
+		"Install Decky Loader and its XR Gaming plugin, and check XR Gaming recognises your glasses. CRT XR uses its head tracking.",
+		"## Starting in 3D",
+		"1. Connect the glasses in 2D and start CRT XR from Gaming Mode.",
+		"2. Release the button, then press A. The view goes dark.",
+		"3. Press the glasses' SBS button. Your room appears when they're ready.",
+		"> Glasses the XR driver can switch go into SBS by themselves, and back to 2D when you leave.",
+		"## Leaving",
+		"1. Choose Exit. The TV switches off.",
+		"2. Press the glasses' SBS button to go back to 2D. CRT XR closes when they do.",
+		"## While playing",
+		"R3 :: Recentre the view",
+		"> Turning the wrong way? Invert that axis in Controls & XR.",
+		"## Your glasses",
+		"CRT XR recognises VITURE, XREAL, Rokid and RayNeo displays. Only the VITURE Pro 2 has been tested.",
+		"!! Fixed view",
+		"There's no tracking yet, so the TV stays still. Check XR Gaming sees the glasses, then use Controls & XR → Connect glasses."])
 
 func state_action(saving: bool) -> void:
 	if not saving:

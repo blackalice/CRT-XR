@@ -3,7 +3,7 @@ from pathlib import Path
 import concurrent.futures, json, os, re, subprocess, tempfile, time, sys
 ROOT=Path(__file__).resolve().parents[1]
 GODOT=os.environ.get("GODOT_BIN") or str(ROOT/"tools/godot/Godot_v4.5.1-stable_win64_console.exe")
-TESTS="smoke emulation multicore gamepad controller_menu menu_navigation menu_improvements menu_layout stereo_menu picture_controls picture_pipeline preferences_startup rom_locations rom_index library_cards play_qol share_and_defaults showcase_defaults music_albums music_resume tv_audio tv_power_on console_prop room_contacts user_data_migration pose_prediction display_probe startup_brand windows_setup video video_menu ffmpeg_installer opentrack_tracking menu_depth room_presets box_art archives tv_atmosphere sbs_auto_switch".split()
+TESTS="smoke emulation multicore gamepad controller_menu menu_navigation menu_improvements menu_layout stereo_menu picture_controls picture_pipeline preferences_startup rom_locations rom_index library_cards play_qol share_and_defaults showcase_defaults music_albums music_resume tv_audio tv_power_on console_prop room_contacts user_data_migration pose_prediction display_probe startup_brand windows_setup video video_menu ffmpeg_installer opentrack_tracking menu_depth room_presets box_art archives tv_atmosphere sbs_auto_switch help_article".split()
 OUT=ROOT/"build/beta-review";OUT.mkdir(parents=True,exist_ok=True)
 def run(name):
     isolated=tempfile.mkdtemp(prefix=name+"-",dir=OUT)

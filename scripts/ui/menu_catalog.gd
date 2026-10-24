@@ -2,6 +2,33 @@ extends RefCounted
 ## Explicit ordered rows and stable IDs; bindings reuse the application's
 ## existing actions and preferences rather than a second settings store.
 const VideoSession = preload("res://scripts/video/video_session.gd")
+## Help pages, in the help page markup (scripts/ui/help_article.gd): the
+## controller button first, then its keyboard key.
+const CONTROLS_GUIDE := """## Anywhere
+L1 + R1 + Start | Escape :: Open or close the menu
+R3 | R :: Recentre the view
+## In the menu
+D-pad | Arrows :: Move
+A | Enter :: Select
+B | Backspace :: Back
+L1 / R1 | Q / E :: Change category
+L2 / R2 | Z / C :: Change section
+Y :: Reset an option to its default
+X :: Preview the picture"""
+const TROUBLESHOOTING_GUIDE := """!! Tracking unavailable
+Retry the glasses in Controls & XR → Tracking, or choose Fixed view.
+
+!! Double image
+Match the glasses' SBS mode with View → Display.
+
+!! Missing games
+Check Library locations. Games can be plain files or ZIPs for a supported console. Sega CD discs can be .cue/.bin, or CHD in a Sega CD folder. 7z and RAR aren't supported.
+
+!! No radio
+Use a direct MP3 stream URL.
+
+!! Save failed
+Check free space and the save folder's permissions."""
 var host: Node
 var menu: Control
 
@@ -240,9 +267,9 @@ func pages(category: int) -> Array:
 			return [page("About & Help",[
 				action("system.version","CRT XR",func(): menu.notify("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))),"A little CRT room for your XR glasses.",false,str(ProjectSettings.get_setting("application/config/version"))),
 				action("system.glasses","Using glasses",func(): menu.open_help("Using glasses",menu.play.glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),
-				action("system.device","Device status",func(): menu.open_help("Device status",menu.status_title+"\n\n"+menu.status_detail),"Current display and tracking status."),
-				action("system.controls","Controls",func(): menu.open_help("Controls","Menu: L1 + R1 + Start / Escape. Recenter: R3 / R. Navigate: D-pad / arrows. Select: A / Enter. Back: B / Backspace. Categories: L1 / R1 (Q / E); sections: L2 / R2 (Z / C). Reset option: Y. Picture preview: X."),"Controller and keyboard shortcuts."),
-				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting","Tracking unavailable? Retry glasses in Controls & XR → Tracking, or choose fixed view. Double image? Match the glasses’ SBS mode with View → Display. Missing games? Check Library locations. Games can be plain files or ZIPs for a supported console; Sega CD discs can be .cue/.bin or CHD in a Sega CD folder. No radio? Use a direct MP3 stream URL. Save failed? Check free space and folder permissions."),"Help with glasses, games, audio and saving."),
+				action("system.device","Device status",func(): menu.open_help("Device status","!! "+menu.status_title+"\n"+menu.status_detail),"Current display and tracking status."),
+				action("system.controls","Controls",func(): menu.open_help("Controls",CONTROLS_GUIDE),"Controller and keyboard shortcuts."),
+				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting",TROUBLESHOOTING_GUIDE),"Help with glasses, games, audio and saving."),
 				action("system.credits","Credits & licences",func(): menu.open_help("Credits & licences",FileAccess.get_file_as_string("res://THIRD_PARTY.md")),"Godot, libretro, and the artists and developers behind CRT XR."),
 				action("system.diagnostics","Copy diagnostics",func():
 					DisplayServer.clipboard_set("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))+" | "+OS.get_name()+" | Godot "+str(Engine.get_version_info().string)+" | "+DisplayServer.get_name()); menu.notify("Version and platform details copied; no ROM or music paths included."),"Copies version/platform information for a bug report."),
