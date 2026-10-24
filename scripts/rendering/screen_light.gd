@@ -8,17 +8,23 @@ const RECEIVER_LAYER := 2
 const Pipeline = preload("res://scripts/rendering/picture_pipeline.gd")
 const SAMPLE_PERIOD := 1.0 / 20.0
 const RESPONSE_SECONDS := 0.055
-## Light at full glow for a picture of average radiance 1. Radiance is shaped by
-## GLOW_CURVE first: dark scenes stay dark and white screens don't flare, while a
-## typical game picture lights the casing, table and props in its own colours.
-const GLOW_ENERGY := 24.0
-const GLOW_CURVE := 0.7
+## Light at full glow for a picture of average radiance 1, in proportion to the
+## picture's light as a real screen's is: a small logo on black lights the room
+## faintly, a bright game picture clearly. (A softer curve lifted dark pictures
+## until a green logo turned the whole set green.)
+const GLOW_ENERGY := 16.0
+## The bloom is steeper still: only bright pictures bloom.
 const BLOOM_CURVE := 1.4
 ## Reach in metres (scaled with the set) and a soft falloff, like a large panel.
 const GLOW_RANGE := 3.0
 const GLOW_FALLOFF := 1.0
 ## How far each light leans towards its own half rather than the whole picture.
 const SIDE_BIAS := 0.7
+## The lights sit on the tube's face (see _ready).
+const LIGHT_DEPTH := 0.0
+## The picture's light bounced back off the room: a faint fill in its colour
+## on everything, the TV's own front included, added to the room's ambient.
+const BOUNCE := 1.0
 var lights: Array[OmniLight3D] = []
 ## 0 (off) to 1 (a dark room lit by the TV alone).
 var strength := 0.5
@@ -26,6 +32,10 @@ var strength := 0.5
 ## already scaled down for a lit room; it shares this light's picture samples.
 var halo: MeshInstance3D
 var bloom := 0.0
+## The room's own ambient light, before the bounce is added to it.
+var room: Environment
+var room_colour := Color.BLACK
+var room_energy := 0.0
 var power_level := 1.0
 var grading: Dictionary = {}
 var picture_area := 0.8
@@ -49,10 +59,13 @@ func _ready() -> void:
 	calibration.fill(Color(.40,.44,.47))
 	for x in [-0.34, 0.34]:
 		var light := OmniLight3D.new()
-		# Slightly ahead of the faceplate: approximates the curved emitting tube
-		# and its diffuse bounce into the inset bezel. Deliberately no specular
-		# point highlight, which would expose this as two tiny bulbs.
-		light.position = Vector3(x, 0.035, 0.30)
+		# On the tube's face, where the light comes from: the inset bezel's walls
+		# and the tabletop face it, while the casing's front and the table's
+		# rails and legs face away, as they do from a real screen. (Further
+		# forward, the lights lit the TV's own front and, with no shadows, the
+		# table's underside.) Deliberately no specular point highlight, which
+		# would expose this as two tiny bulbs.
+		light.position = Vector3(x, 0.035, LIGHT_DEPTH)
 		light.omni_range = GLOW_RANGE
 		light.omni_attenuation = GLOW_FALLOFF
 		light.light_specular = 0.0
@@ -75,6 +88,12 @@ func set_strength(value: float) -> void:
 			light.light_energy = 0.0
 			light.hide()
 	_follow_picture()
+	_show_bounce()
+
+## The room's ambient light; the picture's bounce is added on top.
+func set_room_ambient(colour: Color, energy: float) -> void:
+	room_colour = colour; room_energy = energy
+	_show_bounce()
 
 func set_bloom(value: float) -> void:
 	bloom = clampf(value, 0.0, 1.0)
@@ -147,6 +166,7 @@ func _process(delta: float) -> void:
 	if (side_current[0] - applied[0]).length() + (side_current[1] - applied[1]).length() < 0.0005 and scales == applied_scale and bloom == applied_bloom: return
 	applied = side_current.duplicate(); applied_scale = scales; applied_bloom = bloom
 	_show_halo()
+	_show_bounce()
 	if strength <= 0.0: return
 	for side in range(2):
 		var light := lights[side]
@@ -159,7 +179,7 @@ func _process(delta: float) -> void:
 
 ## Light from a picture of this peak radiance at full glow.
 static func glow_energy(peak: float) -> float:
-	return GLOW_ENERGY * pow(maxf(peak, 0.0), GLOW_CURVE)
+	return GLOW_ENERGY * maxf(peak, 0.0)
 
 ## The bloom takes each half's colour. Its steeper curve keeps it for bright
 ## pictures: a dark scene barely blooms, a white or sky-blue one clearly does.
@@ -175,3 +195,11 @@ func _show_halo() -> void:
 		var peak := maxf(radiance.x, maxf(radiance.y, radiance.z))
 		var shaped := radiance / maxf(peak, 0.00001) * pow(peak, BLOOM_CURVE)
 		material.set_shader_parameter("left_colour" if side == 0 else "right_colour", shaped)
+
+func _show_bounce() -> void:
+	if room == null: return
+	var bounce := (side_current[0] + side_current[1]) * 0.5 * BOUNCE * strength * power_level
+	var total := Vector3(room_colour.r, room_colour.g, room_colour.b) * room_energy + bounce
+	var peak := maxf(total.x, maxf(total.y, total.z))
+	room.ambient_light_energy = peak
+	if peak > 0.0: room.ambient_light_color = Color(total.x / peak, total.y / peak, total.z / peak)

@@ -117,8 +117,10 @@ func build(signal_texture: Texture2D) -> void:
 	television.add_child(screen_light)
 	# Only the cabinet, furniture and floor receive these lights. Picture/glass
 	# are built afterwards and keep their self-lit appearance.
+	# Not what sits under the tabletop: the screen light has no shadows, so it
+	# would shine through the table onto the lower shelf and the VCR.
 	for part in television.find_children("*", "MeshInstance3D", true, false):
-		if not part.has_meta("contact_patch"): part.layers |= screen_light.RECEIVER_LAYER
+		if not part.has_meta("contact_patch") and part.name not in ["LowerShelf", "VideoRecorder"]: part.layers |= screen_light.RECEIVER_LAYER
 	floor_node.layers |= screen_light.RECEIVER_LAYER
 	screen_light.set_strength(spill_strength)
 	_build_lighting()
@@ -320,8 +322,8 @@ func _apply_lighting() -> void:
 		var now := Time.get_time_dict_from_system()
 		mood = time_of_day(float(now.hour) + float(now.minute) / 60.0)
 	var warm := clampf(warmth + mood[2], 0.0, 1.0)
-	room_environment.ambient_light_energy = ambient * mood[0]
-	room_environment.ambient_light_color = Color("b1c3db").lerp(Color("e9d6b6"), warm)
+	screen_light.room = room_environment
+	screen_light.set_room_ambient(Color("b1c3db").lerp(Color("e9d6b6"), warm), ambient * mood[0])
 	key_light.light_energy = key_energy * mood[1]
 	fill_light.light_energy = fill_energy * mood[1]
 	key_light.light_color = Color.WHITE.lerp(Color("ffd29b"), warm)

@@ -33,8 +33,9 @@ void fragment() {
 	vec2 q = abs(p) - screen_half + vec2(corner);
 	float outside = length(max(q, vec2(0.0))) + min(max(q.x, q.y), 0.0) - corner;
 	float d = max(outside, 0.0) / reach;
-	// A bright inner rim and a soft tail.
-	float glow = exp(-d * 4.0) * 0.6 + exp(-d * 1.5) * 0.4;
+	// A bright inner rim and a short tail, gone well before the casing's edge
+	// so the bloom never shows an outline where it stops.
+	float glow = (exp(-d * 4.0) * 0.7 + exp(-d * 2.5) * 0.3) * (1.0 - smoothstep(0.5, 1.0, d));
 	// Ends a little inside the casing's edge.
 	vec2 c = abs(p - casing_centre) - casing_half + vec2(casing_corner);
 	float inside_casing = -(length(max(c, vec2(0.0))) + min(max(c.x, c.y), 0.0) - casing_corner);

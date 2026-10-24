@@ -124,6 +124,9 @@ func _ready() -> void:
 	heading.add_theme_font_size_override("font_size",32)
 	MenuSkin.weigh(heading,MenuSkin.BOLD)
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	# A long game title shortens with an ellipsis instead of widening the panel
+	# past its edge (with the Deck's battery beside it, it did).
+	heading.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	top.add_child(heading)
 	back_button = Button.new(); back_button.text = "Back  [B]"
 	back_button.focus_mode = Control.FOCUS_NONE

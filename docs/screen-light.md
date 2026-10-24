@@ -43,8 +43,11 @@ No Steam Deck connection, transfer or hardware performance claim was made.
 ## Tuning and limitations
 
 Room > Screen glow (0 = off): default 0.5, maximum 1.0 (a room lit by the TV
-alone, as in the Lights off mood). Energy is 24 × radiance^0.7 × glow per light,
-reaching 3 m with a soft falloff; each light follows its half of the picture.
+alone, as in the Lights off mood). Energy is 16 × radiance × glow per light, in
+proportion to the picture's light, reaching 3 m with a soft falloff; each light
+follows its half of the picture. The picture's bounce (radiance × glow) is added
+to the room's ambient light (`set_room_ambient`), so surfaces that face away
+from the lights take a faint fill in the picture's colour.
 Values saved on the old 0–0.4 scale migrate once (0.4 becomes 0.5). Existing saved zero stays off; focus the slider and
 press Y to restore the default. The legacy `crt/screen_spill` global preference
 migrates to `room/spill_strength`, keeping this separate from per-game picture
@@ -59,6 +62,8 @@ a steeper curve (radiance^1.4) and a level of bloom × the room's darkness × po
 the bloom is on.
 
 This is a diffuse area-source approximation, not ray-traced indirect lighting.
-The sources sit slightly ahead of the curved glass to light the inset bezel.
-They do not cast occlusion shadows or provide a mirror reflection of the tube;
-recessed/hidden surfaces can receive some light. Keep the strength subtle.
+The sources sit on the tube's face (`LIGHT_DEPTH`). Further forward they lit the
+TV's own front and, with no shadows, the table's rails and the shelf beneath it.
+They do not cast occlusion shadows or provide a mirror reflection of the tube,
+so the lower shelf and VCR are excluded from the receiver mask; the floor under
+the table can still receive some light. Keep the strength subtle.

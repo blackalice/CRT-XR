@@ -198,13 +198,21 @@ The self-lit game picture keeps its contrast as the surroundings fade.
 **Screen glow** (Room → Materials; 0 = off, 1 = a dark room lit by the TV
 alone) uses two native, shadowless lights instead of an additive cabinet
 overlay. Each takes the colour of its own half of the picture (leaning 70%
-towards its side), so a red left side tints the left of the set. Light follows
-the picture's average linear radiance through a soft curve (radiance^0.7), so
-dark scenes stay dark and a white screen lights the room strongly without
-washing out the casing; it reaches 3 m with a gentle falloff. Settings saved
+towards its side), so a red left side tints the left of the set. Light is in
+proportion to the picture's average linear radiance (energy 16 × radiance at
+full glow), so a small logo on black lights the room faintly and a bright game
+picture clearly; it reaches 3 m with a gentle falloff. The lights sit on the
+tube's face, where the light comes from: the tabletop, the props beside the set
+and the bezel's inset walls face them, while the casing's own front and the
+table's rails and legs face away, as they do from a real screen. They have no
+shadows, so the lower shelf and the VCR, under the tabletop, are left out of
+them rather than lit through it. The picture's light also bounces back off the
+room: a faint fill in its colour is added to the room's ambient light, so the
+casing's front and the darker corners take the picture's colour softly
+instead of going black. Settings saved
 before this rescale (`room/lighting_version` below 2) map the old 0–0.4 range
-so the old maximum, the previous default, becomes the new default of 0.5. It illuminates the inset bezel, furniture and
-nearby floor using their existing materials and normals. Point specular
+so the old maximum, the previous default, becomes the new default of 0.5. It
+uses the furniture's and floor's existing materials and normals. Point specular
 highlights are disabled so the approximation does not look like two bulbs.
 The lights move with the TV and their reach follows its scale. Picture and
 glass are excluded from the receiver mask; the existing distance fade remains.
@@ -212,9 +220,9 @@ glass are excluded from the receiver mask; the existing distance fade remains.
 **Screen bloom in the dark** (Room → Materials; default 0.5, 0 = off) is the
 soft halo your eyes see around a bright tube in a dark room. It is a single
 additive quad just in front of the casing's face (`shaders/screen_halo.gdshader`):
-clear over the picture, brightest at the tube's edge and fading across the
-bezel, stopping inside the casing's own outline so it never haloes the black
-room beyond. It takes the colours of the picture's left and right halves from
+clear over the picture, brightest at the tube's edge and fading out within
+about 12 cm, well inside the casing's outline, so it never shows an edge or
+haloes the black room beyond. It takes the colours of the picture's left and right halves from
 the screen glow's samples (no extra sampling), through a steeper curve
 (radiance^1.4) so dark scenes barely bloom and bright ones clearly do. It
 scales with the room's darkness: full with the room lights off, most of it in

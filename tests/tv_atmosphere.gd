@@ -117,11 +117,11 @@ func run() -> void:
 	check(noon[2] < 0.0 and evening[2] > 0.0, "Cooler by day, warmer in the evening")
 	check(is_equal_approx(World.time_of_day(0.0)[0], World.time_of_day(24.0)[0]), "Midnight is the same either side")
 	world.follow_clock = false; world.apply_room_settings()
-	check(is_equal_approx(world.room_environment.ambient_light_energy, world.ambient), "Off, the room uses your lighting exactly")
+	check(is_equal_approx(world.screen_light.room_energy, world.ambient), "Off, the room uses your lighting exactly")
 	world.follow_clock = true; world.apply_room_settings()
 	var now := Time.get_time_dict_from_system()
 	var mood: Array = World.time_of_day(float(now.hour) + float(now.minute) / 60.0)
-	check(is_equal_approx(world.room_environment.ambient_light_energy, world.ambient * mood[0]), "On, the room shifts around your lighting by the hour")
+	check(is_equal_approx(world.screen_light.room_energy, world.ambient * mood[0]), "On, the room shifts around your lighting by the hour")
 
 	world.follow_clock = false
 
@@ -137,7 +137,16 @@ func run() -> void:
 	check(light.bloom == 0.0 and not light.halo.visible, "Bloom can be switched off")
 	world.screen_bloom = 0.5; world.set_spill_strength(0.0); world.apply_room_settings()
 	check(light.is_processing() and light.lights[0].light_energy == 0.0, "With the glow off the bloom still follows the picture")
-	world.set_spill_strength(0.5); world.follow_clock = true
+	world.set_spill_strength(0.5)
+	# The picture's bounce: a faint fill in its colour, on top of the room's own.
+	var white := Image.create(64, 48, false, Image.FORMAT_RGB8); white.fill(Color.WHITE)
+	light.set_image(white); light.power_level = 1.0 # the TV is on
+	for i in range(30): light._process(1.0 / 30.0)
+	check(world.room_environment.ambient_light_energy > light.room_energy + 0.1, "A bright picture adds its bounce to the room's ambient light")
+	for part in ["LowerShelf", "VideoRecorder"]:
+		var node: Node = world.television.find_child(part, true, false)
+		check(node != null and not (node.layers & light.RECEIVER_LAYER), part + " under the tabletop is not lit through it")
+	world.follow_clock = true
 
 	# Settings round-trip, and they belong to the room (presets save them).
 	world.show_game_cover = false; world.screen_bloom = 0.8
@@ -150,6 +159,11 @@ func run() -> void:
 	check(is_equal_approx(world.screen_bloom, 0.8), "Screen bloom is saved")
 	check(effects.channel_change and effects.power_off_effect, "The channel change and power-off settings are saved")
 	check(app.rooms.room_only().get_value("room", "ambience") == 3, "Room presets include the room sound")
+	# A long game title with the battery beside it must not widen the menu.
+	app.menu.heading.text = "Donkey Kong Country (Europe) (En,Fr,De) (Rev 1) - an even longer title"
+	app.menu.status_line.label.text = "76% · 14:04"
+	var header: Control = app.menu.heading.get_parent()
+	check(header.get_combined_minimum_size().x <= app.menu.size.x, "A long title shortens instead of widening the menu")
 	app.menu.open_settings(); app.menu.category = 3
 	var titles: Array = app.menu.catalog.pages(3).map(func(page): return page.title)
 	check("Sound" in titles, "Room has a Sound page")

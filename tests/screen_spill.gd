@@ -58,7 +58,10 @@ func run():
 	view.add_child(camera)
 	patch = MeshInstance3D.new()
 	patch.mesh = QuadMesh.new()
-	patch.position = Vector3(.72,0,.06)
+	# Like the bezel's inset wall or a prop beside the set: in front of the
+	# tube's face, turned towards it (the lights sit on the face itself).
+	patch.position = Vector3(.72,0,.3)
+	patch.rotation.y = deg_to_rad(-60)
 	patch.layers = Light.RECEIVER_LAYER
 	material = StandardMaterial3D.new()
 	material.albedo_color = Color(.3,.3,.3)
@@ -88,7 +91,8 @@ func run():
 	half.fill(Color.RED); half.fill_rect(Rect2i(128,0,128,240),Color.BLUE)
 	var sides: Array[Vector3] = Light.half_radiance(half,settings)
 	check(sides[0].x > .99 and sides[0].z < .01 and sides[1].z > .99 and sides[1].x < .01,"Each light sees its own half: red left, blue right")
-	check(Light.glow_energy(0.0) == 0.0 and Light.glow_energy(0.5) < Light.glow_energy(0.1) * 5.0 * 0.7,"Dark stays dark, and a white screen doesn't flare (soft curve)")
+	check(Light.glow_energy(0.0) == 0.0 and is_equal_approx(Light.glow_energy(0.05), Light.glow_energy(1.0) * 0.05),"Light is in proportion to the picture's: a dim logo on black stays dim")
+	check(light.lights.all(func(l): return is_equal_approx(l.position.z, Light.LIGHT_DEPTH)) and Light.LIGHT_DEPTH <= 0.06, "The lights sit on the tube's face, so the casing's front and the table's underside face away")
 	var dim := Light.average_radiance(image(Color(.5,.5,.5)),settings)
 	check(dim.x < .23 and dim.x > .20,"Display gamma is applied before light averaging")
 	settings.brightness = .5
@@ -102,7 +106,7 @@ func run():
 	camera.position.x = 4.5
 	var distant := await settle(Color.WHITE)
 	check(distant.r < .01,"Light stays local to the TV")
-	patch.position = Vector3(.72,0,.06)
+	patch.position = Vector3(.72,0,.3)
 	camera.position.x = .72
 	light.set_strength(0)
 	var count: int = light.sample_count
