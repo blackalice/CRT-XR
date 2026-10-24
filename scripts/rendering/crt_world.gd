@@ -149,17 +149,24 @@ func build(signal_texture: Texture2D) -> void:
 
 func _build_halo() -> void:
 	var size := Vector2(float(imported_screen.width), float(imported_screen.height)) if not imported_screen.is_empty() else Vector2(1.32, 0.99)
-	var reach := 0.24
+	var cabinet: AABB = imported_screen.cabinet_bounds if not imported_screen.is_empty() else AABB(Vector3(-0.85, -0.635, -0.78), Vector3(1.70, 1.27, 0.8325))
+	var anchor := Vector2(ImportedCRT.SCREEN_ANCHOR.x, ImportedCRT.SCREEN_ANCHOR.y)
+	var casing_centre := Vector2(cabinet.get_center().x, cabinet.get_center().y) - anchor
+	var casing_half := Vector2(cabinet.size.x, cabinet.size.y) * 0.5
+	# The quad covers the casing's face, centred on the picture.
+	var quad_half := casing_centre.abs() + casing_half
 	var halo := MeshInstance3D.new()
 	halo.name = "ScreenHalo"
 	var quad := QuadMesh.new()
-	quad.size = size + Vector2.ONE * reach * 2.0
+	quad.size = quad_half * 2.0
 	halo.mesh = quad
 	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var material := ShaderMaterial.new()
 	material.shader = load("res://shaders/screen_halo.gdshader")
 	material.set_shader_parameter("screen_half", size * 0.5)
-	material.set_shader_parameter("reach", reach)
+	material.set_shader_parameter("quad_half", quad_half)
+	material.set_shader_parameter("casing_centre", casing_centre)
+	material.set_shader_parameter("casing_half", casing_half)
 	# After the glass, so the bloom adds over everything around the tube.
 	material.render_priority = 2
 	halo.material_override = material

@@ -53,8 +53,8 @@ Increasing screen spill brightens nearby materials, not the image itself.
 Existing distance blackout and the XR floor island stay in effect.
 
 Room > Screen bloom in the dark shares these samples: `ScreenHalo`, an additive
-quad in front of the casing, takes each half's smoothed radiance through the
-same curve and a level of bloom × the room's darkness × power level
+quad masked to the casing's face, takes each half's smoothed radiance through
+a steeper curve (radiance^1.4) and a level of bloom × the room's darkness × power level
 (`CRTWorld.room_darkness`). The light keeps sampling while either the glow or
 the bloom is on.
 

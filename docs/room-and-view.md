@@ -212,9 +212,11 @@ glass are excluded from the receiver mask; the existing distance fade remains.
 **Screen bloom in the dark** (Room → Materials; default 0.5, 0 = off) is the
 soft halo your eyes see around a bright tube in a dark room. It is a single
 additive quad just in front of the casing's face (`shaders/screen_halo.gdshader`):
-clear over the picture, brightest at the tube's edge and fading out about
-24 cm beyond it, in the colours of the picture's left and right halves (the
-same samples and curve as the screen glow, so it costs no extra sampling). It
+clear over the picture, brightest at the tube's edge and fading across the
+bezel, stopping inside the casing's own outline so it never haloes the black
+room beyond. It takes the colours of the picture's left and right halves from
+the screen glow's samples (no extra sampling), through a steeper curve
+(radiance^1.4) so dark scenes barely bloom and bright ones clearly do. It
 scales with the room's darkness: full with the room lights off, most of it in
 Late night, little in Dim XR and none in brighter rooms or by day when the
 room follows the clock. It fades out when seen from a steep angle and goes dark

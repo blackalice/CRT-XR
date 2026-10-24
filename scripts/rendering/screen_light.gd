@@ -13,6 +13,7 @@ const RESPONSE_SECONDS := 0.055
 ## typical game picture lights the casing, table and props in its own colours.
 const GLOW_ENERGY := 24.0
 const GLOW_CURVE := 0.7
+const BLOOM_CURVE := 1.4
 ## Reach in metres (scaled with the set) and a soft falloff, like a large panel.
 const GLOW_RANGE := 3.0
 const GLOW_FALLOFF := 1.0
@@ -160,7 +161,8 @@ func _process(delta: float) -> void:
 static func glow_energy(peak: float) -> float:
 	return GLOW_ENERGY * pow(maxf(peak, 0.0), GLOW_CURVE)
 
-## The bloom takes each half's colour, shaped by the same curve as the glow.
+## The bloom takes each half's colour. Its steeper curve keeps it for bright
+## pictures: a dark scene barely blooms, a white or sky-blue one clearly does.
 func _show_halo() -> void:
 	if halo == null: return
 	var level := bloom * power_level
@@ -171,5 +173,5 @@ func _show_halo() -> void:
 	for side in range(2):
 		var radiance: Vector3 = side_current[side]
 		var peak := maxf(radiance.x, maxf(radiance.y, radiance.z))
-		var shaped := radiance / maxf(peak, 0.00001) * pow(peak, GLOW_CURVE)
+		var shaped := radiance / maxf(peak, 0.00001) * pow(peak, BLOOM_CURVE)
 		material.set_shader_parameter("left_colour" if side == 0 else "right_colour", shaped)
