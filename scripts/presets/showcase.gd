@@ -40,7 +40,12 @@ const ROOM := {
 	"show_clock_radio": true,
 	"clock_24_hour": false,
 	"show_vcr": true,
-	"show_game_boxes": true
+	"show_game_boxes": true,
+	"show_game_cover": true,
+	"follow_clock": false,
+	"ambience": 0,
+	"ambience_level": 0.5,
+	"crt_whine": false
 }
 const PICTURE := {
 	"width": 1.0,
@@ -69,7 +74,9 @@ const AUDIO := {
 }
 const ATMOSPHERE := {
 	"power_on": true,
-	"power_sound": 0.6
+	"power_sound": 0.6,
+	"channel_change": true,
+	"power_off": true
 }
 const CONNECTION := 2
 const PER_GAME_PICTURE := false

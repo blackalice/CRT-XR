@@ -69,6 +69,9 @@ var emulator: Node
 var video: Node
 var music: Node
 var power_on: Node
+## Channel changes, degauss and power-off (scripts/rendering/tv_effects.gd).
+var tv_effects: Node
+var exiting := false
 var signal_view: SubViewport
 var was_paused_before_menu := false
 var provider: TrackingProvider = Simulated.new()
@@ -85,6 +88,8 @@ var height_offset: float = Showcase.VIEW.height_offset
 var right_stick_distance: bool = Showcase.VIEW.right_stick_distance
 var distance_speed: float = Showcase.VIEW.distance_speed
 var distance_save_delay := -1.0
+## Room settings that are on or off, besides shadows.
+const ROOM_SWITCHES := ["show_clock_radio", "clock_24_hour", "show_vcr", "show_game_boxes", "show_game_cover", "follow_clock", "crt_whine"]
 const ROOM_FIELDS := [
 	["spill_strength", "Screen light spill (0 = off)", 0.0, 0.4, 0.02],
 	["ambient", "Ambient fill", 0.0, 1.5, 0.05],
@@ -332,6 +337,10 @@ func start_application() -> void:
 	power_on=preload("res://scripts/rendering/tv_power_on.gd").new()
 	add_child(power_on)
 	power_on.setup(world.screen_material,world.screen_light,emulator.tv_audio)
+	tv_effects=preload("res://scripts/rendering/tv_effects.gd").new()
+	add_child(tv_effects)
+	tv_effects.setup(world.screen_material,world.screen_light,emulator.tv_audio)
+	tv_effects.power_on=power_on
 	Input.joy_connection_changed.connect(func(device, connected):
 		if not connected:
 			emulator.gamepad.disconnect_device(device)
@@ -345,6 +354,7 @@ func start_application() -> void:
 	emulator.frame_presented.connect(world.screen_light.set_image)
 	emulator.frame_presented.connect(world.picture.frame_presented)
 	emulator.game_changed.connect(func(active):
+		show_game_cover(emulator.rom_path if active else "")
 		change_game_preferences(active)
 		show_programme(active, emulator.fps, emulator.display_aspect)
 		if active:
@@ -412,6 +422,8 @@ func start_application() -> void:
 	box_art = preload("res://scripts/content/box_art.gd").new()
 	box_art.name = "BoxArt"
 	add_child(box_art)
+	box_art.cover_ready.connect(func(rom_path, texture):
+		if emulator.loaded and emulator.rom_path == rom_path: world.set_game_cover(texture))
 	build_settings()
 	music.restore_resume()
 	for panel in panels:
@@ -467,6 +479,9 @@ func apply_settings(config: ConfigFile) -> void:
 	power_on.sound_level=float(config.get_value("atmosphere","power_sound",0.60))
 	power_on.reduced_motion=menu_reduced_motion
 	power_on.apply()
+	tv_effects.channel_change=bool(config.get_value("atmosphere","channel_change",true))
+	tv_effects.power_off_effect=bool(config.get_value("atmosphere","power_off",true))
+	tv_effects.reduced_motion=menu_reduced_motion
 	for key in emulator.tv_audio.DEFAULTS:
 		emulator.tv_audio.set(key,config.get_value("audio",key,emulator.tv_audio.DEFAULTS[key]))
 	emulator.tv_audio.apply()
@@ -476,8 +491,10 @@ func apply_settings(config: ConfigFile) -> void:
 		world.set(setting[0], clampf(config.get_value("room", setting[0], world.get(setting[0])), setting[2], setting[3]))
 	world.shadows = bool(config.get_value("room", "shadows", true))
 	world.floor_style = clampi(int(config.get_value("room", "floor_style", Showcase.ROOM.floor_style)), 0, world.FLOOR_STYLES.size() - 1)
-	for key in ["show_clock_radio", "clock_24_hour", "show_vcr", "show_game_boxes"]:
+	for key in ROOM_SWITCHES:
 		world.set(key, bool(config.get_value("room", key, Showcase.ROOM[key])))
+	world.ambience = clampi(int(config.get_value("room", "ambience", Showcase.ROOM.ambience)), 0, world.room_sound.CHOICES.size() - 1)
+	world.ambience_level = clampf(float(config.get_value("room", "ambience_level", Showcase.ROOM.ambience_level)), 0.0, 1.0)
 	var preview_depth = config.get_value("emulation", "run_ahead", 1)
 	emulator.run_ahead = clampi(int(preview_depth), 0, 2)
 	emulator.set_separate_preview(bool(config.get_value("emulation", "separate_preview", true)))
@@ -736,6 +753,10 @@ func request_exit() -> void:
 		if not settings_panel.visible: toggle_settings()
 		menu.show_error("Could not save before exiting. Check free space and save-folder permissions, then try Exit again.")
 		return
+	# The tube switches off before the window closes, once.
+	if exiting: return
+	exiting = true
+	if tv_effects.play("power_off"): await tv_effects.finished
 	get_tree().quit()
 
 func _exit_tree() -> void:
@@ -805,6 +826,19 @@ func close_settings() -> void:
 	if video.loaded and not video.ended: video.set_paused(was_paused_before_menu, true)
 	if not is_instance_valid(sbs_prompt): power_on.begin()
 
+## Degauss: closes the menu so the wobble and colour swirl show on the picture.
+func degauss() -> void:
+	close_settings()
+	if not settings_panel.visible: tv_effects.play("degauss")
+
+## The playing game's cover on the box beside the TV; "" puts the box's own print back.
+func show_game_cover(rom_path: String) -> void:
+	world.set_game_cover(null)
+	if rom_path.is_empty(): return
+	box_art.set_root(default_rom_dir)
+	var cover: Texture2D = box_art.cover(rom_path)
+	if cover != null: world.set_game_cover(cover)
+
 func preview_power_on() -> void:
 	var already_started: bool = power_on.started
 	close_settings()
@@ -819,6 +853,8 @@ func show_programme(active: bool, rate: float, aspect: float) -> void:
 	pattern.visible = not active
 	pattern.set_process(not active)
 	signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active else SubViewport.UPDATE_ALWAYS
+	# Switching programmes is a channel change; the first is the power-on instead.
+	if active and power_on.progress >= 1.0: tv_effects.play("channel")
 	if active:
 		world.picture.source_rate = rate
 		world.picture.source_aspect = aspect
@@ -1121,6 +1157,7 @@ func reset_all_options() -> void:
 	menu_depth = true
 	haptic_strength = 0.8
 	power_on.enabled=true; power_on.sound_level=.60; power_on.reduced_motion=false; power_on.apply()
+	tv_effects.channel_change=true; tv_effects.power_off_effect=true; tv_effects.reduced_motion=false
 	rebuild_settings()
 	show_notice("All settings reset to defaults")
 
@@ -1246,6 +1283,8 @@ func capture_settings() -> ConfigFile:
 	for key in music.DEFAULTS: config.set_value("music",key,music.get(key))
 	config.set_value("atmosphere","power_on",power_on.enabled)
 	config.set_value("atmosphere","power_sound",power_on.sound_level)
+	config.set_value("atmosphere","channel_change",tv_effects.channel_change)
+	config.set_value("atmosphere","power_off",tv_effects.power_off_effect)
 	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
@@ -1257,7 +1296,9 @@ func capture_settings() -> ConfigFile:
 	for setting in ROOM_FIELDS: config.set_value("room", setting[0], world.get(setting[0]))
 	config.set_value("room", "shadows", world.shadows)
 	config.set_value("room", "floor_style", world.floor_style)
-	for key in ["show_clock_radio", "clock_24_hour", "show_vcr", "show_game_boxes"]:
+	config.set_value("room", "ambience", world.ambience)
+	config.set_value("room", "ambience_level", world.ambience_level)
+	for key in ROOM_SWITCHES:
 		config.set_value("room", key, world.get(key))
 	for pair in [["distance", distance], ["height_offset", height_offset], ["scale", tv_scale], ["ipd", ipd], ["convergence", convergence], ["edge_fade", edge_fade], ["vertical_fov", vertical_fov], ["smoothing", smoothing], ["motion_predict", motion_predict]]:
 		config.set_value("view", pair[0], pair[1])

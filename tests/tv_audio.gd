@@ -33,7 +33,7 @@ func run():
 	audio.reset_defaults(); app.apply_settings(config)
 	check(audio.room_amount==.12 and audio.speaker_character==.55 and audio.directional_strength==.8,"Global audio controls round-trip through preferences")
 	app.menu.open_settings(); app.menu.category=2; app.menu.subsection=0; app.menu.render()
-	check(app.menu.items.size()==9 and app.menu.items[0].id=="music.game_volume" and not app.menu.items.any(func(i):return i.id=="music.duck_game"),"Audio leads with game volume and keeps ducking in its own section")
+	check(app.menu.items.size()==11 and app.menu.items[0].id=="music.game_volume" and not app.menu.items.any(func(i):return i.id=="music.duck_game"),"Audio leads with game volume and keeps ducking in its own section")
 	app.menu.select("audio.room_amount"); app.menu.reset_option()
 	check(is_equal_approx(audio.room_amount,.18),"Y resets only the selected audio setting")
 	app.set_stereo(true)

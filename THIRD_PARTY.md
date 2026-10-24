@@ -130,6 +130,8 @@ source-code licence. See `docs/crt-model-local.md` for asset handling.
 
 The VCR mechanism sounds in `assets/audio/vcr/` are original: synthesised by `scripts/make-vcr-sounds.py` from clicks, thunks, a motor and a modelled plastic cabinet, with no recordings. The generator and its sounds are provided under CC0-1.0.
 
+The TV and room sounds in `assets/audio/tv/` (channel change, degauss, power-off, room tone, rain, clock ticks and the tube whine) are original: synthesised by `scripts/make-tv-sounds.py` from noise, clicks and tones, with no recordings. The generator and its sounds are provided under CC0-1.0.
+
 ## Wide wooden table
 
 "Wood Drawer & Tables Set" by brandon_grey (https://sketchfab.com/brandondmc10),

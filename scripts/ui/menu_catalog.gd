@@ -125,6 +125,7 @@ func pages(category: int) -> Array:
 					w.glass_material.set_shader_parameter("reflection_strength",h.glass_reflections)
 					w.set_curvature(h.screen_curvature)))
 			crt.append_array(picture_fields(w.picture.BEAM_FIELDS))
+			crt.append(action("crt.degauss","Degauss",h.degauss,"Like the button on an old set: closes the menu, then the picture wobbles and swirls with colour as the tube's field clears.",false,""))
 			var fitting := picture_fields(w.picture.FIT_FIELDS)
 			fitting.append(toggle("picture.aspect","Preserve picture shape",w.picture,"keep_aspect",true,"Keeps the whole game or video picture at its intended shape, including handheld proportions. A video's widescreen shape is set by Picture shape.",refresh))
 			fitting.append(toggle("picture.guides","Picture-edge guides",w.picture,"guides",false,"Highlights the game frame edges to check that the full picture is visible.",refresh))
@@ -146,7 +147,7 @@ func pages(category: int) -> Array:
 			var picture_pages := [page("Presets",presets),page("CRT",crt),page("Screen fit",fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
 			return picture_pages
 		3:
-			var groups := {"Lighting":[],"Materials":[],"Placement & fade":[]}
+			var groups := {"Lighting":[],"Materials":[],"Placement":[]}
 			var tips := {
 				"ambient":"Fills darker areas without casting additional shadows.","key_energy":"Brightness of the warm lamp; does not change the game image.",
 				"fill_energy":"Soft front illumination to stop dark plastic losing detail.","warmth":"Balances the room lighting between cooler and warmer tones.",
@@ -157,9 +158,9 @@ func pages(category: int) -> Array:
 				"floor_brightness":"Brightness of the floor.","fade_begin":"Distance where the small room island begins fading to black.","fade_end":"Distance where the surroundings become fully black."}
 			for field in h.ROOM_FIELDS:
 				var key: String = field[0]
-				var group := "Materials" if key in ["cabinet_ao_strength","cabinet_grain_strength","floor_brightness","spill_strength"] else ("Placement & fade" if key in ["lamp_height","lamp_side","fade_begin","fade_end"] else "Lighting")
+				var group := "Materials" if key in ["cabinet_ao_strength","cabinet_grain_strength","floor_brightness","spill_strength"] else ("Placement" if key in ["lamp_height","lamp_side","fade_begin","fade_end"] else "Lighting")
 				groups[group].append({"id":"room."+key,"label":str(field[1]).replace(" (lower = lighter)","").replace(" (0 = off)",""),"kind":"number","min":field[2],"max":field[3],"step":field[4],"default":h.SettingsDefaults.ROOM[key],"visual":true,
-					"unit":"m" if group=="Placement & fade" else ("percent" if key in ["warmth","shadow_strength","cabinet_ao_strength","cabinet_grain_strength","spill_strength"] else "x"),
+					"unit":"m" if group=="Placement" else ("percent" if key in ["warmth","shadow_strength","cabinet_ao_strength","cabinet_grain_strength","spill_strength"] else "x"),
 					"getter":func(): return w.get(key),"setter":func(value): h.set_room_value(key,value),"help":tips.get(key,"Moves the room lamp while the TV stays stationary.")})
 			groups.Lighting.append(toggle("room.shadows","Lamp shadows",w,"shadows",true,"Controls live shadows on unbaked objects. The TV and table keep their soft baked contact shading.",w.apply_room_settings))
 			groups.Materials.push_front({"id":"room.floor_style","label":"Floor","kind":"choice","choices":w.FLOOR_STYLES,"default":h.Showcase.ROOM.floor_style,"visual":true,
@@ -169,13 +170,25 @@ func pages(category: int) -> Array:
 				toggle("room.clock_radio","Clock radio",w,"show_clock_radio",true,"A clock radio beside the TV showing the time on a dim red display. Music plays from its side of the room.",w.apply_room_settings),
 				toggle("room.clock_24_hour","24-hour clock",w,"clock_24_hour",false,"Shows the clock radio and VCR time in 24-hour format.",w.apply_room_settings),
 				toggle("room.vcr","VCR",w,"show_vcr",true,"A video recorder on the shelf under the TV. Its display shows the time, or the tape counter while a video plays.",w.apply_room_settings),
-				toggle("room.game_boxes","Game boxes",w,"show_game_boxes",true,"A small stack of game boxes beside the TV.",w.apply_room_settings)]
+				toggle("room.game_boxes","Game boxes",w,"show_game_boxes",true,"A small stack of game boxes beside the TV.",func(): w.apply_room_settings(); menu.refresh()),
+				toggle("room.game_cover","Your game on the box",w,"show_game_cover",true,"The top box shows the playing game's cover, from your existing scrapes (covers or box2dfront).",w.apply_room_settings)]
+			if not w.show_game_boxes:
+				props[-1].disabled=true; props[-1].disabled_reason="Show the game boxes first."; props[-1].help += " " + props[-1].disabled_reason
+			groups.Lighting.append(toggle("room.follow_clock","Follow the time of day",w,"follow_clock",false,"Brighter and cooler by day, warmer in the evening and dimmer late at night, around your own lighting.",w.apply_room_settings))
+			var ambience_level := number("room.ambience_level","Room sound volume",w,"ambience_level",0,1,.05,h.Showcase.ROOM.ambience_level,"percent","Kept well under the game or video.",w.apply_room_settings,false)
+			if w.ambience==0:
+				ambience_level.disabled=true; ambience_level.disabled_reason="Choose a room sound first."; ambience_level.help += " " + ambience_level.disabled_reason
+			var sound: Array = [{"id":"room.ambience","label":"Room sound","kind":"choice","choices":w.room_sound.CHOICES,"default":h.Showcase.ROOM.ambience,"visual":false,
+				"getter":func(): return w.ambience,"setter":func(value): w.ambience=value; w.apply_room_settings(); menu.refresh(),
+				"help":"Quiet sound for the room around the TV: still air, rain on the window, or rain with a ticking clock."},
+				ambience_level,
+				toggle("room.crt_whine","Tube whine",w,"crt_whine",false,"The high-pitched whine of a CRT's line transformer (15.7 kHz). Very quiet, and many people can't hear it at all.",w.apply_room_settings,false)]
 			var presets: Array = [menu.room_choice("room.preset")]
 			for i in range(h.rooms.COUNT):
 				var index: int = i
 				var state := "✓ Active" if h.rooms.active()=="mine.%d" % index else ("Saved" if h.rooms.saved(index) else "Empty")
 				presets.append(action("room.mine.%d" % index,h.rooms.name(index),func(): menu.open_my_room(index),"Your own room: apply it, save the current room here, rename or delete.",false,state))
-			return [page("Presets",presets),page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Props",props),page("Placement & fade",groups["Placement & fade"])]
+			return [page("Presets",presets),page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Props",props),page("Sound",sound),page("Placement",groups["Placement"])]
 
 		4:
 			var glasses_source: String = "VITURE glasses" if OS.get_name() == "Windows" else "XR Gaming"
@@ -278,9 +291,11 @@ func pages(category: int) -> Array:
 					audio_rows[index].help += " " + audio_rows[index].disabled_reason
 			audio_rows.append(action("audio.preview","Preview sound",audio.preview_sample,"Plays a short sample through the selected sound mode while the game stays paused."))
 			audio_rows.append(toggle("atmosphere.power_on","TV power-on effect",h.power_on,"enabled",true,"Brief tube warm-up and switch sound when first revealed.",func(): h.power_on.apply(); menu.refresh(),false))
-			var volume=number("atmosphere.power_sound","Power-on sound volume",h.power_on,"sound_level",0,1,.05,.60,"percent","Zero keeps the startup effect silent.",h.power_on.apply,false)
-			if not h.power_on.enabled:
-				volume.disabled=true; volume.disabled_reason="Enable the TV power-on effect first."; volume.help += " " + volume.disabled_reason
+			audio_rows.append(toggle("atmosphere.channel_change","Channel change effect",h.tv_effects,"channel_change",true,"A burst of static and a rolling picture when a game or video starts, like changing channel.",menu.refresh,false))
+			audio_rows.append(toggle("atmosphere.power_off","Power-off effect",h.tv_effects,"power_off_effect",true,"The picture shrinks to a fading dot as CRT XR closes.",menu.refresh,false))
+			var volume=number("atmosphere.power_sound","TV effect sounds",h.power_on,"sound_level",0,1,.05,.60,"percent","Volume of the switch, static, degauss and power-off sounds. Zero keeps them silent.",h.power_on.apply,false)
+			if not (h.power_on.enabled or h.tv_effects.channel_change or h.tv_effects.power_off_effect):
+				volume.disabled=true; volume.disabled_reason="Turn on a TV effect first."; volume.help += " " + volume.disabled_reason
 			audio_rows.append(volume)
 			audio_rows.append(action("atmosphere.preview","Preview TV power-on",h.preview_power_on,"Closes settings and replays the picture and sound effect.",not h.power_on.enabled))
 			var music = h.music

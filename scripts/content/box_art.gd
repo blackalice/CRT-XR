@@ -3,17 +3,25 @@ extends Node
 ## "downloaded_media" folders, and media folders beside the ROMs. Nothing is
 ## downloaded. Images load on a background thread; art_ready announces each.
 signal art_ready(rom_path: String, texture: Texture2D)
+## A printed front cover for the box on the table (see cover()).
+signal cover_ready(rom_path: String, texture: Texture2D)
 const MEDIA_TYPES := ["covers", "box2dfront", "3dboxes", "miximages", "screenshots"]
 ## Folders some scrapers put beside the ROMs, best first.
 const BESIDE := ["media/box2dfront", "media/covers", "media/boxart", "media/images", "boxart", "covers", "images"]
+## Only flat front covers can be printed on a box: no 3D renders or screenshots.
+const COVER_TYPES := ["covers", "box2dfront"]
+const COVER_BESIDE := ["media/box2dfront", "media/covers", "media/boxart", "boxart", "covers"]
 const EXTENSIONS := ["png", "jpg", "jpeg", "webp"]
 const MAX_HEIGHT := 160
+## The box on the table is seen up close, so its cover loads larger.
+const COVER_HEIGHT := 512
 
 var rom_root := ""
 var found: Dictionary = {}
 var textures: Dictionary = {}
 var listings: Dictionary = {}
-var queue: Array[String] = []
+## Loads waiting for the thread: [cache key, ROM path, file, height].
+var queue: Array = []
 var thread: Thread
 
 ## Starts again for a (new) ROM folder.
@@ -49,9 +57,11 @@ func match_in(folder: String, base: String) -> String:
 	var names := listing(folder)
 	return folder.path_join(names[base]) if names.has(base) else ""
 
-## The box art file for a ROM, or "" when the player has none.
-func find(rom_path: String) -> String:
-	if found.has(rom_path): return found[rom_path]
+## The box art file for a ROM, or "" when the player has none. `kinds` and
+## `beside` narrow the search, as cover() does for printable front covers.
+func find(rom_path: String, kinds: Array = MEDIA_TYPES, beside_folders: Array = BESIDE) -> String:
+	var cache_key := rom_path if kinds == MEDIA_TYPES else rom_path + "|cover"
+	if found.has(cache_key): return found[cache_key]
 	var result := ""
 	var base := rom_path.get_file().get_basename().to_lower()
 	var folder := rom_path.get_base_dir()
@@ -66,25 +76,33 @@ func find(rom_path: String) -> String:
 			relative = "/".join(parts.slice(1))
 	var system := system_folder.get_file()
 	for root in media_roots():
-		for kind in MEDIA_TYPES:
+		for kind in kinds:
 			result = match_in(root.path_join(system).path_join(kind).path_join(relative), base)
 			if result.is_empty() and not relative.is_empty(): result = match_in(root.path_join(system).path_join(kind), base)
 			if not result.is_empty(): break
 		if not result.is_empty(): break
 	if result.is_empty():
-		for beside in BESIDE:
+		for beside in beside_folders:
 			result = match_in(folder.path_join(beside), base)
 			if result.is_empty(): result = match_in(folder.path_join(beside), base + "-image")
 			if not result.is_empty(): break
-	found[rom_path] = result
+	found[cache_key] = result
 	return result
 
 ## The art as a texture, or null until it has loaded (art_ready follows).
 func texture(rom_path: String) -> Texture2D:
-	if textures.has(rom_path): return textures[rom_path]
-	if find(rom_path).is_empty(): return null
-	textures[rom_path] = null
-	queue.append(rom_path)
+	return _request(rom_path, rom_path, find(rom_path), MAX_HEIGHT)
+
+## A flat front cover, larger, for the box on the table; null until it has
+## loaded (cover_ready follows) or when the scrapes have none.
+func cover(rom_path: String) -> Texture2D:
+	return _request(rom_path + "|cover", rom_path, find(rom_path, COVER_TYPES, COVER_BESIDE), COVER_HEIGHT)
+
+func _request(key: String, rom_path: String, file: String, height: int) -> Texture2D:
+	if textures.has(key): return textures[key]
+	if file.is_empty(): return null
+	textures[key] = null
+	queue.append([key, rom_path, file, height])
 	_next()
 	return null
 
@@ -92,20 +110,24 @@ func _next() -> void:
 	if queue.is_empty() or (thread != null and thread.is_alive()): return
 	if thread != null: thread.wait_to_finish()
 	thread = Thread.new()
-	var rom: String = queue.pop_front()
-	thread.start(_load.bind(rom, find(rom)))
+	var job: Array = queue.pop_front()
+	thread.start(_load.bind(job))
 
-## On the loading thread: decode and shrink one image.
-func _load(rom_path: String, file: String) -> void:
-	var image := Image.load_from_file(file)
-	if image != null and image.get_height() > MAX_HEIGHT:
-		image.resize(maxi(1, image.get_width() * MAX_HEIGHT / image.get_height()), MAX_HEIGHT, Image.INTERPOLATE_BILINEAR)
-	_loaded.call_deferred(rom_path, image)
+## On the loading thread: decode and shrink one image, with mipmaps for the
+## table cover, which is seen at an angle.
+func _load(job: Array) -> void:
+	var height: int = job[3]
+	var image := Image.load_from_file(job[2])
+	if image != null and image.get_height() > height:
+		image.resize(maxi(1, image.get_width() * height / image.get_height()), height, Image.INTERPOLATE_BILINEAR)
+	if image != null and height == COVER_HEIGHT: image.generate_mipmaps()
+	_loaded.call_deferred(job, image)
 
-func _loaded(rom_path: String, image: Image) -> void:
+func _loaded(job: Array, image: Image) -> void:
 	var art: Texture2D = ImageTexture.create_from_image(image) if image != null and not image.is_empty() else null
-	textures[rom_path] = art
-	art_ready.emit(rom_path, art)
+	textures[job[0]] = art
+	if str(job[0]).ends_with("|cover"): cover_ready.emit(job[1], art)
+	else: art_ready.emit(job[1], art)
 	_next()
 
 func _exit_tree() -> void:

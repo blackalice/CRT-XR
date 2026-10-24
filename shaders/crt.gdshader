@@ -16,6 +16,16 @@ uniform sampler2D beam_texture : source_color, filter_linear, repeat_disable;
 uniform bool use_shared_beam = false;
 uniform bool fitting_guides = false;
 uniform float power_progress : hint_range(0.0,1.0) = 1.0;
+// TV moments (scripts/rendering/tv_effects.gd): a channel change's static and
+// picture roll, a degauss's wobble and colour swirl, and the power-off.
+uniform float channel_static : hint_range(0.0,1.0) = 0.0;
+uniform float picture_roll : hint_range(0.0,1.0) = 0.0;
+uniform float degauss : hint_range(0.0,1.0) = 0.0;
+uniform bool degauss_wobble = true;
+uniform float power_off : hint_range(0.0,1.0) = 0.0;
+float static_noise(vec2 cell) {
+ return fract(sin(dot(cell,vec2(12.9898,78.233)))*43758.5453);
+}
 vec3 linear_signal(vec2 uv) {
  vec3 c = texture(signal_texture,clamp(uv,vec2(.5)/signal_size,vec2(1)-vec2(.5)/signal_size)).rgb;
  if (!OUTPUT_IS_SRGB) c = pow(max(c,vec3(0)),vec3(1.0/2.2));
@@ -47,6 +57,18 @@ vec3 cached_row(vec2 uv,float line,float stripe) {
 }
 void fragment() {
  vec2 uv = (UV-picture_rect.xy)/picture_rect.zw;
+ vec2 tube = uv;
+ // Power-off: the picture collapses to a bright line, then to a dot.
+ if(power_off>0.0) {
+  vec2 squash = vec2(mix(1.0,.008,smoothstep(.40,.78,power_off)),mix(1.0,.006,smoothstep(0.0,.42,power_off)));
+  uv = (uv-.5)/squash+.5;
+ }
+ // A rolling picture settles back into place after a channel change.
+ if(picture_roll>0.0) uv.y = fract(uv.y+picture_roll);
+ if(degauss>0.0 && degauss_wobble) {
+  uv.x += sin(uv.y*17.0+TIME*31.0)*.010*degauss;
+  uv.y += sin(uv.x*11.0+TIME*23.0)*.006*degauss;
+ }
  vec2 pixel = uv*signal_size;
  vec2 footprint = fwidth(pixel);
  vec3 color = vec3(0);
@@ -72,6 +94,12 @@ void fragment() {
   }
   vec2 p = abs(uv*2.0-1.0);
   color *= 1.0-vignette*dot(p*p,p*p);
+  if(degauss>0.0) {
+   // The coil's field sweeps colour blotches across the mask as it fades.
+   vec3 swirl = .5+.5*cos(6.283185*(vec3(0.0,.33,.67)+uv.x*1.4+uv.y*.8+TIME*.9));
+   color *= mix(vec3(1),swirl*1.7,degauss*.65);
+  }
+  if(power_off>0.0) color *= 1.0+3.0*smoothstep(.25,.60,power_off);
   color = clamp(color,vec3(0),vec3(1));
   if(fitting_guides) {
    vec2 edge = min(uv,vec2(1)-uv)*signal_size;
@@ -81,6 +109,22 @@ void fragment() {
    float circle = length((uv-.5)*vec2(4.0/3.0,1.0));
    if(abs(circle-.3)<max(fwidth(circle),.002)) color = vec3(.8);
   }
+ }
+ if(picture_roll>0.0) {
+  // The vertical blanking interval rolls past as a dark bar.
+  float rolled = fract(tube.y+picture_roll);
+  color *= smoothstep(0.0,.035,rolled)*smoothstep(1.0,.965,rolled);
+ }
+ if(channel_static>0.0) {
+  float inside_tube = step(0.0,tube.x)*step(tube.x,1.0)*step(0.0,tube.y)*step(tube.y,1.0);
+  float snow = static_noise(floor(tube*vec2(320.0,240.0))+vec2(floor(TIME*60.0)*7.0,floor(TIME*60.0)*13.0));
+  color = mix(color,vec3(snow*.85)*inside_tube,channel_static);
+ }
+ if(power_off>.70) {
+  // The last of the beam: a dot that fades in the middle of the tube.
+  vec2 centre = (tube-.5)*vec2(picture_rect.z/picture_rect.w*4.0/3.0,1.0);
+  float dot_glow = exp(-dot(centre,centre)*2600.0)*(1.0-smoothstep(.80,1.0,power_off));
+  color = color*(1.0-smoothstep(.76,.84,power_off)) + vec3(dot_glow);
  }
  // Brief deflection warm-up: a dim centre line opens into the full picture.
  // Reveal existing pixels rather than squeezing/cropping the game image.

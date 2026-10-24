@@ -78,7 +78,7 @@ not loaded into generative image tools or visually inspected by the assistant.
 | Game | ROM browser, last game, pause, states, test signal, input-delay preview |
 | View | Distance, screen height, stick binding and speed, scale, stereo, fullscreen, IPD, convergence, FOV, soft edges, smoothing |
 | Picture | Scanlines, phosphor mask and glow, glass reflection, screen curvature |
-| Room | Room presets (built-in moods and three of your own), ambient/lamp/fill energy, warmth, lamp position, floor style and brightness, props (clock radio, 24-hour clock, VCR, game boxes), fade distances, shadows |
+| Room | Room presets (built-in moods and three of your own), ambient/lamp/fill energy, warmth, lamp position, floor style and brightness, props (clock radio, 24-hour clock, VCR, game boxes, your game on the box), room sound and tube whine, follow the time of day, fade distances, shadows |
 | Setup | Tracking provider, axis inversion, diagnostic overlay |
 
 ## Lighting and furniture
@@ -153,6 +153,34 @@ models or textures; `scripts/rendering/room_props.gd`, `shaders/prop_*.gdshader`
 - Three **game boxes** (a plastic clamshell between two cardboard cartons)
   right of the TV. Each box uses cover, spine and edge artwork from
   `artwork/game-boxes/`, lit by the room and screen without emission.
+  **Your game on the box** (on by default) prints the playing game's front cover
+  on the top carton, from the player's existing scrapes (`covers` or
+  `box2dfront`; never screenshots or 3D renders), loaded at 512 px on a worker
+  thread. Portrait covers lie turned, like a box put down sideways; any spare
+  edge and the spine take the cover's average colour. Without a cover, or with no
+  game loaded, the box keeps its own print.
+
+### Room sound and time of day
+
+**Room → Sound** adds quiet sound around the TV, off by default: *Quiet room*
+(soft air), *Rain on the window*, or *Rain and a ticking clock* (ticking on the
+real second), with its own volume kept well under the programme. **Tube whine**
+adds the line transformer's 15.7 kHz whine, very quietly; many people can't hear
+it. **Room → Lighting → Follow the time of day** (off by default) shifts your own
+lighting by the hour: brighter and cooler by day, warmer in the evening, dimmer
+in the small hours. The saved values don't change, so turning it off restores
+the room exactly. These are room settings, so room presets keep them.
+
+### TV moments
+
+**Audio → TV sound** has the TV's own effects beside the power-on: a **channel
+change** (static, a click and a rolling picture for under half a second when a
+game or video starts after the first) and a **power-off** (the picture collapses
+to a line and a fading dot as CRT XR closes). **Picture → CRT → Degauss** closes
+the menu and plays the coil's wobble, colour swirl and thunk. One **TV effect
+sounds** level covers them all. Reduced motion keeps the degauss colour without
+the wobble, settles the channel change without the roll, and skips the power-off.
+The sounds are synthesised by `scripts/make-tv-sounds.py` (CC0, no recordings).
 
 Displays are emissive but add no lights and never blink. Props are built at 2.3×
 real size to match the oversized TV and table, cast no

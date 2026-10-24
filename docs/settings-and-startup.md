@@ -16,7 +16,7 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 | View | Placement; Display |
 | Picture | Presets; CRT; Screen fit; Colour; Signal |
 | Audio | TV sound; Music balance; Music & radio; Music space |
-| Room | Lighting; Materials; Placement & fade |
+| Room | Presets; Lighting; Materials; Props; Sound; Placement |
 | Controls & XR | Controller; Tracking; Advanced calibration |
 | Saved setups | Setup slots; Per-game picture |
 | About & Help | About, controls, device status, troubleshooting, credits, diagnostics and reset; Accessibility |

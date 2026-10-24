@@ -31,6 +31,16 @@ var show_clock_radio: bool = Showcase.ROOM.show_clock_radio
 var clock_24_hour: bool = Showcase.ROOM.clock_24_hour
 var show_vcr: bool = Showcase.ROOM.show_vcr
 var show_game_boxes: bool = Showcase.ROOM.show_game_boxes
+## The playing game's own cover on the top box, when your scrapes have one.
+var show_game_cover: bool = Showcase.ROOM.show_game_cover
+var game_cover: Texture2D
+## The lighting follows the real time of day, around the values above.
+var follow_clock: bool = Showcase.ROOM.follow_clock
+## Room sound (RoomAmbience.CHOICES), its level, and the tube's whine.
+var ambience: int = Showcase.ROOM.ambience
+var ambience_level: float = Showcase.ROOM.ambience_level
+var crt_whine: bool = Showcase.ROOM.crt_whine
+var room_sound := preload("res://scripts/audio/room_ambience.gd").new()
 var clock_radio: MeshInstance3D
 var video_recorder: MeshInstance3D
 var game_boxes: MeshInstance3D
@@ -82,6 +92,7 @@ func build(signal_texture: Texture2D) -> void:
 	floor_node.material_override = floor_material
 	add_child(floor_node)
 	add_child(television)
+	add_child(room_sound)
 	television.name = "StationaryTelevision"
 	imported_screen = ImportedCRT.load_cabinet(television)
 	if imported_screen.is_empty():
@@ -174,6 +185,7 @@ func _update_prop_clocks(delta: float) -> void:
 	var minute := int(now.hour) * 60 + int(now.minute)
 	if minute == shown_minute: return
 	shown_minute = minute
+	if follow_clock: _apply_lighting()
 	for prop in [clock_radio, video_recorder]:
 		if prop == video_recorder and vcr_counter >= 0: continue
 		var material := prop.material_override as ShaderMaterial
@@ -191,7 +203,7 @@ func _show_tape_counter(seconds: int) -> void:
 	material.set_shader_parameter("twelve_hour", false)
 
 func _process(_delta: float) -> void:
-	if (show_clock_radio or show_vcr) and clock_radio != null: _update_prop_clocks(_delta)
+	if (show_clock_radio or show_vcr or follow_clock) and clock_radio != null: _update_prop_clocks(_delta)
 	# A small floor island follows the virtual set, including its scale control.
 	# Transforms are only written on change: each write dirties the render server.
 	if television.transform != last_tv_transform:
@@ -229,12 +241,7 @@ func apply_room_settings() -> void:
 	set_spill_strength(spill_strength)
 	ImportedCRT.Plastic.set_detail_strengths(television, cabinet_ao_strength, cabinet_grain_strength)
 	fade_end = maxf(fade_end, fade_begin + 0.5)
-	room_environment.ambient_light_energy = ambient
-	room_environment.ambient_light_color = Color("b1c3db").lerp(Color("e9d6b6"), warmth)
-	key_light.light_energy = key_energy
-	fill_light.light_energy = fill_energy
-	key_light.light_color = Color.WHITE.lerp(Color("ffd29b"), warmth)
-	fill_light.light_color = Color("c8dfff").lerp(Color("fff0d6"), warmth * 0.6)
+	_apply_lighting()
 	key_light.position = Vector3(lamp_side, lamp_height, 2.5)
 	key_light.look_at(television.global_position + Vector3(0, -0.1, -0.2))
 	# Baked contact shading turns off casting on the cabinet and furniture; a shadow
@@ -246,12 +253,70 @@ func apply_room_settings() -> void:
 		clock_radio.visible = show_clock_radio
 		video_recorder.visible = show_vcr
 		game_boxes.visible = show_game_boxes
+		_show_game_cover()
 		shown_minute = -1; clock_elapsed = 1.0 # apply a 12/24-hour change at once
 	for material in [distance_fade, floor_material]:
 		material.set_shader_parameter("fade_begin", fade_begin)
 		material.set_shader_parameter("fade_end", fade_end)
 	floor_material.set_shader_parameter("brightness", floor_brightness)
 	fade_dirty = true
+	room_sound.ambience = ambience
+	room_sound.level = ambience_level
+	room_sound.whine = crt_whine
+	room_sound.apply()
+
+## How the time of day shifts the room: [hour, ambient x, lamp x, warmth +].
+## Brighter and cooler by day, warm in the evening, dim in the small hours.
+const DAYLIGHT := [[0.0, 0.6, 0.75, 0.10], [6.0, 0.7, 0.85, 0.0], [9.0, 1.6, 1.15, -0.25], [13.0, 1.8, 1.2, -0.3],
+	[17.0, 1.2, 1.05, -0.05], [20.0, 1.0, 1.0, 0.10], [22.0, 0.75, 0.85, 0.12], [24.0, 0.6, 0.75, 0.10]]
+
+## [ambient x, lamp x, warmth +] for an hour of the day (0..24, fractional).
+static func time_of_day(hour: float) -> Array:
+	for i in range(DAYLIGHT.size() - 1):
+		var a: Array = DAYLIGHT[i]
+		var b: Array = DAYLIGHT[i + 1]
+		if hour >= a[0] and hour <= b[0]:
+			var t: float = (hour - a[0]) / (b[0] - a[0])
+			return [lerpf(a[1], b[1], t), lerpf(a[2], b[2], t), lerpf(a[3], b[3], t)]
+	return [1.0, 1.0, 0.0]
+
+## Your room values, shifted by the time of day when the room follows the clock.
+func _apply_lighting() -> void:
+	var mood := [1.0, 1.0, 0.0]
+	if follow_clock:
+		var now := Time.get_time_dict_from_system()
+		mood = time_of_day(float(now.hour) + float(now.minute) / 60.0)
+	var warm := clampf(warmth + mood[2], 0.0, 1.0)
+	room_environment.ambient_light_energy = ambient * mood[0]
+	room_environment.ambient_light_color = Color("b1c3db").lerp(Color("e9d6b6"), warm)
+	key_light.light_energy = key_energy * mood[1]
+	fill_light.light_energy = fill_energy * mood[1]
+	key_light.light_color = Color.WHITE.lerp(Color("ffd29b"), warm)
+	fill_light.light_color = Color("c8dfff").lerp(Color("fff0d6"), warm * 0.6)
+
+## The playing game's cover on the top box, or its own print when there is none.
+func set_game_cover(texture: Texture2D) -> void:
+	game_cover = texture
+	_show_game_cover()
+
+func _show_game_cover() -> void:
+	if game_boxes == null: return
+	var material := game_boxes.material_override as ShaderMaterial
+	var shown := show_game_cover and game_cover != null
+	material.set_shader_parameter("game_cover_on", shown)
+	if not shown: return
+	var image := game_cover.get_image()
+	var aspect := float(image.get_width()) / maxf(1.0, image.get_height())
+	# The box tint is the cover's average colour, for its spine and border.
+	var average := image.duplicate() as Image
+	if average.is_compressed(): average.decompress()
+	average.clear_mipmaps()
+	# Halving step by step averages every pixel; one jump to 1x1 samples the centre.
+	while average.get_width() > 1 or average.get_height() > 1:
+		average.resize(maxi(1, average.get_width() / 2), maxi(1, average.get_height() / 2), Image.INTERPOLATE_BILINEAR)
+	material.set_shader_parameter("game_cover", game_cover)
+	material.set_shader_parameter("game_cover_aspect", aspect)
+	material.set_shader_parameter("game_cover_tint", average.get_pixel(0, 0))
 
 func _build_lighting() -> void:
 	# Local lights move with the TV distance control and leave the far room dark.
