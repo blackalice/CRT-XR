@@ -7,9 +7,12 @@ the cabinet. That pass and its averaging viewport have been removed.
 `screen_light.gd` uses two overlapping OmniLight3D sources anchored to the TV.
 Their short ranges and receiver mask limit the effect to the cabinet, stand,
 props and floor. Native lighting handles albedo and surface normals.
-Screen-light specular and shadows are disabled: point highlights expose the
-approximation, while shadow maps would add substantial stereo cost. The room's
-existing shadowed lamp is unchanged. This respects the Compatibility renderer:
+Screen-light specular is disabled: point highlights expose the approximation.
+They cast cube shadows from one caster only, `TableOccluder` (a shadow-only box
+the size of the tabletop), so the space under the table stays dark; the box is
+excluded from the lamp's caster check, so the lamp's shadow map stays off. On
+the RTX 4080 the stereo benchmark below measured no difference with the
+shadows on (0.213 ms either way). This respects the Compatibility renderer:
 [Godot 4.5 lighting documentation](https://docs.godotengine.org/en/4.5/tutorials/3d/lights_and_shadows.html).
 
 No projector, reflection capture or full-screen bloom pass is required. The
@@ -62,8 +65,7 @@ a steeper curve (radiance^1.4) and a level of bloom × the room's darkness × po
 the bloom is on.
 
 This is a diffuse area-source approximation, not ray-traced indirect lighting.
-The sources sit on the tube's face (`LIGHT_DEPTH`). Further forward they lit the
-TV's own front and, with no shadows, the table's rails and the shelf beneath it.
-They do not cast occlusion shadows or provide a mirror reflection of the tube,
-so the lower shelf and VCR are excluded from the receiver mask; the floor under
-the table can still receive some light. Keep the strength subtle.
+The sources sit 25 cm ahead of the tube (`LIGHT_DEPTH`), lighting the bezel
+evenly; on the tube's face they hot-spotted its inner lip. Only the tabletop
+shadows them; the lower shelf and VCR are also left out of the receiver mask.
+They provide no mirror reflection of the tube. Keep the strength subtle.

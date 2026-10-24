@@ -196,20 +196,20 @@ GPU per eye on Windows). The floor patch has soft black edges as well as distanc
 The self-lit game picture keeps its contrast as the surroundings fade.
 
 **Screen glow** (Room → Materials; 0 = off, 1 = a dark room lit by the TV
-alone) uses two native, shadowless lights instead of an additive cabinet
+alone) uses two native lights instead of an additive cabinet
 overlay. Each takes the colour of its own half of the picture (leaning 70%
 towards its side), so a red left side tints the left of the set. Light is in
 proportion to the picture's average linear radiance (energy 16 × radiance at
 full glow), so a small logo on black lights the room faintly and a bright game
-picture clearly; it reaches 3 m with a gentle falloff. The lights sit on the
-tube's face, where the light comes from: the tabletop, the props beside the set
-and the bezel's inset walls face them, while the casing's own front and the
-table's rails and legs face away, as they do from a real screen. They have no
-shadows, so the lower shelf and the VCR, under the tabletop, are left out of
-them rather than lit through it. The picture's light also bounces back off the
-room: a faint fill in its colour is added to the room's ambient light, so the
-casing's front and the darker corners take the picture's colour softly
-instead of going black. Settings saved
+picture clearly; it reaches 3 m with a gentle falloff. The lights sit 25 cm
+ahead of the tube so the bezel and casing are lit evenly (on the tube's face
+they made the bezel's inner lip a bright ring). Their only shadow caster is
+`TableOccluder`, an unseen board the size of the tabletop, so the floor, legs
+and rails under the table stay dark instead of being lit through it; it is
+left out of the lamp's casters, so the lamp's shadow map stays off. The lower
+shelf and the VCR are also left out of the screen light. The picture's light
+also bounces back off the room: a faint fill in its colour (0.35 × radiance ×
+glow) is added to the room's ambient light. Settings saved
 before this rescale (`room/lighting_version` below 2) map the old 0–0.4 range
 so the old maximum, the previous default, becomes the new default of 0.5. It
 uses the furniture's and floor's existing materials and normals. Point specular

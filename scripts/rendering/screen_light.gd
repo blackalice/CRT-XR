@@ -20,11 +20,11 @@ const GLOW_RANGE := 3.0
 const GLOW_FALLOFF := 1.0
 ## How far each light leans towards its own half rather than the whole picture.
 const SIDE_BIAS := 0.7
-## The lights sit on the tube's face (see _ready).
-const LIGHT_DEPTH := 0.0
+## How far ahead of the tube the lights sit (see _ready).
+const LIGHT_DEPTH := 0.25
 ## The picture's light bounced back off the room: a faint fill in its colour
 ## on everything, the TV's own front included, added to the room's ambient.
-const BOUNCE := 1.0
+const BOUNCE := 0.35
 var lights: Array[OmniLight3D] = []
 ## 0 (off) to 1 (a dark room lit by the TV alone).
 var strength := 0.5
@@ -59,18 +59,22 @@ func _ready() -> void:
 	calibration.fill(Color(.40,.44,.47))
 	for x in [-0.34, 0.34]:
 		var light := OmniLight3D.new()
-		# On the tube's face, where the light comes from: the inset bezel's walls
-		# and the tabletop face it, while the casing's front and the table's
-		# rails and legs face away, as they do from a real screen. (Further
-		# forward, the lights lit the TV's own front and, with no shadows, the
-		# table's underside.) Deliberately no specular point highlight, which
-		# would expose this as two tiny bulbs.
+		# Ahead of the tube, so the bezel and casing are lit evenly. On the
+		# tube's face they hot-spotted the bezel's inner lip into a bright ring.
+		# The tabletop's shadow keeps them off the table's underside.
+		# Deliberately no specular point highlight, which would expose this as
+		# two tiny bulbs.
 		light.position = Vector3(x, 0.035, LIGHT_DEPTH)
 		light.omni_range = GLOW_RANGE
 		light.omni_attenuation = GLOW_FALLOFF
 		light.light_specular = 0.0
 		light.light_cull_mask = RECEIVER_LAYER
-		light.shadow_enabled = false
+		# Shadows from the tabletop alone (CRTWorld's TableOccluder; nothing else
+		# casts), so the space under the table stays dark. Compatibility only
+		# has cube shadows: six passes of that one box per light.
+		light.shadow_enabled = true
+		light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
+		light.shadow_blur = 2.0
 		light.light_energy = 0.0
 		add_child(light)
 		lights.append(light)

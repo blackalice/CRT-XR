@@ -58,8 +58,7 @@ func run():
 	view.add_child(camera)
 	patch = MeshInstance3D.new()
 	patch.mesh = QuadMesh.new()
-	# Like the bezel's inset wall or a prop beside the set: in front of the
-	# tube's face, turned towards it (the lights sit on the face itself).
+	# Like a prop beside the set: turned towards the lights in front of the tube.
 	patch.position = Vector3(.72,0,.3)
 	patch.rotation.y = deg_to_rad(-60)
 	patch.layers = Light.RECEIVER_LAYER
@@ -92,7 +91,7 @@ func run():
 	var sides: Array[Vector3] = Light.half_radiance(half,settings)
 	check(sides[0].x > .99 and sides[0].z < .01 and sides[1].z > .99 and sides[1].x < .01,"Each light sees its own half: red left, blue right")
 	check(Light.glow_energy(0.0) == 0.0 and is_equal_approx(Light.glow_energy(0.05), Light.glow_energy(1.0) * 0.05),"Light is in proportion to the picture's: a dim logo on black stays dim")
-	check(light.lights.all(func(l): return is_equal_approx(l.position.z, Light.LIGHT_DEPTH)) and Light.LIGHT_DEPTH <= 0.06, "The lights sit on the tube's face, so the casing's front and the table's underside face away")
+	check(light.lights.all(func(l): return is_equal_approx(l.position.z, Light.LIGHT_DEPTH)) and Light.LIGHT_DEPTH > 0.1, "The lights sit ahead of the tube, lighting the bezel evenly rather than its inner lip")
 	var dim := Light.average_radiance(image(Color(.5,.5,.5)),settings)
 	check(dim.x < .23 and dim.x > .20,"Display gamma is applied before light averaging")
 	settings.brightness = .5
@@ -115,7 +114,7 @@ func run():
 	check(off.r < .01 and light.sample_count == count and not light.lights[0].visible,"Off hides lights immediately and stops sampling")
 	light.set_strength(.1)
 	light.set_process(false)
-	check(light.lights.size() == 2 and not light.lights[0].shadow_enabled and light.lights[0].light_specular == 0,"Bounded two-light approximation avoids shadow maps and point reflections")
+	check(light.lights.size() == 2 and light.lights.all(func(l): return l.shadow_enabled and l.omni_shadow_mode == OmniLight3D.SHADOW_CUBE) and light.lights[0].light_specular == 0,"Two lights, shadowed (by the tabletop alone in the room), without point reflections")
 	light.set_image(image(Color.WHITE))
 	light.current = Vector3.ZERO
 	for i in range(30): light._process(1.0/60.0)

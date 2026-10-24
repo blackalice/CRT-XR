@@ -107,13 +107,14 @@ func build(signal_texture: Texture2D) -> void:
 	support_floor_y=float(support.get_meta("floor_y",-1.25))
 	preload("res://scripts/rendering/room_contacts.gd").apply(self,support)
 	_build_props(support)
+	_build_table_occluder(support)
 	# A black overlay fades the cabinet and furniture without changing their PBR maps.
 	# The self-lit picture and glass are created afterwards and retain their contrast.
 	# The overlay is a second blended draw, so it is attached only to parts that
 	# reach past fade_begin (see update_fade_overlays).
 	for part in television.find_children("*", "GeometryInstance3D", true, false):
 		# A black overlay on a multiply contact patch would darken its whole quad.
-		if not part.has_meta("contact_patch"): fade_parts.append(part)
+		if not part.has_meta("contact_patch") and not part.has_meta("screen_occluder"): fade_parts.append(part)
 	television.add_child(screen_light)
 	# Only the cabinet, furniture and floor receive these lights. Picture/glass
 	# are built afterwards and keep their self-lit appearance.
@@ -205,6 +206,25 @@ func _build_props(support: Node3D) -> void:
 		shelf_top = board.end.y
 	video_recorder = Props.vcr(television, shelf_top, cabinet.get_center().x, front - 0.1 - Props.VCR_SIZE.z * Props.SET_SCALE * 0.5)
 
+## An unseen board the size of the tabletop that only casts shadows: the screen
+## light has no other casters, so without it the light shone through the table
+## onto the floor, legs and rails beneath. It is left out of the lamp's casters
+## (has_shadow_casters), so the lamp's own shadow map stays off.
+func _build_table_occluder(support: Node3D) -> void:
+	if not support.has_node("TopShelf"): return
+	var shelf := support.get_node("TopShelf") as MeshInstance3D
+	var bounds: AABB = television.global_transform.affine_inverse() * (shelf.global_transform * shelf.get_aabb())
+	var board := MeshInstance3D.new()
+	board.name = "TableOccluder"
+	var box := BoxMesh.new()
+	box.size = bounds.size
+	board.mesh = box
+	board.position = bounds.get_center()
+	board.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY
+	board.layers = screen_light.RECEIVER_LAYER
+	board.set_meta("screen_occluder", true)
+	television.add_child(board)
+
 func _update_prop_clocks(delta: float) -> void:
 	if video_recorder != null and vcr_transport != shown_transport:
 		shown_transport = vcr_transport
@@ -265,6 +285,7 @@ func update_fade_overlays(eye: Vector3) -> void:
 
 func has_shadow_casters() -> bool:
 	for part in television.find_children("*", "GeometryInstance3D", true, false):
+		if part.has_meta("screen_occluder"): continue
 		if part.visible and part.cast_shadow != GeometryInstance3D.SHADOW_CASTING_SETTING_OFF: return true
 	return false
 

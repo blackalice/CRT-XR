@@ -143,6 +143,9 @@ func run() -> void:
 	light.set_image(white); light.power_level = 1.0 # the TV is on
 	for i in range(30): light._process(1.0 / 30.0)
 	check(world.room_environment.ambient_light_energy > light.room_energy + 0.1, "A bright picture adds its bounce to the room's ambient light")
+	var board: GeometryInstance3D = world.television.find_child("TableOccluder", true, false)
+	check(board != null and board.cast_shadow == GeometryInstance3D.SHADOW_CASTING_SETTING_SHADOWS_ONLY and light.lights[0].shadow_enabled, "The tabletop shadows the screen light, so under the table stays dark")
+	check(not world.key_light.shadow_enabled or world.has_shadow_casters(), "The unseen tabletop board does not switch on the lamp's shadow map")
 	for part in ["LowerShelf", "VideoRecorder"]:
 		var node: Node = world.television.find_child(part, true, false)
 		check(node != null and not (node.layers & light.RECEIVER_LAYER), part + " under the tabletop is not lit through it")

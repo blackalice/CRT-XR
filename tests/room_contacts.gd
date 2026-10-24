@@ -16,6 +16,8 @@ func run():
     check(preload("res://scripts/rendering/room_contacts.gd").texture("table_ao.png").get_image().has_mipmaps(),"Contact maps have filtered mip levels")
     var all_static:=true
     for node in w.television.find_children("*","MeshInstance3D",true,false):
+        # The unseen tabletop board shadows only the screen light (CRTWorld.TableOccluder).
+        if node.has_meta("screen_occluder"):continue
         if node.cast_shadow!=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF:all_static=false
     check(all_static,"Static shapes avoid aliasing live shadow maps")
     check(not w.key_light.shadow_enabled,"With nothing casting, the lamp renders no shadow map")
