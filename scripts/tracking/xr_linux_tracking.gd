@@ -8,6 +8,7 @@ var sequence := -1
 var raw_orientation := Quaternion.IDENTITY
 var helper_check_elapsed := 0.0
 var helper_alive := true
+var reference_reset_pending := false
 
 var predictor := Predictor.new()
 
@@ -51,6 +52,10 @@ func update(delta: float) -> void:
 		if not message.get("valid", false):
 			if message.get("status", "") == "driver_lock_busy":
 				continue # brief contention is not a disconnect; watchdog still applies
+			# Stale samples leave the driver's reference intact. Other driver
+			# failures may involve calibration/reconnect; keep that fact sticky
+			# until the consumer has handled recovery, even across packet bursts.
+			if message.get("status", "") != "tracking_stale": reference_reset_pending = true
 			valid = false
 			status = "XR: " + str(message.get("status", "unavailable"))
 			break
@@ -83,6 +88,7 @@ func update(delta: float) -> void:
 		helper_check_elapsed = 0.0
 		helper_alive = OS.is_process_running(helper_pid)
 	if helper_pid > 0 and not helper_alive:
+		reference_reset_pending = true
 		valid = false
 		status = "XR: helper stopped; select simulation or retry tracking"
 	var angles := raw_orientation.get_euler()
@@ -97,6 +103,12 @@ func update(delta: float) -> void:
 	else:
 		predictor.decay(delta)
 	angular_velocity = predictor.angular_velocity
+
+func recovery_keeps_reference() -> bool:
+	return not reference_reset_pending
+
+func acknowledge_recovery() -> void:
+	reference_reset_pending = false
 
 func close() -> void:
 	if helper_pid > 0 and OS.is_process_running(helper_pid):

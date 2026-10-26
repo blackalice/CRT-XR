@@ -589,9 +589,11 @@ func _process(delta: float) -> void:
 	if previously_valid and not provider.valid and provider.real:
 		show_notice("Tracking lost — holding the view steady. Open Game for Retry glasses tracking or Fixed view.")
 	if provider.valid and (needs_center or not tracking_was_valid):
-		# Keep the view continuous after a driver reconnect or local reference reset.
-		if provider.real:
+		# A sample gap (including a blocked restore) does not move the room's
+		# anchor. Rebase only for initial centering or a possible driver reset.
+		if provider.real and (needs_center or not provider.recovery_keeps_reference()):
 			center = provider.orientation * displayed.inverse()
+		provider.acknowledge_recovery()
 		needs_center = false
 	tracking_was_valid = provider.valid
 	if provider.status != previous_tracking_status:

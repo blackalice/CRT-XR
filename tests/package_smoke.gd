@@ -20,10 +20,13 @@ func run() -> void:
 		check(ResourceLoader.load(base.path_join("assets/" + asset)) != null, "Packaged resource loads: " + asset)
 	var app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	app.vcr_sounds.enabled = false
+	app.vcr_sounds.stop_all()
 	if is_instance_valid(app.sbs_prompt): app.sbs_prompt.desktop_ready.emit()
 	await process_frame
 	await process_frame
 	check(is_instance_valid(app.world), "Exported scene starts")
+	check(app.world.screen_light.lights.all(func(light): return not light.shadow_enabled), "Screen glow avoids live shadow passes")
 	app.close_settings()
 	app.use_tracking(false)
 	var session = app.emulator

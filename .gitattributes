@@ -4,6 +4,8 @@
 *.gd text eol=lf
 *.gdshader text eol=lf
 *.py text eol=lf
+# Unified diffs retain leading context spaces and tabs from upstream source.
+*.patch text eol=lf whitespace=-blank-at-eol,-space-before-tab
 *.ps1 text eol=lf
 *.md text eol=lf
 *.json text eol=lf

@@ -27,5 +27,13 @@ func close() -> void:
 func update(_delta: float) -> void:
 	pass
 
+## A temporary sample gap need not mean the driver's coordinate frame changed.
+## Providers without that distinction retain the existing reconnect behaviour.
+func recovery_keeps_reference() -> bool:
+	return false
+
+func acknowledge_recovery() -> void:
+	pass
+
 func handle_input(_event: InputEvent) -> void:
 	pass

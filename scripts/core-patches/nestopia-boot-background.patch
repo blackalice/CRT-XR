@@ -1,0 +1,37 @@
+diff --git a/source/core/NstPpu.cpp b/source/core/NstPpu.cpp
+--- a/source/core/NstPpu.cpp
++++ b/source/core/NstPpu.cpp
+@@ -82,7 +82,7 @@ namespace Nes
+ 		: limit(buffer + STD_LINE_SPRITES*4), secondary(0), corrupt(NO_CORRUPTION), spriteLimit(true) {}
+ 
+ 		Ppu::Output::Output(Video::Screen::Pixel* p)
+-		: pixels(p) {}
++		: pixels(p), bgColor(0x0F) {}
+ 
+ 		Ppu::TileLut::TileLut()
+ 		{
+@@ -280,6 +280,10 @@ namespace Nes
+ 
+ 			UpdateStates();
+ 
++			// The boot frame can finish before any palette write. The NTSC
++			// filter uses this as a lookup index even for a cleared screen.
++			output.bgColor = palette.ram[0] & uint(Palette::COLOR);
++
+ 			screen.Clear();
+ 		}
+ 
+diff --git a/source/core/NstVideoFilterNtsc.cpp b/source/core/NstVideoFilterNtsc.cpp
+--- a/source/core/NstVideoFilterNtsc.cpp
++++ b/source/core/NstVideoFilterNtsc.cpp
+@@ -43,7 +43,9 @@ namespace Nes
+ 			{
+ 				NST_ASSERT( phase < 3 );
+ 
+-				const uint bgcolor = this->bgColor;
++				// The backdrop is a six-bit NES palette index, without emphasis.
++				// Keep a malformed value from reading beyond the NTSC lookup table.
++				const uint bgcolor = this->bgColor & 0x3F;
+ 				const Input::Pixel* NST_RESTRICT src = input.pixels;
+ 				Pixel* NST_RESTRICT dst = static_cast<Pixel*>(output.pixels);
+ 				const long pad = output.pitch - (NTSC_WIDTH-7) * sizeof(Pixel);

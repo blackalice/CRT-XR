@@ -9,6 +9,7 @@ subprocess.run([sys.executable,str(ROOT/'scripts/check-core-sources.py')],check=
 paths=set(subprocess.check_output(['git','ls-files','-c','-o','--exclude-standard','-z'],cwd=ROOT).decode().split('\0'))-{''}
 files={name:ROOT/name for name in paths if (ROOT/name).is_file()}
 for p in (ROOT/'cores/sources').glob('*.tar.gz'):files['cores/sources/'+p.name]=p
+for p in (ROOT/'cores/sources').glob('*.patch'):files['cores/sources/'+p.name]=p
 files['cores/core-builds.json']=ROOT/'cores/core-builds.json'
 for p in (ROOT/'build/core-build-logs').glob('*.log'):files['build-materials/'+p.name]=p
 assert len([p for p in files if p.startswith('cores/sources/')])>=5,'Missing core/binding/engine input archives'
@@ -21,7 +22,7 @@ Original CRT XR code is MIT; preserve all upstream notices. See docs/CORE-DISTRI
 
 This archive supplies the actual application/host source tree, exact core source snapshots, godot-cpp bindings, Godot engine source, core build logs and per-binary source/compiler/flag hashes. Native host code is in native/emulation; installation scripts are in scripts/installer. SOURCE-MANIFEST.json identifies every supplied input. Local TV/table model originals are separate artistic data, not bundled here; use creator URLs and preparation instructions in docs/DEVELOPMENT.md.
 
-On Linux with Python 3.9+, GCC/G++, CMake, Make and the MinGW-w64 POSIX compiler installed (see Dockerfile.emulation):
+On Linux with Python 3.9+, Git, GCC/G++, CMake, Make and the MinGW-w64 POSIX compiler installed (see Dockerfile.emulation):
 
 ```sh
 mkdir -p tools extensions/bin
@@ -36,7 +37,7 @@ bash scripts/build-linux.sh
 python3 scripts/check-core-sources.py
 ```
 
-The core builder uses SHA-verified supplied source archives when Git metadata is absent; no mutable nightly download is needed. Hashes identify exact inputs and outputs; future compilers are not promised bit-for-bit identical results. The recorded successful core build used Ubuntu 24.04/GCC 13 and MinGW GCC 13. Binary package notices and source access must accompany redistribution.
+The core builder uses SHA-verified supplied source archives when Git metadata is absent; no mutable nightly download is needed. It then applies the recorded patches under scripts/core-patches; copies and hashes of those patches are also supplied under cores/sources and in core-builds.json. Hashes identify exact inputs and outputs; future compilers are not promised bit-for-bit identical results. The recorded successful core build used Ubuntu 24.04/GCC 13 and MinGW GCC 13. Binary package notices and source access must accompany redistribution.
 
 For Windows VITURE tracking, compile native/windows_tracking/bridge.cpp with MinGW POSIX and -std=c++17 -O2 -static -municode, linking ws2_32, setupapi and hid, as recorded in scripts/build-windows-tracking.ps1. No vendor headers or proprietary runtime are required to compile this bridge. Runtime VITURE SDK files are separately obtained by the user and are not in this source archive or binary packages. Windows exports require Python on Windows to apply the per-monitor DPI manifest with scripts/set-windows-dpi.py; retain the separate PCK.
 

@@ -1,7 +1,10 @@
-# Emulator distribution review - beta.14
+# Emulator distribution review - beta.14.1
 
 Reviewed 17 October 2026 for beta.5 and updated 22 October 2026 for the ten-core
 beta.9 collection, against the pinned sources in scripts/build-release-cores.py.
+Beta.14.1 rebuilds Nestopia for Linux and Windows from the same pinned revision
+with the recorded boot-background initialization patch. The upstream archive,
+patch, build recipes and their hashes accompany the binaries and source download.
 The beta.10 to beta.12 cores are the same ten builds; beta.13 rebuilds Genesis Plus GX from the same pinned source with CHD support (HAVE_CHD=1) and keeps the other nine; beta.14 ships the same ten builds as beta.13. FFmpeg is not distributed: Linux uses
 the system's copy, and on Windows the user chooses to download it (THIRD_PARTY.md).
 

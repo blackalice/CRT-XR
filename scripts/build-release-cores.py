@@ -14,6 +14,7 @@ SPECS=[
   'cxx_extra':' -std=c++17','args':['LTO='],
   'licenses':[['LICENSE','Snes9x-LICENSE.txt'],['filter/snes_ntsc-license.txt','snes_ntsc-LICENSE.txt'],['jma/license.txt','JMA-LICENSE.txt'],['filter/xbrz-license.txt','xbrz-LICENSE.txt']]},
  {'core':'nestopia','repository':'nestopia','revision':'06a8949e0b3cf60e3a38a374b1426bf40fccb9a0','directory':'libretro','makefile':'Makefile',
+  'patches':['nestopia-boot-background.patch'],
   'licenses':[['COPYING','Nestopia-LICENSE.txt']]},
  # Genesis Plus GX carries Mega Drive, Master System, Game Gear and Sega CD images.
  # HAVE_CDROM is libretro-common physical-drive (cdrom://) access, not Sega CD emulation;
@@ -76,6 +77,13 @@ def main():
    with tempfile.TemporaryDirectory(prefix='crt-xr-core-') as work:
     subprocess.run(['tar','-xzf',str(archive),'-C',work],check=True)
     source=Path(work)/repository
+    patches=[]
+    for name in spec.get('patches',[]):
+     patch=ROOT/'scripts/core-patches'/name
+     subprocess.run(['git','apply','--check',str(patch)],cwd=source,check=True)
+     subprocess.run(['git','apply',str(patch)],cwd=source,check=True)
+     stored=sources/name;shutil.copy2(patch,stored)
+     patches.append({'path':'sources/'+name,'sha256':digest(stored)})
     artifact=spec.get('artifact',core)
     extension='so' if platform=='linux' else 'dll'
     name=core+'_libretro.'+extension
@@ -112,7 +120,7 @@ def main():
       'compiler':version,'cxx_compiler':output(cxx,'--version').splitlines()[0],
       'make_version':(output('cmake','--version').splitlines()[0] if spec.get('recipe')=='cmake' else output('make','--version').splitlines()[0]),
       'make_arguments':[str(a).replace(str(source),'<extracted-source>').replace(str(work),'<work>') for a in args[1:]],
-      'source_date_epoch':epoch,'build_log_sha256':digest(log)})
+      'source_date_epoch':epoch,'build_log_sha256':digest(log), 'patches':patches})
     print('Built '+name+' '+digest(destination),flush=True)
  manifest=cores/'core-builds.json'
  previous=json.loads(manifest.read_text(encoding='utf-8')) if manifest.exists() else {'builds':[]}

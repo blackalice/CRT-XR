@@ -19,6 +19,10 @@ for b in builds:
  source=cores/b['source_archive']
  assert source.resolve().is_relative_to(cores.resolve())
  assert hashlib.sha256(source.read_bytes()).hexdigest()==b['source_sha256'],str(source)
+ for patch in b.get('patches',[]):
+  path=cores/patch['path']
+  assert path.resolve().is_relative_to(cores.resolve())
+  assert hashlib.sha256(path.read_bytes()).hexdigest()==patch['sha256'],str(path)
  assert b['compiler'] and b['cxx_compiler'] and b['make_arguments'] and b['source_commit']
 for name in ['Snes9x-LICENSE.txt','Genesis-Plus-GX-LICENSE.txt','libchdr-LICENSE.txt','LZMA-SDK-LICENSE.txt','zstd-LICENSE.txt','zlib-LICENSE.txt','Nestopia-LICENSE.txt','Gambatte-LICENSE.txt','mGBA-LICENSE.txt','Beetle-PCE-FAST-LICENSE.txt','Beetle-LYNX-LICENSE.txt','Beetle-NGP-LICENSE.txt','Stella-LICENSE.txt','Vecx-LICENSE.md','libretro-header-LICENSE.txt']:
  assert (cores/name).is_file(),name

@@ -114,7 +114,7 @@ func run():
 	check(off.r < .01 and light.sample_count == count and not light.lights[0].visible,"Off hides lights immediately and stops sampling")
 	light.set_strength(.1)
 	light.set_process(false)
-	check(light.lights.size() == 2 and light.lights.all(func(l): return l.shadow_enabled and l.omni_shadow_mode == OmniLight3D.SHADOW_CUBE) and light.lights[0].light_specular == 0,"Two lights, shadowed (by the tabletop alone in the room), without point reflections")
+	check(light.lights.size() == 2 and light.lights.all(func(l): return not l.shadow_enabled) and light.lights[0].light_specular == 0,"Two shadowless lights without point reflections")
 	light.set_image(image(Color.WHITE))
 	light.current = Vector3.ZERO
 	for i in range(30): light._process(1.0/60.0)

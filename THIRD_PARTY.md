@@ -34,6 +34,10 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   Rupert Carmichael. Upstream source revision:
   https://github.com/libretro/nestopia/tree/06a8949e0b3cf60e3a38a374b1426bf40fccb9a0
   Full licence: `cores/Nestopia-LICENSE.txt`.
+  CRT XR beta.14.1 applies `nestopia-boot-background.patch`: initialize the
+  background palette index on startup/reset and bound its NTSC lookup index.
+  The patch and exact build evidence ship under `cores/sources/` and
+  `cores/core-builds.json`; see `docs/nes-core-fix.md` in the source download.
 * Genesis Plus GX, Charles MacDonald, Eke-Eke and other credited contributors.
   Serves Mega Drive, Master System, Game Gear and Sega CD.
   Its custom licence prohibits sale and commercial use; bundled components

@@ -54,56 +54,6 @@
       "build_log_sha256": "07ef7defa0e6196e5fecc6f5fa2fb2f7073865468760387a60c7c8253b445e9f"
     },
     {
-      "core": "nestopia",
-      "platform": "linux",
-      "source_commit": "06a8949e0b3cf60e3a38a374b1426bf40fccb9a0",
-      "origin": "Local source build",
-      "binary_sha256": "9ad4179941ac8c70cd4efab7974288a9e506bde66af8e4167688f9e43c57e16c",
-      "source_archive": "sources/nestopia-06a8949e0b3cf60e3a38a374b1426bf40fccb9a0.tar.gz",
-      "source_sha256": "94560cf75fc1af67ba38f4bea33a41c573b552b750818224c5e5bcdfac4fd729",
-      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
-      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
-      "make_version": "GNU Make 4.3",
-      "make_arguments": [
-        "-C",
-        "<extracted-source>/libretro",
-        "-f",
-        "Makefile",
-        "-j6",
-        "platform=unix",
-        "CC=gcc",
-        "CXX=g++",
-        "GIT_VERSION= 06a8949"
-      ],
-      "source_date_epoch": "1792021122",
-      "build_log_sha256": "8f547de4d7387475b7c31a68c4923aa7763d31ce07e4218e2e1450a1ae517c54"
-    },
-    {
-      "core": "nestopia",
-      "platform": "windows",
-      "source_commit": "06a8949e0b3cf60e3a38a374b1426bf40fccb9a0",
-      "origin": "Local source build",
-      "binary_sha256": "0ecd74c0a637e64266f70bffd6626f52b278c9475fd5737c2bc33ad14d62eaaf",
-      "source_archive": "sources/nestopia-06a8949e0b3cf60e3a38a374b1426bf40fccb9a0.tar.gz",
-      "source_sha256": "94560cf75fc1af67ba38f4bea33a41c573b552b750818224c5e5bcdfac4fd729",
-      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
-      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
-      "make_version": "GNU Make 4.3",
-      "make_arguments": [
-        "-C",
-        "<extracted-source>/libretro",
-        "-f",
-        "Makefile",
-        "-j6",
-        "platform=win",
-        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
-        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
-        "GIT_VERSION= 06a8949"
-      ],
-      "source_date_epoch": "1792021122",
-      "build_log_sha256": "581b407ebb2c14e36ea616dc540a1bd455ec03d38c1f00ff3b70d22081deb5bb"
-    },
-    {
       "core": "gambatte",
       "platform": "linux",
       "source_commit": "d9d6cd06382d1ced30de34d56d3609452323dab1",
@@ -520,8 +470,70 @@
       ],
       "source_date_epoch": "1791565714",
       "build_log_sha256": "d9b8943bd1cce47285d54b604ffefa36134ab6235695e57df77be84b5af86e52"
+    },
+    {
+      "core": "nestopia",
+      "platform": "linux",
+      "source_commit": "06a8949e0b3cf60e3a38a374b1426bf40fccb9a0",
+      "origin": "Local source build",
+      "binary_sha256": "4de818c05ec0376cebf436452c5040d461074146584b9dae6951b27aab2acc0b",
+      "source_archive": "sources/nestopia-06a8949e0b3cf60e3a38a374b1426bf40fccb9a0.tar.gz",
+      "source_sha256": "94560cf75fc1af67ba38f4bea33a41c573b552b750818224c5e5bcdfac4fd729",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>/libretro",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=unix",
+        "CC=gcc",
+        "CXX=g++",
+        "GIT_VERSION= 06a8949"
+      ],
+      "source_date_epoch": "1792021122",
+      "build_log_sha256": "e5b1e5908316f786781bca0d16c621ef3c65d05e76d7f02f64d72e0c03dda6bb",
+      "patches": [
+        {
+          "path": "sources/nestopia-boot-background.patch",
+          "sha256": "a80ad77221dd164aed94402386e310677da59eeb44c27cc99b046077e313805f"
+        }
+      ]
+    },
+    {
+      "core": "nestopia",
+      "platform": "windows",
+      "source_commit": "06a8949e0b3cf60e3a38a374b1426bf40fccb9a0",
+      "origin": "Local source build",
+      "binary_sha256": "2e8e6f3b7c9a8d9bb89c7f83b222d23910d074ebb98aeab34716fe83b10ba4e8",
+      "source_archive": "sources/nestopia-06a8949e0b3cf60e3a38a374b1426bf40fccb9a0.tar.gz",
+      "source_sha256": "94560cf75fc1af67ba38f4bea33a41c573b552b750818224c5e5bcdfac4fd729",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>/libretro",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=win",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= 06a8949"
+      ],
+      "source_date_epoch": "1792021122",
+      "build_log_sha256": "b2cd45fb64a090e86f6e2fd504dc6122cb7ec6b0c0362715b959ecbce2dc4ff9",
+      "patches": [
+        {
+          "path": "sources/nestopia-boot-background.patch",
+          "sha256": "a80ad77221dd164aed94402386e310677da59eeb44c27cc99b046077e313805f"
+        }
+      ]
     }
   ],
   "build_environment": "PRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.1 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
-  "built_utc": "2026-10-23T20:13:32.103086+00:00"
+  "built_utc": "2026-10-26T13:35:26.175789+00:00"
 }

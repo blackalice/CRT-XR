@@ -2,8 +2,8 @@ extends Node3D
 ## A cheap diffuse area-source approximation, not a projection of the framebuffer.
 ## Two overlapping lights avoid a single bright hotspot; each takes the colour of
 ## its own half of the picture, so a red left side tints the left of the room.
-## No shadows, textures, extra receiver passes or GPU readback; native PBR
-## handles albedo and normals.
+## No live shadow maps, textures, extra receiver passes or GPU readback.
+## Native PBR handles albedo and normals.
 const RECEIVER_LAYER := 2
 const Pipeline = preload("res://scripts/rendering/picture_pipeline.gd")
 const SAMPLE_PERIOD := 1.0 / 20.0
@@ -52,6 +52,9 @@ var sampling_usec := 0
 var applied: Array[Vector3] = [-Vector3.ONE, -Vector3.ONE] # radiance last written to each light
 var applied_scale := Vector3.ZERO # range scale, power level, strength last written
 var applied_bloom := -1.0
+var picture_dirty := true
+var sampled_grading: Dictionary = {}
+var sampled_area := -1.0
 
 func _ready() -> void:
 	name = "ScreenLight"
@@ -61,7 +64,6 @@ func _ready() -> void:
 		var light := OmniLight3D.new()
 		# Ahead of the tube, so the bezel and casing are lit evenly. On the
 		# tube's face they hot-spotted the bezel's inner lip into a bright ring.
-		# The tabletop's shadow keeps them off the table's underside.
 		# Deliberately no specular point highlight, which would expose this as
 		# two tiny bulbs.
 		light.position = Vector3(x, 0.035, LIGHT_DEPTH)
@@ -69,12 +71,11 @@ func _ready() -> void:
 		light.omni_attenuation = GLOW_FALLOFF
 		light.light_specular = 0.0
 		light.light_cull_mask = RECEIVER_LAYER
-		# Shadows from the tabletop alone (CRTWorld's TableOccluder; nothing else
-		# casts), so the space under the table stays dark. Compatibility only
-		# has cube shadows: six passes of that one box per light.
-		light.shadow_enabled = true
-		light.omni_shadow_mode = OmniLight3D.SHADOW_CUBE
-		light.shadow_blur = 2.0
+		# Steam Deck long-session mitigation: avoid Compatibility's shadowed
+		# light passes. Any nonzero glow could abruptly wash out the picture
+		# and clock digits after play; zero glow removed it. Keep diffuse colour,
+		# energy, reach and ambient bounce identical for the hardware comparison.
+		light.shadow_enabled = false
 		light.light_energy = 0.0
 		add_child(light)
 		lights.append(light)
@@ -83,6 +84,7 @@ func _ready() -> void:
 func set_image(image: Image) -> void:
 	# Retain the latest CPU frame by reference, including while the game is paused.
 	source = image
+	picture_dirty = true # The emulator reuses and mutates the same Image.
 	elapsed = SAMPLE_PERIOD if image == null else elapsed
 
 func set_strength(value: float) -> void:
@@ -148,8 +150,11 @@ static func half_radiance(image: Image, settings: Dictionary) -> Array[Vector3]:
 func _process(delta: float) -> void:
 	if strength <= 0.0 and bloom <= 0.0: return
 	elapsed += delta
-	if elapsed >= SAMPLE_PERIOD and not grading.is_empty():
+	if elapsed >= SAMPLE_PERIOD and not grading.is_empty() and (picture_dirty or grading != sampled_grading or picture_area != sampled_area):
 		elapsed = fmod(elapsed,SAMPLE_PERIOD)
+		picture_dirty = false
+		sampled_grading = grading.duplicate()
+		sampled_area = picture_area
 		var started := Time.get_ticks_usec()
 		# The original test signal has a stable low average luminance. Avoid a
 		# viewport readback just to animate its small moving calibration marker.
@@ -179,7 +184,10 @@ func _process(delta: float) -> void:
 		light.visible = peak > .0001
 		light.light_color = (Color(radiance.x,radiance.y,radiance.z) / maxf(peak,.00001)).linear_to_srgb()
 		light.light_energy = glow_energy(peak) * strength * power_level
-		light.omni_range = GLOW_RANGE * range_scale
+		# Range changes dirty the light's bounds/shadow state. Picture colour
+		# changes do not change its reach; only write when the TV scale changes.
+		var reach := GLOW_RANGE * range_scale
+		if not is_equal_approx(light.omni_range, reach): light.omni_range = reach
 
 ## Light from a picture of this peak radiance at full glow.
 static func glow_energy(peak: float) -> float:
