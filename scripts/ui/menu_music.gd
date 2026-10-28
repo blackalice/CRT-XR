@@ -1,5 +1,6 @@
 extends RefCounted
 ## Music pages: the album browser, the radio address and the player controls.
+const Platform = preload("res://scripts/platform/platform.gd")
 var host: Node
 var menu: Control
 var music_dir := ""
@@ -7,7 +8,7 @@ var music_page := 0
 var music_origin: Dictionary = {}
 
 func open_music_browser(path := "") -> void:
-	if OS.get_name()=="Windows" and not path.is_empty(): path=menu.library.Locations.normalize_windows_path(path)
+	if Platform.is_windows() and not path.is_empty(): path=menu.library.Locations.normalize_windows_path(path)
 	if menu.mode!="music_browser": music_origin=menu.snapshot()
 	menu.remember(); menu.clear_input()
 	if path.is_empty():

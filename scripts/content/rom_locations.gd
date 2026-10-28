@@ -1,4 +1,5 @@
 extends RefCounted
+const Platform = preload("res://scripts/platform/platform.gd")
 
 static func unescape_mount_path(path: String) -> String:
 	return path.replace("\\040", " ").replace("\\011", "\t").replace("\\012", "\n").replace("\\134", "\\")
@@ -41,7 +42,7 @@ static func library_candidates(home: String, mounts: PackedStringArray) -> Packe
 	for root in roots:
 		for relative in ["Emulation/roms", "emulation/roms", "retrodeck/roms", "RetroDECK/roms", "roms", "ROMs", "Roms", "ROMs/roms"]:
 			var path := root.path_join(relative)
-			var key := path.to_lower() if OS.get_name()=="Windows" else path
+			var key := path.to_lower() if Platform.case_insensitive_paths() else path
 			if DirAccess.open(path)!=null and not seen.has(key):
 				seen[key]=true; result.append(path)
 	return result

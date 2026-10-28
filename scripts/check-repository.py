@@ -32,6 +32,11 @@ for name in files:
     if re.search(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\bgithub_pat_[A-Za-z0-9_]{30,}|\bgh[pousr]_[A-Za-z0-9]{30,}', text):
         problem('Possible credential; review locally: ' + name)
 
+    # Platform decisions live in scripts/platform/ (docs/ANDROID-PORT-PLAN.md, D3).
+    if name.startswith('scripts/') and name.endswith('.gd') and not name.startswith('scripts/platform/'):
+        if re.search(r'\bOS\.get_name\(\)|\bOS\.get_executable_path\(\)', text):
+            problem('Platform check outside scripts/platform/; ask Platform instead: ' + name)
+
 for required in ['LICENSE', 'LICENSING.md', 'THIRD_PARTY.md', 'docs/DEVELOPMENT.md']:
     if not (ROOT / required).is_file(): problem('Missing publication notice: ' + required)
 

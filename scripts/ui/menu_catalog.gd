@@ -2,6 +2,7 @@ extends RefCounted
 ## Explicit ordered rows and stable IDs; bindings reuse the application's
 ## existing actions and preferences rather than a second settings store.
 const VideoSession = preload("res://scripts/video/video_session.gd")
+const Platform = preload("res://scripts/platform/platform.gd")
 ## Help pages, in the help page markup (scripts/ui/help_article.gd): the
 ## controller button first, then its keyboard key.
 const CONTROLS_GUIDE := """## Anywhere
@@ -42,7 +43,7 @@ func about_page() -> String:
 		"A little CRT room for your XR glasses: your games and videos on a 90s TV, in a room you can light, furnish and settle into.",
 		"## About",
 		"Version := " + str(ProjectSettings.get_setting("application/config/version")),
-		"Running on := %s · Godot %s" % [OS.get_name(), Engine.get_version_info().string],
+		"Running on := %s · Godot %s" % [Platform.display_name(), Engine.get_version_info().string],
 		"Made by := Stuart Foy",
 		"Website := " + WEBSITE,
 		"Source and updates := " + PROJECT_PAGE,
@@ -237,7 +238,7 @@ func pages(category: int) -> Array:
 			return [page("Presets",presets),page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Props",props),page("Sound",sound),page("Placement",groups["Placement"])]
 
 		4:
-			var glasses_source: String = "VITURE glasses" if OS.get_name() == "Windows" else "XR Gaming"
+			var glasses_source: String = Platform.glasses_tracking_label()
 			var tracking: Array = [
 				{"id":"tracking.source","label":"Tracking source","kind":"choice","choices":[glasses_source,"OpenTrack"],"default":0,
 					"getter":func(): return 1 if h.tracking_source == "opentrack" else 0,"setter":func(value): h.set_tracking_source("opentrack" if int(value) == 1 else "glasses"); menu.refresh(),
@@ -290,7 +291,7 @@ func pages(category: int) -> Array:
 				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting",TROUBLESHOOTING_GUIDE),"Help with glasses, games, audio and saving."),
 				action("system.credits","Credits & licences",func(): menu.open_help("Credits & licences",FileAccess.get_file_as_string("res://THIRD_PARTY.md")),"Godot, libretro, and the artists and developers behind CRT XR."),
 				action("system.diagnostics","Copy diagnostics",func():
-					DisplayServer.clipboard_set("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))+" | "+OS.get_name()+" | Godot "+str(Engine.get_version_info().string)+" | "+DisplayServer.get_name()); menu.notify("Version and platform details copied; no ROM or music paths included."),"Copies version/platform information for a bug report."),
+					DisplayServer.clipboard_set("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))+" | "+Platform.display_name()+" | Godot "+str(Engine.get_version_info().string)+" | "+DisplayServer.get_name()); menu.notify("Version and platform details copied; no ROM or music paths included."),"Copies version/platform information for a bug report."),
 				action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")]),page("Accessibility",[
 				toggle("access.large","Larger menu text",h,"menu_large_text",false,"Larger text and taller rows; lists scroll to keep focus visible.",menu.apply_accessibility,false),
 				toggle("access.contrast","Stronger menu contrast",h,"menu_high_contrast",false,"Brighter text and clearer borders on a dark background.",menu.apply_accessibility,false),

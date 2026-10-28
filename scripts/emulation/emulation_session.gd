@@ -1,5 +1,6 @@
 extends Node
 const Registry = preload("res://scripts/emulation/core_registry.gd")
+const Platform = preload("res://scripts/platform/platform.gd")
 ## Godot owns presentation; the native Libretro host owns frame execution/callbacks.
 signal content_changed(texture: Texture2D)
 signal frame_presented(image: Image)
@@ -77,7 +78,7 @@ func load_rom(path: String) -> bool:
 		report("Unsupported game file. Use a cartridge for a supported system, alone or in a ZIP; .bin needs a SEGA or SEGADISCSYSTEM header, and CHD discs go in a Sega CD folder.", true)
 		return false
 	var selected_path := Registry.core_path(detected)
-	if not FileAccess.file_exists(selected_path):
+	if not Platform.core_present(selected_path):
 		report("%s core missing. Restore %s from the application package." % [Registry.SYSTEMS[detected].name, selected_path], true)
 		return false
 	if not Registry.bios_satisfied(detected):

@@ -1,7 +1,8 @@
 extends RefCounted
 ## The extracted fourth table. Keeps the original procedural stand as a fallback.
+const Platform = preload("res://scripts/platform/platform.gd")
 static func build(parent: Node3D, top: float, cabinet: AABB) -> Node3D:
-    var path:=ProjectSettings.globalize_path("res://build/wood-table/table.scn") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir().path_join("assets/wood-table/table.scn")
+    var path:=Platform.asset("wood-table/table.scn","wood-table/table.scn")
     if not FileAccess.file_exists(path):return null
     var packed:=load(path) as PackedScene
     if packed==null:return null

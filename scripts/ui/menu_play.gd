@@ -1,5 +1,6 @@
 extends RefCounted
 ## While a game is loaded: save-state slots, loading, and the reset button.
+const Platform = preload("res://scripts/platform/platform.gd")
 var host: Node
 var menu: Control
 ## Save-state slots per game.
@@ -42,7 +43,7 @@ func choose_state(slot: int) -> void:
 ## Step-by-step help for glasses on this platform, in the help page markup
 ## (scripts/ui/help_article.gd).
 func glasses_guide() -> String:
-	if OS.get_name()=="Windows":
+	if Platform.is_windows():
 		return "\n".join([
 			"## Starting in 3D",
 			"1. Switch the glasses to their side-by-side (SBS) mode before starting CRT XR.",

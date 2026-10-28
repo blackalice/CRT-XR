@@ -2,6 +2,7 @@ extends Node
 ## Box art from scrapes the player already has: ES-DE / EmuDeck / RetroDECK
 ## "downloaded_media" folders, and media folders beside the ROMs. Nothing is
 ## downloaded. Images load on a background thread; art_ready announces each.
+const Platform = preload("res://scripts/platform/platform.gd")
 signal art_ready(rom_path: String, texture: Texture2D)
 ## A printed front cover for the box on the table (see cover()).
 signal cover_ready(rom_path: String, texture: Texture2D)
@@ -33,7 +34,7 @@ func set_root(path: String) -> void:
 ## Where ES-DE style scrapes keep their media, most likely first.
 func media_roots() -> Array[String]:
 	var roots: Array[String] = []
-	var home := OS.get_environment("HOME") if OS.get_name() != "Windows" else OS.get_environment("USERPROFILE")
+	var home := Platform.home_folder()
 	if not rom_root.is_empty():
 		roots.append(rom_root.get_base_dir().path_join("tools/downloaded_media")) # EmuDeck: Emulation/roms → Emulation/tools
 		roots.append(rom_root.get_base_dir().path_join("ES-DE/downloaded_media"))

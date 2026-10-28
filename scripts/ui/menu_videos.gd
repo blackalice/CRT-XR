@@ -4,6 +4,7 @@ extends RefCounted
 const VideoSession = preload("res://scripts/video/video_session.gd")
 const VideoLibrary = preload("res://scripts/video/video_library.gd")
 const FfmpegInstaller = preload("res://scripts/video/ffmpeg_installer.gd")
+const Platform = preload("res://scripts/platform/platform.gd")
 var host: Node
 var menu: Control
 const VIDEOS_PER_PAGE := 50
@@ -26,7 +27,7 @@ func video_location_items() -> Array:
 ## Elsewhere, say what to install.
 func video_setup_items(section: String) -> Array:
 	var installer: Node = host.ffmpeg_installer
-	if OS.get_name() != "Windows" or installer == null:
+	if not Platform.downloads_ffmpeg() or installer == null:
 		return [menu.entry(menu.catalog.unavailable(menu.catalog.action("library.ffmpeg_missing","Video playback needs FFmpeg",func(): pass,
 			"CRT XR plays videos with the system's FFmpeg 7.1 or 8. SteamOS includes it; on other systems install it with the package manager.",true),
 			"Install FFmpeg 7.1 or 8 to watch videos."),section,"video")]

@@ -20,6 +20,7 @@ const SettingsDefaults = preload("res://scripts/ui/settings_defaults.gd")
 const SettingsStore = preload("res://scripts/ui/settings_store.gd")
 const CoreRegistry = preload("res://scripts/emulation/core_registry.gd")
 const StartupStatus = preload("res://scripts/ui/startup_status.gd")
+const Platform = preload("res://scripts/platform/platform.gd")
 const PICTURE_SECTIONS := ["crt", "picture"]
 ## Picture profile used for every video, kept apart from games and the test signal.
 const VIDEO_PROFILE := "video"
@@ -190,7 +191,7 @@ func _ready() -> void:
 	for arg in startup_args:
 		if arg in ["--sbs","--full-sbs","--sbs-session","--sbs-session-manual","--sbs-prompt"]:
 			Input.mouse_mode=Input.MOUSE_MODE_HIDDEN
-	if OS.get_name()=="Windows" and ("--windows-xr" in startup_args or (not OS.has_feature("editor") and not "--script" in OS.get_cmdline_args())):
+	if Platform.is_windows() and ("--windows-xr" in startup_args or (not OS.has_feature("editor") and not "--script" in OS.get_cmdline_args())):
 		sbs_prompt=preload("res://scripts/ui/windows_setup.gd").new()
 		sbs_prompt.z_index=4096
 		sbs_prompt.xr_ready.connect(func(size: Vector2i):
@@ -264,7 +265,7 @@ func start_sbs_session() -> void:
 
 func start_application() -> void:
 	fade_material.shader = load("res://shaders/eye_fade.gdshader")
-	if not windows_fixed_start and OS.get_name() in ["Linux", "Windows"] and not "--simulate" in OS.get_cmdline_user_args():
+	if not windows_fixed_start and not Platform.glasses_tracking().is_empty() and not "--simulate" in OS.get_cmdline_user_args():
 		use_tracking(true)
 	signal_view = SubViewport.new()
 	signal_view.size = Vector2i(256, 240)
@@ -446,7 +447,7 @@ func start_application() -> void:
 		set_stereo(true)
 		DisplayServer.window_set_size(sbs_target_size())
 		DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_FULLSCREEN)
-	print("CRT XR ready / Godot ", Engine.get_version_info().string, " / ", OS.get_name())
+	print("CRT XR ready / Godot ", Engine.get_version_info().string, " / ", Platform.display_name())
 	var arguments := OS.get_cmdline_user_args()
 	for index in range(arguments.size() - 1):
 		if arguments[index] == "--rom":
@@ -742,7 +743,7 @@ func use_tracking(real_tracking: bool) -> void:
 	provider.close()
 	if not real_tracking: provider = Simulated.new()
 	elif tracking_source == "opentrack": provider = OpenTrackTracking.new()
-	else: provider = WindowsTracking.new() if OS.get_name() == "Windows" else LinuxTracking.new()
+	else: provider = WindowsTracking.new() if Platform.glasses_tracking() == "viture_windows" else LinuxTracking.new()
 	provider.invert_pitch = bool(inversion.x)
 	provider.invert_yaw = bool(inversion.y)
 	provider.invert_roll = bool(inversion.z)

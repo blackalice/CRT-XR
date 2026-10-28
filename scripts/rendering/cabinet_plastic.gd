@@ -3,6 +3,7 @@ extends RefCounted
 ## connectors and badges, which must keep their original imported materials.
 const CASING_PARTS := ["Front_section", "Front_buttons", "rear_section"]
 const SHADER = preload("res://shaders/cabinet_plastic.gdshader")
+const Platform = preload("res://scripts/platform/platform.gd")
 static var grain_texture: ImageTexture
 
 static func apply(scene: Node) -> void:
@@ -35,7 +36,7 @@ static func apply(scene: Node) -> void:
 			part.set_surface_override_material(surface, replacements[key])
 
 static func load_baked_ao(filename: String) -> Texture2D:
-	var base := ProjectSettings.globalize_path("res://build/crt-model/ao") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir().path_join("assets/ao")
+	var base := Platform.asset("crt-model/ao", "ao")
 	# Prefer the BC4 conversion from scripts/prepare-cabinet-ao.gd (about a third
 	# of the memory, no decode at startup); the PNG remains the fallback.
 	var compressed := base.path_join(filename.get_basename() + ".res")

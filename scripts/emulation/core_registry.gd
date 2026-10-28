@@ -4,6 +4,7 @@ extends RefCounted
 ## Systems with a "bios_any" list need one of those files in the bios folder next to the application.
 const Archive = preload("res://scripts/content/rom_archive.gd")
 const Folders = preload("res://scripts/content/console_folders.gd")
+const Platform = preload("res://scripts/platform/platform.gd")
 const SYSTEMS := {
 	"snes": {"name":"SNES", "core":"snes9x", "extensions":["sfc","smc","swc","fig"], "aspect":4.0/3.0},
 	"nes": {"name":"NES", "core":"nestopia", "extensions":["nes","unf","unif"], "aspect":4.0/3.0},
@@ -151,8 +152,7 @@ static func core_path(system: String) -> String:
 	var override := OS.get_environment("CRT_XR_CORE")
 	if override.is_empty(): override=OS.get_environment("RETROCRT_CORE")
 	if not override.is_empty(): return override
-	var base := ProjectSettings.globalize_path("res://") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()
-	return base.path_join("cores/" + SYSTEMS[system].core + "_libretro." + ("dll" if OS.get_name()=="Windows" else "so"))
+	return Platform.core_library(SYSTEMS[system].core)
 
 ## Cores whose audio survives the same-instance preview (save/run/restore) unchanged.
 ## Only used when Separate preview core is off: the default second copy of the core
@@ -173,23 +173,25 @@ static var library_root := ""
 ## Folders searched for BIOS files, in order: CRT_XR_BIOS; a bios folder beside the
 ## application; on the Steam Deck install, ~/Applications/CRT-XR/bios (release
 ## folders are replaced on update, so files beside the app would not survive);
-## and the bios folder next to the ROM folder (EmuDeck keeps roms and bios side by
-## side). The host gives cores one system/save directory, so the system's own BIOS
+## on Android, Documents/CRT XR/bios in shared storage; and the bios folder next to
+## the ROM folder (EmuDeck keeps roms and bios side by side). The host gives cores one system/save directory, so the system's own BIOS
 ## files are staged there. Only declared names are copied: shared emulator bios
 ## folders can be huge.
 static func bios_sources() -> Array[String]:
 	var folders: Array[String] = []
 	var override := OS.get_environment("CRT_XR_BIOS")
 	if not override.is_empty(): folders.append(override)
-	var base := ProjectSettings.globalize_path("res://") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()
+	var base := Platform.app_dir()
 	folders.append(base.path_join("bios"))
 	if base.get_base_dir().get_file() == "releases": folders.append(base.get_base_dir().get_base_dir().path_join("bios"))
+	if not Platform.shared_folder().is_empty(): folders.append(Platform.shared_folder().path_join("bios"))
 	if not library_root.is_empty(): folders.append(library_root.get_base_dir().path_join("bios"))
 	return folders
 
 ## Where to tell users to put BIOS files: a folder that survives app updates.
 static func preferred_bios_folder() -> String:
-	var base := ProjectSettings.globalize_path("res://") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()
+	if not Platform.shared_folder().is_empty(): return Platform.shared_folder().path_join("bios")
+	var base := Platform.app_dir()
 	if base.get_base_dir().get_file() == "releases": return base.get_base_dir().get_base_dir().path_join("bios")
 	return base.path_join("bios")
 

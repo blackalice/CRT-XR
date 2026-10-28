@@ -3,13 +3,12 @@ extends RefCounted
 const SCREEN_ANCHOR := Vector3(0.0, 0.035, 0.06)
 const Plastic = preload("res://scripts/rendering/cabinet_plastic.gd")
 const Brand = preload("res://scripts/rendering/cabinet_brand.gd")
+const Platform = preload("res://scripts/platform/platform.gd")
 
 # Load a user-supplied GLB locally; no model data is embedded in source control.
 static func load_cabinet(parent: Node3D) -> Dictionary:
-	var path := ProjectSettings.globalize_path("res://build/crt-model/crt_tv.glb")
-	if not OS.has_feature("editor"):
-		path = OS.get_executable_path().get_base_dir().path_join("assets/crt_tv.glb")
-	var prepared := ProjectSettings.globalize_path("res://build/crt-model/optimised/cabinet.scn") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir().path_join("assets/optimised/cabinet.scn")
+	var path := Platform.asset("crt-model/crt_tv.glb", "crt_tv.glb")
+	var prepared := Platform.asset("crt-model/optimised/cabinet.scn", "optimised/cabinet.scn")
 	if not FileAccess.file_exists(path) and not FileAccess.file_exists(prepared):
 		return {}
 	var scene: Node

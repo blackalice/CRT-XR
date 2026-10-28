@@ -2,6 +2,7 @@ extends RefCounted
 const Locations = preload("res://scripts/content/rom_locations.gd")
 const Registry = preload("res://scripts/emulation/core_registry.gd")
 const Folders = preload("res://scripts/content/console_folders.gd")
+const Platform = preload("res://scripts/platform/platform.gd")
 const HIDDEN := ["$recycle.bin","system volume information","lost+found"]
 var current_dir := ""
 var default_dir := ""
@@ -9,11 +10,10 @@ var entries: Array[Dictionary] = []
 var message := ""
 
 func home_folder() -> String:
-	var home := OS.get_environment("HOME") if OS.get_name()=="Linux" else OS.get_environment("USERPROFILE")
-	return home if not home.is_empty() else ProjectSettings.globalize_path("res://")
+	return Platform.home_folder()
 
 func show_folder(path: String) -> bool:
-	if OS.get_name()=="Windows": path=Locations.normalize_windows_path(path)
+	if Platform.is_windows(): path=Locations.normalize_windows_path(path)
 	var directory := DirAccess.open(path)
 	if directory == null:
 		message = "Folder unavailable. Check its drive or network connection, or choose another folder."

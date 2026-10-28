@@ -4,6 +4,7 @@ extends RefCounted
 const RomIndex = preload("res://scripts/content/rom_index.gd")
 const VideoSession = preload("res://scripts/video/video_session.gd")
 const FfmpegInstaller = preload("res://scripts/video/ffmpeg_installer.gd")
+const Platform = preload("res://scripts/platform/platform.gd")
 var host: Node
 var menu: Control
 ## Lists this long or longer offer Jump to letter.
@@ -88,7 +89,7 @@ func library_tool_items() -> Array:
 		result.append(menu.entry(menu.catalog.action("library.detected:"+path,"Found a ROM folder",func(): open_folder(path),"Open this detected library, then choose Use this folder for my library.",false,"›"),find,"search","",path))
 	result.append(menu.entry(menu.catalog.action("library.browse","Browse this computer",browse_folders,"Start from your ROM folder, or your home folder.",false,""),find,"folder","","",true))
 	result.append(menu.entry(menu.catalog.action("library.sd","SD card",open_cards,"Browse a mounted Steam Deck SD card.",false,""),find,"sd","","",true))
-	if OS.get_name()=="Windows": result.append(menu.entry(menu.catalog.action("library.drives","Computer drives",open_drives,"Choose a drive, then browse to your ROM folder.",false,""),find,"drive","","",true))
+	if Platform.has_drive_list(): result.append(menu.entry(menu.catalog.action("library.drives","Computer drives",open_drives,"Choose a drive, then browse to your ROM folder.",false,""),find,"drive","","",true))
 	result.append(menu.entry(menu.catalog.action("library.path","Type a folder or network path…",enter_folder_path,"Enter a drive folder or a network share path; Windows handles sign-in.",false,""),find,"network","","",true))
 	return result
 
@@ -146,7 +147,7 @@ func enter_folder_path(for_music := false) -> void:
 	menu.keys.focus_entry(); menu.rename_field.select_all()
 
 func submit_folder_path() -> void:
-	var path: String = menu.library.Locations.normalize_windows_path(menu.rename_field.text) if OS.get_name()=="Windows" else menu.rename_field.text.strip_edges()
+	var path: String = menu.library.Locations.normalize_windows_path(menu.rename_field.text) if Platform.is_windows() else menu.rename_field.text.strip_edges()
 	if path.is_empty(): menu.show_error("Enter a folder path, such as D:/roms or //server/share/roms."); return
 	if DirAccess.open(path)==null:
 		menu.show_error("Cannot open this folder. Check the path, drive or network connection. For a network share, connect and sign in through Windows File Explorer first.")

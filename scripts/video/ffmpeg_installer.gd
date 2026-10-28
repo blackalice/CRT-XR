@@ -5,6 +5,7 @@ extends Node
 ## just those files by byte range, so the rest of the archive (tools, filters,
 ## devices) never comes down. Every file is checked against the archive's
 ## CRC-32 before it is used. CRT XR itself ships no FFmpeg.
+const Platform = preload("res://scripts/platform/platform.gd")
 signal progress(done: int, total: int, message: String)
 signal finished(ok: bool, message: String)
 
@@ -30,7 +31,7 @@ static func install_path() -> String:
 ## True when a previous download is present; points the decoder at it unless a
 ## developer has already chosen a copy with CRT_XR_FFMPEG_DIR.
 static func use_installed() -> bool:
-	if OS.get_name() != "Windows": return false
+	if not Platform.downloads_ffmpeg(): return false
 	var folder := install_path()
 	var found := false
 	for file in DirAccess.get_files_at(folder) if DirAccess.dir_exists_absolute(folder) else PackedStringArray():
@@ -224,5 +225,5 @@ static func finish_removal() -> void:
 ## True when this copy of CRT XR is using libraries it downloaded.
 static func installed() -> bool:
 	var folder := install_path()
-	return OS.get_name() == "Windows" and DirAccess.dir_exists_absolute(folder) and not FileAccess.file_exists(folder.path_join("remove")) \
+	return Platform.downloads_ffmpeg() and DirAccess.dir_exists_absolute(folder) and not FileAccess.file_exists(folder.path_join("remove")) \
 		and Array(DirAccess.get_files_at(folder)).any(func(file): return str(file).begins_with("avcodec-"))

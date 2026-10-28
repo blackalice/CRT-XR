@@ -1,5 +1,6 @@
 extends RefCounted
 ## Static console and two low-poly rear cables. Placement is relative to TV/table.
+const Platform = preload("res://scripts/platform/platform.gd")
 static func cable(parent: Node3D, points: PackedVector3Array, radius: float, label: String) -> void:
  var curve:=Curve3D.new()
  for i in range(points.size()):
@@ -22,7 +23,7 @@ static func cable(parent: Node3D, points: PackedVector3Array, radius: float, lab
  part.material_override=material;part.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
  parent.add_child(part)
 static func build(tv: Node3D, support: Node3D, cabinet: AABB) -> Node3D:
- var path:=ProjectSettings.globalize_path("res://build/console/console.scn") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir().path_join("assets/console/console.scn")
+ var path:=Platform.asset("console/console.scn","console/console.scn")
  if not FileAccess.file_exists(path) or not support.has_node("TopShelf"):return null
  var part:=load(path).instantiate() as MeshInstance3D
  if part==null:return null

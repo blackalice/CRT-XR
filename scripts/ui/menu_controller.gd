@@ -26,6 +26,7 @@ const SECTION_INSIDE := "CONTENTS"
 const SECTION_PLACES := "GO TO"
 const StatusLine = preload("res://scripts/ui/status_line.gd")
 const HelpArticle = preload("res://scripts/ui/help_article.gd")
+const Platform = preload("res://scripts/platform/platform.gd")
 ## Confirmation answers shown in the danger colour.
 const DESTRUCTIVE := ["Exit","Delete","Forget","Remove","Reset","Overwrite","Stop","Replace"]
 var location_bar: PanelContainer
@@ -475,7 +476,7 @@ func place_entries(prefix: String, open: Callable, path_entry: Callable, extra: 
 	for mount in library.cards():
 		var path: String=mount
 		result.append(entry(catalog.action(prefix+".sd:"+path,"SD card",open.bind(path),path,false,""),SECTION_PLACES,"sd","","",true))
-	if OS.get_name()=="Windows":
+	if Platform.has_drive_list():
 		for drive in library.Locations.computer_drives():
 			var path: String=drive
 			result.append(entry(catalog.action(prefix+".drive:"+path,"Drive "+path.trim_suffix("/"),open.bind(path),"Browse this drive, including mapped network drives.",false,""),SECTION_PLACES,"drive","","",true))

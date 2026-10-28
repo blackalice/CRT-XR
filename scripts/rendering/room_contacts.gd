@@ -1,7 +1,8 @@
 extends RefCounted
 ## Static contact AO in model-local coordinates. Lighting stays dynamic.
+const Platform = preload("res://scripts/platform/platform.gd")
 static func texture(name: String) -> Texture2D:
-    var folder:=ProjectSettings.globalize_path("res://build/room-bake") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir().path_join("assets/room-bake")
+    var folder:=Platform.asset("room-bake","room-bake")
     var path:=folder.path_join(name)
     if not FileAccess.file_exists(path):return null
     var image:=Image.load_from_file(path)
@@ -9,7 +10,7 @@ static func texture(name: String) -> Texture2D:
     image.convert(Image.FORMAT_L8);image.generate_mipmaps()
     return ImageTexture.create_from_image(image)
 static func apply(world: Node3D, support: Node3D) -> void:
-    var folder:=ProjectSettings.globalize_path("res://build/room-bake") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir().path_join("assets/room-bake")
+    var folder:=Platform.asset("room-bake","room-bake")
     var manifest_path:=folder.path_join("bake.json")
     if not FileAccess.file_exists(manifest_path):return
     var data=JSON.parse_string(FileAccess.get_file_as_string(manifest_path))

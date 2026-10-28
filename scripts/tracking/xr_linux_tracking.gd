@@ -1,6 +1,7 @@
 extends TrackingProvider
 ## Native helper keeps driver synchronization outside Godot's rendering process.
 const Predictor = preload("res://scripts/tracking/pose_prediction.gd")
+const Platform = preload("res://scripts/platform/platform.gd")
 
 var socket := PacketPeerUDP.new()
 var helper_pid := -1
@@ -17,14 +18,14 @@ var live_status := "XRLinuxDriver / LIVE 3DoF"
 func _init() -> void:
 	real = true
 	valid = false
-	if OS.get_name() != "Linux":
-		status = "Real tracking requires Linux; select simulation"
+	if Platform.glasses_tracking() != "xr_linux":
+		status = "No built-in glasses tracking on this platform yet; use OpenTrack or the fixed view"
 		return
 	var driver := OS.get_environment("HOME").path_join(".local/bin/xrDriver")
 	if not FileAccess.file_exists(driver):
 		status = "XR Gaming driver missing; install or enable XR Gaming"
 		return
-	var base := ProjectSettings.globalize_path("res://dist/linux") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir()
+	var base := ProjectSettings.globalize_path("res://dist/linux") if Platform.in_editor() else Platform.app_dir()
 	var helper := base.path_join("crt-xr-tracking-bridge")
 	if not FileAccess.file_exists(helper):
 		status = "Tracking helper missing; select simulation"
