@@ -18,6 +18,8 @@ foreach ($helper in @('crt-xr-tracking-bridge','crt-xr-ipc-inventory')) {
     if ([IO.Path]::GetFullPath($candidate) -ne [IO.Path]::GetFullPath((Join-Path $out $helper))) { Copy-Item -LiteralPath $candidate -Destination $out -Force }
 }
 Copy-Item -LiteralPath (Join-Path $root 'scripts/launch-deck.sh') -Destination $out
+Copy-Item -LiteralPath (Join-Path $root 'scripts/launch-linux.sh') -Destination $out
+Copy-Item -LiteralPath (Join-Path $root 'scripts/linux-session.py') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/launch-steam.sh') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/steam-session.py') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/tracking-session.py') -Destination $out
@@ -26,6 +28,7 @@ Copy-Item -LiteralPath (Join-Path $root 'scripts/launch-glasses.sh') -Destinatio
 Copy-Item -LiteralPath (Join-Path $root 'scripts/glasses-session.py') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'scripts/driver-sbs.py') -Destination $out
 Copy-Item -LiteralPath (Join-Path $root 'docs/display-setup.md') -Destination (Join-Path $out 'DISPLAY-SETUP.md')
+Copy-Item -LiteralPath (Join-Path $root 'docs/LINUX-DESKTOP.md') -Destination (Join-Path $out 'LINUX-DESKTOP.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/emulation.md') -Destination (Join-Path $out 'PLAYING.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/gaming-mode.md') -Destination (Join-Path $out 'GAMING-MODE.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/input-latency.md') -Destination (Join-Path $out 'INPUT-LATENCY.md')
@@ -118,19 +121,23 @@ if (Test-Path -LiteralPath (Join-Path $roomBake 'bake.json')) {
     Copy-Item -LiteralPath (Join-Path $root 'docs/room-contact-bake.md') -Destination (Join-Path $out 'assets/ROOM-CONTACT-BAKE.md')
 }
 # Linux shebangs must stay LF even when the checkout uses Windows line endings.
-foreach ($name in @('crt-xr.x86_64','launch-deck.sh','launch-steam.sh','launch-glasses.sh','steam-session.py','tracking-session.py','display-probe.py','glasses-session.py','driver-sbs.py')) {
+foreach ($name in @('crt-xr.x86_64','launch-deck.sh','launch-linux.sh','linux-session.py','launch-steam.sh','launch-glasses.sh','steam-session.py','tracking-session.py','display-probe.py','glasses-session.py','driver-sbs.py')) {
     $scriptPath = Join-Path $out $name
     $text = [IO.File]::ReadAllText($scriptPath).Replace("`r`n", "`n")
     [IO.File]::WriteAllText($scriptPath, $text, [Text.UTF8Encoding]::new($false))
 }
 $installerOut = Join-Path $out 'installer'
 New-Item -ItemType Directory -Force $installerOut | Out-Null
-foreach ($name in @('install.py','steam_config.py')) {
+foreach ($name in @('install.py','steam_config.py','runtime_check.py')) {
     $text = [IO.File]::ReadAllText((Join-Path $root "scripts/installer/$name")).Replace("`r`n", "`n")
     [IO.File]::WriteAllText((Join-Path $installerOut $name), $text, [Text.UTF8Encoding]::new($false))
 }
 $text = [IO.File]::ReadAllText((Join-Path $root 'scripts/installer/Install-CRT-XR.sh')).Replace("`r`n", "`n")
 [IO.File]::WriteAllText((Join-Path $out 'Install-CRT-XR.sh'), $text, [Text.UTF8Encoding]::new($false))
+foreach ($name in @('Install-CRT-XR-Linux.sh','Install CRT XR Linux.desktop')) {
+    $text = [IO.File]::ReadAllText((Join-Path $root "scripts/installer/$name")).Replace("`r`n", "`n")
+    [IO.File]::WriteAllText((Join-Path $out $name), $text, [Text.UTF8Encoding]::new($false))
+}
 foreach ($name in @('GETTING-STARTED.md','PRE-LAUNCH-CHECKLIST.md','LICENCE-PROPOSAL.md')) {
     Copy-Item -LiteralPath (Join-Path $root "docs/$name") -Destination $out
 }

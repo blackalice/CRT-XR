@@ -1,4 +1,4 @@
-"""Offline per-user CRT XR installer. Steam must be closed before configuration writes."""
+"""Offline per-user Linux installer; desktop or optional Steam integration."""
 
 import argparse
 
@@ -44,6 +44,8 @@ def verified_payload(package):
     for name,digest in manifest.items():
 
         path=package/name
+
+        if Path(name).is_absolute() or '..' in Path(name).parts: raise ValueError('Unsafe package path')
 
         if path.is_symlink() or not path.resolve().is_relative_to(package.resolve()): raise ValueError('Unsafe package path')
 
@@ -178,6 +180,109 @@ def artwork_plan(package,config,appid,previous,allowed=None):
         owned[target.name]=hashlib.sha256(data).hexdigest()
 
     return changes,owned
+
+def stage_payload(package,home,manifest):
+    fingerprint=hashlib.sha256((package/'package-manifest.json').read_bytes()).hexdigest()[:12]
+    release=home/'Applications/CRT-XR/releases'/fingerprint
+    release.parent.mkdir(parents=True,exist_ok=True)
+    if release.exists():
+        if (release/'package-manifest.json').read_bytes()!=(package/'package-manifest.json').read_bytes():
+            raise ValueError('Existing release manifest differs from this package')
+        verified_payload(release)
+        return release
+    stage=Path(tempfile.mkdtemp(prefix='.staging-',dir=release.parent))
+    try:
+        for name in manifest:
+            destination=stage/name
+            destination.parent.mkdir(parents=True,exist_ok=True)
+            shutil.copy2(package/name,destination)
+            if name.endswith(('.sh','.desktop','.x86_64')) or name in ['crt-xr-tracking-bridge','crt-xr-ipc-inventory']:
+                destination.chmod(0o755)
+        shutil.copy2(package/'package-manifest.json',stage/'package-manifest.json')
+        verified_payload(stage)
+        stage.rename(release)
+    finally:
+        if stage.exists(): shutil.rmtree(stage)
+    return release
+
+
+def application_running(base):
+    for path in Path('/proc').glob('[0-9]*/exe'):
+        try:
+            executable=path.resolve()
+            if executable.name=='crt-xr-engine.x86_64' and executable.is_relative_to(base.resolve()): return True
+        except (OSError,RuntimeError): pass
+    return False
+
+
+def desktop_value(value):
+    return str(value).replace('\\','\\\\').replace('\n','\\n').replace('\r','\\r').replace('\t','\\t')
+
+
+def desktop_exec(value):
+    # Desktop Entry string escaping happens before Exec argument parsing.
+    escaped=str(value).replace('\\','\\\\').replace('"','\\"').replace('$','\\$').replace('`','\\`').replace('%','%%')
+    return desktop_value('"'+escaped+'"')
+
+
+def desktop_entry(current):
+    # GLib checks the executable before expanding %% field escapes. Invoke Bash
+    # explicitly so home directories containing a literal % still launch.
+    launcher='bash '+desktop_exec(current/'launch-linux.sh')
+    return ('[Desktop Entry]\nType=Application\nName=CRT XR\nComment=Retro games and videos in a CRT room\n'
+            'Exec='+launcher+'\nIcon='+desktop_value(current/'artwork/Icon.png')+'\n'
+            'Terminal=false\nCategories=Game;Emulator;\nActions=Glasses;\n\n'
+            '[Desktop Action Glasses]\nName=Play with XR glasses\nExec='+launcher+' --glasses\n').encode('utf-8')
+
+
+def install_desktop(package,home,dry_run=False,data_home=None):
+    from runtime_check import check_runtime
+    manifest=verified_payload(package)
+    for name in ['launch-linux.sh','linux-session.py','tracking-session.py','installer/runtime_check.py','artwork/Icon.png']:
+        if name not in manifest: raise ValueError('Incomplete desktop package: '+name)
+    runtime=check_runtime(package)
+    base=home/'Applications/CRT-XR'
+    current=base/'current'
+    if current.exists() and not current.is_symlink(): raise ValueError('The install/current path is not a managed link; nothing changed')
+    if application_running(base): raise RuntimeError('Close CRT XR before installing or updating it.')
+    if data_home is None:
+        candidate=Path(os.environ.get('XDG_DATA_HOME',str(home/'.local/share')))
+        data_home=candidate if candidate.is_absolute() else home/'.local/share'
+    data_home=Path(data_home)
+    if not data_home.is_absolute(): raise ValueError('Application-menu data directory must be an absolute path')
+    entry=data_home/'applications/crt-xr.desktop'
+    receipt=base/'desktop-install-receipt.json'
+    result={'integration':'desktop','shortcut':str(entry),'runtime':runtime,
+            'tracking':'For head tracking, install/enable the compatible XR Linux Driver (available with Breezy Desktop). Ordinary desktop play needs no XR software.'}
+    if dry_run: return dict(result,dry_run=True)
+    release=stage_payload(package,home,manifest)
+    backups=base/'install-backups'
+    backups.mkdir(parents=True,exist_ok=True)
+    backup=Path(tempfile.mkdtemp(prefix=time.strftime('%Y%m%d-%H%M%S')+'-desktop-',dir=backups))
+    previous=os.readlink(current) if current.is_symlink() else None
+    old_entry=entry.read_bytes() if entry.exists() else None
+    old_receipt=receipt.read_bytes() if receipt.exists() else None
+    if old_entry is not None: (backup/'crt-xr.desktop').write_bytes(old_entry)
+    if old_receipt is not None: (backup/'desktop-install-receipt.json').write_bytes(old_receipt)
+    result.update(release=str(release),backup=str(backup))
+    (backup/'receipt.json').write_text(json.dumps(dict(result,previous_release=previous),indent=2)+'\n')
+    pending=base/'.current-install'
+    if pending.exists() or pending.is_symlink(): raise ValueError('Incomplete install link exists; inspect .current-install before retrying')
+    if application_running(base): raise RuntimeError('CRT XR started during installation. Close it and retry.')
+    try:
+        atomic(entry,desktop_entry(current))
+        atomic(receipt,(json.dumps(result,indent=2)+'\n').encode())
+        pending.symlink_to(release,target_is_directory=True)
+        os.replace(pending,current)
+    except BaseException:
+        for path,old in [(entry,old_entry),(receipt,old_receipt)]:
+            if old is None: path.unlink(missing_ok=True)
+            else: atomic(path,old)
+        if pending.is_symlink(): pending.unlink()
+        raise
+    # Steam's independent install receipt and configuration are left intact.
+    return result
+
 
 def install(package,home,account,resolution,dry_run=False):
 
@@ -334,8 +439,21 @@ def install(package,home,account,resolution,dry_run=False):
     return result
 
 def dialog(*args):
-
-    return subprocess.run(['kdialog','--title','CRT XR setup',*args],text=True,capture_output=True)
+    if shutil.which('kdialog'):
+        command=['kdialog','--title','CRT XR setup',*args]
+    elif shutil.which('zenity'):
+        kind,text,*values=args
+        command=['zenity','--title','CRT XR setup']
+        if kind=='--radiolist':
+            command+=['--list','--radiolist','--text',text,'--column','Select','--column','ID','--column','Choice','--hide-column','2','--print-column','2']
+            for i in range(0,len(values),3):command+=['TRUE' if values[i+2]=='on' else 'FALSE',values[i],values[i+1]]
+        elif kind=='--menu':
+            command+=['--list','--text',text,'--column','ID','--column','Account','--hide-column','1','--print-column','1',*values]
+        else:
+            command+=[{'--yesno':'--question','--msgbox':'--info','--error':'--error'}[kind],'--text',text]
+    else:
+        raise RuntimeError('Graphical setup needs kdialog or zenity. Run the installer with --no-gui in a terminal.')
+    return subprocess.run(command,text=True,capture_output=True)
 
 def main():
 
@@ -353,15 +471,31 @@ def main():
 
     parser.add_argument('--gui',action='store_true')
 
+    parser.add_argument('--no-gui',dest='gui',action='store_false')
+
+    parser.add_argument('--integration',choices=['steam','desktop'],default='steam')
+
+    parser.add_argument('--data-home',type=Path,help='Application-menu data directory (desktop installation only)')
+
     args=parser.parse_args()
 
     try:
 
         verified_payload(args.package.resolve())
 
+        if args.integration=='desktop':
+            if args.gui and not (shutil.which('kdialog') or shutil.which('zenity')):
+                print('Graphical dialogs unavailable; continuing in this terminal.')
+                args.gui=False
+            result=install_desktop(args.package.resolve(),args.home.resolve(),args.dry_run,args.data_home)
+            print(json.dumps(result,indent=2))
+            if args.gui and not args.dry_run:
+                dialog('--msgbox','CRT XR is installed. Open CRT XR from your application menu.\n\nFor glasses, use the launcher\'s Play with XR glasses action, or run launch-linux.sh --glasses. KDE can manage the display; other desktops require manual SBS/display setup.\n\n'+result['tracking']+'\n\nYour ROMs, settings and saves were not moved.')
+            return 0
+
         if args.gui:
 
-            if not shutil.which('kdialog'): raise RuntimeError('Desktop setup needs kdialog. Run this from Steam Deck Desktop Mode.')
+            if not (shutil.which('kdialog') or shutil.which('zenity')): raise RuntimeError('Graphical setup needs kdialog or zenity. Run with --no-gui in a terminal.')
 
             selection=dialog('--radiolist','XR setup requires Decky Loader + XR Gaming already installed.\nPro 2 glasses currently need the testing version of XR Gaming.\n\nChoose your display setup.\nVITURE Full SBS uses the tested 3840 × 1080 game resolution.\nOther glasses need manual display setup in this beta.',
 
@@ -401,7 +535,7 @@ def main():
 
         if args.gui and not args.dry_run:
 
-            dialog('--msgbox','CRT XR is installed.\n\n'+result['tracking']+'\n\nRestart Steam, then Return to Gaming Mode. Find CRT XR under Non-Steam.\nWith glasses: start in mono, press A at the prompt, then switch SBS.\nWithout glasses: launch normally.\n\nYour ROMs, settings and saves were not moved.')
+            dialog('--msgbox','CRT XR is installed.\n\n'+result['tracking']+'\n\nRestart Steam and find CRT XR under Non-Steam. On Steam Deck, you can Return to Gaming Mode.\nWith glasses: start in mono, then switch to SBS when prompted.\nWithout glasses: launch normally.\n\nYour ROMs, settings and saves were not moved.')
 
             # The user restarts Steam or returns to Gaming Mode. A detached
             # restart can inherit a stale X display during a session change.
@@ -412,7 +546,7 @@ def main():
 
         message='Setup could not finish: '+str(error)
 
-        if args.gui and shutil.which('kdialog'):dialog('--error',message)
+        if args.gui and (shutil.which('kdialog') or shutil.which('zenity')):dialog('--error',message)
 
         print(message,file=sys.stderr)
 

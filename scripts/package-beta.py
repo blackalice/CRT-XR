@@ -1,5 +1,6 @@
 """Arrange, check and archive an exported build for a release download.
 Usage: python scripts/package-beta.py dist/CRT-XR-0.1.0-beta.14-SteamDeck linux [source-archive]
+       python scripts/package-beta.py dist/CRT-XR-Linux-preview linux-desktop [source-archive]
        python scripts/package-beta.py dist/CRT-XR-0.1.0-beta.14-Windows windows [source-archive]
 With a source archive (from package-corresponding-source.py), licenses/SOURCE-ACCESS.md
 is written naming it and its SHA-256; otherwise an existing one is required.
@@ -15,10 +16,13 @@ Steam shortcut are unchanged. Re-running on an arranged folder is safe.
 from pathlib import Path
 import hashlib,json,shutil,sys,tarfile,zipfile,subprocess
 ROOT=Path(__file__).resolve().parents[1]
-folder=Path(sys.argv[1]).resolve();platform=sys.argv[2]
+folder=Path(sys.argv[1]).resolve();target=sys.argv[2]
+desktop=target=='linux-desktop'
+platform='linux' if desktop else target
 assert folder.is_dir() and platform in ["linux","windows"]
 PAYLOAD="CRT XR files"
 GUIDES={"linux":["GETTING-STARTED.md","PLAYING.md","GAMING-MODE.md","DISPLAY-SETUP.md"],"windows":["GETTING-STARTED.md","PLAYING.md","WINDOWS-SETUP.md"]}[platform]
+if desktop:GUIDES=["LINUX-DESKTOP.md","PLAYING.md","DISPLAY-SETUP.md"]
 NOTICES=["LICENSE","LICENSING.md","THIRD_PARTY.md","CORE-DISTRIBUTION.md","SOURCE-ACCESS.md","godot-cpp-LICENSE.md"]
 DEVELOPER_NOTES=["BETA-REVIEW.md","BETA-QUICKSTART.md","PRE-LAUNCH-CHECKLIST.md","LICENCE-PROPOSAL.md","AUDIO.md","CRT-PERFORMANCE.md","INPUT-LATENCY.md","PICTURE-CONTROLS.md","ROOM-AND-VIEW.md","SCREEN-LIGHT.md","SETTINGS-AND-STARTUP.md","MENU-AND-SETTINGS.md"]
 
@@ -35,8 +39,11 @@ for name in GUIDES:move(app/name,app/"docs"/name)
 for name in NOTICES:move(app/name,app/"licenses"/name)
 for name in DEVELOPER_NOTES:(app/name).unlink(missing_ok=True)
 if platform=="linux":
- move(app/"Install CRT XR.desktop",folder/"Install CRT XR.desktop")
- shutil.copy2(ROOT/"scripts/installer/HOW TO INSTALL.txt",folder/"HOW TO INSTALL.txt")
+ if desktop:
+  move(app/"Install CRT XR.desktop",app/"Install CRT XR Steam.desktop")
+  move(app/"Install CRT XR Linux.desktop",folder/"Install CRT XR.desktop")
+ else:move(app/"Install CRT XR.desktop",folder/"Install CRT XR.desktop")
+ shutil.copy2(ROOT/"scripts/installer"/("HOW TO INSTALL LINUX.txt" if desktop else "HOW TO INSTALL.txt"),folder/"HOW TO INSTALL.txt")
 else:
  move(app/"crt-xr-windows-tracking.exe",app/"tracking"/"crt-xr-windows-tracking.exe")
  # Steam artwork is only used by the Steam Deck installer.
@@ -47,13 +54,14 @@ if len(sys.argv)>3:
  source=Path(sys.argv[3]).resolve();assert source.is_file(),f"Missing source archive: {source}"
  version=(ROOT/'project.godot').read_text(encoding='utf-8').split('config/version="',1)[1].split('"',1)[0]
  (app/"licenses").mkdir(exist_ok=True)
+ location=("This preview's source archive is supplied alongside it; keep both files together." if desktop else
+           f"It is published beside this download on the same GitHub release:\nhttps://github.com/blackalice/CRT-XR/releases/tag/v{version}")
  (app/"licenses"/"SOURCE-ACCESS.md").write_text(f"""# Corresponding source: {version}
 
 Exact source and build inputs for this package: {source.name}
 SHA-256: {hashlib.sha256(source.read_bytes()).hexdigest()}
 
-It is published beside this download on the same GitHub release:
-https://github.com/blackalice/CRT-XR/releases/tag/v{version}
+{location}
 
 Original CRT XR code is MIT; the emulator cores and other components keep their
 own licences. See CORE-DISTRIBUTION.md and THIRD_PARTY.md in this folder.
@@ -61,6 +69,9 @@ own licences. See CORE-DISTRIBUTION.md and THIRD_PARTY.md in this folder.
 required=["licenses/LICENSE","licenses/LICENSING.md","licenses/CORE-DISTRIBUTION.md","licenses/SOURCE-ACCESS.md","licenses/THIRD_PARTY.md","licenses/godot/LICENSE.txt","licenses/fonts/OpenSans-OFL.txt","assets/optimised/cabinet.scn","assets/wood-table/table.scn","assets/room-bake/table_contact_albedo.res"]+["docs/"+name for name in GUIDES]
 required += ["CRT-XR.exe","CRT-XR.pck","tracking/crt-xr-windows-tracking.exe","crt_xr_libretro.windows.x86_64.dll"] if platform=="windows" else ["crt-xr.x86_64","crt-xr-engine.x86_64","crt-xr.pck","crt-xr-tracking-bridge","crt-xr-ipc-inventory","crt_xr_libretro.linux.x86_64.so","Install-CRT-XR.sh","installer/install.py","installer/steam_config.py","tracking-session.py"]+["artwork/"+name+".png" for name in ["Portrait","Landscape","Hero","Logo","Icon"]]
 for name in required:assert (app/name).is_file(),f"Missing packaged asset: {name}"
+if desktop:
+ for name in ["launch-linux.sh","linux-session.py","installer/runtime_check.py","Install-CRT-XR-Linux.sh"]:
+  assert (app/name).is_file(),f"Missing desktop installer asset: {name}"
 for core in ["snes9x","nestopia","genesis_plus_gx","gambatte","mgba","mednafen_pce_fast","mednafen_lynx","mednafen_ngp","stella","vecx"]:assert (app/"cores"/(core+"_libretro."+("dll" if platform=="windows" else "so"))).is_file(),f"Missing packaged core: {core}"
 top=sorted(p.name for p in folder.iterdir())
 expected={"linux":sorted(["Install CRT XR.desktop","HOW TO INSTALL.txt",PAYLOAD]),"windows":sorted(["CRT-XR.exe","CRT-XR.pck","crt_xr_libretro.windows.x86_64.dll","HOW TO START.txt","cores","assets","tracking","docs","licenses"])}[platform]
@@ -74,7 +85,7 @@ for p in files:
  assert p.suffix.lower() not in [".sfc",".smc",".nes",".gen",".smd",".sms",".gg",".gb",".gbc",".gba",".pce",".a26",".lynx",".ngp",".ngc",".vec",".cue",".mp3",".srm",".rst",".blend"],f"Private/source-only file in package: {p}"
  assert not p.name.lower().startswith("retrocrt"),f"Stale product binary: {p}"
 if platform=="linux":
- for path in [app/name for name in ["crt-xr.x86_64","launch-deck.sh","launch-steam.sh","launch-glasses.sh","Install-CRT-XR.sh"]]+[folder/"Install CRT XR.desktop"]:
+ for path in [app/name for name in ["crt-xr.x86_64","launch-deck.sh","launch-steam.sh","launch-glasses.sh","Install-CRT-XR.sh"]+(["launch-linux.sh","Install-CRT-XR-Linux.sh"] if desktop else [])]+[folder/"Install CRT XR.desktop"]:
   assert b"\r" not in path.read_bytes(),f"Linux launcher has Windows line endings: {path.name}"
 # The installer verifies every file against this manifest before installing.
 manifest={p.relative_to(app).as_posix():hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
@@ -89,7 +100,7 @@ if platform=="windows":
 else:
  def permissions(info):
   name=Path(info.name).name
-  info.mode=0o755 if info.isdir() or name.endswith(".x86_64") or name.startswith("launch-") or name in ["Install-CRT-XR.sh","Install CRT XR.desktop"] or name in ["crt-xr-tracking-bridge","crt-xr-ipc-inventory"] else 0o644
+  info.mode=0o755 if info.isdir() or name.endswith(".x86_64") or name.startswith("launch-") or name in ["Install-CRT-XR.sh","Install-CRT-XR-Linux.sh","Install CRT XR.desktop"] or name in ["crt-xr-tracking-bridge","crt-xr-ipc-inventory"] else 0o644
   return info
  with tarfile.open(archive,"w:gz") as output:output.add(folder,arcname=folder.name,filter=permissions)
 print("Checked release download:",archive)

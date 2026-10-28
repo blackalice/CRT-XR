@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Install CRT XR
+Comment=Install or update CRT XR for Linux
+Icon=system-software-install
+TryExec=python3
+Exec=python3 -c "from pathlib import Path;from urllib.parse import urlparse,unquote;import subprocess,sys;p=Path(unquote(urlparse(sys.argv[1]).path)) if sys.argv[1].startswith('file:') else Path(sys.argv[1]);d=p.resolve().parent;s=d/'CRT XR files'/'Install-CRT-XR-Linux.sh';s=s if s.is_file() else d/'Install-CRT-XR-Linux.sh';sys.exit(subprocess.call(['bash',str(s)],cwd=s.parent))" %k
+Terminal=true
+StartupNotify=false
+Categories=Game;System;

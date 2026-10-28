@@ -44,7 +44,7 @@ class TrackingSession:
         for key, value in record["applied"].items():
             if key not in TRACKING_ONLY: raise RuntimeError("Unknown tracking recovery field")
             match = line_for(restored, key)
-            # Preserve changes made through XR Gaming while the app was open.
+            # Preserve changes made through the driver's UI while the app was open.
             if match and match.group().split("=", 1)[1].strip() == value:
                 restored = replace_line(restored, key, record["before"].get(key))
         if restored != text: self.config.write_text(restored, encoding="utf-8")
@@ -72,7 +72,7 @@ class TrackingSession:
             for key, value in TRACKING_ONLY.items(): modified = replace_line(modified, key, key + "=" + value)
             # The driver watches this file's writes; retain its inode and permissions.
             if modified != original: self.config.write_text(modified, encoding="utf-8")
-            print("CRT XR: tracking enabled; XR Gaming compositor effects disabled for this session", flush=True)
+            print("CRT XR: tracking enabled; XR driver display effects disabled for this session", flush=True)
             return self
         except BaseException:
             try:

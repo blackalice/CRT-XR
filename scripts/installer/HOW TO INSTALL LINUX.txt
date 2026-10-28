@@ -1,0 +1,21 @@
+CRT XR for Linux x86-64 — installer preview
+==========================================
+
+1. Extract this archive into a normal folder. Keep its contents together.
+2. Double-click "Install CRT XR". Allow execution / Trust and Launch if asked.
+3. Open CRT XR from your desktop's application menu.
+
+No Steam account or administrator password is required. Installation is in
+~/Applications/CRT-XR. Updates retain settings, saves and the previous build.
+Close CRT XR before updating. You can delete the download after installation.
+
+If your file manager does not run the installer, open a terminal in this folder:
+  bash "CRT XR files/Install-CRT-XR-Linux.sh" --no-gui
+
+Requirements: x86-64 Linux with glibc 2.38 or newer, libstdc++ supporting
+GLIBCXX_3.4.32, Python 3.9+, and working OpenGL 3.3 / GPU drivers. The installer
+checks library dependencies. ARM/Android and musl-based Linux are not supported
+by this build. Video playback additionally needs compatible system FFmpeg.
+
+For glasses and optional Steam integration, see CRT XR files/docs/LINUX-DESKTOP.md.
+This preview has automated WSL checks; real KDE/GNOME glasses testing is pending.
