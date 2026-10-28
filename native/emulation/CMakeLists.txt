@@ -33,16 +33,26 @@ else()
     target_compile_options(crt_xr_libretro PRIVATE -Wall -Wextra -Wpedantic -Wno-unused-parameter)
 endif()
 target_link_libraries(crt_xr_libretro PRIVATE godot-cpp ${CMAKE_DL_LIBS} Threads::Threads)
+set(ARCH_NAME x86_64)
+set(LIBRARY_PREFIX "")
 if(WIN32)
     if(MINGW)
         target_link_options(crt_xr_libretro PRIVATE -static -static-libgcc -static-libstdc++)
         target_link_libraries(crt_xr_libretro PRIVATE winpthread)
     endif()
     set(OS_NAME windows)
+elseif(ANDROID)
+    # Built with the NDK toolchain file (scripts/build-android.sh). The APK
+    # packages native libraries by their lib* name; 16 KB pages are required on
+    # newer devices.
+    target_link_options(crt_xr_libretro PRIVATE -Wl,-z,max-page-size=16384)
+    set(OS_NAME android)
+    set(ARCH_NAME arm64)
+    set(LIBRARY_PREFIX lib)
 else()
     set(OS_NAME linux)
 endif()
-set_target_properties(crt_xr_libretro PROPERTIES PREFIX "" OUTPUT_NAME "crt_xr_libretro.${OS_NAME}.x86_64"
+set_target_properties(crt_xr_libretro PROPERTIES PREFIX "${LIBRARY_PREFIX}" OUTPUT_NAME "crt_xr_libretro.${OS_NAME}.${ARCH_NAME}"
     LIBRARY_OUTPUT_DIRECTORY "${ROOT}/extensions/bin" RUNTIME_OUTPUT_DIRECTORY "${ROOT}/extensions/bin"
     RUNTIME_OUTPUT_DIRECTORY_RELEASE "${ROOT}/extensions/bin")
 add_library(crt_xr_mock_core SHARED tests/mock_libretro.cpp)

@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://c13orna7dn2n1"
 path.s3tc="res://.godot/imported/edge.png-72aeaabc18ab43b110cd0c68b1a46893.s3tc.ctex"
+path.etc2="res://.godot/imported/edge.png-72aeaabc18ab43b110cd0c68b1a46893.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://artwork/game-boxes/cardboard-02/edge.png"
-dest_files=["res://.godot/imported/edge.png-72aeaabc18ab43b110cd0c68b1a46893.s3tc.ctex"]
+dest_files=["res://.godot/imported/edge.png-72aeaabc18ab43b110cd0c68b1a46893.s3tc.ctex", "res://.godot/imported/edge.png-72aeaabc18ab43b110cd0c68b1a46893.etc2.ctex"]
 
 [params]
 

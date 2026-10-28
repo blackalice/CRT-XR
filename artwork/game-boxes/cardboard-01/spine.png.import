@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://ddf2wrdjk0qul"
 path.s3tc="res://.godot/imported/spine.png-71d2cdfefed03d22af5f54e0d21bcb4c.s3tc.ctex"
+path.etc2="res://.godot/imported/spine.png-71d2cdfefed03d22af5f54e0d21bcb4c.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://artwork/game-boxes/cardboard-01/spine.png"
-dest_files=["res://.godot/imported/spine.png-71d2cdfefed03d22af5f54e0d21bcb4c.s3tc.ctex"]
+dest_files=["res://.godot/imported/spine.png-71d2cdfefed03d22af5f54e0d21bcb4c.s3tc.ctex", "res://.godot/imported/spine.png-71d2cdfefed03d22af5f54e0d21bcb4c.etc2.ctex"]
 
 [params]
 

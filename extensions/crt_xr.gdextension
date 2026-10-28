@@ -6,3 +6,4 @@ reloadable = false
 [libraries]
 windows.x86_64 = "res://extensions/bin/crt_xr_libretro.windows.x86_64.dll"
 linux.x86_64 = "res://extensions/bin/crt_xr_libretro.linux.x86_64.so"
+android.arm64 = "res://extensions/bin/libcrt_xr_libretro.android.arm64.so"

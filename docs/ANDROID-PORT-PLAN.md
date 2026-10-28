@@ -1,7 +1,15 @@
 # Android port plan
 
-Status, 28 October 2026: proposal only. Nothing here is implemented. It is
-written against beta.14.1 plus the uncommitted Linux desktop work.
+Status, 28 October 2026: groundwork started on the `android-port` branch.
+
+- **Phase 1 done:** `scripts/platform/platform.gd`, all call sites migrated,
+  the `check-repository.py` rule, and `tests/platform_paths.gd`.
+- **Phase 2 partly done:** `Dockerfile.android`, the Android CMake branch and
+  `.gdextension` entry. The extension builds for arm64.
+- **Android export preset and a debug APK export** (`scripts/build-android.sh`).
+
+Not yet started: Android cores, the plugin, and anything on a device. See
+[development](DEVELOPMENT.md#android-preview-groundwork).
 
 ## Goal and scope
 

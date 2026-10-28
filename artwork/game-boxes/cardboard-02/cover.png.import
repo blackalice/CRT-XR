@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://b0lb5byerrdpv"
 path.s3tc="res://.godot/imported/cover.png-e8a7a6d1fee23a50623108bb291842dc.s3tc.ctex"
+path.etc2="res://.godot/imported/cover.png-e8a7a6d1fee23a50623108bb291842dc.etc2.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://artwork/game-boxes/cardboard-02/cover.png"
-dest_files=["res://.godot/imported/cover.png-e8a7a6d1fee23a50623108bb291842dc.s3tc.ctex"]
+dest_files=["res://.godot/imported/cover.png-e8a7a6d1fee23a50623108bb291842dc.s3tc.ctex", "res://.godot/imported/cover.png-e8a7a6d1fee23a50623108bb291842dc.etc2.ctex"]
 
 [params]
 

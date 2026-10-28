@@ -90,6 +90,19 @@ On Linux, preferences are normally in `~/.local/share/godot/app_userdata/CRT XR/
 
 Run `scripts/build-windows-tracking.ps1` (WSL Ubuntu with the MinGW POSIX compiler), then `scripts/export-windows.ps1`. Windows export requires Python and applies the per-monitor DPI manifest after export with a separate PCK. Keep that PCK with the EXE. The VITURE SDK under ignored `sdk/` is for local testing only; public packages exclude proprietary SDK files. End users follow [Windows setup](WINDOWS-SETUP.md). Use the exported EXE for mixed-DPI hardware checks; the unmodified editor executable retains system DPI awareness.
 
+## Android (preview groundwork)
+
+The Android port follows the [Android port plan](ANDROID-PORT-PLAN.md). It builds in its own image with the NDK, SDK and JDK versions Godot 4.5.1's Android template expects (NDK 28.1.13356709, platform 35, build-tools 35.0.0, Java 17). First run `scripts/setup-emulation.ps1` so `tools/godot-cpp` and `tools/snes9x` exist, and `scripts/setup-export-templates.ps1` so `tools/export_templates.zip` exists. Then:
+
+```powershell
+docker build -f Dockerfile.android -t crt-xr-android .
+docker run --rm --mount "type=bind,source=$($PWD.Path),target=/work" crt-xr-android bash scripts/build-android.sh all
+```
+
+`extension` builds `extensions/bin/libcrt_xr_libretro.android.arm64.so` and the native test executables in `build/emulation-android/`. `export` fetches the pinned Linux Godot editor into `tools/godot-linux/` (self-contained, with its own Android templates, settings and a development-only debug keystore), stages the prepared models and bakes into the ignored `android_assets/`, and writes `dist/android/CRT-XR-debug.apk`. `all` does both. The export checks that the Android preset's `version/name` and `version/code` follow `config/version`, so bump them with each release. The container's Godot cannot load the desktop Linux extension (it needs a newer glibc) and says so; that does not affect the Android export.
+
+Cores and FFmpeg are not built for Android yet, so the APK can show the room but not play games or videos. Nothing has run on a device yet. The prebuilt template keeps Godot's minimum of API 24 while the extension targets API 29 (Android 10); the APK's minimum is raised with the Gradle build in Phase 3. Platform differences belong in `scripts/platform/platform.gd`; `check-repository.py` rejects `OS.get_name()` and `OS.get_executable_path()` elsewhere in `scripts/`, and `tests/platform_paths.gd` checks the answers for each platform from the desktop editor.
+
 ## The animated logo
 
 The About page's 3D logo is rebuilt from the After Effects composition

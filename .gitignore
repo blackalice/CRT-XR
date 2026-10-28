@@ -78,3 +78,6 @@ Desktop.ini
 *.flac
 *.m4a
 *.bin
+
+# Prepared models and bakes staged into the Android pack by scripts/build-android.sh.
+/android_assets/

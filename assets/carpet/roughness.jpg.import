@@ -4,15 +4,16 @@ importer="texture"
 type="CompressedTexture2D"
 uid="uid://xm7iekv3wsx8"
 path.bptc="res://.godot/imported/roughness.jpg-ffe3e9027d8d4b85dd22d45d19f8e561.bptc.ctex"
+path.astc="res://.godot/imported/roughness.jpg-ffe3e9027d8d4b85dd22d45d19f8e561.astc.ctex"
 metadata={
-"imported_formats": ["s3tc_bptc"],
+"imported_formats": ["s3tc_bptc", "etc2_astc"],
 "vram_texture": true
 }
 
 [deps]
 
 source_file="res://assets/carpet/roughness.jpg"
-dest_files=["res://.godot/imported/roughness.jpg-ffe3e9027d8d4b85dd22d45d19f8e561.bptc.ctex"]
+dest_files=["res://.godot/imported/roughness.jpg-ffe3e9027d8d4b85dd22d45d19f8e561.bptc.ctex", "res://.godot/imported/roughness.jpg-ffe3e9027d8d4b85dd22d45d19f8e561.astc.ctex"]
 
 [params]
 

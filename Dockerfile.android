@@ -1,0 +1,24 @@
+FROM ubuntu:22.04@sha256:5ec03bb3441e8b0bf3b4f9cd4629a1ae763010dc3035bb8da3ae6cf026486401
+# Android toolchain at the versions Godot 4.5.1's Android build template expects
+# (android_source.zip config.gradle): NDK 28.1.13356709, platform 35,
+# build-tools 35.0.0, Java 17. The Godot editor and export templates stay in the
+# ignored tools/ folder (scripts/build-android.sh), as on the other platforms.
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    build-essential cmake python3 git ca-certificates curl unzip openjdk-17-jdk-headless \
+    libfontconfig1 \
+    && rm -rf /var/lib/apt/lists/*
+ENV ANDROID_HOME=/opt/android-sdk
+ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+ENV ANDROID_NDK_VERSION=28.1.13356709
+ENV ANDROID_NDK_ROOT=/opt/android-sdk/ndk/28.1.13356709
+RUN curl -sSfL -o /tmp/tools.zip https://dl.google.com/android/repository/commandlinetools-linux-13114758_latest.zip \
+    && echo "7ec965280a073311c339e571cd5de778b9975026cfcbe79f2b1cdcb1e15317ee  /tmp/tools.zip" | sha256sum -c - \
+    && mkdir -p "$ANDROID_HOME/cmdline-tools" \
+    && unzip -q /tmp/tools.zip -d "$ANDROID_HOME/cmdline-tools" \
+    && mv "$ANDROID_HOME/cmdline-tools/cmdline-tools" "$ANDROID_HOME/cmdline-tools/latest" \
+    && rm /tmp/tools.zip \
+    && yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null \
+    && "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install \
+        "platform-tools" "platforms;android-35" "build-tools;35.0.0" "ndk;$ANDROID_NDK_VERSION" > /dev/null
+WORKDIR /work
+CMD ["bash", "scripts/build-android.sh", "all"]
