@@ -96,12 +96,13 @@ The Android port follows the [Android port plan](ANDROID-PORT-PLAN.md). It build
 
 ```powershell
 docker build -f Dockerfile.android -t crt-xr-android .
+docker run --rm --mount "type=bind,source=$($PWD.Path),target=/work" crt-xr-android python3 scripts/build-release-cores.py android
 docker run --rm --mount "type=bind,source=$($PWD.Path),target=/work" crt-xr-android bash scripts/build-android.sh all
 ```
 
 `extension` builds `extensions/bin/libcrt_xr_libretro.android.arm64.so` and the native test executables in `build/emulation-android/`. `export` fetches the pinned Linux Godot editor into `tools/godot-linux/` (self-contained, with its own Android templates, settings and a development-only debug keystore), stages the prepared models and bakes into the ignored `android_assets/`, and writes `dist/android/CRT-XR-debug.apk`. `all` does both. The export checks that the Android preset's `version/name` and `version/code` follow `config/version`, so bump them with each release. The container's Godot cannot load the desktop Linux extension (it needs a newer glibc) and says so; that does not affect the Android export.
 
-Cores and FFmpeg are not built for Android yet, so the APK can show the room but not play games or videos. Nothing has run on a device yet. The prebuilt template keeps Godot's minimum of API 24 while the extension targets API 29 (Android 10); the APK's minimum is raised with the Gradle build in Phase 3. Platform differences belong in `scripts/platform/platform.gd`; `check-repository.py` rejects `OS.get_name()` and `OS.get_executable_path()` elsewhere in `scripts/`, and `tests/platform_paths.gd` checks the answers for each platform from the desktop editor.
+`build-release-cores.py android` builds the ten cores for arm64 from the same pinned source archives as the desktop cores, through each core's upstream `jni/` ndk-build recipe (mGBA through CMake with the NDK toolchain), into `cores/android-arm64/`, and records them in `core-builds.json` beside the desktop builds; `check-core-sources.py` then expects all thirty. Existing source archives are reused, never regenerated: another git version compresses the same commit differently. The `addons/crt_xr_android` editor plugin packages those cores as APK native libraries, and the export copies the core licences and build records into the APK. FFmpeg is not built for Android yet, so videos do not play. Nothing has run on a device yet. The prebuilt template keeps Godot's minimum of API 24 while the extension targets API 29 (Android 10); the APK's minimum is raised with the Gradle build in Phase 3. Platform differences belong in `scripts/platform/platform.gd`; `check-repository.py` rejects `OS.get_name()` and `OS.get_executable_path()` elsewhere in `scripts/`, and `tests/platform_paths.gd` checks the answers for each platform from the desktop editor.
 
 ## The animated logo
 

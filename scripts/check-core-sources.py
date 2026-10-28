@@ -5,13 +5,20 @@ ROOT=Path(sys.argv[1]).resolve() if len(sys.argv)>1 else Path(__file__).resolve(
 cores=ROOT/'cores'
 record=json.loads((cores/'core-builds.json').read_text(encoding='utf-8'))
 builds=record['builds']
-expected={(c,p) for c in ['snes9x','nestopia','genesis_plus_gx','gambatte','mgba','mednafen_pce_fast','mednafen_lynx','mednafen_ngp','stella','vecx'] for p in ['linux','windows']}
-assert {(b['core'],b['platform']) for b in builds}==expected and len(builds)==20,'Incomplete core build evidence'
+CORES=['snes9x','nestopia','genesis_plus_gx','gambatte','mgba','mednafen_pce_fast','mednafen_lynx','mednafen_ngp','stella','vecx']
+# Desktop records are always required; Android's are optional until it ships, but
+# then complete.
+platforms=['linux','windows']+(['android-arm64'] if any(b['platform']=='android-arm64' for b in builds) else [])
+expected={(c,p) for c in CORES for p in platforms}
+assert {(b['core'],b['platform']) for b in builds}==expected and len(builds)==len(expected),'Incomplete core build evidence'
+def binary_name(core,platform):
+ if platform=='android-arm64':return 'android-arm64/lib'+core+'_libretro.so'
+ return core+'_libretro.'+('so' if platform=='linux' else 'dll')
 evidence=ROOT/'third_party/cores/release-builds.json'
 if evidence.exists():
  assert json.loads(evidence.read_text(encoding='utf-8'))['builds']==builds,'Source-only rebuild evidence is stale'
 for b in builds:
- binary=cores/(b['core']+'_libretro.'+('so' if b['platform']=='linux' else 'dll'))
+ binary=cores/binary_name(b['core'],b['platform'])
  # An exported platform folder has only that platform's binaries.
  if binary.exists():
   assert b['origin']=='Local source build'
@@ -26,4 +33,4 @@ for b in builds:
  assert b['compiler'] and b['cxx_compiler'] and b['make_arguments'] and b['source_commit']
 for name in ['Snes9x-LICENSE.txt','Genesis-Plus-GX-LICENSE.txt','libchdr-LICENSE.txt','LZMA-SDK-LICENSE.txt','zstd-LICENSE.txt','zlib-LICENSE.txt','Nestopia-LICENSE.txt','Gambatte-LICENSE.txt','mGBA-LICENSE.txt','Beetle-PCE-FAST-LICENSE.txt','Beetle-LYNX-LICENSE.txt','Beetle-NGP-LICENSE.txt','Stella-LICENSE.txt','Vecx-LICENSE.md','libretro-header-LICENSE.txt']:
  assert (cores/name).is_file(),name
-print('Recorded core binaries, all twenty source-build records and complete core source archive hashes verified.')
+print('Recorded core binaries, all %d source-build records (%s) and complete core source archive hashes verified.' % (len(builds),', '.join(platforms)))

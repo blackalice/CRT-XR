@@ -1,49 +1,65 @@
 """Build release cores from exact git objects, with per-binary source/toolchain evidence.
-Run with Linux Python 3.9+: python3 scripts/build-release-cores.py [all|linux|windows] [core ...].
+Run with Linux Python 3.9+: python3 scripts/build-release-cores.py [all|linux|windows|android] [core ...].
 Naming cores rebuilds only those; the other cores keep their binaries and records.
 Requires make, CMake, GCC/G++, and MinGW-w64 POSIX cross-compilers for Windows.
+android builds arm64-v8a cores into cores/android-arm64/ inside the crt-xr-android
+image (Dockerfile.android), through each core's upstream jni/ ndk-build recipe or
+CMake with the NDK toolchain; "all" stays linux and windows.
 """
 from pathlib import Path
 import datetime, hashlib, json, os, shutil, subprocess, sys, tempfile, tarfile
 ROOT=Path(__file__).resolve().parents[1]
 # Per-core recipes: source directory holding the makefile ("" = archive root), makefile,
 # optional extra make arguments, the produced library base name when it differs from the
-# core name, and the licence files to retain from the exact archive.
+# core name, the upstream Android jni/ folder and its extra ndk-build arguments, and the
+# licence files to retain from the exact archive.
 SPECS=[
  {'core':'snes9x','repository':'snes9x','revision':'1bcc369e89f08243e0a462882fb1f3e42e51de3a','directory':'libretro','makefile':'Makefile',
-  'cxx_extra':' -std=c++17','args':['LTO='],
+  'cxx_extra':' -std=c++17','args':['LTO='],'jni':'libretro/jni',
   'licenses':[['LICENSE','Snes9x-LICENSE.txt'],['filter/snes_ntsc-license.txt','snes_ntsc-LICENSE.txt'],['jma/license.txt','JMA-LICENSE.txt'],['filter/xbrz-license.txt','xbrz-LICENSE.txt']]},
  {'core':'nestopia','repository':'nestopia','revision':'06a8949e0b3cf60e3a38a374b1426bf40fccb9a0','directory':'libretro','makefile':'Makefile',
-  'patches':['nestopia-boot-background.patch'],
+  'patches':['nestopia-boot-background.patch'],'jni':'libretro/jni',
   'licenses':[['COPYING','Nestopia-LICENSE.txt']]},
  # Genesis Plus GX carries Mega Drive, Master System, Game Gear and Sega CD images.
  # HAVE_CDROM is libretro-common physical-drive (cdrom://) access, not Sega CD emulation;
  # it stays off on both platforms. CHD reads Sega CD discs through the bundled
  # libchdr, LZMA, zlib and zstd sources in libretro/deps.
  {'core':'genesis_plus_gx','repository':'genesis-plus-gx','revision':'393f70cd64c7334564c19a424c383f53986c13f4','directory':'','makefile':'Makefile.libretro','args':['HAVE_CDROM=0','HAVE_CHD=1'],
+  'jni':'libretro/jni','android_args':['HAVE_CDROM=0','HAVE_CHD=1'],
   'licenses':[['LICENSE.txt','Genesis-Plus-GX-LICENSE.txt'],['libretro/deps/libchdr/LICENSE.txt','libchdr-LICENSE.txt'],
    ['libretro/deps/lzma-19.00/LICENSE','LZMA-SDK-LICENSE.txt'],['libretro/deps/zstd/LICENSE','zstd-LICENSE.txt'],['libretro/deps/zlib-1.2.11/README','zlib-LICENSE.txt']]},
- {'core':'gambatte','repository':'gambatte','revision':'d9d6cd06382d1ced30de34d56d3609452323dab1','directory':'','makefile':'Makefile.libretro',
+ {'core':'gambatte','repository':'gambatte','revision':'d9d6cd06382d1ced30de34d56d3609452323dab1','directory':'','makefile':'Makefile.libretro','jni':'libgambatte/libretro/jni',
   'licenses':[['COPYING','Gambatte-LICENSE.txt']]},
  {'core':'mgba','repository':'mgba','revision':'7a12d6d4b9acb14c0ae62c9166b6a2f3d08007f6','recipe':'cmake',
   'licenses':[['LICENSE','mGBA-LICENSE.txt']]},
- {'core':'mednafen_pce_fast','repository':'beetle-pce-fast','revision':'3f946f277aef3aa99a95551618bbcd1dd2bda0d9','directory':'','makefile':'Makefile',
+ {'core':'mednafen_pce_fast','repository':'beetle-pce-fast','revision':'3f946f277aef3aa99a95551618bbcd1dd2bda0d9','directory':'','makefile':'Makefile','jni':'jni',
   'licenses':[['COPYING','Beetle-PCE-FAST-LICENSE.txt']]},
- {'core':'mednafen_lynx','repository':'beetle-lynx','revision':'fcdefcfb3c11d6d2e71be076a5d3df2e88ab73ed','directory':'','makefile':'Makefile',
+ {'core':'mednafen_lynx','repository':'beetle-lynx','revision':'fcdefcfb3c11d6d2e71be076a5d3df2e88ab73ed','directory':'','makefile':'Makefile','jni':'jni',
   'licenses':[['COPYING','Beetle-LYNX-LICENSE.txt']]},
- {'core':'mednafen_ngp','repository':'beetle-ngp','revision':'a50d5ac288a81f2104ddf43195a4efdd15c72227','directory':'','makefile':'Makefile',
+ {'core':'mednafen_ngp','repository':'beetle-ngp','revision':'a50d5ac288a81f2104ddf43195a4efdd15c72227','directory':'','makefile':'Makefile','jni':'jni',
   'licenses':[['COPYING','Beetle-NGP-LICENSE.txt']]},
- {'core':'stella','repository':'stella','revision':'ba52c43b9eda950eb0c0eec69cda9b17dee8c39b','directory':'src/os/libretro','makefile':'Makefile','artifact':'stella2023',
+ {'core':'stella','repository':'stella','revision':'ba52c43b9eda950eb0c0eec69cda9b17dee8c39b','directory':'src/os/libretro','makefile':'Makefile','artifact':'stella2023','jni':'src/os/libretro/jni',
   'licenses':[['License.txt','Stella-LICENSE.txt']]},
  {'core':'vecx','repository':'vecx','revision':'dccff5402a16d1ea7c112095a8e42632bf149506','directory':'','makefile':'Makefile.libretro','args':['HAS_GPU=0'],
+  # Its Android.mk asks for a GLES hardware context, which the host does not offer.
+  'jni':'jni','android_args':['HAS_GPU=0','GLES=0'],
   'licenses':[['LICENSE.md','Vecx-LICENSE.md']]},
 ]
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
+ANDROID_API=29
+def android_ndk():
+ ndk=os.environ.get('ANDROID_NDK_ROOT')
+ if not ndk:raise SystemExit('android builds run inside the crt-xr-android image (ANDROID_NDK_ROOT unset)')
+ return Path(ndk)
+def binary_name(core,platform):
+ # The APK packages native libraries by their lib* name.
+ if platform=='android-arm64':return 'android-arm64/lib'+core+'_libretro.so'
+ return core+'_libretro.'+('so' if platform=='linux' else 'dll')
 def output(*args):return subprocess.check_output(args,text=True).strip()
 def main():
  target=sys.argv[1] if len(sys.argv)>1 else 'all'
- if target not in ['all','linux','windows']:raise SystemExit('Use all, linux or windows')
- platforms=['linux','windows'] if target=='all' else [target]
+ if target not in ['all','linux','windows','android']:raise SystemExit('Use all, linux, windows or android')
+ platforms={'all':['linux','windows'],'android':['android-arm64']}.get(target,[target])
  chosen=sys.argv[2:] or [spec['core'] for spec in SPECS]
  unknown=set(chosen)-{spec['core'] for spec in SPECS}
  if unknown:raise SystemExit('Unknown cores: '+', '.join(sorted(unknown)))
@@ -53,6 +69,7 @@ def main():
  backup.mkdir(parents=True)
  for p in cores.iterdir():
   if p.is_file() and p.suffix in ['.dll','.so','.json']:shutil.copy2(p,backup/p.name)
+ if (cores/'android-arm64').is_dir():shutil.copytree(cores/'android-arm64',backup/'android-arm64')
  records=[]
  for spec in [spec for spec in SPECS if spec['core'] in chosen]:
   core,repository,revision=spec['core'],spec['repository'],spec['revision']
@@ -60,7 +77,10 @@ def main():
   archive=sources/(repository+'-'+revision+'.tar.gz')
   if (repo/'.git').exists():
    assert output('git','-C',str(repo),'rev-parse',revision)==revision,repository+': revision must be a full commit hash present in '+str(repo)
-   subprocess.run(['git','-C',str(repo),'archive','--format=tar.gz','--prefix='+repository+'/', '--output='+str(archive),revision],check=True)
+   # Reuse an existing archive: git versions compress differently, and every
+   # platform's record must name the same source bytes.
+   if not archive.is_file():
+    subprocess.run(['git','-C',str(repo),'archive','--format=tar.gz','--prefix='+repository+'/', '--output='+str(archive),revision],check=True)
    epoch=output('git','-C',str(repo),'show','-s','--format=%ct',revision)
   else:
    # Source releases have no .git directories: validate the bundled archive
@@ -70,8 +90,13 @@ def main():
    assert archive.is_file() and digest(archive)==evidence['source_sha256'],'Source archive differs from release evidence'
    epoch=evidence['source_date_epoch']
   for platform in platforms:
-   cc='gcc' if platform=='linux' else 'x86_64-w64-mingw32-gcc-posix'
-   cxx='g++' if platform=='linux' else 'x86_64-w64-mingw32-g++-posix'
+   android=platform=='android-arm64'
+   if android:
+    ndk=android_ndk();llvm=ndk/'toolchains/llvm/prebuilt/linux-x86_64/bin'
+    cc=str(llvm/('aarch64-linux-android'+str(ANDROID_API)+'-clang'));cxx=cc+'++'
+   else:
+    cc='gcc' if platform=='linux' else 'x86_64-w64-mingw32-gcc-posix'
+    cxx='g++' if platform=='linux' else 'x86_64-w64-mingw32-g++-posix'
    cxx_args=cxx+spec.get('cxx_extra','')
    version=output(cc,'--version').splitlines()[0]
    with tempfile.TemporaryDirectory(prefix='crt-xr-core-') as work:
@@ -85,13 +110,31 @@ def main():
      stored=sources/name;shutil.copy2(patch,stored)
      patches.append({'path':'sources/'+name,'sha256':digest(stored)})
     artifact=spec.get('artifact',core)
-    extension='so' if platform=='linux' else 'dll'
-    name=core+'_libretro.'+extension
+    extension='so' if platform!='windows' else 'dll'
+    name=binary_name(core,platform)
     env=dict(os.environ,SOURCE_DATE_EPOCH=epoch,LC_ALL='C',TZ='UTC')
     log=logs/(core+'-'+platform+'.log')
     print('Building '+core+' '+platform,flush=True)
     with log.open('w') as stream:
-     if spec.get('recipe')=='cmake':
+     if android and spec.get('recipe')=='cmake':
+      configure=['cmake','-S',str(source),'-B',str(Path(work)/'cmake-build'),'-DCMAKE_BUILD_TYPE=Release','-DLIBMGBA_ONLY=ON','-DBUILD_LIBRETRO=ON',
+                 '-DCMAKE_TOOLCHAIN_FILE='+str(ndk/'build/cmake/android.toolchain.cmake'),'-DANDROID_ABI=arm64-v8a',
+                 '-DANDROID_PLATFORM=android-'+str(ANDROID_API),'-DANDROID_STL=c++_static']
+      subprocess.run(configure,env=env,stdout=stream,stderr=subprocess.STDOUT,check=True)
+      build=['cmake','--build',str(Path(work)/'cmake-build'),'--target',artifact+'_libretro','-j'+os.environ.get('BUILD_JOBS','6')]
+      subprocess.run(build,env=env,stdout=stream,stderr=subprocess.STDOUT,check=True)
+      args=[a.replace(str(ndk),'<ndk>') for a in configure]+['&&']+build
+      built=Path(work)/'cmake-build'/(artifact+'_libretro.so')
+     elif android:
+      # libretro's own Android recipe. The extracted source has no Git metadata, so
+      # the makefiles' optional git-version branches stay off.
+      jni=source/spec['jni']
+      args=[str(ndk/'ndk-build'),'-C',str(jni),'-j'+os.environ.get('BUILD_JOBS','6'),'APP_ABI=arm64-v8a',
+            'APP_PLATFORM=android-'+str(ANDROID_API),'APP_STL=c++_static']+spec.get('android_args',[])
+      subprocess.run(args,env=env,stdout=stream,stderr=subprocess.STDOUT,check=True)
+      args=['<ndk>/ndk-build']+args[1:]
+      built=jni.parent/'libs/arm64-v8a/libretro.so'
+     elif spec.get('recipe')=='cmake':
       # Upstream libretro CI recipe; LIBMGBA_ONLY disables optional host libraries
       # (PNG, SQLite, Lua, FFmpeg...) so the core has no extra runtime dependencies.
       configure=['cmake','-S',str(source),'-B',str(Path(work)/'cmake-build'),'-DCMAKE_BUILD_TYPE=Release','-DLIBMGBA_ONLY=ON','-DBUILD_LIBRETRO=ON']
@@ -114,20 +157,24 @@ def main():
       subprocess.run(args,env=env,stdout=stream,stderr=subprocess.STDOUT,check=True)
       built=make_dir/(artifact+'_libretro.'+extension)
     assert built.is_file(),built
-    destination=cores/name;shutil.copy2(built,destination)
+    destination=cores/name;destination.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(built,destination)
     records.append({'core':core,'platform':platform,'source_commit':revision,'origin':'Local source build',
       'binary_sha256':digest(destination),'source_archive':'sources/'+archive.name,'source_sha256':digest(archive),
       'compiler':version,'cxx_compiler':output(cxx,'--version').splitlines()[0],
-      'make_version':(output('cmake','--version').splitlines()[0] if spec.get('recipe')=='cmake' else output('make','--version').splitlines()[0]),
+      'make_version':(output('cmake','--version').splitlines()[0] if spec.get('recipe')=='cmake' else
+        output(str(ndk/'prebuilt/linux-x86_64/bin/make'),'--version').splitlines()[0] if android else output('make','--version').splitlines()[0]),
       'make_arguments':[str(a).replace(str(source),'<extracted-source>').replace(str(work),'<work>') for a in args[1:]],
-      'source_date_epoch':epoch,'build_log_sha256':digest(log), 'patches':patches})
+      'source_date_epoch':epoch,'build_log_sha256':digest(log), 'patches':patches,
+      # Android builds run in their own image; the desktop image stays the shared record.
+      **({'build_environment':'Android NDK '+os.environ.get('ANDROID_NDK_VERSION','')+', API '+str(ANDROID_API)+'; '+
+          next(l for l in Path('/etc/os-release').read_text().splitlines() if l.startswith('PRETTY_NAME='))} if android else {})})
     print('Built '+name+' '+digest(destination),flush=True)
  manifest=cores/'core-builds.json'
  previous=json.loads(manifest.read_text(encoding='utf-8')) if manifest.exists() else {'builds':[]}
  built={(r['core'],r['platform']) for r in records}
  previous['builds']=[b for b in previous.get('builds',[]) if (b['core'],b['platform']) not in built]+records
  previous['origin']='Locally built pinned source; each binary records its exact source archive, compiler, flags and SHA-256.'
- previous['build_environment']=Path('/etc/os-release').read_text()
+ if target!='android':previous['build_environment']=Path('/etc/os-release').read_text()
  previous['built_utc']=datetime.datetime.now(datetime.timezone.utc).isoformat()
  manifest.write_text(json.dumps(previous,indent=2)+'\n',encoding='utf-8')
  # Source-only releases use this tracked evidence when tools/<core> has no Git metadata.

@@ -68,6 +68,11 @@ stage_assets() {
     if [[ -f "$out/room-bake/floor_ao.png" ]]; then
         printf '[remap]\n\nimporter="keep"\n' > "$out/room-bake/floor_ao.png.import"
     fi
+    # The cores' licences and build records travel with them, as in the desktop packages.
+    if compgen -G "$root/cores/android-arm64/lib*_libretro.so" > /dev/null; then
+        mkdir -p "$out/licenses/cores"
+        cp "$root"/cores/*-LICENSE.* "$root/cores/core-builds.json" "$out/licenses/cores/"
+    fi
 }
 
 export_apk() {
@@ -119,7 +124,15 @@ EOF
     local listing
     listing="$(unzip -l "$apk")"
     grep -q "lib/arm64-v8a/libcrt_xr_libretro.android.arm64.so" <<<"$listing" || { echo "APK lacks the extension" >&2; exit 1; }
-    echo "Android debug APK: dist/android/CRT-XR-debug.apk ($(du -h "$apk" | cut -f1))"
+    # addons/crt_xr_android packages whatever cores were built; all of them must arrive.
+    local count=0 core
+    for core in "$root"/cores/android-arm64/lib*_libretro.so; do
+        [[ -f "$core" ]] || continue
+        grep -q "lib/arm64-v8a/$(basename "$core")" <<<"$listing" || { echo "APK lacks $(basename "$core")" >&2; exit 1; }
+        count=$((count + 1))
+    done
+    if [[ $count -eq 0 ]]; then echo "No Android cores packaged: run scripts/build-release-cores.py android to play games."; fi
+    echo "Android debug APK: dist/android/CRT-XR-debug.apk ($(du -h "$apk" | cut -f1), $count cores)"
 }
 
 case "$target" in

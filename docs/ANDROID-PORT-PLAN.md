@@ -4,11 +4,15 @@ Status, 28 October 2026: groundwork started on the `android-port` branch.
 
 - **Phase 1 done:** `scripts/platform/platform.gd`, all call sites migrated,
   the `check-repository.py` rule, and `tests/platform_paths.gd`.
-- **Phase 2 partly done:** `Dockerfile.android`, the Android CMake branch and
-  `.gdextension` entry. The extension builds for arm64.
+- **Phase 2 done, apart from on-device tests:** `Dockerfile.android`, the Android
+  CMake branch and `.gdextension` entry, and all ten cores built for arm64 with
+  source records. The native test executables build but have not run on a device.
 - **Android export preset and a debug APK export** (`scripts/build-android.sh`).
+- **Phase 3 started:** the `addons/crt_xr_android` export plugin puts the cores in
+  the APK. It is an editor export plugin for now; the Gradle/AAR plugin (D2) comes
+  with the Kotlin glue.
 
-Not yet started: Android cores, the plugin, and anything on a device. See
+Not yet started: the Kotlin glue, FFmpeg for Android, and anything on a device. See
 [development](DEVELOPMENT.md#android-preview-groundwork).
 
 ## Goal and scope
