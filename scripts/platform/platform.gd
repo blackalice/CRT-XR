@@ -66,6 +66,17 @@ static func home_folder() -> String:
 static func shared_folder() -> String:
 	return home_folder().path_join("Documents/CRT XR") if is_android() else ""
 
+## Android 11 and later show apps only photos, music and videos in shared
+## storage unless they have "All files access", so game folders list as empty.
+const STORAGE_PERMISSION := "android.permission.MANAGE_EXTERNAL_STORAGE"
+
+static func needs_storage_access() -> bool:
+	return is_android() and not OS.has_feature("editor") and not OS.get_granted_permissions().has(STORAGE_PERMISSION)
+
+## Opens Android's "All files access" page for CRT XR.
+static func request_storage_access() -> void:
+	if needs_storage_access(): OS.request_permission(STORAGE_PERMISSION)
+
 ## Paths that differ only in case name the same file.
 static func case_insensitive_paths() -> bool: return is_windows()
 

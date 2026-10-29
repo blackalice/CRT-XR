@@ -76,6 +76,7 @@ var tv_effects: Node
 var exiting := false
 var signal_view: SubViewport
 var was_paused_before_menu := false
+var storage_access_wanted := false
 var provider: TrackingProvider = Simulated.new()
 ## "glasses" (XR Gaming on Linux, VITURE SDK on Windows) or "opentrack" (UDP 4242).
 var tracking_source := "glasses"
@@ -264,6 +265,9 @@ func start_sbs_session() -> void:
 	print("SBS startup: same-window handover complete")
 
 func start_application() -> void:
+	if Platform.needs_storage_access():
+		storage_access_wanted=true
+		Platform.request_storage_access()
 	fade_material.shader = load("res://shaders/eye_fade.gdshader")
 	if not windows_fixed_start and not Platform.glasses_tracking().is_empty() and not "--simulate" in OS.get_cmdline_user_args():
 		use_tracking(true)
@@ -716,6 +720,10 @@ func _input(event: InputEvent) -> void:
 			JOY_BUTTON_RIGHT_STICK: recenter()
 
 func _notification(what: int) -> void:
+	# Android returns here from its "All files access" page; rescan once granted.
+	if what == NOTIFICATION_APPLICATION_RESUMED and storage_access_wanted and not Platform.needs_storage_access():
+		storage_access_wanted=false
+		if is_instance_valid(menu): menu.games.refresh_library()
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(emulator):
 		emulator.gamepad.clear()
 		clear_menu_gamepad()
