@@ -2,6 +2,7 @@ extends Button
 signal selected(id: String)
 signal adjust_requested(id: String, direction: int)
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
+const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
 ## Optional item keys: "row_icon" (see row_icon.gd) leads the row; "emphasis" is
 ## "primary" for a screen's main action or "danger" for one that forgets
@@ -83,6 +84,7 @@ func configure(definition: Dictionary) -> void:
 		value_label.add_theme_color_override("font_color",MenuSkin.MUTED)
 		words.add_child(value_label)
 	else: value_group.add_child(value_label)
+	for input in item.get("value_inputs", []): value_group.add_child(InputGlyph.new(input))
 	if item.kind=="number":
 		value_label.custom_minimum_size.x=106
 		value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER

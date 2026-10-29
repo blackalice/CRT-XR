@@ -48,8 +48,13 @@ func rows() -> Array:
 	for entry in Layouts.names(system):
 		var id: int = entry[0]
 		var name: String = entry[1]
-		result.append(menu.catalog.action("controls.button.%d" % id, name, func(): start_capture(id, name),
-			"Press A, then the button you want for %s, or push a stick that way. Wait %d seconds to cancel." % [name, int(CAPTURE_SECONDS)], false, Layouts.inputs_for(layout, id)))
+		var inputs := Layouts.inputs_of(layout, id)
+		var row: Dictionary = menu.catalog.action("controls.button.%d" % id, name, func(): start_capture(id, name),
+			"%s: %s. Press A, then the button you want for it, or push a stick that way. Wait %d seconds to cancel." % [name, Layouts.inputs_for(layout, id), int(CAPTURE_SECONDS)],
+			false, "Not set" if inputs.is_empty() else "")
+		# Drawn as the controls themselves (face buttons as a diamond of circles).
+		row["value_inputs"] = inputs
+		result.append(row)
 	result.append(menu.catalog.action("controls.reset","Reset to Standard",func(): apply(Layouts.standard(system, spec)),
 		"Puts back the console's usual layout for %s." % ("this game" if Layouts.has_game_layout(emulator.rom_hash) else "all %s games" % console),current == "standard",""))
 	return result

@@ -153,12 +153,17 @@ static func assign(layout: Dictionary, input: String, id: int) -> void:
 	if input.begins_with("ls_"): layout.left_stick = "buttons"
 	elif input.begins_with("rs_"): layout.right_stick = "buttons"
 
-## The inputs that press console button id, as a readable list.
-static func inputs_for(layout: Dictionary, id: int) -> String:
+## The inputs that press console button id, in menu order.
+static func inputs_of(layout: Dictionary, id: int) -> Array[String]:
 	var found: Array[String] = []
 	for input in INPUT_LABELS:
 		if layout.buttons.get(input, -1) != id: continue
 		if input.begins_with("ls_") and layout.left_stick != "buttons": continue
 		if input.begins_with("rs_") and layout.right_stick != "buttons": continue
-		found.append(INPUT_LABELS[input])
+		found.append(input)
+	return found
+
+## The same as a readable list.
+static func inputs_for(layout: Dictionary, id: int) -> String:
+	var found := inputs_of(layout, id).map(func(input): return INPUT_LABELS[input])
 	return ", ".join(found) if not found.is_empty() else "Not set"
