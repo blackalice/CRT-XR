@@ -35,7 +35,8 @@ func run() -> void:
 	var buttons := [JOY_BUTTON_A, JOY_BUTTON_B, JOY_BUTTON_X, JOY_BUTTON_Y, JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER,
 		JOY_BUTTON_BACK, JOY_BUTTON_START, JOY_BUTTON_DPAD_UP, JOY_BUTTON_DPAD_DOWN, JOY_BUTTON_DPAD_LEFT, JOY_BUTTON_DPAD_RIGHT, JOY_BUTTON_LEFT_STICK]
 	var axes := [JOY_AXIS_LEFT_X, JOY_AXIS_LEFT_Y, JOY_AXIS_RIGHT_X, JOY_AXIS_RIGHT_Y, JOY_AXIS_TRIGGER_LEFT, JOY_AXIS_TRIGGER_RIGHT]
-	for system in ["snes", "nes", "megadrive", "gameboy", "psx", "n64"]:
+	# The N64's own standard layout is new (see controller_layouts.gd): it is checked below.
+	for system in ["snes", "nes", "megadrive", "gameboy", "psx"]:
 		var spec: Dictionary = Registry.SYSTEMS[system]
 		var layout := Layouts.standard(system, spec)
 		var pad = Gamepad.new()
@@ -52,6 +53,18 @@ func run() -> void:
 		check(Layouts.valid(layout) and Layouts.preset_of(system, spec, layout) == "standard", "The standard layout is valid and recognised: " + system)
 
 	var n64: Dictionary = Registry.SYSTEMS.n64
+	check(n64.options.get("mupen64plus-alt-map") == "True", "The N64 core reads every button on its own (independent C-buttons)")
+	var n64_pad = Gamepad.new()
+	var standard_n64 := Layouts.standard("n64", n64)
+	for pair in [[JOY_BUTTON_A, Layouts.B], [JOY_BUTTON_X, Layouts.Y], [JOY_BUTTON_Y, Layouts.X], [JOY_BUTTON_B, Layouts.A],
+			[JOY_BUTTON_LEFT_SHOULDER, Layouts.SELECT], [JOY_BUTTON_RIGHT_SHOULDER, Layouts.R2]]:
+		button(n64_pad, pair[0], true)
+		var pressed: int = n64_pad.read(standard_n64).mask
+		button(n64_pad, pair[0], false)
+		check(pressed == 1 << pair[1], "N64 standard: controller button %d is %s" % [pair[0], Layouts.names("n64").filter(func(entry): return entry[0] == pair[1])[0][1]])
+	axis(n64_pad, JOY_AXIS_TRIGGER_LEFT, 1.0)
+	check(n64_pad.read(standard_n64).mask == 1 << Layouts.L2, "N64 standard: L2 is Z")
+	axis(n64_pad, JOY_AXIS_TRIGGER_LEFT, 0.0)
 	var smash := Layouts.preset("n64", n64, "smash")
 	var pad = Gamepad.new()
 	button(pad, JOY_BUTTON_Y, true)
@@ -60,6 +73,9 @@ func run() -> void:
 	axis(pad, JOY_AXIS_RIGHT_Y, -1.0)
 	var quiet: Dictionary = pad.read(smash)
 	check(quiet.mask == 0 and quiet.analog == PackedInt32Array([0, 0, 0, 0]), "Smash: the right stick does nothing")
+	button(pad, JOY_BUTTON_LEFT_SHOULDER, true)
+	check(pad.read(smash).mask == 1 << Layouts.L2, "Smash: L1 shields (Z)")
+	button(pad, JOY_BUTTON_LEFT_SHOULDER, false)
 	var twin := Layouts.preset("n64", n64, "twin_stick")
 	axis(pad, JOY_AXIS_RIGHT_X, 1.0); axis(pad, JOY_AXIS_RIGHT_Y, 0.0)
 	axis(pad, JOY_AXIS_LEFT_Y, -1.0)

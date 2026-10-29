@@ -35,12 +35,14 @@ const SYSTEMS := {
 		"controller":(2 << 8) | 5, "analog":true, "triggers":true, "preview":false,
 		"bios_optional":["scph5501.bin","scph5500.bin","scph5502.bin","scph1001.bin","scph7001.bin","scph101.bin","psxonpsp660.bin","ps1_rom.bin"]},
 	# GLideN64 at the console's own 320x240, so the CRT draws native lines. The
-	# host applies the stick deadzone, so the core's is off. The core reads all
-	# three byte orders (.z64, .v64, .n64).
+	# host applies the stick deadzone, so the core's is off. Independent C-buttons
+	# (alt-map) give every N64 button its own input, so controller layouts decide
+	# the mapping; without it R2 is a C-button modifier and digital C is ignored.
+	# The core reads all three byte orders (.z64, .v64, .n64).
 	"n64": {"name":"Nintendo 64", "short":"N64", "core":"mupen64plus_next", "extensions":["z64","n64","v64"], "aspect":4.0/3.0,
 		"analog":true, "triggers":true, "preview":false, "hardware":true,
 		"options":{"mupen64plus-rdp-plugin":"gliden64", "mupen64plus-43screensize":"320x240", "mupen64plus-aspect":"4:3",
-			"mupen64plus-astick-deadzone":"0", "mupen64plus-cpucore":"dynamic_recompiler"}}
+			"mupen64plus-astick-deadzone":"0", "mupen64plus-cpucore":"dynamic_recompiler", "mupen64plus-alt-map":"True"}}
 }
 
 static func identify(path: String) -> String:

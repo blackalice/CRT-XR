@@ -46,6 +46,7 @@ const NAMES := {
 	"ngpc": [[B,"A"],[A,"B"],[START,"Option"]],
 	"vectrex": [[A,"1"],[B,"2"],[X,"3"],[Y,"4"]],
 	"psx": [[B,"Cross"],[A,"Circle"],[Y,"Square"],[X,"Triangle"],[L,"L1"],[R,"R1"],[L2,"L2"],[R2,"R2"],[L3,"L3"],[R3,"R3"],[SELECT,"Select"],[START,"Start"]],
+	# With the core's independent C-buttons (alt-map) on: see core_registry.gd.
 	"n64": [[B,"A"],[Y,"B"],[L2,"Z"],[R2,"R"],[SELECT,"L"],[X,"C-Up"],[A,"C-Down"],[L,"C-Left"],[R,"C-Right"],[START,"Start"]],
 }
 const DPAD_NAMES := [[UP,"D-pad up"],[DOWN,"D-pad down"],[LEFT,"D-pad left"],[RIGHT,"D-pad right"]]
@@ -57,6 +58,7 @@ static func names(system: String) -> Array:
 ## usual Libretro button, triggers reach consoles that have them, and the left
 ## stick is analog on consoles with sticks and a second D-pad on the others.
 static func standard(system: String, spec: Dictionary) -> Dictionary:
+	if system == "n64": return standard_n64()
 	var buttons := {"south": B, "east": A, "west": Y, "north": X, "l1": L, "r1": R, "back": SELECT, "start": START,
 		"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
 	if spec.get("triggers", false): buttons.merge({"l2": L2, "r2": R2})
@@ -65,6 +67,13 @@ static func standard(system: String, spec: Dictionary) -> Dictionary:
 	if not analog: buttons.merge({"ls_up": UP, "ls_down": DOWN, "ls_left": LEFT, "ls_right": RIGHT})
 	return {"buttons": buttons, "left_stick": "analog" if analog else "buttons", "right_stick": "analog" if analog else "buttons"}
 
+## The N64 pad on a modern controller: A and B on the bottom and left buttons,
+## C-Down and C-Up on the right and top ones, Z on L2, R on R1 and R2, L on L1
+## and Back, and the right stick as all four C-buttons.
+static func standard_n64() -> Dictionary:
+	return {"buttons": {"south": B, "west": Y, "east": A, "north": X, "l1": SELECT, "back": SELECT, "r1": R2, "r2": R2, "l2": L2,
+		"start": START, "up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}, "left_stick": "analog", "right_stick": "analog"}
+
 ## Built-in layouts: [id, name, help, layout]. Standard always comes first.
 static func presets(system: String, spec: Dictionary) -> Array:
 	var result := [["standard", "Standard", "The console's usual layout.", standard(system, spec)]]
@@ -72,9 +81,9 @@ static func presets(system: String, spec: Dictionary) -> Array:
 		"n64":
 			# Super Smash Bros.: jump on face buttons instead of a flick of the C-stick.
 			var smash := standard(system, spec)
-			smash.buttons.merge({"south": B, "west": Y, "north": X, "east": A, "l1": L2, "r1": R2, "back": SELECT}, true)
+			smash.buttons.merge({"l1": L2, "back": SELECT}, true)
 			smash.right_stick = "buttons"
-			result.append(["smash", "Smash Bros.", "A and B on the bottom and left buttons, jump (C) on the top and right buttons, shield on L1/L2 and grab on R1/R2. The right stick does nothing.", smash])
+			result.append(["smash", "Smash Bros.", "A and B on the bottom and left buttons, jump (C-Up, C-Down) on the top and right buttons, shield (Z) on L1 and L2, grab (R) on R1 and R2, taunt (L) on Back. The right stick does nothing.", smash])
 			# Twin-stick shooters: the right stick aims as the N64 stick, the left stick moves on the C-buttons.
 			var twin := standard(system, spec)
 			twin.buttons.merge({"r2": L2, "l2": R2, "ls_up": X, "ls_down": A, "ls_left": L, "ls_right": R}, true)

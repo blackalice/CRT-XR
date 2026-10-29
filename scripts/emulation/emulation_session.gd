@@ -335,8 +335,10 @@ func read_input() -> Dictionary:
 ## Applies the layout saved for this game, or for its console, or the standard one.
 func reload_controls() -> void:
 	controls = Layouts.resolve(system_id, Registry.SYSTEMS[system_id], rom_hash)
-	# The right stick moves the TV only while the game has no use for it.
-	gamepad.right_stick_game = controls.right_stick != "buttons" or controls.buttons.keys().any(func(input): return input.begins_with("rs_"))
+	# The right stick moves the TV only on consoles without sticks whose layout
+	# leaves it free; on a console with sticks a layout that switches it off
+	# should not make it zoom the TV instead.
+	gamepad.right_stick_game = Registry.SYSTEMS[system_id].get("analog", false) or controls.right_stick != "buttons" 		or controls.buttons.keys().any(func(input): return input.begins_with("rs_"))
 
 func set_paused(value: bool) -> void:
 	paused = value
@@ -474,7 +476,11 @@ func load_from(path: String, description: String) -> bool:
 	if envelope.get("rom")!=rom_hash or envelope.get("core")!=core_identity:
 		report("Save is unreadable or does not match this ROM and core. Your save file has been kept.",true)
 		return false
-	if not core.load_state(envelope.state):
+	var restored: bool = core.load_state(envelope.state)
+	# Mupen64Plus-Next starts its console on the first frame and refuses a state
+	# before then (as when resuming straight after loading): run it and retry.
+	if not restored and core.run_frame(0): restored = core.load_state(envelope.state)
+	if not restored:
 		report(str(core.last_error()), true)
 		return false
 	restart_audio()
