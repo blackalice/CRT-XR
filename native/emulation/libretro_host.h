@@ -1,18 +1,38 @@
 #pragma once
 #define RETRO_IMPORT_SYMBOLS
 #include "libretro.h"
+#include "gl_context.h"
 #include <cstdint>
+#include <functional>
 #include <map>
+#include <memory>
 #include <string>
+#include <type_traits>
 #include <vector>
 
 namespace crt_xr {
-// One Libretro instance, used only on the Godot main thread. Several hosts may
+
+// Runs tasks one at a time on a thread of its own; run() waits for each.
+class CoreThread {
+public:
+    CoreThread();
+    ~CoreThread();
+    bool is_current() const;
+    void run(const std::function<void()>& task);
+private:
+    struct State;
+    std::unique_ptr<State> state;
+};
+// One Libretro instance, driven from the Godot main thread. Several hosts may
 // coexist when each loads its own copy of a core library; the C callbacks reach
 // whichever host is currently calling into its core.
 class LibretroHost {
 public:
     ~LibretroHost();
+    // Cores that draw with the GPU (the Nintendo 64): set before load_core. Every
+    // call into the core then runs on a thread of its own, where the core's hidden
+    // OpenGL context lives, so Godot's context on the main thread is never touched.
+    bool hardware_rendering = false;
     bool load_core(const std::string& path);
     bool load_game(const std::string& path, const std::string& save_directory);
     bool step(std::uint16_t buttons);
@@ -48,7 +68,8 @@ public:
     std::vector<std::uint8_t> rgba;
     std::vector<std::int16_t> pcm;
 private:
-    static LibretroHost* active;
+    // Per thread: a hardware core's callbacks arrive on its own thread.
+    static thread_local LibretroHost* active;
     struct Use {
         LibretroHost* previous;
         explicit Use(const LibretroHost* host) : previous(active) { active = const_cast<LibretroHost*>(host); }
@@ -63,6 +84,23 @@ private:
     std::vector<std::uint8_t> rom;
     retro_disk_control_ext_callback disk{};
     int insert_countdown = 0; // frames until the opened tray closes; 0 = none pending
+    std::unique_ptr<CoreThread> worker;
+    std::unique_ptr<GlContext> gl;
+    retro_hw_render_callback hw{};
+    bool hw_active = false;
+    // Runs f on the core's thread when it has one (and is not already there).
+    template <class F> auto on_core(F&& f) const -> decltype(f()) {
+        if (!worker || worker->is_current()) return f();
+        if constexpr (std::is_void_v<decltype(f())>) worker->run([&] { f(); });
+        else {
+            decltype(f()) result{};
+            worker->run([&] { result = f(); });
+            return result;
+        }
+    }
+    bool set_hw_render(retro_hw_render_callback& callback);
+    static std::uintptr_t current_framebuffer();
+    static retro_proc_address_t proc_address(const char* name);
     bool av_info(const retro_system_av_info& info);
     static bool environment(unsigned command, void* data);
     static void video(const void* data, unsigned width, unsigned height, std::size_t pitch);

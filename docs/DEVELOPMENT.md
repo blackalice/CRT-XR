@@ -14,7 +14,7 @@ On Windows, from the repository root:
 ./scripts/setup-emulation.ps1
 ```
 
-These download the engine/templates and clone pinned godot-cpp and the eleven core sources (Snes9x, Nestopia, Genesis Plus GX, Gambatte, mGBA, Beetle PCE Fast, Beetle Lynx, Beetle NeoPop, Stella, vecx and PCSX ReARMed) into ignored `tools/`. The native build uses CMake, Make and GCC (mGBA builds with CMake); the compiler image includes the MinGW cross compiler for Windows.
+These download the engine/templates and clone pinned godot-cpp and the twelve core sources (Snes9x, Nestopia, Genesis Plus GX, Gambatte, mGBA, Beetle PCE Fast, Beetle Lynx, Beetle NeoPop, Stella, vecx, PCSX ReARMed and Mupen64Plus-Next; building it needs nasm, mesa-common-dev and libgl-dev) into ignored `tools/`. The native build uses CMake, Make and GCC (mGBA builds with CMake); the compiler image includes the MinGW cross compiler for Windows.
 
 ```powershell
 docker build -f Dockerfile.emulation -t crt-xr-build .

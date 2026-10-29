@@ -87,6 +87,15 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   `cores/PCSX-ReARMed-LZMA-LICENSE.txt`), miniz (MIT) and zstd (BSD), whose
   notices are in their headers in the source snapshot, and mman-win32 (MIT;
   `cores/mman-win32-LICENSE.md`). No PlayStation BIOS is included.
+* Mupen64Plus-Next (Nintendo 64), GPL version 2, the Mupen64Plus and libretro
+  contributors. Upstream source revision:
+  https://github.com/libretro/mupen64plus-libretro-nx/tree/15bada85906593376e8fd697f1b0b3af3a20f512
+  Full licence: `cores/Mupen64Plus-Next-LICENSE.txt`, with Mupen64Plus-Core and
+  its HLE RSP (`cores/Mupen64Plus-core-LICENSE.txt`, `cores/Mupen64Plus-RSP-HLE-LICENSE.txt`)
+  and the GLideN64 renderer (GPL version 2, Sergey Lipskiy and contributors;
+  `cores/GLideN64-LICENSE.txt`), which carries GlideHQ (GPL 2), gles2n64 (LGPL 3),
+  Glow, GLSL-FXAA (MIT) and readerwriterqueue (BSD) under the
+  `cores/GLideN64-*-LICENSE` files.
 
 Release cores are locally compiled from the exact revisions above. `cores/core-builds.json`
 records the actual binary/source archive SHA-256 hashes, compiler versions and

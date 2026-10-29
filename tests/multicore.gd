@@ -65,6 +65,7 @@ func run() -> void:
 	check(Registry.identify("user://probe.bin")=="megadrive", "Ambiguous .bin accepts Sega header")
 	bin = FileAccess.open("user://unrelated.bin",FileAccess.WRITE); bin.store_buffer(PackedByteArray([1,2,3])); bin.close()
 	check(Registry.identify("user://unrelated.bin").is_empty(), "Unrelated binary is not treated as a game")
+	check(Registry.SYSTEMS.n64.get("hardware", false) and not Registry.SYSTEMS.n64.get("preview", true) and Registry.SYSTEMS.keys().filter(func(system): return Registry.SYSTEMS[system].get("hardware", false)) == ["n64"], "Only the Nintendo 64 draws with the GPU, without input preview")
 	check(Registry.preview_safe("snes") and not Registry.preview_safe("gameboy") and not Registry.preview_safe("megadrive"), "Input preview runs only on cores whose audio survives the restore")
 	var cd := PackedByteArray(); cd.resize(0x110); tag(cd,0x100,"SEGADISCSYSTEM")
 	var disc := FileAccess.open("user://crt-xr-probe.bin",FileAccess.WRITE); disc.store_buffer(cd); disc.close()
@@ -82,7 +83,7 @@ func run() -> void:
 	for ext in ["32x","sgx"]:
 		var unsupported := FileAccess.open("user://probe."+ext,FileAccess.WRITE); unsupported.store_buffer(addon); unsupported.close()
 		check(Registry.identify("user://probe."+ext).is_empty(), "Unsupported add-on extension stays hidden: "+ext)
-	for fixture in [["vec","vectrex"],["lynx","atarilynx"],["ngp","ngpc"],["ngpc","ngpc"],["ngc","ngpc"],["ws",""]]:
+	for fixture in [["vec","vectrex"],["lynx","atarilynx"],["ngp","ngpc"],["ngpc","ngpc"],["ngc","ngpc"],["z64","n64"],["n64","n64"],["v64","n64"],["ws",""]]:
 		var tiny := FileAccess.open("user://probe."+fixture[0],FileAccess.WRITE); tiny.store_buffer(PackedByteArray([0,1,2,3])); tiny.close()
 		check(Registry.identify("user://probe."+fixture[0])==fixture[1], "Extension classifies "+fixture[0])
 	for ext in ["nes", "md"]:

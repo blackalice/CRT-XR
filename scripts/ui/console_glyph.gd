@@ -33,6 +33,11 @@ func _draw() -> void:
 	elif kind=="vectrex":
 		block(Rect2(6,12,48,36),Color("e6e4da"),6); block(Rect2(12,17,36,22),Color("1d222b"),3)
 		draw_arc(Vector2(30,28),9,-0.7,PI+0.7,24,accent,1.5,true); block(Rect2(14,42,32,3),accent,1)
+	elif kind=="n64":
+		# The dark console: its raised cartridge slot, power/reset and four ports.
+		block(Rect2(2,22,56,26),Color("2b2e36"),6); block(Rect2(14,12,32,16),Color("3a3f4a"),4)
+		block(Rect2(19,15,22,5),ink,1); block(Rect2(8,27,7,3),accent,1); block(Rect2(45,27,7,3),Color("8b8f96"),1)
+		for x in [12,23,34,45]: block(Rect2(x,40,5,5),ink,1)
 	elif kind=="psx":
 		# The grey console seen from above: the round disc lid and its buttons.
 		block(Rect2(3,12,54,36),Color("aeb2b8"),4); block(Rect2(3,40,54,8),Color("8f949b"),0)

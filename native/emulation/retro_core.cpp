@@ -28,6 +28,7 @@ void RetroCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("load_game", "path", "saves"), &RetroCore::load_game);
     ClassDB::bind_method(D_METHOD("set_option", "key", "value"), &RetroCore::set_option);
     ClassDB::bind_method(D_METHOD("set_controller", "device"), &RetroCore::set_controller);
+    ClassDB::bind_method(D_METHOD("set_hardware_rendering", "enabled"), &RetroCore::set_hardware_rendering);
     ClassDB::bind_method(D_METHOD("set_analog", "left_x", "left_y", "right_x", "right_y"), &RetroCore::set_analog);
     ClassDB::bind_method(D_METHOD("disc_info"), &RetroCore::disc_info);
     ClassDB::bind_method(D_METHOD("change_disc", "index"), &RetroCore::change_disc);
@@ -53,6 +54,8 @@ bool RetroCore::load_core(const String& path) { return host.load_core(path.utf8(
 bool RetroCore::load_game(const String& path, const String& saves) { return host.load_game(path.utf8().get_data(), saves.utf8().get_data()); }
 void RetroCore::set_option(const String& key, const String& value) { host.set_option(key.utf8().get_data(), value.utf8().get_data()); }
 void RetroCore::set_controller(int device) { host.port_device = static_cast<unsigned>(device); }
+// Before load_core: the core then runs on its own thread with a hidden OpenGL context.
+void RetroCore::set_hardware_rendering(bool enabled) { host.hardware_rendering = enabled; }
 void RetroCore::set_analog(int left_x, int left_y, int right_x, int right_y) {
     const int values[] = {left_x, left_y, right_x, right_y};
     for (int i = 0; i < 4; ++i) host.analog[i] = static_cast<std::int16_t>(std::clamp(values[i], -32768, 32767));

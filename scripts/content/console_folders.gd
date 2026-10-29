@@ -14,8 +14,9 @@ const ALIASES := {
 	"atarilynx":"atarilynx","lynx":"atarilynx",
 	"ngpc":"ngpc","ngp":"ngpc","neogeopocket":"ngpc","neogeopocketcolor":"ngpc","neopocketcolor":"ngpc",
 	"vectrex":"vectrex",
-	"psx":"psx","ps1":"psx","playstation":"psx","playstation1":"psx","sonyplaystation":"psx","psone":"psx"}
-const UNSUPPORTED := ["32x","3do","amiga","amiga600","amiga1200","amigacd32","amstradcpc","arcade","atari5200","atari7800","atarijaguar","atarist","atomiswave","c64","cdi","colecovision","dreamcast","fbneo","fds","gamecube","gc","intellivision","mame","mame2003","mame2010","mame2015","mame2016","mamecurrent","model2","model3","msx","msx2","n3ds","n64","nintendo3ds","nintendods","nintendo64","naomi","nds","neogeo","neogeocd","odyssey2","pc","pcenginecd","pcfx","pico8","ports","ps2","ps3","ps4","psp","psvita","playstation2","playstation3","saturn","scummvm","sega32x","supergrafx","switch","tgcd","wii","wiiu","wonderswan","wonderswancolor","xbox","xbox360","zx81","zxspectrum"]
+	"psx":"psx","ps1":"psx","playstation":"psx","playstation1":"psx","sonyplaystation":"psx","psone":"psx",
+	"n64":"n64","nintendo64":"n64"}
+const UNSUPPORTED := ["32x","3do","amiga","amiga600","amiga1200","amigacd32","amstradcpc","arcade","atari5200","atari7800","atarijaguar","atarist","atomiswave","c64","cdi","colecovision","dreamcast","fbneo","fds","gamecube","gc","intellivision","mame","mame2003","mame2010","mame2015","mame2016","mamecurrent","model2","model3","msx","msx2","n3ds","nintendo3ds","nintendods","naomi","nds","neogeo","neogeocd","odyssey2","pc","pcenginecd","pcfx","pico8","ports","ps2","ps3","ps4","psp","psvita","playstation2","playstation3","saturn","scummvm","sega32x","supergrafx","switch","tgcd","wii","wiiu","wonderswan","wonderswancolor","xbox","xbox360","zx81","zxspectrum"]
 
 static func key(name: String) -> String:
 	return name.to_lower().replace(" ","").replace("-","").replace("_","")

@@ -1,11 +1,15 @@
 #include "libretro_host.h"
+#include "gl_context.h"
 #include <algorithm>
+#include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
+#include <thread>
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -15,108 +19,179 @@
 #endif
 
 namespace crt_xr {
-LibretroHost* LibretroHost::active = nullptr;
-LibretroHost::~LibretroHost() { close(); }
+struct CoreThread::State {
+    std::mutex mutex;
+    std::condition_variable wake, done;
+    const std::function<void()>* pending = nullptr;
+    bool quit = false;
+    std::thread thread;
+};
+CoreThread::CoreThread() : state(std::make_unique<State>()) {
+    state->thread = std::thread([state = state.get()] {
+        std::unique_lock<std::mutex> lock(state->mutex);
+        for (;;) {
+            state->wake.wait(lock, [state] { return state->quit || state->pending; });
+            if (!state->pending) return;
+            const auto* task = state->pending;
+            lock.unlock();
+            (*task)();
+            lock.lock();
+            state->pending = nullptr;
+            state->done.notify_all();
+        }
+    });
+}
+CoreThread::~CoreThread() {
+    { std::lock_guard<std::mutex> lock(state->mutex); state->quit = true; }
+    state->wake.notify_all();
+    state->thread.join();
+}
+bool CoreThread::is_current() const { return std::this_thread::get_id() == state->thread.get_id(); }
+void CoreThread::run(const std::function<void()>& task) {
+    std::unique_lock<std::mutex> lock(state->mutex);
+    state->pending = &task;
+    state->wake.notify_all();
+    state->done.wait(lock, [this] { return state->pending == nullptr; });
+}
+
+thread_local LibretroHost* LibretroHost::active = nullptr;
+LibretroHost::~LibretroHost() {
+    close();
+    worker.reset();
+}
 void LibretroHost::close_game() {
-    Use use(this);
-    if (loaded) fn_unload_game();
-    loaded = false;
-    rom.clear(); rgba.clear(); pcm.clear();
-    width = height = 0;
-    video_changed = false;
-    insert_countdown = 0;
-    std::fill(std::begin(analog), std::end(analog), 0);
+    on_core([&] {
+        Use use(this);
+        if (loaded) fn_unload_game();
+        // The core lets go of its GL objects; the context stays for the next game.
+        if (hw_active) {
+            if (hw.context_destroy) hw.context_destroy();
+            gl->destroy_framebuffer();
+        }
+        hw_active = false;
+        hw = {};
+        loaded = false;
+        rom.clear(); rgba.clear(); pcm.clear();
+        width = height = 0;
+        video_changed = false;
+        insert_countdown = 0;
+        std::fill(std::begin(analog), std::end(analog), 0);
+    });
 }
 void LibretroHost::close() {
     close_game();
-    Use use(this);
-    if (initialized) fn_deinit();
-    initialized = false;
-    if (library) {
+    on_core([&] {
+        Use use(this);
+        if (initialized) fn_deinit();
+        initialized = false;
+        gl.reset(); // destroyed on the thread it is current on
+        if (library) {
 #ifdef _WIN32
-        FreeLibrary(static_cast<HMODULE>(library));
+            FreeLibrary(static_cast<HMODULE>(library));
 #else
-        dlclose(library);
+            dlclose(library);
 #endif
-    }
-    library = nullptr;
-    options.clear();
-    overrides.clear();
-    disk = {};
+        }
+        library = nullptr;
+        options.clear();
+        overrides.clear();
+        disk = {};
+    });
 }
 bool LibretroHost::load_core(const std::string& path) {
     close();
-    error.clear();
+    if (hardware_rendering && !worker) worker = std::make_unique<CoreThread>();
+    if (!hardware_rendering) worker.reset();
+    return on_core([&] {
+        error.clear();
 #ifdef _WIN32
-    library = LoadLibraryW(std::filesystem::u8path(path).wstring().c_str());
-    auto symbol = [this](const char* name) { return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(library), name)); };
+        library = LoadLibraryW(std::filesystem::u8path(path).wstring().c_str());
+        auto symbol = [this](const char* name) { return reinterpret_cast<void*>(GetProcAddress(static_cast<HMODULE>(library), name)); };
 #else
-    library = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
-    auto symbol = [this](const char* name) { return dlsym(library, name); };
+        library = dlopen(path.c_str(), RTLD_NOW | RTLD_LOCAL);
+        auto symbol = [this](const char* name) { return dlsym(library, name); };
 #endif
-    if (!library) { error = "Cannot load native core or one of its dependencies: " + path; return false; }
+        if (!library) { error = "Cannot load native core or one of its dependencies: " + path; return false; }
 #define BIND(method) fn_##method = reinterpret_cast<decltype(fn_##method)>(symbol("retro_" #method)); if (!fn_##method) { error = "Core missing retro_" #method; close(); return false; }
-    BIND(api_version); BIND(init); BIND(deinit); BIND(set_environment); BIND(set_video_refresh);
-    BIND(set_audio_sample); BIND(set_audio_sample_batch); BIND(set_input_poll); BIND(set_input_state);
-    BIND(get_system_info); BIND(get_system_av_info); BIND(set_controller_port_device);
-    BIND(load_game); BIND(unload_game); BIND(reset); BIND(run); BIND(serialize_size); BIND(serialize); BIND(unserialize);
-    BIND(get_memory_data); BIND(get_memory_size);
+        BIND(api_version); BIND(init); BIND(deinit); BIND(set_environment); BIND(set_video_refresh);
+        BIND(set_audio_sample); BIND(set_audio_sample_batch); BIND(set_input_poll); BIND(set_input_state);
+        BIND(get_system_info); BIND(get_system_av_info); BIND(set_controller_port_device);
+        BIND(load_game); BIND(unload_game); BIND(reset); BIND(run); BIND(serialize_size); BIND(serialize); BIND(unserialize);
+        BIND(get_memory_data); BIND(get_memory_size);
 #undef BIND
-    if (fn_api_version() != RETRO_API_VERSION) { error = "Unsupported Libretro API version"; close(); return false; }
-    Use use(this);
-    pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
-    fn_set_environment(environment);
-    fn_set_video_refresh(video);
-    fn_set_audio_sample(audio);
-    fn_set_audio_sample_batch(audio_batch);
-    fn_set_input_poll(input_poll);
-    fn_set_input_state(input);
-    retro_system_info info{};
-    fn_get_system_info(&info);
-    name = info.library_name ? info.library_name : "Libretro";
-    if (info.library_version) name += std::string(" ") + info.library_version;
-    // init waits until load_game so directory callbacks are already valid.
-    return true;
+        if (fn_api_version() != RETRO_API_VERSION) { error = "Unsupported Libretro API version"; close(); return false; }
+        Use use(this);
+        pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
+        fn_set_environment(environment);
+        fn_set_video_refresh(video);
+        fn_set_audio_sample(audio);
+        fn_set_audio_sample_batch(audio_batch);
+        fn_set_input_poll(input_poll);
+        fn_set_input_state(input);
+        retro_system_info info{};
+        fn_get_system_info(&info);
+        name = info.library_name ? info.library_name : "Libretro";
+        if (info.library_version) name += std::string(" ") + info.library_version;
+        // init waits until load_game so directory callbacks are already valid.
+        return true;
+    });
 }
 bool LibretroHost::load_game(const std::string& path, const std::string& directory) {
     if (!library) { error = "No core loaded"; return false; }
     close_game();
-    Use use(this);
-    error.clear();
-    save_dir = directory;
-    system_dir = directory;
-    std::ifstream file(std::filesystem::u8path(path), std::ios::binary | std::ios::ate);
-    if (!file) { error = "Cannot open ROM: " + path; return false; }
-    const auto size = file.tellg();
-    rom.clear();
-    if (!initialized) { fn_init(); initialized = true; }
-    retro_system_info info{};
-    fn_get_system_info(&info);
-    retro_game_info game{};
-    game.path = path.c_str();
-    if (info.need_fullpath) {
-        // Disc images (for example Sega CD .cue/.bin) exceed the cartridge
-        // buffer cap; the core opens the path itself.
-        if (size <= 0) { error = "ROM file is empty: " + path; return false; }
-        game.data = nullptr;
-        game.size = 0;
-    } else {
-        // 64 MiB is the largest Nintendo 64 cartridge.
-        if (size <= 0 || size > 64 * 1024 * 1024) { error = "ROM must contain 1 byte to 64 MiB"; return false; }
-        rom.resize(static_cast<std::size_t>(size));
-        file.seekg(0);
-        if (!file.read(reinterpret_cast<char*>(rom.data()), size)) { rom.clear(); error = "Failed reading ROM"; return false; }
-        game.data = rom.data();
-        game.size = rom.size();
-    }
-    if (!fn_load_game(&game)) { error = "Core rejected ROM"; rom.clear(); return false; }
-    loaded = true;
-    fn_set_controller_port_device(0, port_device);
-    fn_set_controller_port_device(1, RETRO_DEVICE_NONE);
-    retro_system_av_info av{};
-    fn_get_system_av_info(&av);
-    if (!av_info(av)) { close_game(); return false; }
-    return true;
+    return on_core([&] {
+        Use use(this);
+        error.clear();
+        save_dir = directory;
+        system_dir = directory;
+        std::ifstream file(std::filesystem::u8path(path), std::ios::binary | std::ios::ate);
+        if (!file) { error = "Cannot open ROM: " + path; return false; }
+        const auto size = file.tellg();
+        rom.clear();
+        if (!initialized) { fn_init(); initialized = true; }
+        retro_system_info info{};
+        fn_get_system_info(&info);
+        retro_game_info game{};
+        game.path = path.c_str();
+        if (info.need_fullpath) {
+            // Disc images (for example Sega CD .cue/.bin) exceed the cartridge
+            // buffer cap; the core opens the path itself.
+            if (size <= 0) { error = "ROM file is empty: " + path; return false; }
+            game.data = nullptr;
+            game.size = 0;
+        } else {
+            // 64 MiB is the largest Nintendo 64 cartridge.
+            if (size <= 0 || size > 64 * 1024 * 1024) { error = "ROM must contain 1 byte to 64 MiB"; return false; }
+            rom.resize(static_cast<std::size_t>(size));
+            file.seekg(0);
+            if (!file.read(reinterpret_cast<char*>(rom.data()), size)) { rom.clear(); error = "Failed reading ROM"; return false; }
+            game.data = rom.data();
+            game.size = rom.size();
+        }
+        if (!fn_load_game(&game)) {
+            if (error.empty()) error = "Core rejected ROM";
+            rom.clear(); hw_active = false; hw = {};
+            return false;
+        }
+        loaded = true;
+        fn_set_controller_port_device(0, port_device);
+        fn_set_controller_port_device(1, RETRO_DEVICE_NONE);
+        retro_system_av_info av{};
+        fn_get_system_av_info(&av);
+        if (!av_info(av)) { close_game(); return false; }
+        if (hw_active) {
+            // The core draws into a framebuffer as large as its largest frame,
+            // then sets up its GL state (Libretro's context_reset).
+            const unsigned w = std::max(av.geometry.max_width, av.geometry.base_width);
+            const unsigned h = std::max(av.geometry.max_height, av.geometry.base_height);
+            if (w == 0 || h == 0 || w > 4096 || h > 4096 || !gl->resize(w, h, hw.depth, hw.stencil, error)) {
+                if (error.empty()) error = "Core reported an unsupported frame size";
+                close_game(); return false;
+            }
+            if (hw.context_reset) hw.context_reset();
+        }
+        return true;
+    });
 }
 bool LibretroHost::av_info(const retro_system_av_info& info) {
     if (!std::isfinite(info.timing.fps) || info.timing.fps < 1 || info.timing.fps > 240 ||
@@ -129,22 +204,48 @@ bool LibretroHost::av_info(const retro_system_av_info& info) {
 }
 bool LibretroHost::step(std::uint16_t mask) {
     if (!loaded) { error = "No game loaded"; return false; }
-    Use use(this);
-    buttons = mask;
-    pcm.clear();
-    video_changed = false;
-    error.clear();
-    fn_run();
-    if (insert_countdown > 0 && --insert_countdown == 0 && disk.set_eject_state) disk.set_eject_state(false);
-    return error.empty();
+    return on_core([&] {
+        Use use(this);
+        buttons = mask;
+        pcm.clear();
+        video_changed = false;
+        error.clear();
+        fn_run();
+        if (insert_countdown > 0 && --insert_countdown == 0 && disk.set_eject_state) disk.set_eject_state(false);
+        return error.empty();
+    });
 }
 bool LibretroHost::reset() {
     if (!loaded) { error = "No game loaded"; return false; }
-    Use use(this);
-    error.clear();
-    fn_reset(); // The console's reset button; cartridge SRAM is kept.
-    return error.empty();
+    return on_core([&] {
+        Use use(this);
+        error.clear();
+        fn_reset(); // The console's reset button; cartridge SRAM is kept.
+        return error.empty();
+    });
 }
+bool LibretroHost::set_hw_render(retro_hw_render_callback& callback) {
+    if (!hardware_rendering || !worker) return false; // only on the core's own thread
+    const bool core_profile = callback.context_type == RETRO_HW_CONTEXT_OPENGL_CORE;
+    if (!core_profile && callback.context_type != RETRO_HW_CONTEXT_OPENGL) return false;
+    // A compatibility request below 3.3 is met by 3.3, which is a superset.
+    unsigned major = callback.version_major, minor = callback.version_minor;
+    if (major < 3 || (major == 3 && minor < 3 && !core_profile)) { major = 3; minor = core_profile ? std::max(minor, 2u) : 3; }
+    if (!gl) gl = std::make_unique<GlContext>();
+    std::string problem;
+    if (!gl->create(major, minor, core_profile, problem)) {
+        error = "Hardware rendering unavailable: " + problem;
+        log(RETRO_LOG_ERROR, "%s\n", error.c_str());
+        return false;
+    }
+    callback.get_current_framebuffer = current_framebuffer;
+    callback.get_proc_address = proc_address;
+    hw = callback;
+    hw_active = true;
+    return true;
+}
+std::uintptr_t LibretroHost::current_framebuffer() { return active && active->gl ? active->gl->framebuffer() : 0; }
+retro_proc_address_t LibretroHost::proc_address(const char* name) { return reinterpret_cast<retro_proc_address_t>(GlContext::proc(name)); }
 bool LibretroHost::environment(unsigned command, void* data) {
     if (!active) return false;
     switch (command) {
@@ -184,6 +285,11 @@ bool LibretroHost::environment(unsigned command, void* data) {
     case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS: return true;
     // Bit 0 video, bit 1 audio. Preview instances skip audio synthesis.
     case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: *static_cast<int*>(data) = 1 | (active->want_audio ? 2 : 0); return true;
+    case RETRO_ENVIRONMENT_GET_PREFERRED_HW_RENDER:
+        if (!active->hardware_rendering) return false;
+        *static_cast<unsigned*>(data) = RETRO_HW_CONTEXT_OPENGL_CORE; return true;
+    case RETRO_ENVIRONMENT_SET_HW_RENDER: return data && active->set_hw_render(*static_cast<retro_hw_render_callback*>(data));
+    case RETRO_ENVIRONMENT_SET_HW_SHARED_CONTEXT: return active->hardware_rendering;
     case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION: *static_cast<unsigned*>(data) = 1; return true;
     case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE: {
         // Null takes the tray away again (Genesis Plus GX does so for cartridges).
@@ -228,8 +334,16 @@ const std::vector<std::uint32_t>& lookup(bool rgb565) {
 void LibretroHost::video(const void* data, unsigned w, unsigned h, std::size_t pitch) {
     if (!active || !data) return; // null is a duplicate frame
     LibretroHost& host = *active;
+    if (data == RETRO_HW_FRAME_BUFFER_VALID) {
+        // The core drew into the hidden framebuffer: read it back for the TV.
+        if (!host.hw_active || w == 0 || h == 0 || w > 1024 || h > 1024 || !host.gl->read(w, h, host.hw.bottom_left_origin, host.rgba)) {
+            host.error = "Unsupported core video buffer"; return;
+        }
+        host.width = w; host.height = h; host.video_changed = true;
+        return;
+    }
     const unsigned bytes = host.pixel_format == RETRO_PIXEL_FORMAT_XRGB8888 ? 4 : 2;
-    if (data == RETRO_HW_FRAME_BUFFER_VALID || w == 0 || h == 0 || w > 1024 || h > 1024 || pitch < w * bytes) {
+    if (w == 0 || h == 0 || w > 1024 || h > 1024 || pitch < w * bytes) {
         host.error = "Unsupported core video buffer"; return;
     }
     host.rgba.resize(static_cast<std::size_t>(w) * h * 4);
@@ -289,56 +403,66 @@ std::vector<std::uint8_t> LibretroHost::serialize() {
 }
 bool LibretroHost::serialize_into(std::vector<std::uint8_t>& state) {
     if (!loaded) { error = "No game loaded"; return false; }
-    Use use(this);
-    const auto size = fn_serialize_size();
-    if (size == 0 || size > 64 * 1024 * 1024) { error = "Core returned unsupported state size"; return false; }
-    state.resize(size);
-    if (!fn_serialize(state.data(), state.size())) { error = "Core failed to save state"; return false; }
-    return true;
+    return on_core([&] {
+        Use use(this);
+        const auto size = fn_serialize_size();
+        if (size == 0 || size > 64 * 1024 * 1024) { error = "Core returned unsupported state size"; return false; }
+        state.resize(size);
+        if (!fn_serialize(state.data(), state.size())) { error = "Core failed to save state"; return false; }
+        return true;
+    });
 }
 bool LibretroHost::unserialize(const std::uint8_t* data, std::size_t size) {
-    Use use(this);
-    if (!loaded || size == 0 || size > 64 * 1024 * 1024 || !fn_unserialize(data, size)) { error = "Core rejected save state"; return false; }
-    return true;
+    return on_core([&] {
+        Use use(this);
+        if (!loaded || size == 0 || size > 64 * 1024 * 1024 || !fn_unserialize(data, size)) { error = "Core rejected save state"; return false; }
+        return true;
+    });
 }
 std::vector<std::uint8_t> LibretroHost::save_ram() const {
     if (!loaded) return {};
-    Use use(this);
-    const auto size = fn_get_memory_size(RETRO_MEMORY_SAVE_RAM);
-    const auto* data = static_cast<const std::uint8_t*>(fn_get_memory_data(RETRO_MEMORY_SAVE_RAM));
-    if (!data || size == 0 || size > 16 * 1024 * 1024) return {};
-    return {data, data + size};
+    return on_core([&] {
+        Use use(this);
+        const auto size = fn_get_memory_size(RETRO_MEMORY_SAVE_RAM);
+        const auto* data = static_cast<const std::uint8_t*>(fn_get_memory_data(RETRO_MEMORY_SAVE_RAM));
+        if (!data || size == 0 || size > 16 * 1024 * 1024) return std::vector<std::uint8_t>{};
+        return std::vector<std::uint8_t>(data, data + size);
+    });
 }
 bool LibretroHost::set_save_ram(const std::uint8_t* data, std::size_t size) {
     if (!loaded) { error = "SRAM size does not match this game"; return false; }
-    Use use(this);
-    if (size != fn_get_memory_size(RETRO_MEMORY_SAVE_RAM)) { error = "SRAM size does not match this game"; return false; }
-    auto* memory = fn_get_memory_data(RETRO_MEMORY_SAVE_RAM);
-    if (!memory || !data) return false;
-    std::memcpy(memory, data, size); return true;
+    return on_core([&] {
+        Use use(this);
+        if (size != fn_get_memory_size(RETRO_MEMORY_SAVE_RAM)) { error = "SRAM size does not match this game"; return false; }
+        auto* memory = fn_get_memory_data(RETRO_MEMORY_SAVE_RAM);
+        if (!memory || !data) return false;
+        std::memcpy(memory, data, size); return true;
+    });
 }
 void LibretroHost::set_option(const std::string& key, const std::string& value) { overrides[key] = value; }
 unsigned LibretroHost::disc_count() const {
     if (!loaded || !disk.get_num_images) return 0;
-    Use use(this);
-    return disk.get_num_images();
+    return on_core([&] { Use use(this); return disk.get_num_images(); });
 }
 unsigned LibretroHost::disc_index() const {
     if (!loaded || !disk.get_image_index) return 0;
-    Use use(this);
-    return disk.get_image_index();
+    return on_core([&] { Use use(this); return disk.get_image_index(); });
 }
 std::string LibretroHost::disc_label(unsigned index) const {
     if (!loaded || !disk.get_image_label) return {};
-    Use use(this);
-    char label[256] = {};
-    return disk.get_image_label(index, label, sizeof(label)) ? label : "";
+    return on_core([&] {
+        Use use(this);
+        char label[256] = {};
+        return std::string(disk.get_image_label(index, label, sizeof(label)) ? label : "");
+    });
 }
 bool LibretroHost::change_disc(unsigned index) {
     if (!loaded || !disk.set_eject_state || !disk.set_image_index || index >= disc_count()) { error = "This game has no other disc"; return false; }
-    Use use(this);
-    if (!disk.set_eject_state(true) || !disk.set_image_index(index)) { error = "The core could not change disc"; return false; }
-    insert_countdown = std::max(1, static_cast<int>(std::lround(fps)));
-    return true;
+    return on_core([&] {
+        Use use(this);
+        if (!disk.set_eject_state(true) || !disk.set_image_index(index)) { error = "The core could not change disc"; return false; }
+        insert_countdown = std::max(1, static_cast<int>(std::lround(fps)));
+        return true;
+    });
 }
 }

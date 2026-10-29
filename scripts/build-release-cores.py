@@ -48,6 +48,16 @@ SPECS=[
    ['deps/lightning/COPYING.LESSER','GNU-Lightning-LICENSE.txt'],['deps/lightning/COPYING','GNU-Lightning-GPL-3.0-LICENSE.txt'],
    ['deps/libchdr/LICENSE.txt','PCSX-ReARMed-libchdr-LICENSE.txt'],['deps/libchdr/deps/lzma-26.02/LICENSE','PCSX-ReARMed-LZMA-LICENSE.txt'],
    ['deps/mman/README.md','mman-win32-LICENSE.md']]},
+ # Nintendo 64. GLideN64 draws through the host's hidden OpenGL 3.3 context; the x86-64 dynarec
+ # needs nasm. MSYSTEM selects the 64-bit MinGW branch of the makefile. Windows matches Linux's
+ # feature set: no Vulkan renderer (the host offers OpenGL only), no LLE RSP, no threaded Angrylion.
+ {'core':'mupen64plus_next','repository':'mupen64plus-next','revision':'15bada85906593376e8fd697f1b0b3af3a20f512','directory':'','makefile':'Makefile',
+  'args':['MSYSTEM=MINGW64','HAVE_PARALLEL_RSP=0','HAVE_PARALLEL_RDP=0','HAVE_THR_AL=0','LLE=0'],
+  'licenses':[['LICENSE','Mupen64Plus-Next-LICENSE.txt'],['mupen64plus-core/LICENSES','Mupen64Plus-core-LICENSE.txt'],
+   ['mupen64plus-rsp-hle/LICENSES','Mupen64Plus-RSP-HLE-LICENSE.txt'],['GLideN64/LICENSE','GLideN64-LICENSE.txt'],
+   ['GLideN64/licenses/gles2n64/LICENSE','GLideN64-gles2n64-LICENSE.txt'],['GLideN64/licenses/GlideHQ/gpl-2.0.txt','GLideN64-GlideHQ-LICENSE.txt'],
+   ['GLideN64/licenses/Glow/LICENSE','GLideN64-Glow-LICENSE.txt'],['GLideN64/licenses/GLSL-FXAA/LICENSE.md','GLideN64-GLSL-FXAA-LICENSE.md'],
+   ['GLideN64/licenses/readerwriterqueue/LICENSE.md','GLideN64-readerwriterqueue-LICENSE.md']]},
 ]
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def output(*args):return subprocess.check_output(args,text=True).strip()

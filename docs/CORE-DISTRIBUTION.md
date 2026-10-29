@@ -14,8 +14,9 @@ The treatment below was written for Nestopia and applies equally to every
 copyleft core in the collection: Nestopia (GPL-2.0-or-later), Gambatte (GPL-2.0
 only, per its file headers), Beetle PCE Fast, Beetle Lynx and Beetle NeoPop
 (GPL-2.0-or-later; Beetle Lynx also contains zlib-licensed Handy code), Stella
-(GPL-2.0), vecx (GPL-3.0) and PCSX ReARMed (GPL-2.0-or-later, with its LGPL
-Lightrec and GNU Lightning recompiler libraries built in). mGBA is MPL-2.0, a file-level copyleft: its source
+(GPL-2.0), vecx (GPL-3.0), PCSX ReARMed (GPL-2.0-or-later, with its LGPL
+Lightrec and GNU Lightning recompiler libraries built in) and Mupen64Plus-Next
+(GPL-2.0, with GLideN64). mGBA is MPL-2.0, a file-level copyleft: its source
 is supplied unchanged and remains under the MPL. Each copyleft core is combined
 in process with the MIT host only, never with another core, so the GPL version
 of each core governs its own combination.

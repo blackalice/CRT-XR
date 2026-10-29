@@ -8,6 +8,8 @@ extends RefCounted
 ## "controller" is the Libretro device in port 1; "analog" systems take the sticks
 ## (and leave the left stick off the D-pad); "triggers" systems take L2/R2; systems
 ## with "preview": false are too heavy to run a second time for input preview.
+## "hardware" cores draw with OpenGL, on a thread of their own with a hidden
+## context; "options" are core option values that replace the core's defaults.
 const Archive = preload("res://scripts/content/rom_archive.gd")
 const Folders = preload("res://scripts/content/console_folders.gd")
 const SYSTEMS := {
@@ -31,7 +33,14 @@ const SYSTEMS := {
 	# has a built-in BIOS replacement; a real BIOS improves compatibility.
 	"psx": {"name":"PlayStation", "core":"pcsx_rearmed", "extensions":[], "aspect":4.0/3.0,
 		"controller":(2 << 8) | 5, "analog":true, "triggers":true, "preview":false,
-		"bios_optional":["scph5501.bin","scph5500.bin","scph5502.bin","scph1001.bin","scph7001.bin","scph101.bin","psxonpsp660.bin","ps1_rom.bin"]}
+		"bios_optional":["scph5501.bin","scph5500.bin","scph5502.bin","scph1001.bin","scph7001.bin","scph101.bin","psxonpsp660.bin","ps1_rom.bin"]},
+	# GLideN64 at the console's own 320x240, so the CRT draws native lines. The
+	# host applies the stick deadzone, so the core's is off. The core reads all
+	# three byte orders (.z64, .v64, .n64).
+	"n64": {"name":"Nintendo 64", "short":"N64", "core":"mupen64plus_next", "extensions":["z64","n64","v64"], "aspect":4.0/3.0,
+		"analog":true, "triggers":true, "preview":false, "hardware":true,
+		"options":{"mupen64plus-rdp-plugin":"gliden64", "mupen64plus-43screensize":"320x240", "mupen64plus-aspect":"4:3",
+			"mupen64plus-astick-deadzone":"0", "mupen64plus-cpucore":"dynamic_recompiler"}}
 }
 
 static func identify(path: String) -> String:
@@ -382,5 +391,6 @@ static func controls(system: String) -> String:
 		"atarilynx": return "Atari Lynx: bottom = A, right = B; L1/R1 = Option 1/2. Start = Option."
 		"atari2600": return "Atari 2600: bottom = the joystick Fire button. Start = console Reset."
 		"vectrex": return "Vectrex: right = button 1, bottom = 2, top = 3, left = 4."
+		"n64": return "Nintendo 64: bottom = A, left = B; right stick or right/top/L1/R1 = C-buttons. L2 = Z, R2 = R, Back = L. Left stick = the analog stick."
 		"psx": return "PlayStation: bottom/right/left/top = Cross/Circle/Square/Triangle. L1/R1 and the triggers = L1/R1/L2/R2. Sticks = DualShock sticks. Back = Select."
 	return "SNES: bottom/right/left/top = B/A/Y/X. L1/R1 = L/R. Back = Select."

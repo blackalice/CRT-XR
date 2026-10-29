@@ -72,7 +72,7 @@ for name in required:assert (app/name).is_file(),f"Missing packaged asset: {name
 if desktop:
  for name in ["launch-linux.sh","linux-session.py","installer/runtime_check.py","Install-CRT-XR-Linux.sh"]:
   assert (app/name).is_file(),f"Missing desktop installer asset: {name}"
-for core in ["snes9x","nestopia","genesis_plus_gx","gambatte","mgba","mednafen_pce_fast","mednafen_lynx","mednafen_ngp","stella","vecx","pcsx_rearmed"]:assert (app/"cores"/(core+"_libretro."+("dll" if platform=="windows" else "so"))).is_file(),f"Missing packaged core: {core}"
+for core in ["snes9x","nestopia","genesis_plus_gx","gambatte","mgba","mednafen_pce_fast","mednafen_lynx","mednafen_ngp","stella","vecx","pcsx_rearmed","mupen64plus_next"]:assert (app/"cores"/(core+"_libretro."+("dll" if platform=="windows" else "so"))).is_file(),f"Missing packaged core: {core}"
 top=sorted(p.name for p in folder.iterdir())
 expected={"linux":sorted(["Install CRT XR.desktop","HOW TO INSTALL.txt",PAYLOAD]),"windows":sorted(["CRT-XR.exe","CRT-XR.pck","crt_xr_libretro.windows.x86_64.dll","HOW TO START.txt","cores","assets","tracking","docs","licenses"])}[platform]
 assert top==expected,f"Unexpected top-level download contents: {top}"

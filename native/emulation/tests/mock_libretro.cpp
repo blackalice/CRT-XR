@@ -22,6 +22,42 @@ bool set_index(unsigned index) { if (!tray_open || index > 1) return false; disc
 unsigned get_count() { return 2; }
 bool no_replace(unsigned, const retro_game_info*) { return false; }
 bool no_add() { return false; }
+#ifdef MOCK_HW_RENDER
+// Draws with OpenGL like a Nintendo 64 core: a 3.3 core context from the host,
+// cleared to a colour, with a green strip along the bottom (bottom-left origin).
+retro_hw_render_callback hw;
+bool context_ready;
+using Clear = void (*)(unsigned);
+using ClearColor = void (*)(float, float, float, float);
+using BindFramebuffer = void (*)(unsigned, unsigned);
+using Rectangle = void (*)(int, int, int, int);
+using Toggle = void (*)(unsigned);
+struct { Clear clear; ClearColor clear_color; BindFramebuffer bind; Rectangle viewport, scissor; Toggle enable, disable; } gl;
+void reset_context() {
+    gl.clear = reinterpret_cast<Clear>(hw.get_proc_address("glClear"));
+    gl.clear_color = reinterpret_cast<ClearColor>(hw.get_proc_address("glClearColor"));
+    gl.bind = reinterpret_cast<BindFramebuffer>(hw.get_proc_address("glBindFramebuffer"));
+    gl.viewport = reinterpret_cast<Rectangle>(hw.get_proc_address("glViewport"));
+    gl.scissor = reinterpret_cast<Rectangle>(hw.get_proc_address("glScissor"));
+    gl.enable = reinterpret_cast<Toggle>(hw.get_proc_address("glEnable"));
+    gl.disable = reinterpret_cast<Toggle>(hw.get_proc_address("glDisable"));
+    context_ready = gl.clear && gl.clear_color && gl.bind && gl.viewport && gl.scissor && gl.enable && gl.disable;
+}
+void destroy_context() { context_ready = false; }
+void draw(bool pressed) {
+    if (!context_ready) return;
+    gl.bind(0x8D40, static_cast<unsigned>(hw.get_current_framebuffer())); // GL_FRAMEBUFFER
+    gl.viewport(0, 0, 64, 48);
+    gl.clear_color(pressed ? 0.0f : 1.0f, 0.0f, pressed ? 1.0f : 0.0f, 1.0f);
+    gl.clear(0x4000 | 0x100); // colour and depth
+    gl.enable(0x0C11); // GL_SCISSOR_TEST: the bottom eight rows, counted bottom-up
+    gl.scissor(0, 0, 64, 8);
+    gl.clear_color(0.0f, 1.0f, 0.0f, 0.0f);
+    gl.clear(0x4000);
+    gl.disable(0x0C11);
+    video(RETRO_HW_FRAME_BUFFER_VALID, 64, 48, 0);
+}
+#endif
 bool get_label(unsigned index, char* text, std::size_t size) { return std::snprintf(text, size, "Disc %u", index + 1) > 0; }
 }
 extern "C" {
@@ -46,11 +82,23 @@ RETRO_API void retro_get_system_info(retro_system_info* info) { *info = {"CRT XR
     false
 #endif
     , false}; }
+#ifdef MOCK_HW_RENDER
+RETRO_API void retro_get_system_av_info(retro_system_av_info* info) { *info = {{64, 48, 64, 48, 4.0f / 3.0f}, {60, 32000}}; }
+#else
 RETRO_API void retro_get_system_av_info(retro_system_av_info* info) { *info = {{2, 2, 2, 2, 1}, {60, 32000}}; }
+#endif
 RETRO_API void retro_set_controller_port_device(unsigned, unsigned) {}
 RETRO_API bool retro_load_game(const retro_game_info* game) {
     counter = 0;
     tray_open = false; disc = 0;
+#ifdef MOCK_HW_RENDER
+    hw = {};
+    hw.context_type = RETRO_HW_CONTEXT_OPENGL_CORE;
+    hw.version_major = 3; hw.version_minor = 3;
+    hw.context_reset = reset_context; hw.context_destroy = destroy_context;
+    hw.depth = true; hw.bottom_left_origin = true;
+    if (!environment(RETRO_ENVIRONMENT_SET_HW_RENDER, &hw)) return false;
+#endif
 #ifdef MOCK_NEED_FULLPATH
     const bool supplied = game && game->path && !game->data;
 #else
@@ -65,6 +113,9 @@ RETRO_API void retro_run() {
     ++counter;
     poll();
     const bool pressed = input(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B);
+#ifdef MOCK_HW_RENDER
+    draw(pressed);
+#else
     if (counter % 4 == 1) {
         auto format = RETRO_PIXEL_FORMAT_RGB565;
         environment(RETRO_ENVIRONMENT_SET_PIXEL_FORMAT, &format);
@@ -81,6 +132,7 @@ RETRO_API void retro_run() {
         const std::uint16_t pixels[] = {static_cast<std::uint16_t>(pressed ? 0x001F : 0x7C00), 0x03E0, 0, 0, 0x001F, 0x7FFF, 0, 0};
         video(pixels, 2, 2, 8);
     } else video(nullptr, 2, 2, 0);
+#endif
     const std::int16_t samples[] = {1000, -1000, 32767, -32768};
     audio_batch(samples, 2);
     audio(250, -250);

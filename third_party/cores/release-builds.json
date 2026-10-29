@@ -586,8 +586,70 @@
       "source_date_epoch": "1790893197",
       "build_log_sha256": "b1d75121d792bd78d091a8e69e3a3d4a7199a57fe1b531f5700bd6196e86c0f3",
       "patches": []
+    },
+    {
+      "core": "mupen64plus_next",
+      "platform": "linux",
+      "source_commit": "15bada85906593376e8fd697f1b0b3af3a20f512",
+      "origin": "Local source build",
+      "binary_sha256": "8ee8e9229b75f7f42622ac6744371817450f71c40961a6a6ebf22e062bacf432",
+      "source_archive": "sources/mupen64plus-next-15bada85906593376e8fd697f1b0b3af3a20f512.tar.gz",
+      "source_sha256": "75d8d90c5b368ce58ff6e755917c4140199664ce0fb74035dabe78eb70d2c47c",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=unix",
+        "CC=gcc",
+        "CXX=g++",
+        "GIT_VERSION= 15bada8",
+        "MSYSTEM=MINGW64",
+        "HAVE_PARALLEL_RSP=0",
+        "HAVE_PARALLEL_RDP=0",
+        "HAVE_THR_AL=0",
+        "LLE=0"
+      ],
+      "source_date_epoch": "1792702242",
+      "build_log_sha256": "595def84630cd50d255faccc23f62c8199fe2ca6143fd24b3a0dd1330143784b",
+      "patches": []
+    },
+    {
+      "core": "mupen64plus_next",
+      "platform": "windows",
+      "source_commit": "15bada85906593376e8fd697f1b0b3af3a20f512",
+      "origin": "Local source build",
+      "binary_sha256": "b5fe6bb50d49881edc1c35ec9852d0cf77cb412e1971dd3bcd527ee7040348ed",
+      "source_archive": "sources/mupen64plus-next-15bada85906593376e8fd697f1b0b3af3a20f512.tar.gz",
+      "source_sha256": "75d8d90c5b368ce58ff6e755917c4140199664ce0fb74035dabe78eb70d2c47c",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile",
+        "-j6",
+        "platform=win",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= 15bada8",
+        "MSYSTEM=MINGW64",
+        "HAVE_PARALLEL_RSP=0",
+        "HAVE_PARALLEL_RDP=0",
+        "HAVE_THR_AL=0",
+        "LLE=0"
+      ],
+      "source_date_epoch": "1792702242",
+      "build_log_sha256": "c7715698f3876a12e272f3978da393abe683ee7f08901ae5d07e9e5fea8d0c63",
+      "patches": []
     }
   ],
   "build_environment": "PRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.1 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
-  "built_utc": "2026-10-29T19:24:55.428052+00:00"
+  "built_utc": "2026-10-29T20:39:51.258308+00:00"
 }

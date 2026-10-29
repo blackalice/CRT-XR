@@ -107,6 +107,7 @@ func load_rom(path: String) -> bool:
 	display_aspect = Registry.SYSTEMS[system_id].aspect
 	# Preserve existing SNES paths; new systems have independent save namespaces.
 	save_directory = "user://saves" if system_id == "snes" else "user://saves/" + system_id + "/" + Registry.SYSTEMS[system_id].core
+	core.set_hardware_rendering(Registry.SYSTEMS[system_id].get("hardware", false))
 	if not core.load_core(selected_path):
 		report(str(core.last_error()), true)
 		core = null

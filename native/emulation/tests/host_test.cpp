@@ -3,13 +3,15 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <stdexcept>
+#include <string>
 
-void check(bool value, const char* message) {
+void check(bool value, const std::string& message) {
     if (!value) throw std::runtime_error(message);
     std::cout << "PASS: " << message << '\n';
 }
 int main(int argc, char** argv) {
-    if (argc != 5 && argc != 6) return 2;
+    if (argc < 5 || argc > 7) return 2;
     try {
         crt_xr::LibretroHost host;
         check(!host.load_core("/missing/crt_xr-core"), "Missing core fails cleanly");
@@ -81,7 +83,7 @@ int main(int argc, char** argv) {
         check(!saved_ram.empty() && saved_ram[0] == 0x5A, "Real SNES program writes the expected SRAM sentinel");
         host.close_game();
         check(!host.step(0), "Frame execution is rejected after unload");
-        if (argc == 6) {
+        if (argc >= 6) {
             host.close();
             crt_xr::LibretroHost fullpath_host;
             check(fullpath_host.load_core(argv[5]), "Fullpath fixture core dynamically loads");
@@ -94,6 +96,27 @@ int main(int argc, char** argv) {
             check(fullpath_host.load_game(image.string(), argv[4]), "Fullpath core receives a 40 MiB image without the buffer read");
             check(fullpath_host.step(0) && fullpath_host.width == 2, "Fullpath core executes a frame");
             std::filesystem::remove(image);
+        }
+        if (argc == 7) {
+            // A core that draws with OpenGL, on its own thread with a hidden context.
+            crt_xr::LibretroHost refused;
+            check(refused.load_core(argv[6]) && !refused.load_game(argv[3], argv[4]), "Without hardware rendering a GPU core is refused cleanly");
+            refused.close();
+            crt_xr::LibretroHost gpu;
+            gpu.hardware_rendering = true;
+            check(gpu.load_core(argv[6]), "GPU fixture core loads on its own thread");
+            check(gpu.load_game(argv[3], argv[4]), "GPU core gets an OpenGL 3.3 core context: " + gpu.error);
+            check(gpu.step(0) && gpu.width == 64 && gpu.height == 48 && gpu.rgba.size() == 64 * 48 * 4, "A GPU frame is read back at its own size");
+            const auto top = [&](std::size_t x) { return gpu.rgba.data() + x * 4; };
+            const auto bottom = [&](std::size_t x) { return gpu.rgba.data() + (47 * 64 + x) * 4; };
+            check(top(5)[0] == 255 && top(5)[1] == 0 && top(5)[2] == 0 && top(5)[3] == 255, "The picture's colour comes through");
+            check(bottom(5)[0] == 0 && bottom(5)[1] == 255 && bottom(5)[3] == 255, "Bottom-up GL rows are flipped and made opaque");
+            check(gpu.step(1) && top(5)[0] == 0 && top(5)[2] == 255, "Input reaches the GPU core");
+            const auto state = gpu.serialize();
+            check(!state.empty() && gpu.unserialize(state.data(), state.size()), "GPU core states round-trip on its thread");
+            check(gpu.load_game(argv[3], argv[4]) && gpu.step(0) && top(5)[0] == 255, "A second game reuses the context");
+            gpu.close();
+            check(!gpu.loaded, "The GPU core closes with its context");
         }
     } catch (const std::exception& error) { std::cerr << "FAIL: " << error.what() << '\n'; return 1; }
     return 0;

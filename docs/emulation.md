@@ -20,6 +20,7 @@ Steam Deck deployment and hardware validation follow separately.
 | Atari Lynx | Beetle Lynx | `.lynx` |
 | Neo Geo Pocket / Color | Beetle NeoPop | `.ngp`, `.ngpc` |
 | Vectrex | vecx | `.vec` |
+| Nintendo 64 | Mupen64Plus-Next (GLideN64) | `.z64`, `.n64`, `.v64` (any byte order), plain or alone in a ZIP |
 | PlayStation | PCSX ReARMed | `.cue`, `.bin`/`.iso` with a PlayStation volume, PS1 `.pbp`, `.m3u` playlists; `.chd` or zipped discs in a PlayStation folder |
 
 `.md` and `.bin` require a SEGA cartridge header (Mega Drive) or the
@@ -98,7 +99,13 @@ L2/R2 the triggers; the sticks are a DualShock's, which stays digital until a
 game turns analog on. On PlayStation the left stick is the analog stick only,
 not a second D-pad, and the right stick belongs to the game rather than moving
 the TV. Input preview is off for PlayStation: it would run the console twice.
-All systems keep
+Nintendo 64: A and B use bottom/left; the right stick (or right/top and the
+shoulders) works the C-buttons; L2 is Z, R2 is R and Back is L. The N64 draws
+with the GPU: its core runs on a thread of its own with a hidden OpenGL 3.3
+context (WGL on Windows, surfaceless EGL on Linux) at the console's own
+320x240, and each frame is read back to the TV like any other console's. The
+first game on a new machine can take a while to start while GLideN64 builds its
+shader cache. All systems keep
 the same menu chord and recenter shortcut. Settings → Controls & XR →
 Controller shows the current system's layout. Keyboard Z/X/A/S/Q/W retain
 the corresponding bottom/right/left/top/L1/R1 positions.
