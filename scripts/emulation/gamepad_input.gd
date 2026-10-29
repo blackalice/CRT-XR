@@ -1,4 +1,5 @@
 extends RefCounted
+const Layouts = preload("res://scripts/emulation/controller_layouts.gd")
 ## Normalized Xbox/Deck positions -> SNES B,Y,Select,Start,Up,Down,Left,Right,A,X,L,R.
 const BUTTONS := {
 	JOY_BUTTON_A: 0, JOY_BUTTON_X: 1, JOY_BUTTON_BACK: 2, JOY_BUTTON_START: 3,
@@ -86,6 +87,40 @@ func mask(stick_dpad := true) -> int:
 		if state.axes.y > STICK_DEADZONE: result |= 1 << 5
 	if result & (1 << 4) and result & (1 << 5): result &= ~((1 << 4) | (1 << 5))
 	if result & (1 << 6) and result & (1 << 7): result &= ~((1 << 6) | (1 << 7))
+	return result
+
+## The console's input under a controller layout (see controller_layouts.gd):
+## {"mask": Libretro button bits, "analog": left X/Y, right X/Y}.
+func read(layout: Dictionary) -> Dictionary:
+	var result := {"mask": 0, "analog": PackedInt32Array([0, 0, 0, 0])}
+	if menu_active or not devices.has(active_device): return result
+	var state: Dictionary = devices[active_device]
+	var bindings: Dictionary = layout.buttons
+	var mask := 0
+	for input in Layouts.BUTTON_INPUTS:
+		var button: int = Layouts.BUTTON_INPUTS[input]
+		if not bindings.has(input) or not state.buttons.get(button, false) or state.blocked.has(button): continue
+		if state.chord and button in MENU_BUTTONS: continue
+		mask |= 1 << bindings[input]
+	for input in Layouts.TRIGGER_INPUTS:
+		if bindings.has(input) and float(state.triggers.get(Layouts.TRIGGER_INPUTS[input], 0.0)) > TRIGGER_THRESHOLD: mask |= 1 << bindings[input]
+	var sticks := analog()
+	var analog_out := PackedInt32Array([0, 0, 0, 0])
+	for side in [["ls_", layout.left_stick, state.axes, 0], ["rs_", layout.right_stick, state.right, 2]]:
+		match side[1]:
+			"analog": analog_out[side[3]] = sticks[side[3]]; analog_out[side[3] + 1] = sticks[side[3] + 1]
+			"left": analog_out[0] = sticks[side[3]]; analog_out[1] = sticks[side[3] + 1]
+			"buttons":
+				var stick: Vector2 = side[2]
+				var pushed := {"up": stick.y < -STICK_DEADZONE, "down": stick.y > STICK_DEADZONE, "left": stick.x < -STICK_DEADZONE, "right": stick.x > STICK_DEADZONE}
+				for direction in Layouts.STICK_DIRECTIONS:
+					var input: String = side[0] + direction
+					if pushed[direction] and bindings.has(input): mask |= 1 << bindings[input]
+	# Opposite D-pad directions cancel, as on a real pad.
+	if mask & (1 << 4) and mask & (1 << 5): mask &= ~((1 << 4) | (1 << 5))
+	if mask & (1 << 6) and mask & (1 << 7): mask &= ~((1 << 6) | (1 << 7))
+	result.mask = mask
+	result.analog = analog_out
 	return result
 
 ## Left X, left Y, right X, right Y in Libretro's -32768..32767 range (down is positive).

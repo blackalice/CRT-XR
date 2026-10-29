@@ -105,7 +105,16 @@ with the GPU: its core runs on a thread of its own with a hidden OpenGL 3.3
 context (WGL on Windows, surfaceless EGL on Linux) at the console's own
 320x240, and each frame is read back to the TV like any other console's. The
 first game on a new machine can take a while to start while GLideN64 builds its
-shader cache. All systems keep
+shader cache. **Game controls** (Settings → Controls & XR) changes which control presses
+each console button. Choose a layout, then press A on a button and press the
+control you want (or push a stick that way); wait five seconds to cancel.
+Layouts are kept per console, and **Layout for → This game only** gives one
+game its own. Presets: N64 *Smash Bros.* (jump on face buttons, right stick
+off) and *Twin-stick shooter* (GoldenEye, Perfect Dark: move on the left stick,
+aim with the right); PlayStation *D-pad on left stick* for games without
+analog support. On consoles with sticks each stick can be analog or work as
+four buttons. R3 (recentre) and the L1 + R1 + Start menu chord cannot be
+reassigned. All systems keep
 the same menu chord and recenter shortcut. Settings → Controls & XR →
 Controller shows the current system's layout. Keyboard Z/X/A/S/Q/W retain
 the corresponding bottom/right/left/top/L1/R1 positions.

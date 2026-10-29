@@ -255,8 +255,7 @@ func pages(category: int) -> Array:
 				elif h.emulator.separate_preview: input_delay.disabled_reason="The separate preview core could not start for %s." % console
 				else: input_delay.disabled_reason="%s needs Separate preview core: its sound buzzes with a same-core preview." % console
 			var separate_preview := toggle("controls.separate_preview","Separate preview core",h.emulator,"separate_preview",true,"Runs the input preview in a second copy of the emulator, so game sound is never rewound. Works on every console; uses a little more memory. Off limits the preview to SNES.",func(): h.emulator.set_separate_preview(h.emulator.separate_preview); menu.refresh(),false)
-			return [page("Controller",[
-				action("controls.mapping","Game button layout",func(): menu.notify(h.emulator.Registry.controls(h.emulator.system_id)),h.emulator.Registry.controls(h.emulator.system_id),false,h.emulator.Registry.SYSTEMS[h.emulator.system_id].name),
+			return [page("Game controls",menu.controls.rows()),page("Controller",[
 				toggle("controls.distance","Right stick adjusts distance",h,"right_stick_distance",true,"Stick up brings the TV closer; stick down moves it farther away.",unchanged,false),
 				property_row("distance_speed","Distance adjustment speed",.2,2,.1,"m/s","Speed of the right-stick distance control, in metres per second.",false),
 				input_delay,separate_preview]),

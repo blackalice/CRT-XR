@@ -18,6 +18,7 @@ var music := preload("res://scripts/ui/menu_music.gd").new()
 var games := preload("res://scripts/ui/menu_games.gd").new()
 var play := preload("res://scripts/ui/menu_play.gd").new()
 var keys := preload("res://scripts/ui/menu_keys.gd").new()
+var controls := preload("res://scripts/ui/menu_controls.gd").new()
 ## File screens share one structure: where you are (the location bar), what
 ## you can do here (THIS FOLDER), what is inside (CONTENTS) and other places
 ## (GO TO). Section names are shown as small headers between rows.
@@ -108,7 +109,7 @@ var focus_tween: Tween
 
 
 func _ready() -> void:
-	for helper in [pictures,videos,music,games,play,keys]: helper.host=host; helper.menu=self
+	for helper in [pictures,videos,music,games,play,keys,controls]: helper.host=host; helper.menu=self
 	theme = MenuSkin.create()
 	host.box_art.art_ready.connect(thumbnail_arrived)
 	sound_player=AudioStreamPlayer.new(); sound_player.volume_db=-28; add_child(sound_player)
@@ -1133,6 +1134,8 @@ func release_input(event: InputEvent) -> void:
 		if event.axis==JOY_AXIS_LEFT_Y: stick.y=event.axis_value
 
 func handle(event: InputEvent) -> bool:
+	# A console button waiting for its new control takes the next press.
+	if controls.handle(event): return true
 	if (event is InputEventJoypadButton and event.pressed) or (event is InputEventJoypadMotion and absf(event.axis_value)>.55):
 		set_input_kind("controller")
 	if event is InputEventMouse:

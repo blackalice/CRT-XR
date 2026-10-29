@@ -1,5 +1,6 @@
 extends Node
 const Registry = preload("res://scripts/emulation/core_registry.gd")
+const Layouts = preload("res://scripts/emulation/controller_layouts.gd")
 ## Godot owns presentation; the native Libretro host owns frame execution/callbacks.
 signal content_changed(texture: Texture2D)
 signal frame_presented(image: Image)
@@ -51,9 +52,8 @@ var preview_copy := "" # "", "ready" or "failed" for the loaded game
 var preview_time_usec := 0
 var preview_count := 0
 var gamepad := preload("res://scripts/emulation/gamepad_input.gd").new()
-## The loaded console's sticks and triggers (see Registry.SYSTEMS).
-var analog_input := false
-var trigger_input := false
+## The controller layout in force for the loaded game (see controller_layouts.gd).
+var controls: Dictionary = {}
 var unpack_thread: Thread
 var unpacking := ""
 var unpack_cancelled := false
@@ -140,9 +140,7 @@ func load_rom(path: String) -> bool:
 		Registry.archive_game(path)["sha256"] = rom_hash
 	else: rom_hash = Registry.content_hash(path)
 	var info: Dictionary = core.info()
-	analog_input = spec.get("analog", false)
-	trigger_input = spec.get("triggers", false)
-	gamepad.right_stick_game = analog_input
+	reload_controls()
 	core_identity = str(info.name)
 	fps = float(info.fps)
 	auto_saved = true
@@ -197,10 +195,10 @@ func _process(delta: float) -> void:
 	var period := 1.0 / fps
 	var frames := 0
 	var rendered := false
-	var buttons := input_mask()
-	if analog_input:
-		var sticks: PackedInt32Array = gamepad.analog()
-		core.set_analog(sticks[0], sticks[1], sticks[2], sticks[3])
+	var input := read_input()
+	var buttons: int = input.mask
+	var sticks: PackedInt32Array = input.analog
+	core.set_analog(sticks[0], sticks[1], sticks[2], sticks[3])
 	while accumulator >= period and frames < 8:
 		if not core.run_frame(buttons):
 			set_paused(true)
@@ -322,15 +320,23 @@ func update_texture(force := false, preview: Dictionary = {}) -> void:
 const KEYBOARD_PAD := [KEY_Z, KEY_A, KEY_TAB, KEY_ENTER, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_X, KEY_S, KEY_Q, KEY_W]
 
 func input_mask() -> int:
-	if gamepad.menu_active: return 0
-	# Consoles with sticks keep the left stick for themselves; L2/R2 reach only
-	# consoles with triggers (other cores give those IDs unrelated jobs).
-	var mask: int = gamepad.mask(not analog_input)
-	if not trigger_input: mask &= ~((1 << 12) | (1 << 13))
+	return read_input().mask
+
+## The controller through the game's layout, with the keyboard's fixed keys added.
+func read_input() -> Dictionary:
+	if gamepad.menu_active: return {"mask": 0, "analog": PackedInt32Array([0, 0, 0, 0])}
+	# Before a game loads, the current console's standard layout.
+	var layout: Dictionary = controls if not controls.is_empty() else Layouts.standard(system_id, Registry.SYSTEMS[system_id])
+	var input: Dictionary = gamepad.read(layout)
 	for id in range(12):
-		var pressed := Input.is_physical_key_pressed(KEYBOARD_PAD[id])
-		if pressed: mask |= 1 << id
-	return mask
+		if Input.is_physical_key_pressed(KEYBOARD_PAD[id]): input.mask |= 1 << id
+	return input
+
+## Applies the layout saved for this game, or for its console, or the standard one.
+func reload_controls() -> void:
+	controls = Layouts.resolve(system_id, Registry.SYSTEMS[system_id], rom_hash)
+	# The right stick moves the TV only while the game has no use for it.
+	gamepad.right_stick_game = controls.right_stick != "buttons" or controls.buttons.keys().any(func(input): return input.begins_with("rs_"))
 
 func set_paused(value: bool) -> void:
 	paused = value
@@ -489,8 +495,7 @@ func stop() -> void:
 	paused = false
 	texture = null
 	last_frame = null
-	analog_input = false
-	trigger_input = false
+	controls = {}
 	gamepad.right_stick_game = false
 	game_changed.emit(false)
 
