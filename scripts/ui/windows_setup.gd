@@ -1,5 +1,6 @@
 extends Control
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
+const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 ## Explicit display choice and a black curtain across a physical SBS mode change.
 signal xr_ready(size: Vector2i)
 signal desktop_ready
@@ -14,7 +15,7 @@ var last_size := Vector2i.ZERO
 var canvas: Control
 var column: VBoxContainer
 var display_button: Button
-var hint: Label
+var hint: Control
 var buttons: Array[Button] = []
 
 func _ready() -> void:
@@ -55,17 +56,15 @@ func _ready() -> void:
 	column.add_child(instructions)
 	selected_screen = get_window().current_screen
 	display_button = add_button("", func(): change_screen(1))
-	add_button("Open glasses view  [A]", begin)
+	add_button("Open glasses view", begin)
 	add_button("Play on this screen without glasses", func():
 		if not proceeding:
 			proceeding=true
 			desktop_ready.emit())
 	add_button("Exit", func(): get_tree().quit())
-	hint = Label.new()
-	hint.text = "Display: Left / Right     Select: Up / Down     Open: A / Enter\nIf it stays black, return the glasses to mono and press B / Escape to retry."
-	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	hint.add_theme_font_size_override("font_size",20)
-	MenuSkin.weigh(hint,MenuSkin.REGULAR)
+	# Controls drawn as the menus draw them, with the keyboard keys alongside.
+	hint = GlyphText.new("Display: {←→} / Left Right     Select: {↑↓} / Up Down     Open: {A} / Enter\nIf it stays black, return the glasses to mono and press {B} / Escape to retry.", 20, MenuSkin.TEXT)
+	hint.centred = true
 	column.add_child(hint)
 	get_window().size_changed.connect(resize_canvas)
 	refresh_display()

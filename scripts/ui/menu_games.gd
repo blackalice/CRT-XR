@@ -42,7 +42,7 @@ func library_items() -> Array:
 	if not h.play_history.recent.is_empty(): result.append(
 		menu.card(menu.catalog.action("library.recent","Recently played",func(): open_history("recent"),"Return to your latest games. Unplugged-card entries are kept.",h.play_history.recent.is_empty(),"%d game%s" % [h.play_history.recent.size(),"" if h.play_history.recent.size()==1 else "s"]),"PICK UP & PLAY","recent",menu.MenuSkin.AMBER,"QUICK ACCESS"))
 	if not h.play_history.favourites.is_empty(): result.append(
-		menu.card(menu.catalog.action("library.favourites","Favourites",func(): open_history("favourites"),"Your favourites across every supported console. Press X on a game to add it.",h.play_history.favourites.is_empty(),"%d game%s" % [h.play_history.favourites.size(),"" if h.play_history.favourites.size()==1 else "s"]),"YOUR PERSONAL SHELF","favourites",Color("dfb984"),"QUICK ACCESS"))
+		menu.card(menu.catalog.action("library.favourites","Favourites",func(): open_history("favourites"),"Your favourites across every supported console. Press {X} on a game to add it.",h.play_history.favourites.is_empty(),"%d game%s" % [h.play_history.favourites.size(),"" if h.play_history.favourites.size()==1 else "s"]),"YOUR PERSONAL SHELF","favourites",Color("dfb984"),"QUICK ACCESS"))
 	var watching: Array=host.video_library.continue_watching(5) if menu.videos.videos_shown() else []
 	if not watching.is_empty(): result.append(menu.videos.continue_card(watching.size(),"QUICK ACCESS"))
 	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"],"psx":["SONY · 32-BIT CD","a9b6cf"],"n64":["NINTENDO · 64-BIT","8fcf9a"]}
@@ -165,7 +165,7 @@ func browse_folders() -> void:
 	menu.show_error("No available folder could be opened.")
 
 func open_default() -> void:
-	if host.default_rom_dir.is_empty(): menu.show_error("No default folder yet. Browse to your ROM folder and press R1.")
+	if host.default_rom_dir.is_empty(): menu.show_error("No default folder yet. Browse to your ROM folder and press {R1}.")
 	else: open_folder(host.default_rom_dir)
 
 func open_cards() -> void:
@@ -338,8 +338,8 @@ func console_items() -> Array:
 		var path: String = game.path
 		result.append(game_item(path,game.label))
 	if listed.size()>GAMES_PER_PAGE:
-		result.append(menu.catalog.action("games.previous","Previous page",func(): change_game_page(-1),"Also available with L1. Left/right jumps ten games.",game_page==0))
-		result.append(menu.catalog.action("games.next","Next page",func(): change_game_page(1),"Also available with R1. Left/right jumps ten games.",(game_page+1)*GAMES_PER_PAGE>=listed.size()))
+		result.append(menu.catalog.action("games.previous","Previous page",func(): change_game_page(-1),"Also available with {L1}. {←→} jumps ten games.",game_page==0))
+		result.append(menu.catalog.action("games.next","Next page",func(): change_game_page(1),"Also available with {R1}. {←→} jumps ten games.",(game_page+1)*GAMES_PER_PAGE>=listed.size()))
 	return result
 
 ## A grid of letters; those with no games are greyed out.

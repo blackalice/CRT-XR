@@ -379,20 +379,3 @@ static func stage_bios(system: String, destination: String) -> void:
 		if file != null:
 			file.store_buffer(bytes)
 			file.close()
-
-static func controls(system: String) -> String:
-	match system:
-		"nes": return "NES: bottom = B, right = A; left/top = turbo B/A. Back = Select."
-		"megadrive": return "Mega Drive: left/bottom/right = A/B/C; L1/top/R1 = X/Y/Z. Back = Mode."
-		"mastersystem", "gamegear": return "Sega: bottom = button 1, right = button 2. Start = Pause/Start."
-		"segacd": return "Sega CD: same layout as Mega Drive. Start = Start/Play."
-		"gameboy": return "Game Boy: bottom = B, right = A. Back = Select, Start = Start."
-		"gba": return "Game Boy Advance: bottom = B, right = A; L1/R1 = L/R. Back = Select, Start = Start."
-		"pcengine": return "PC Engine: bottom = II, right = I; L1/R1 = V/VI on the 6-button pad. Start = Run."
-		"ngpc": return "Neo Geo Pocket: bottom = A, right = B. Start = Option."
-		"atarilynx": return "Atari Lynx: bottom = A, right = B; L1/R1 = Option 1/2. Start = Option."
-		"atari2600": return "Atari 2600: bottom = the joystick Fire button. Start = console Reset."
-		"vectrex": return "Vectrex: right = button 1, bottom = 2, top = 3, left = 4."
-		"n64": return "Nintendo 64: bottom = A, left = B; right stick or right/top/L1/R1 = C-buttons. L2 = Z, R2 = R, Back = L. Left stick = the analog stick."
-		"psx": return "PlayStation: bottom/right/left/top = Cross/Circle/Square/Triangle. L1/R1 and the triggers = L1/R1/L2/R2. Sticks = DualShock sticks. Back = Select."
-	return "SNES: bottom/right/left/top = B/A/Y/X. L1/R1 = L/R. Back = Select."

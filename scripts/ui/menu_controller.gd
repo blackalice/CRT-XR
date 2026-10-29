@@ -12,6 +12,7 @@ const RomIndex = preload("res://scripts/content/rom_index.gd")
 const Confirmation = preload("res://scripts/ui/confirmation_panel.gd")
 const LocationBar = preload("res://scripts/ui/location_bar.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
+const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 ## Page builders and actions, one helper per area; each reaches the menu and host.
 var pictures := preload("res://scripts/ui/menu_pictures.gd").new()
 var videos := preload("res://scripts/ui/menu_videos.gd").new()
@@ -59,9 +60,9 @@ var preview_button: Button
 var section_hint: Label
 var heading: Label
 var subtitle: Label
-var help_label: Label
+var help_label: Control
 var hints: HFlowContainer
-var error_label: Label
+var error_label: Control
 var body: HBoxContainer
 var sidebar: VBoxContainer
 var sidebar_panel: PanelContainer
@@ -149,11 +150,8 @@ func _ready() -> void:
 	subtitle.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	layout.add_child(subtitle)
 	location_bar=LocationBar.new(); location_bar.hide(); layout.add_child(location_bar)
-	error_label = Label.new()
-	error_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	error_label.max_lines_visible = 2
-	error_label.add_theme_color_override("font_color",Color("ffb59c"))
-	error_label.add_theme_font_size_override("font_size",20)
+	# Messages name controls in braces ("press {R1}"): drawn as the same glyphs as the hints.
+	error_label = GlyphText.new("", 20, Color("ffb59c"))
 	layout.add_child(error_label); error_label.hide()
 	confirm_panel = Confirmation.new()
 	layout.add_child(confirm_panel); confirm_panel.hide()
@@ -250,11 +248,8 @@ func _ready() -> void:
 	compact.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	compact.add_theme_color_override("font_color",MenuSkin.AMBER)
 	layout.add_child(compact); compact.hide()
-	help_label = Label.new()
+	help_label = GlyphText.new("", 20, MenuSkin.TEXT)
 	help_label.custom_minimum_size.y = 64
-	help_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	help_label.max_lines_visible = 3
-	help_label.add_theme_font_size_override("font_size",20)
 	layout.add_child(help_label)
 	hints = preload("res://scripts/ui/shortcut_footer.gd").new()
 	hints.add_theme_font_size_override("font_size",18)
@@ -880,7 +875,7 @@ func refresh_labels() -> void:
 		if host.video.loaded: subtitle.text = "Video · paused" if host.video.paused else "Video"
 		elif host.emulator.loaded: subtitle.text = library.Registry.SYSTEMS.get(host.emulator.system_id, {}).get("name", "Game") + " · paused"
 		else: subtitle.text = status_title
-		subtitle.tooltip_text=status_detail
+		subtitle.tooltip_text=GlyphText.plain(status_detail)
 	elif mode=="help": subtitle.text="Game library" if help_title=="Full game title" else "CRT XR · Help"
 	elif mode=="music_browser": subtitle.text=music.music_dir+" · Page %d" % [music.music_page+1]
 	elif mode=="videos": subtitle.text=videos.video_view_dir+(" · Page %d" % [videos.video_page+1] if videos.video_page>0 else "")
@@ -912,12 +907,12 @@ func refresh_labels() -> void:
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0 and notification_context==state_key(): help_label.text = notification
 	elif mode=="help": help_label.text=""
-	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in any console list and press X."
+	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in any console list and press {X}."
 	elif mode=="library" and not rom_index.message.is_empty(): help_label.text=rom_index.message
 	elif mode=="library" and host.default_rom_dir.is_empty(): help_label.text="Choose Set up your ROM library and select your main ROM folder. Your supported consoles appear here automatically."
 	elif mode=="library" and not rom_index.scanning and rom_index.total()==0: help_label.text="No supported games here yet. Check Library locations. Cartridges can be plain files or ZIPs; Sega CD discs can be .cue/.bin, or CHD in a Sega CD folder. 7z and RAR are not supported."
 	elif row!=null: help_label.text = str(row.item.get("help",""))
-	else: help_label.text = library.message if mode=="browser" else ("Nothing here yet. B goes back." if input_kind=="controller" else "Nothing here yet. Backspace goes back.")
+	else: help_label.text = library.message if mode=="browser" else "Nothing here yet. {B} goes back."
 	if preview and row!=null: compact.text = "▸  %s    ‹  %s  ›" % [row.item.label,row.formatted_value()]
 	refresh_hints(row)
 
@@ -1273,6 +1268,7 @@ func _process(delta: float) -> void:
 func set_input_kind(kind: String) -> void:
 	if kind==input_kind: return
 	input_kind=kind
+	help_label.controller=kind=="controller"; error_label.controller=kind=="controller"
 	search_field.visible=kind=="keyboard" and mode in ["games","recent","favourites","videos"]
 	if kind=="controller" and search_field.has_focus():
 		search_field.release_focus(); select(selected_id,false)

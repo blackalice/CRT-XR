@@ -34,7 +34,7 @@ func show_folder(path: String) -> bool:
 		var system := Registry.identify(current_dir.path_join(file))
 		if not system.is_empty():
 			entries.append({"path":current_dir.path_join(file),"folder":false,"label":file,"system":Registry.SYSTEMS[system].name})
-	message = "No supported games here. Open a folder, or go up with L1." if entries.is_empty() else "Choose a game, or press R1 to use this folder as your library."
+	message = "No supported games here. Open a folder, or go up with {L1}." if entries.is_empty() else "Choose a game, or press {R1} to use this folder as your library."
 	return true
 
 func cards() -> Array:

@@ -142,7 +142,7 @@ func build_panel() -> void:
 		begin_button = Button.new()
 		begin_button.custom_minimum_size.y = 54
 		begin_button.add_theme_font_size_override("font_size", 26)
-		begin_button.text = "I switched to SBS — Continue  [A]"
+		begin_button.text = "I switched to SBS — Continue"
 		begin_button.pressed.connect(continue_session)
 		steps.add_child(begin_button)
 		begin_button.grab_focus()
@@ -150,13 +150,13 @@ func build_panel() -> void:
 
 func step_lines() -> Array:
 	if probe_path.is_empty():
-		return ["Press A to darken the view.", "Switch your glasses to SBS with their button.", "Your room appears when they're ready."] if in_place \
-			else ["Switch your glasses to SBS with their button.", "Press A to continue.", "Your room appears in 3D."]
+		return ["Press {A} to darken the view.", "Switch your glasses to SBS with their button.", "Your room appears when they're ready."] if in_place \
+			else ["Switch your glasses to SBS with their button.", "Press {A} to continue.", "Your room appears in 3D."]
 	return ["Put your glasses on.", "", "Your room appears by itself."]
 
 func footer_parts() -> Array:
 	return [["B", "Return to Steam"], ["", "·  Keep the glasses connected"]] if not probe_path.is_empty() \
-		else [["B", "Cancel"], ["", "·  Keep the glasses connected"]]
+		else ([["A", "Continue"]] if manual_confirmation and not in_place else []) + [["B", "Cancel"], ["", "·  Keep the glasses connected"]]
 
 ## The words that depend on who switches the glasses, and how long it's taken.
 func refresh_text() -> void:

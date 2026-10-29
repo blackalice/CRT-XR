@@ -15,6 +15,7 @@ extends RefCounted
 ## indented lines continue the bullet above.
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
+const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 const CARD := Color("20242a")
 const CHIP := Color("2b3037")
 const RULE := Color("3a3631")
@@ -143,7 +144,7 @@ static func build(copy: String, large: bool) -> Control:
 				tip.add_child(label(block[1], size - 2, MenuSkin.REGULAR, MenuSkin.TEXT))
 				article.add_child(tip)
 			_:
-				article.add_child(label(block[1], size, MenuSkin.REGULAR, MenuSkin.TEXT))
+				article.add_child(prose(block[1], size, MenuSkin.TEXT))
 		first = false
 	return article
 
@@ -168,8 +169,15 @@ static func marked(mark: Control, text: String, size: int) -> Control:
 	row.add_theme_constant_override("separation", 12)
 	mark.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	row.add_child(mark)
-	row.add_child(label(text, size, MenuSkin.REGULAR, MenuSkin.TEXT))
+	row.add_child(prose(text, size, MenuSkin.TEXT))
 	return row
+
+## Text that may name controls in braces ("press {A}"): drawn with glyphs.
+static func prose(text: String, size: int, colour: Color) -> Control:
+	if not "{" in text: return label(text, size, MenuSkin.REGULAR, colour)
+	var copy := GlyphText.new(text, size, colour)
+	copy.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return copy
 
 static func badge(number: String, size: int) -> Control:
 	var panel := PanelContainer.new()

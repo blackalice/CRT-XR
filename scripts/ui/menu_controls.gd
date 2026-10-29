@@ -50,7 +50,7 @@ func rows() -> Array:
 		var name: String = entry[1]
 		var inputs := Layouts.inputs_of(layout, id)
 		var row: Dictionary = menu.catalog.action("controls.button.%d" % id, name, func(): start_capture(id, name),
-			"%s: %s. Press A, then the button you want for it, or push a stick that way. Wait %d seconds to cancel." % [name, Layouts.inputs_for(layout, id), int(CAPTURE_SECONDS)],
+			"%s: %s. Press {A}, then the button you want for it, or push a stick that way. Wait %d seconds to cancel." % [name, Layouts.inputs_for(layout, id), int(CAPTURE_SECONDS)],
 			false, "Not set" if inputs.is_empty() else "")
 		# Drawn as the controls themselves (face buttons as a diamond of circles).
 		row["value_inputs"] = inputs

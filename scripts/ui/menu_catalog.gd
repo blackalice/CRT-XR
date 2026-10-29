@@ -154,7 +154,7 @@ func pages(category: int) -> Array:
 				property_row("height_offset","Screen height offset (m)",-1.5,1.5,.05,"m","Moves the TV, furniture and floor together vertically."),
 				property_row("tv_scale","TV scale",.5,1.6,.05,"percent","Scales the whole set; this is independent of picture fitting."),
 				action("view.fit","Fit TV to view",h.fit_tv_to_view,"Fits the physical TV inside your neutral view."),
-				action("view.recenter","Recenter head",h.recenter,"Also available on R3, without opening the menu.")]),
+				action("view.recenter","Recenter head",h.recenter,"Also available on {R3}, without opening the menu.")]),
 				page("Display",[
 				toggle("view.stereo","Side-by-side stereo",h,"stereo",false,"Use with the glasses' physical SBS mode. This does not switch the glasses themselves.",func(): h.set_stereo(h.stereo)),
 				action("view.fullscreen","Toggle fullscreen",h.toggle_fullscreen,"Switch the local application window between fullscreen and windowed mode."),

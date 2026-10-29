@@ -3,6 +3,7 @@ signal selected(id: String)
 signal adjust_requested(id: String, direction: int)
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
+const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
 ## Optional item keys: "row_icon" (see row_icon.gd) leads the row; "emphasis" is
 ## "primary" for a screen's main action or "danger" for one that forgets
@@ -160,7 +161,7 @@ func refresh() -> void:
 		unavailable_label.text=str(item.get("disabled_reason","")) if disabled else ""
 		# Tiles stay one line; greyed out says enough beside its neighbour.
 		unavailable_label.visible=not unavailable_label.text.is_empty() and item.get("layout","")!="tile"
-	tooltip_text=str(item.get("disabled_reason",item.get("help","")))
+	tooltip_text=GlyphText.plain(str(item.get("disabled_reason",item.get("help",""))))
 	title_label.modulate=Color("85878b") if disabled else Color.WHITE
 	value_label.modulate=title_label.modulate
 	if marker!=null: marker.text=""

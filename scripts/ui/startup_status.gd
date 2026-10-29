@@ -4,7 +4,7 @@ static func describe(game_loaded: bool, default_folder: String, last_game: Strin
 		xr_requested: bool, tracking_valid: bool, tracking_status: String,
 		sbs: bool, window_size: Vector2i, gaming_mode: bool, sbs_size := Vector2i(3840,1080)) -> Dictionary:
 	var title := "Ready to play" if game_loaded else "Choose a game"
-	var detail := "L1 + R1 + Start opens settings. R3 recentres your view." if game_loaded else "Open a game from your library, play your last game, or explore the test signal."
+	var detail := "{L1+R1+Start} opens settings. {R3} recentres your view." if game_loaded else "Open a game from your library, play your last game, or explore the test signal."
 	if not game_loaded and not last_game.is_empty() and not FileAccess.file_exists(last_game):
 		title = "Last game unavailable"
 		detail = "Reconnect its SD card, or choose another game. Your saved location is retained."
