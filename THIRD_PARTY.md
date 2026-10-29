@@ -89,7 +89,7 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   `cores/mman-win32-LICENSE.md`). No PlayStation BIOS is included.
 * Mupen64Plus-Next (Nintendo 64), GPL version 2, the Mupen64Plus and libretro
   contributors. Upstream source revision:
-  https://github.com/libretro/mupen64plus-libretro-nx/tree/15bada85906593376e8fd697f1b0b3af3a20f512
+  https://github.com/libretro/mupen64plus-libretro-nx/tree/6752836de8b224febfd5708444755b77712ac939
   Full licence: `cores/Mupen64Plus-Next-LICENSE.txt`, with Mupen64Plus-Core and
   its HLE RSP (`cores/Mupen64Plus-core-LICENSE.txt`, `cores/Mupen64Plus-RSP-HLE-LICENSE.txt`)
   and the GLideN64 renderer (GPL version 2, Sergey Lipskiy and contributors;

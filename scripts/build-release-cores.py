@@ -51,7 +51,7 @@ SPECS=[
  # Nintendo 64. GLideN64 draws through the host's hidden OpenGL 3.3 context; the x86-64 dynarec
  # needs nasm. MSYSTEM selects the 64-bit MinGW branch of the makefile. Windows matches Linux's
  # feature set: no Vulkan renderer (the host offers OpenGL only), no LLE RSP, no threaded Angrylion.
- {'core':'mupen64plus_next','repository':'mupen64plus-next','revision':'15bada85906593376e8fd697f1b0b3af3a20f512','directory':'','makefile':'Makefile',
+ {'core':'mupen64plus_next','repository':'mupen64plus-next','revision':'6752836de8b224febfd5708444755b77712ac939','directory':'','makefile':'Makefile',
   'args':['MSYSTEM=MINGW64','HAVE_PARALLEL_RSP=0','HAVE_PARALLEL_RDP=0','HAVE_THR_AL=0','LLE=0'],
   'licenses':[['LICENSE','Mupen64Plus-Next-LICENSE.txt'],['mupen64plus-core/LICENSES','Mupen64Plus-core-LICENSE.txt'],
    ['mupen64plus-rsp-hle/LICENSES','Mupen64Plus-RSP-HLE-LICENSE.txt'],['GLideN64/LICENSE','GLideN64-LICENSE.txt'],
