@@ -92,7 +92,7 @@ func run():
 			check(m.get_rect().end.x<=960 and m.get_rect().end.y<=720,"Larger-text page fits canvas: %d/%d" % [category,subsection])
 	page(7); await capture("quick-large-controller")
 	check(m.hints.get_child_count()<=4,"Settings footer has at most four contextual groups")
-	check(m.hints.get_children().any(func(group):return group.get_children().any(func(child):return child.get_script()==preload("res://scripts/ui/button_glyph.gd"))),"Controller footer renders button icons")
+	check(m.hints.get_children().any(func(group):return group.get_children().any(func(child):return child.get_script()==preload("res://scripts/ui/input_glyph.gd"))),"Controller footer renders button icons")
 	page(6); m.select("system.version"); check(m.selected_row().value_label.text==ProjectSettings.get_setting("application/config/version"),"Full version is available in About & Help")
 	m.select("system.help"); m.activate(); await settle(); check(m.mode=="help" and m.help_copy.contains("Tracking"),"Troubleshooting opens a scrollable help page")
 	m.back(); check(m.mode=="settings" and m.category==6,"Help returns to its original settings page")

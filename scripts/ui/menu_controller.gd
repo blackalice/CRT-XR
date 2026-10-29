@@ -11,6 +11,7 @@ const Library = preload("res://scripts/ui/rom_library.gd")
 const RomIndex = preload("res://scripts/content/rom_index.gd")
 const Confirmation = preload("res://scripts/ui/confirmation_panel.gd")
 const LocationBar = preload("res://scripts/ui/location_bar.gd")
+const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 ## Page builders and actions, one helper per area; each reaches the menu and host.
 var pictures := preload("res://scripts/ui/menu_pictures.gd").new()
 var videos := preload("res://scripts/ui/menu_videos.gd").new()
@@ -49,6 +50,10 @@ var search_query := ""
 var search_field: LineEdit
 var back_button: Button
 var back_glyph: Control
+## The category and section shortcuts as drawn controls, shown instead of the
+## key chips while a controller is in use.
+var category_pad_hint: Control
+var section_pad_hint: Control
 var preview_glyph: Control
 var preview_button: Button
 var section_hint: Label
@@ -137,7 +142,7 @@ func _ready() -> void:
 	top.add_child(status_line)
 	top.add_child(back_button)
 	back_button.flat=true; back_button.add_theme_font_size_override("font_size",16); MenuSkin.weigh(back_button,MenuSkin.REGULAR)
-	back_glyph=preload("res://scripts/ui/button_glyph.gd").new("B"); top.add_child(back_glyph)
+	back_glyph=InputGlyph.new("B", 30.0); top.add_child(back_glyph)
 	subtitle = Label.new()
 	subtitle.add_theme_color_override("font_color",MenuSkin.MUTED)
 	subtitle.add_theme_font_size_override("font_size",20)
@@ -181,7 +186,8 @@ func _ready() -> void:
 	var title_margin := MarginContainer.new(); title_margin.add_theme_constant_override("margin_left",12)
 	title_margin.size_flags_horizontal=Control.SIZE_EXPAND_FILL; title_margin.add_child(category_title); category_header.add_child(title_margin)
 	var category_hint := key_hint(); category_hint.name="CategoryHint"; category_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
-	category_header.add_child(category_hint); sidebar.add_child(category_header)
+	category_pad_hint=InputGlyph.row("L1 / R1", 26.0, 14, Color("c9cbce")); category_pad_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	category_header.add_child(category_hint); category_header.add_child(category_pad_hint); sidebar.add_child(category_header)
 	for i in range(CATEGORIES.size()):
 		var index := i
 		var button := Button.new()
@@ -211,6 +217,8 @@ func _ready() -> void:
 	section_hint=key_hint(); section_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	section_hint.tooltip_text="Previous / next section"
 	section_bar.add_child(section_hint)
+	section_pad_hint=InputGlyph.row("L2 / R2", 26.0, 14, Color("c9cbce")); section_pad_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	section_bar.add_child(section_pad_hint)
 	# A baseline under the tabs; the chosen tab's underline sits on it.
 	section_rule=ColorRect.new(); section_rule.color=Color("3a3f46"); section_rule.custom_minimum_size.y=1
 	section_rule.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(section_rule)
@@ -258,7 +266,7 @@ func _ready() -> void:
 	preview_button.pressed.connect(toggle_preview)
 	top.add_child(preview_button)
 	preview_button.flat=true; preview_button.add_theme_font_size_override("font_size",16); MenuSkin.weigh(preview_button,MenuSkin.REGULAR)
-	preview_glyph=preload("res://scripts/ui/button_glyph.gd").new("X"); top.add_child(preview_glyph)
+	preview_glyph=InputGlyph.new("X", 30.0); top.add_child(preview_glyph)
 	visibility_changed.connect(func(): set_process(visible))
 	open_pause()
 	hide()
@@ -932,13 +940,14 @@ func refresh_hints(row) -> void:
 	var back_caption := ("Return to game" if host.emulator.loaded else "Close menu") if mode=="pause" else "Back"
 	back_button.text=back_caption+("" if pad else "  [Backspace]")
 	back_glyph.visible=pad
-	sidebar.find_child("CategoryHint",true,false).text="L1 / R1" if pad else "Q / E"
-	section_hint.text="L2 / R2" if pad else "Z / C"
+	var category_hint: Label = sidebar.find_child("CategoryHint",true,false)
+	category_hint.text="Q / E"; category_hint.visible=not pad; category_pad_hint.visible=pad
+	section_hint.text="Z / C"; section_hint.visible=not pad; section_pad_hint.visible=pad
 	preview_button.visible=preview_available() and not preview
 	preview_button.text="Preview" if pad else "Preview  [X]"
 	preview_glyph.visible=pad and preview_button.visible
 	# One vocabulary everywhere: Deck glyphs for the pad, key names for the keyboard.
-	var parts: Array=["D-pad Select" if pad else "↑↓ Select"]
+	var parts: Array=["↑↓ Select"]
 	var open := "A Open" if pad else "Enter Open"
 	var go_back := "B Back" if pad else "Backspace Back"
 	if mode=="settings":
@@ -953,7 +962,7 @@ func refresh_hints(row) -> void:
 		parts.append(open)
 		if row!=null and row.item.has("rom_path"): parts.append_array(["X Favourite","Y Full title" if search_query.is_empty() else "Y Clear search"])
 	elif mode=="browser": parts.append_array([open,go_back,"R1 Use folder"] if pad else [open,go_back])
-	elif mode=="help": parts=["D-pad Scroll" if pad else "↑↓ Scroll",go_back]
+	elif mode=="help": parts=["↑↓ Scroll",go_back]
 	elif mode=="library":
 		parts.append_array([open,go_back])
 		if not host.default_rom_dir.is_empty(): parts.append("R1 Refresh" if pad else "R Refresh")

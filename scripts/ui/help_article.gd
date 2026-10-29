@@ -14,6 +14,7 @@ extends RefCounted
 ## dropped (the page has one), code ticks and link targets are removed, and
 ## indented lines continue the bullet above.
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
+const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const CARD := Color("20242a")
 const CHIP := Color("2b3037")
 const RULE := Color("3a3631")
@@ -183,8 +184,11 @@ static func badge(number: String, size: int) -> Control:
 	panel.add_child(digit)
 	return panel
 
-## A button as a keycap; the keyboard's alternative is quieter.
+## A button as a keycap; the keyboard's alternative is quieter. Controller
+## buttons are drawn as input glyphs, as everywhere else in the menus.
 static func chip(text: String, size: int, keyboard: bool) -> Control:
+	if not keyboard and Array(text.split(" ", false)).any(func(word): return InputGlyph.knows(word)):
+		return InputGlyph.row(text, size + 14.0, size - 2, MenuSkin.MUTED)
 	var panel := PanelContainer.new()
 	var style := MenuSkin.box(Color.TRANSPARENT if keyboard else CHIP, Color("4a4f57") if keyboard else Color("5b6068"), 1, 0)
 	style.content_margin_left = 10; style.content_margin_right = 10
