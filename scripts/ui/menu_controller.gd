@@ -223,7 +223,11 @@ func _ready() -> void:
 	scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	# Always leave room for the scrollbar. With AUTO, a page whose wrapped rows sit
+	# right at the visible height can flip forever: the bar narrows the rows, a
+	# label wraps and the page grows, the bar goes, the label unwraps. Linux font
+	# metrics hit that on Room → Videos and flooded the message queue until crash.
+	scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_RESERVE
 	scroll.follow_focus = false
 	search_field=LineEdit.new()
 	search_field.placeholder_text="Search games…  (Ctrl+F)"
