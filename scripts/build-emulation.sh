@@ -42,6 +42,6 @@ python3 - "$root" <<'PY'
 from pathlib import Path
 import sys
 root = Path(sys.argv[1])
-notice = (root / "tools/snes9x/libretro/libretro.h").read_text().split("*/", 1)[0] + "*/\n"
+notice = (root / "native/emulation/third_party/libretro/libretro.h").read_text().split("*/", 1)[0] + "*/\n"
 (root / "cores/libretro-header-LICENSE.txt").write_text(notice)
 PY

@@ -33,6 +33,20 @@ int main(int argc, char** argv) {
             check(host.reset() && host.serialize() != running && host.save_ram() == ram, "Reset restarts the console and keeps SRAM");
             check(host.unserialize(running.data(), running.size()), "State restores after a reset");
         }
+        {
+            host.analog[0] = 0x4000;
+            check(host.step(1 << RETRO_DEVICE_ID_JOYPAD_L2) && host.save_ram()[1] == 0x40 && host.save_ram()[2] == 1, "Analog stick and trigger reach the core");
+            check(host.save_ram()[4] == 0, "Core option default applies without an override");
+            host.set_option("fixture_choice", "second");
+            check(host.step(0) && host.save_ram()[4] == 1, "A core option override wins over the default");
+            check(host.disc_count() == 2 && host.disc_index() == 0 && host.disc_label(1) == "Disc 2", "Disc tray reports its discs");
+            check(host.change_disc(1) && host.step(0) && host.save_ram()[3] == 0x81, "Changing disc opens the tray and selects the disc");
+            bool closed = false;
+            for (int i = 0; i < 90 && !closed; ++i) closed = host.step(0) && host.save_ram()[3] == 0x01;
+            check(closed, "The tray closes again after about a second");
+            check(!host.change_disc(5), "A disc the game does not have is refused");
+            ram = host.save_ram();
+        }
         ram[0] = 73;
         check(host.set_save_ram(ram.data(), ram.size()) && host.save_ram()[0] == 73, "SRAM export and restore work");
         check(!host.set_save_ram(&invalid, 1), "Wrong-sized SRAM is rejected");

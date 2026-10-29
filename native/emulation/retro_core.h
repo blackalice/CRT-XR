@@ -18,6 +18,11 @@ protected:
 public:
     bool load_core(const godot::String& path);
     bool load_game(const godot::String& path, const godot::String& saves);
+    void set_option(const godot::String& key, const godot::String& value);
+    void set_controller(int device);
+    void set_analog(int left_x, int left_y, int right_x, int right_y);
+    godot::Dictionary disc_info() const;
+    bool change_disc(int index);
     bool run_frame(int buttons);
     bool reset();
     godot::PackedByteArray frame() const;

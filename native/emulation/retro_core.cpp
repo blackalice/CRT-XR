@@ -1,5 +1,6 @@
 #include "retro_core.h"
 #include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/variant/packed_string_array.hpp>
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <algorithm>
 #include <cstring>
@@ -25,6 +26,11 @@ PackedByteArray pack(const std::vector<std::uint8_t>& bytes) {
 void RetroCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("load_core", "path"), &RetroCore::load_core);
     ClassDB::bind_method(D_METHOD("load_game", "path", "saves"), &RetroCore::load_game);
+    ClassDB::bind_method(D_METHOD("set_option", "key", "value"), &RetroCore::set_option);
+    ClassDB::bind_method(D_METHOD("set_controller", "device"), &RetroCore::set_controller);
+    ClassDB::bind_method(D_METHOD("set_analog", "left_x", "left_y", "right_x", "right_y"), &RetroCore::set_analog);
+    ClassDB::bind_method(D_METHOD("disc_info"), &RetroCore::disc_info);
+    ClassDB::bind_method(D_METHOD("change_disc", "index"), &RetroCore::change_disc);
     ClassDB::bind_method(D_METHOD("run_frame", "buttons"), &RetroCore::run_frame);
     ClassDB::bind_method(D_METHOD("reset"), &RetroCore::reset);
     ClassDB::bind_method(D_METHOD("frame"), &RetroCore::frame);
@@ -45,6 +51,23 @@ void RetroCore::_bind_methods() {
 }
 bool RetroCore::load_core(const String& path) { return host.load_core(path.utf8().get_data()); }
 bool RetroCore::load_game(const String& path, const String& saves) { return host.load_game(path.utf8().get_data(), saves.utf8().get_data()); }
+void RetroCore::set_option(const String& key, const String& value) { host.set_option(key.utf8().get_data(), value.utf8().get_data()); }
+void RetroCore::set_controller(int device) { host.port_device = static_cast<unsigned>(device); }
+void RetroCore::set_analog(int left_x, int left_y, int right_x, int right_y) {
+    const int values[] = {left_x, left_y, right_x, right_y};
+    for (int i = 0; i < 4; ++i) host.analog[i] = static_cast<std::int16_t>(std::clamp(values[i], -32768, 32767));
+}
+Dictionary RetroCore::disc_info() const {
+    Dictionary result;
+    const unsigned count = host.disc_count();
+    result["count"] = count;
+    result["index"] = host.disc_index();
+    PackedStringArray labels;
+    for (unsigned i = 0; i < count; ++i) labels.push_back(String::utf8(host.disc_label(i).c_str()));
+    result["labels"] = labels;
+    return result;
+}
+bool RetroCore::change_disc(int index) { return index >= 0 && host.change_disc(static_cast<unsigned>(index)); }
 bool RetroCore::run_frame(int buttons) { return host.step(static_cast<std::uint16_t>(buttons)); }
 bool RetroCore::reset() { return host.reset(); }
 PackedByteArray RetroCore::frame() const { return pack(host.rgba); }
@@ -90,7 +113,11 @@ bool RetroCore::load_preview(const String& core_path, const String& game_path, c
     if (!fs::copy_file(source, copy, fs::copy_options::overwrite_existing, ignored)) return false;
     preview_library = copy.u8string();
     preview_host.want_audio = false; // its frames are shown, never heard
-    if (preview_host.load_core(preview_library) && preview_host.load_game(game_path.utf8().get_data(), directory.utf8().get_data())) return true;
+    preview_host.port_device = host.port_device;
+    if (preview_host.load_core(preview_library)) {
+        preview_host.copy_options(host); // load_core clears them; the game reads them at load
+        if (preview_host.load_game(game_path.utf8().get_data(), directory.utf8().get_data())) return true;
+    }
     close_preview();
     return false;
 }
@@ -103,6 +130,7 @@ Dictionary RetroCore::run_preview(int buttons, int frames) {
     // affects the picture, never the playing game.
     const auto ram = host.save_ram();
     if (!ram.empty()) preview_host.set_save_ram(ram.data(), ram.size());
+    std::copy(std::begin(host.analog), std::end(host.analog), std::begin(preview_host.analog));
     for (int i = 0; i < std::max(frames, 1); ++i)
         if (!preview_host.step(static_cast<std::uint16_t>(buttons))) return result;
     if (preview_host.width == 0) return result;

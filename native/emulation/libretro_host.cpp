@@ -24,6 +24,8 @@ void LibretroHost::close_game() {
     rom.clear(); rgba.clear(); pcm.clear();
     width = height = 0;
     video_changed = false;
+    insert_countdown = 0;
+    std::fill(std::begin(analog), std::end(analog), 0);
 }
 void LibretroHost::close() {
     close_game();
@@ -39,6 +41,8 @@ void LibretroHost::close() {
     }
     library = nullptr;
     options.clear();
+    overrides.clear();
+    disk = {};
 }
 bool LibretroHost::load_core(const std::string& path) {
     close();
@@ -97,7 +101,8 @@ bool LibretroHost::load_game(const std::string& path, const std::string& directo
         game.data = nullptr;
         game.size = 0;
     } else {
-        if (size <= 0 || size > 32 * 1024 * 1024) { error = "ROM must contain 1 byte to 32 MiB"; return false; }
+        // 64 MiB is the largest Nintendo 64 cartridge.
+        if (size <= 0 || size > 64 * 1024 * 1024) { error = "ROM must contain 1 byte to 64 MiB"; return false; }
         rom.resize(static_cast<std::size_t>(size));
         file.seekg(0);
         if (!file.read(reinterpret_cast<char*>(rom.data()), size)) { rom.clear(); error = "Failed reading ROM"; return false; }
@@ -106,7 +111,7 @@ bool LibretroHost::load_game(const std::string& path, const std::string& directo
     }
     if (!fn_load_game(&game)) { error = "Core rejected ROM"; rom.clear(); return false; }
     loaded = true;
-    fn_set_controller_port_device(0, RETRO_DEVICE_JOYPAD);
+    fn_set_controller_port_device(0, port_device);
     fn_set_controller_port_device(1, RETRO_DEVICE_NONE);
     retro_system_av_info av{};
     fn_get_system_av_info(&av);
@@ -130,6 +135,7 @@ bool LibretroHost::step(std::uint16_t mask) {
     video_changed = false;
     error.clear();
     fn_run();
+    if (insert_countdown > 0 && --insert_countdown == 0 && disk.set_eject_state) disk.set_eject_state(false);
     return error.empty();
 }
 bool LibretroHost::reset() {
@@ -161,8 +167,10 @@ bool LibretroHost::environment(unsigned command, void* data) {
     }
     case RETRO_ENVIRONMENT_GET_VARIABLE: {
         auto* variable = static_cast<retro_variable*>(data);
-        const auto it = active->options.find(variable->key ? variable->key : "");
-        variable->value = it == active->options.end() ? nullptr : it->second.c_str();
+        const std::string key = variable->key ? variable->key : "";
+        variable->value = nullptr;
+        if (const auto chosen = active->overrides.find(key); chosen != active->overrides.end()) variable->value = chosen->second.c_str();
+        else if (const auto initial = active->options.find(key); initial != active->options.end()) variable->value = initial->second.c_str();
         return variable->value != nullptr;
     }
     case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE: *static_cast<bool*>(data) = false; return true;
@@ -176,6 +184,22 @@ bool LibretroHost::environment(unsigned command, void* data) {
     case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS: return true;
     // Bit 0 video, bit 1 audio. Preview instances skip audio synthesis.
     case RETRO_ENVIRONMENT_GET_AUDIO_VIDEO_ENABLE: *static_cast<int*>(data) = 1 | (active->want_audio ? 2 : 0); return true;
+    case RETRO_ENVIRONMENT_GET_DISK_CONTROL_INTERFACE_VERSION: *static_cast<unsigned*>(data) = 1; return true;
+    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_INTERFACE: {
+        // Null takes the tray away again (Genesis Plus GX does so for cartridges).
+        active->disk = {};
+        if (!data) return true;
+        // The original interface is the extended one's leading fields.
+        const auto& basic = *static_cast<const retro_disk_control_callback*>(data);
+        active->disk.set_eject_state = basic.set_eject_state; active->disk.get_eject_state = basic.get_eject_state;
+        active->disk.get_image_index = basic.get_image_index; active->disk.set_image_index = basic.set_image_index;
+        active->disk.get_num_images = basic.get_num_images; active->disk.replace_image_index = basic.replace_image_index;
+        active->disk.add_image_index = basic.add_image_index;
+        return true;
+    }
+    case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
+        active->disk = data ? *static_cast<const retro_disk_control_ext_callback*>(data) : retro_disk_control_ext_callback{};
+        return true;
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
     case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
     case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
@@ -245,7 +269,12 @@ std::size_t LibretroHost::audio_batch(const std::int16_t* data, std::size_t fram
 }
 void LibretroHost::input_poll() {}
 std::int16_t LibretroHost::input(unsigned port, unsigned device, unsigned index, unsigned id) {
-    if (!active || port != 0 || index != 0 || (device & RETRO_DEVICE_MASK) != RETRO_DEVICE_JOYPAD) return 0;
+    if (!active || port != 0) return 0;
+    if ((device & RETRO_DEVICE_MASK) == RETRO_DEVICE_ANALOG) {
+        if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON) return id < 16 && (active->buttons >> id) & 1 ? 0x7FFF : 0;
+        return index < 2 && id < 2 ? active->analog[index * 2 + id] : 0;
+    }
+    if (index != 0 || (device & RETRO_DEVICE_MASK) != RETRO_DEVICE_JOYPAD) return 0;
     if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return static_cast<std::int16_t>(active->buttons);
     return id < 16 ? (active->buttons >> id) & 1 : 0;
 }
@@ -287,5 +316,29 @@ bool LibretroHost::set_save_ram(const std::uint8_t* data, std::size_t size) {
     auto* memory = fn_get_memory_data(RETRO_MEMORY_SAVE_RAM);
     if (!memory || !data) return false;
     std::memcpy(memory, data, size); return true;
+}
+void LibretroHost::set_option(const std::string& key, const std::string& value) { overrides[key] = value; }
+unsigned LibretroHost::disc_count() const {
+    if (!loaded || !disk.get_num_images) return 0;
+    Use use(this);
+    return disk.get_num_images();
+}
+unsigned LibretroHost::disc_index() const {
+    if (!loaded || !disk.get_image_index) return 0;
+    Use use(this);
+    return disk.get_image_index();
+}
+std::string LibretroHost::disc_label(unsigned index) const {
+    if (!loaded || !disk.get_image_label) return {};
+    Use use(this);
+    char label[256] = {};
+    return disk.get_image_label(index, label, sizeof(label)) ? label : "";
+}
+bool LibretroHost::change_disc(unsigned index) {
+    if (!loaded || !disk.set_eject_state || !disk.set_image_index || index >= disc_count()) { error = "This game has no other disc"; return false; }
+    Use use(this);
+    if (!disk.set_eject_state(true) || !disk.set_image_index(index)) { error = "The core could not change disc"; return false; }
+    insert_countdown = std::max(1, static_cast<int>(std::lround(fps)));
+    return true;
 }
 }

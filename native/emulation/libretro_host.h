@@ -24,7 +24,21 @@ public:
     bool unserialize(const std::uint8_t* data, std::size_t size);
     std::vector<std::uint8_t> save_ram() const;
     bool set_save_ram(const std::uint8_t* data, std::size_t size);
+    // A value for a core option that wins over the core's default. Kept until close().
+    void set_option(const std::string& key, const std::string& value);
+    void copy_options(const LibretroHost& other) { overrides = other.overrides; }
+    // Multi-disc games (an .m3u playlist): the core's disc tray, when it has one.
+    unsigned disc_count() const;
+    unsigned disc_index() const;
+    std::string disc_label(unsigned index) const;
+    // Opens the tray, selects the disc and closes the tray a second later, as a
+    // player would; games watch the lid to notice the swap.
+    bool change_disc(unsigned index);
     bool loaded = false;
+    // The controller in port 1, applied by load_game (for example a DualShock).
+    unsigned port_device = RETRO_DEVICE_JOYPAD;
+    // Left X/Y, right X/Y in Libretro's -32768..32767 range, held for the next step().
+    std::int16_t analog[4] = {0, 0, 0, 0};
     unsigned width = 0, height = 0;
     bool video_changed = false;
     // False tells the core its audio is unused (input preview) and drops samples.
@@ -45,8 +59,10 @@ private:
     retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
     std::uint16_t buttons = 0;
     std::string system_dir, save_dir;
-    std::map<std::string, std::string> options;
+    std::map<std::string, std::string> options, overrides;
     std::vector<std::uint8_t> rom;
+    retro_disk_control_ext_callback disk{};
+    int insert_countdown = 0; // frames until the opened tray closes; 0 = none pending
     bool av_info(const retro_system_av_info& info);
     static bool environment(unsigned command, void* data);
     static void video(const void* data, unsigned width, unsigned height, std::size_t pitch);

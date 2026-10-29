@@ -1,5 +1,6 @@
 #include "libretro.h"
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 
 namespace {
@@ -11,6 +12,17 @@ retro_input_poll_t poll;
 retro_input_state_t input;
 std::uint64_t counter;
 std::uint8_t ram[16];
+// A two-disc tray: the host must open it, choose and close it again.
+bool tray_open;
+unsigned disc;
+bool set_eject(bool open) { tray_open = open; return true; }
+bool get_eject() { return tray_open; }
+unsigned get_index() { return disc; }
+bool set_index(unsigned index) { if (!tray_open || index > 1) return false; disc = index; return true; }
+unsigned get_count() { return 2; }
+bool no_replace(unsigned, const retro_game_info*) { return false; }
+bool no_add() { return false; }
+bool get_label(unsigned index, char* text, std::size_t size) { return std::snprintf(text, size, "Disc %u", index + 1) > 0; }
 }
 extern "C" {
 RETRO_API void retro_set_environment(retro_environment_t cb) { environment = cb; }
@@ -21,8 +33,10 @@ RETRO_API void retro_set_input_poll(retro_input_poll_t cb) { poll = cb; }
 RETRO_API void retro_set_input_state(retro_input_state_t cb) { input = cb; }
 RETRO_API unsigned retro_api_version() { return RETRO_API_VERSION; }
 RETRO_API void retro_init() {
-    retro_variable options[] = {{"fixture_option", "Fixture; default|other"}, {nullptr, nullptr}};
+    retro_variable options[] = {{"fixture_option", "Fixture; default|other"}, {"fixture_choice", "Choice; first|second"}, {nullptr, nullptr}};
     environment(RETRO_ENVIRONMENT_SET_VARIABLES, options);
+    retro_disk_control_ext_callback tray{set_eject, get_eject, get_index, set_index, get_count, no_replace, no_add, nullptr, nullptr, get_label};
+    environment(RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE, &tray);
 }
 RETRO_API void retro_deinit() {}
 RETRO_API void retro_get_system_info(retro_system_info* info) { *info = {"CRT XR test fixture", "1", "sfc",
@@ -36,6 +50,7 @@ RETRO_API void retro_get_system_av_info(retro_system_av_info* info) { *info = {{
 RETRO_API void retro_set_controller_port_device(unsigned, unsigned) {}
 RETRO_API bool retro_load_game(const retro_game_info* game) {
     counter = 0;
+    tray_open = false; disc = 0;
 #ifdef MOCK_NEED_FULLPATH
     const bool supplied = game && game->path && !game->data;
 #else
@@ -70,6 +85,12 @@ RETRO_API void retro_run() {
     audio_batch(samples, 2);
     audio(250, -250);
     ram[0] = static_cast<std::uint8_t>(counter);
+    // Exposed for the host test: the left stick, an analog trigger, the disc and an option.
+    ram[1] = static_cast<std::uint8_t>(input(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X) >> 8);
+    ram[2] = input(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_L2) == 0x7FFF;
+    ram[3] = static_cast<std::uint8_t>(disc | (tray_open ? 0x80 : 0));
+    retro_variable choice{"fixture_choice", nullptr};
+    ram[4] = environment(RETRO_ENVIRONMENT_GET_VARIABLE, &choice) && std::strcmp(choice.value, "second") == 0;
 }
 RETRO_API std::size_t retro_serialize_size() { return sizeof(counter); }
 RETRO_API bool retro_serialize(void* data, std::size_t size) { if (size != sizeof(counter)) return false; std::memcpy(data, &counter, size); return true; }
