@@ -532,8 +532,62 @@
           "sha256": "a80ad77221dd164aed94402386e310677da59eeb44c27cc99b046077e313805f"
         }
       ]
+    },
+    {
+      "core": "pcsx_rearmed",
+      "platform": "linux",
+      "source_commit": "c8816799b50388e61cfe237fe2cdbb7d8175f20a",
+      "origin": "Local source build",
+      "binary_sha256": "13c266a7b7a908de725388cd5b180b51b40a191663819652993f21d5cd691a19",
+      "source_archive": "sources/pcsx_rearmed-c8816799b50388e61cfe237fe2cdbb7d8175f20a.tar.gz",
+      "source_sha256": "c762589e7977d3a64f234acf1ce266bfbd2cb1276d5cf30c3d67d18424db9337",
+      "compiler": "gcc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "cxx_compiler": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile.libretro",
+        "-j6",
+        "platform=unix",
+        "CC=gcc",
+        "CXX=g++",
+        "GIT_VERSION= c881679",
+        "HAVE_PHYSICAL_CDROM=0"
+      ],
+      "source_date_epoch": "1790893197",
+      "build_log_sha256": "4854dae02b0f5abae0b9ddf131036e9bae662d84effe3388026fd0c6d63ba099",
+      "patches": []
+    },
+    {
+      "core": "pcsx_rearmed",
+      "platform": "windows",
+      "source_commit": "c8816799b50388e61cfe237fe2cdbb7d8175f20a",
+      "origin": "Local source build",
+      "binary_sha256": "22110a444610781fda9ad90931b1c62641d74dfbbad96669779b994903682179",
+      "source_archive": "sources/pcsx_rearmed-c8816799b50388e61cfe237fe2cdbb7d8175f20a.tar.gz",
+      "source_sha256": "c762589e7977d3a64f234acf1ce266bfbd2cb1276d5cf30c3d67d18424db9337",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 13-posix",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 13-posix",
+      "make_version": "GNU Make 4.3",
+      "make_arguments": [
+        "-C",
+        "<extracted-source>",
+        "-f",
+        "Makefile.libretro",
+        "-j6",
+        "platform=win",
+        "CC=x86_64-w64-mingw32-gcc-posix -static -static-libgcc -static-libstdc++",
+        "CXX=x86_64-w64-mingw32-g++-posix -static -static-libgcc -static-libstdc++",
+        "GIT_VERSION= c881679",
+        "HAVE_PHYSICAL_CDROM=0"
+      ],
+      "source_date_epoch": "1790893197",
+      "build_log_sha256": "b1d75121d792bd78d091a8e69e3a3d4a7199a57fe1b531f5700bd6196e86c0f3",
+      "patches": []
     }
   ],
   "build_environment": "PRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.1 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
-  "built_utc": "2026-10-26T13:35:26.175789+00:00"
+  "built_utc": "2026-10-29T19:24:55.428052+00:00"
 }

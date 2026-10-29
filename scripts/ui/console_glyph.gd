@@ -33,6 +33,13 @@ func _draw() -> void:
 	elif kind=="vectrex":
 		block(Rect2(6,12,48,36),Color("e6e4da"),6); block(Rect2(12,17,36,22),Color("1d222b"),3)
 		draw_arc(Vector2(30,28),9,-0.7,PI+0.7,24,accent,1.5,true); block(Rect2(14,42,32,3),accent,1)
+	elif kind=="psx":
+		# The grey console seen from above: the round disc lid and its buttons.
+		block(Rect2(3,12,54,36),Color("aeb2b8"),4); block(Rect2(3,40,54,8),Color("8f949b"),0)
+		draw_circle(Vector2(22,27),12,Color("9a9fa6")); draw_arc(Vector2(22,27),12,0,TAU,40,ink,1.2,true)
+		draw_circle(Vector2(22,27),3,accent)
+		for x in [42,50]: draw_circle(Vector2(x,22),3,Color("6d7279"))
+		block(Rect2(39,30,14,3),accent,1)
 	else:
 		var tall := kind=="nes"
 		var body := Rect2(13,3,35,53) if tall else Rect2(3,10,54,40)

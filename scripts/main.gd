@@ -8,6 +8,7 @@ const PosePrediction = preload("res://scripts/tracking/pose_prediction.gd")
 const SbsExit = preload("res://scripts/ui/sbs_exit.gd")
 const CRTWorld = preload("res://scripts/rendering/crt_world.gd")
 const Pattern = preload("res://scripts/content/test_pattern.gd")
+const LoadingScreen = preload("res://scripts/content/loading_screen.gd")
 const Emulation = preload("res://scripts/emulation/emulation_session.gd")
 const VideoSession = preload("res://scripts/video/video_session.gd")
 const VideoLibrary = preload("res://scripts/video/video_library.gd")
@@ -123,6 +124,15 @@ var screen_curvature: float = Showcase.CRT.screen_curvature
 var fade_material := ShaderMaterial.new()
 var world: Node3D
 var pattern: Node2D
+## Disc games show a loading card on the TV while they unpack and boot, until
+## their picture starts: never a black screen. loading_path is the game it is for.
+var loading_screen: Node2D
+var loading_path := ""
+var loading_started := 0
+## A game still black after this long is shown anyway, whatever it draws.
+const LOADING_TIMEOUT_MSEC := 30000
+## True while load_game swaps games behind the card, which must stay up.
+var loading_game := false
 var eyes: Array[Camera3D] = []
 var views: Array[SubViewport] = []
 var panels: Array[SubViewportContainer] = []
@@ -273,6 +283,10 @@ func start_application() -> void:
 	add_child(signal_view)
 	pattern = Pattern.new()
 	signal_view.add_child(pattern)
+	loading_screen = LoadingScreen.new()
+	loading_screen.visible = false
+	loading_screen.set_process(false)
+	signal_view.add_child(loading_screen)
 	row = HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	row.add_theme_constant_override("separation", 0)
@@ -352,10 +366,17 @@ func start_application() -> void:
 	for device in Input.get_connected_joypads():
 		print("Controller ", device, ": ", Input.get_joy_name(device))
 	emulator.content_changed.connect(func(texture):
-		world.picture.set_source(texture, true))
-	emulator.frame_presented.connect(world.screen_light.set_image)
-	emulator.frame_presented.connect(world.picture.frame_presented)
+		if loading_path.is_empty(): world.picture.set_source(texture, true))
+	emulator.frame_presented.connect(func(image: Image):
+		# The loading card stays up through a disc's black boot frames.
+		if not loading_path.is_empty():
+			if not picture_started(image): return
+			end_loading()
+		world.screen_light.set_image(image)
+		world.picture.frame_presented(image))
 	emulator.game_changed.connect(func(active):
+		# A game stopped from the menu takes its loading card with it.
+		if not active and not loading_game: end_loading()
 		show_game_cover(emulator.rom_path if active else "")
 		change_game_preferences(active)
 		show_programme(active, emulator.fps, emulator.display_aspect)
@@ -866,11 +887,13 @@ func choose_rom() -> void:
 
 ## Switches the TV between the test signal and a programme (a game or a video).
 func show_programme(active: bool, rate: float, aspect: float) -> void:
-	pattern.visible = not active
-	pattern.set_process(not active)
-	signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active else SubViewport.UPDATE_ALWAYS
+	var loading := not loading_path.is_empty()
+	pattern.visible = not active and not loading
+	pattern.set_process(pattern.visible)
+	signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active and not loading else SubViewport.UPDATE_ALWAYS
 	# Switching programmes is a channel change; the first is the power-on instead.
-	if active and power_on.progress >= 1.0: tv_effects.play("channel")
+	# A game behind the loading card is the same channel.
+	if active and not loading and power_on.progress >= 1.0: tv_effects.play("channel")
 	if active:
 		world.picture.source_rate = rate
 		world.picture.source_aspect = aspect
@@ -881,8 +904,66 @@ func show_programme(active: bool, rate: float, aspect: float) -> void:
 		world.screen_light.set_image(null)
 		world.picture.set_source(signal_view.get_texture())
 
+## Puts the loading card for a disc game on the TV, with progress 0..1 while it
+## unpacks or negative while it boots (which restarts the black-screen timeout).
+func show_loading(path: String, progress := -1.0) -> void:
+	var starting := loading_path != path
+	loading_path = path
+	loading_started = Time.get_ticks_msec()
+	loading_screen.title = path.get_file().get_basename()
+	loading_screen.progress = progress
+	if starting: loading_screen.elapsed = 0.0
+	loading_screen.visible = true
+	loading_screen.set_process(true)
+	pattern.visible = false
+	pattern.set_process(false)
+	signal_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	world.screen_light.set_image(null)
+	world.picture.source_rate = 60.0
+	world.picture.source_aspect = 4.0 / 3.0
+	world.picture.set_source(signal_view.get_texture())
+	if starting and power_on.progress >= 1.0: tv_effects.play("channel")
+
+func update_loading(path: String, progress: float) -> void:
+	if loading_path == path: loading_screen.progress = progress
+
+## Takes the card down: to the game's picture once it runs, else the test signal.
+func end_loading() -> void:
+	if loading_path.is_empty(): return
+	loading_path = ""
+	loading_screen.visible = false
+	loading_screen.set_process(false)
+	if emulator.loaded and emulator.texture != null:
+		signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+		world.picture.source_rate = emulator.fps
+		world.picture.source_aspect = emulator.display_aspect
+		world.picture.set_source(emulator.texture, true)
+	elif not emulator.loaded and not video.loaded: show_programme(false, 60.0, 4.0 / 3.0)
+
+## A game's picture has started once a frame shows something other than black,
+## sampled on a coarse grid; after the timeout any frame counts.
+func picture_started(image: Image) -> bool:
+	if Time.get_ticks_msec() - loading_started > LOADING_TIMEOUT_MSEC: return true
+	if image == null or image.is_empty(): return false
+	var lit := 0
+	for row in range(12):
+		for column in range(16):
+			var colour := image.get_pixel((column * 2 + 1) * image.get_width() / 32, (row * 2 + 1) * image.get_height() / 24)
+			if maxf(colour.r, maxf(colour.g, colour.b)) > 0.12: lit += 1
+	return lit >= 4
+
+## Before a zipped disc unpacks: the playing game is saved and stopped (it would
+## play on behind the card), any video too, and the card goes up.
+func stop_for_disc(path: String) -> bool:
+	if video.loaded: stop_video()
+	if not emulator.save_auto(): return false
+	emulator.stop()
+	show_loading(path, 0.0)
+	return true
+
 func play_video(path: String, from_seconds := 0.0) -> bool:
 	startup_message = ""
+	end_loading()
 	if emulator.loaded:
 		emulator.save_auto()
 		emulator.stop()
@@ -975,8 +1056,14 @@ func load_game(path: String) -> bool:
 	startup_message = ""
 	var restore_paused := was_paused_before_menu
 	if video.loaded: stop_video()
+	# Discs boot through seconds of black: the loading card covers them.
+	if CoreRegistry.identify(path) in ["psx", "segacd"]: show_loading(path)
+	else: end_loading()
+	loading_game = true
 	var opened: bool = emulator.load_rom(path)
+	loading_game = false
 	if not opened:
+		end_loading()
 		startup_message = "Could not open the game. Check the ROM location and emulator files. " + emulator.status
 		if not settings_panel.visible: toggle_settings()
 		if emulator.loaded: was_paused_before_menu = restore_paused

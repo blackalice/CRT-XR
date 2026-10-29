@@ -20,23 +20,47 @@ Steam Deck deployment and hardware validation follow separately.
 | Atari Lynx | Beetle Lynx | `.lynx` |
 | Neo Geo Pocket / Color | Beetle NeoPop | `.ngp`, `.ngpc` |
 | Vectrex | vecx | `.vec` |
+| PlayStation | PCSX ReARMed | `.cue`, `.bin`/`.iso` with a PlayStation volume, PS1 `.pbp`, `.m3u` playlists; `.chd` or zipped discs in a PlayStation folder |
 
 `.md` and `.bin` require a SEGA cartridge header (Mega Drive) or the
 `SEGADISCSYSTEM` header (Sega CD) to avoid treating documents and unrelated
 binary files as games; a `.cue` sheet resolves its first image the same way.
 A CHD's sectors are compressed, so a `.chd` counts as a Sega CD disc when it
-sits in a Sega CD folder (`segacd`, `megacd`, or up to three folders inside one).
+sits in a Sega CD folder (`segacd`, `megacd`, or up to three folders inside one),
+and as a PlayStation disc in a PlayStation folder (`psx`, `ps1`, `playstation`).
+
+PlayStation discs are recognised by their own data: a `.cue` sheet's data
+track, or a `.bin`/`.iso` image, whose ISO 9660 volume names PLAYSTATION (PS2
+discs, which share that name but boot with `BOOT2`, are left out), and PS1
+eboots (`.pbp`, not PSP games). An `.m3u` playlist of a game's discs lists it
+once; the cue sheets and tracks a playlist or cue names are not listed again.
+Multi-disc games need such a playlist: **Change disc** then appears in the pause
+menu and opens the tray, puts in the next disc and closes it, as the game asks.
+PCSX ReARMed runs without a BIOS using its own replacement; a real one
+(`scph5501.bin`, `scph5500.bin`, `scph5502.bin`, `scph1001.bin` and others, any
+letter case) in the bios folder improves compatibility and is used automatically.
+Each game has its own memory card, saved like a battery save and named after
+the game without its disc number, so `Game (Disc 1)` and `Game (Disc 2)` (or
+their playlist) share one card and a save made on disc 1 loads on disc 2. Save
+states and resume points stay with each disc.
 
 A ZIP counts as the first cartridge inside it, read from the archive's directory
 without unpacking; a `.bin` or `.md` inside is unpacked (up to 8 MiB) only to
 check its header. Playing unpacks that one file into `user://cache/content`,
 which holds only the current game. Saves are keyed by the cartridge's own hash,
 so a zipped game and the same game unzipped share battery saves, states and the
-resume point. Discs are never read from ZIPs. Deflate and stored entries are
-supported; 7z, RAR and ZIP64 archives are not.
+resume point. Deflate and stored entries are supported; 7z, RAR and ZIP64
+archives are not.
 
-Sega 32X, SuperGrafx, Famicom Disk System, PC Engine CD, mid-game disc changes,
-analog sticks, light guns, paddles and multiplayer are outside this pass.
+A ZIP holding a PlayStation disc (its cue and tracks, as Redump sets come) counts
+as a game when it sits in a PlayStation folder. The disc is hundreds of
+megabytes, so choosing it first unpacks it in the background, with progress in
+the menu, then starts it; the cache keeps that one disc, so playing it again
+starts at once. Its saves are named from the ZIP's track checksums. Sega CD
+discs are not read from ZIPs.
+
+Sega 32X, SuperGrafx, Famicom Disk System, PC Engine CD, light guns, paddles
+and multiplayer are outside this pass.
 Ordinary cartridges need no BIOS; Sega CD and Atari Lynx read their hardware
 files (`bios_CD_U.bin` and friends, `lynxboot.img`) from a `bios` folder next
 to the application, staged into the core's system directory at load. The
@@ -68,7 +92,13 @@ remain available. Zipped cartridges and Sega CD CHDs are indexed with everything
 On Deck/Xbox controllers, NES B/A use the bottom/right buttons; left/top are
 turbo B/A. Mega Drive A/B/C use left/bottom/right; X/Y/Z use L1/top/R1 when
 the core selects a six-button pad. Back is Mode. Master System/Game Gear
-buttons 1/2 use bottom/right, with Start for Pause/Start. All systems keep
+buttons 1/2 use bottom/right, with Start for Pause/Start. PlayStation Cross,
+Circle, Square and Triangle use bottom/right/left/top, L1/R1 the shoulders and
+L2/R2 the triggers; the sticks are a DualShock's, which stays digital until a
+game turns analog on. On PlayStation the left stick is the analog stick only,
+not a second D-pad, and the right stick belongs to the game rather than moving
+the TV. Input preview is off for PlayStation: it would run the console twice.
+All systems keep
 the same menu chord and recenter shortcut. Settings → Controls & XR →
 Controller shows the current system's layout. Keyboard Z/X/A/S/Q/W retain
 the corresponding bottom/right/left/top/L1/R1 positions.
@@ -104,9 +134,9 @@ The native modules and core are already built in this workspace:
 ./scripts/dev.ps1 -Stereo -Rom 'D:\your-rom-folder\game.sfc'
 ```
 
-Only use ROM files you supply. The cartridge formats above
-are selectable; archives and patch application are not implemented. The native
-host limits cartridge input to 32 MiB. No console BIOS is needed for ordinary
+Only use ROM files you supply. The formats above are selectable; patch
+application is not implemented. The native host limits cartridge input to
+64 MiB; discs are opened by the core itself. No console BIOS is needed for ordinary
 SNES cartridges; special peripherals and enhancement variants are not tested.
 
 Choose **Soft view edges** in settings to control the fade. The default is 7.5%

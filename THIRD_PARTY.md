@@ -76,6 +76,17 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   Upstream source revision:
   https://github.com/libretro/libretro-vecx/tree/dccff5402a16d1ea7c112095a8e42632bf149506
   Full licence: `cores/Vecx-LICENSE.md`.
+* PCSX ReARMed (PlayStation), GPL version 2 or later, the PCSX, PCSX-df and
+  PCSX ReARMed authors (notaz and contributors). Upstream source revision:
+  https://github.com/libretro/pcsx_rearmed/tree/c8816799b50388e61cfe237fe2cdbb7d8175f20a
+  Full licence: `cores/PCSX-ReARMed-LICENSE.txt`. It contains Lightrec
+  (LGPL 2.1 or later, Paul Cercueil; `cores/Lightrec-LICENSE.txt`), GNU Lightning
+  (LGPL 3 or later, Free Software Foundation; `cores/GNU-Lightning-LICENSE.txt`
+  with `cores/GNU-Lightning-GPL-3.0-LICENSE.txt`), libchdr (BSD-3-Clause;
+  `cores/PCSX-ReARMed-libchdr-LICENSE.txt`) with the LZMA SDK (public domain;
+  `cores/PCSX-ReARMed-LZMA-LICENSE.txt`), miniz (MIT) and zstd (BSD), whose
+  notices are in their headers in the source snapshot, and mman-win32 (MIT;
+  `cores/mman-win32-LICENSE.md`). No PlayStation BIOS is included.
 
 Release cores are locally compiled from the exact revisions above. `cores/core-builds.json`
 records the actual binary/source archive SHA-256 hashes, compiler versions and

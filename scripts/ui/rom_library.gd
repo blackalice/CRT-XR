@@ -27,7 +27,10 @@ func show_folder(path: String) -> bool:
 		if folder.begins_with(".") or folder.begins_with("__") or folder.to_lower() in HIDDEN: continue
 		var console := Folders.system(folder)
 		entries.append({"path":current_dir.path_join(folder),"folder":true,"label":folder,"system":Registry.SYSTEMS[console].name if not console.is_empty() else ""})
+	# A cue sheet or playlist stands for its tracks and discs: list the game once.
+	var members := Registry.playlist_members(Array(files).filter(func(file): return file.get_extension().to_lower() in ["cue", "m3u"]).map(func(file): return current_dir.path_join(file)))
 	for file in files:
+		if members.has(current_dir.path_join(file)): continue
 		var system := Registry.identify(current_dir.path_join(file))
 		if not system.is_empty():
 			entries.append({"path":current_dir.path_join(file),"folder":false,"label":file,"system":Registry.SYSTEMS[system].name})

@@ -106,6 +106,11 @@ func step(budget_usec := 2000, entry_budget := 128) -> bool:
 	return not scanning
 
 func finish() -> void:
+	# A disc's cue or playlist stands for its tracks and discs: list the game once.
+	for system in ["segacd", "psx"]:
+		if not games.has(system): continue
+		var members := Registry.playlist_members(games[system].map(func(game): return game.path))
+		if not members.is_empty(): games[system] = games[system].filter(func(game): return not members.has(game.path))
 	for system in games:
 		games[system].sort_custom(func(a,b):
 			var comparison: int = a.label.naturalnocasecmp_to(b.label)

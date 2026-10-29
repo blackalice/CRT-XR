@@ -1,7 +1,13 @@
 extends RefCounted
 ## Cartridge-first support. Ambiguous .bin files require a Sega header; .cue files resolve their first image.
 ## Cartridges may also sit alone in a ZIP; Sega CD discs may be CHD files in a Sega CD folder.
-## Systems with a "bios_any" list need one of those files in the bios folder next to the application.
+## Systems with a "bios_any" list need one of those files in the bios folder next to the application;
+## "bios_optional" files are staged when present but not required.
+## PlayStation discs are .cue sheets, .bin/.iso images and PS1 .pbp eboots whose own
+## data says PlayStation, .m3u playlists of those, or CHDs in a PlayStation folder.
+## "controller" is the Libretro device in port 1; "analog" systems take the sticks
+## (and leave the left stick off the D-pad); "triggers" systems take L2/R2; systems
+## with "preview": false are too heavy to run a second time for input preview.
 const Archive = preload("res://scripts/content/rom_archive.gd")
 const Folders = preload("res://scripts/content/console_folders.gd")
 const SYSTEMS := {
@@ -19,21 +25,35 @@ const SYSTEMS := {
 	"atarilynx": {"name":"Atari Lynx", "core":"mednafen_lynx", "extensions":["lynx"], "aspect":160.0/102.0,
 		"bios_any":["lynxboot.img"]},
 	"ngpc": {"name":"Neo Geo Pocket / Color", "short":"Neo Geo Pocket", "core":"mednafen_ngp", "extensions":["ngp","ngpc","ngc"], "aspect":16.0/15.0},
-	"vectrex": {"name":"Vectrex", "core":"vecx", "extensions":["vec"], "aspect":4.0/3.0}
+	"vectrex": {"name":"Vectrex", "core":"vecx", "extensions":["vec"], "aspect":4.0/3.0},
+	# A DualShock (RETRO_DEVICE_SUBCLASS(ANALOG, 1)) stays digital until a game asks
+	# for analog, so pad-only games behave as with the original controller. The core
+	# has a built-in BIOS replacement; a real BIOS improves compatibility.
+	"psx": {"name":"PlayStation", "core":"pcsx_rearmed", "extensions":[], "aspect":4.0/3.0,
+		"controller":(2 << 8) | 5, "analog":true, "triggers":true, "preview":false,
+		"bios_optional":["scph5501.bin","scph5500.bin","scph5502.bin","scph1001.bin","scph7001.bin","scph101.bin","psxonpsp660.bin","ps1_rom.bin"]}
 }
 
 static func identify(path: String) -> String:
 	var extension := path.get_extension().to_lower()
 	if extension == "cue": return disc_identify(path)
+	if extension == "m3u": return playlist_identify(path)
+	if extension == "pbp": return "psx" if psx_eboot(path) else ""
 	if extension == "zip": return archive_game(path).get("system", "")
 	# A CHD's sectors are compressed, so its console folder says what it holds.
-	if extension == "chd": return "segacd" if folder_system(path) == "segacd" else ""
+	if extension == "chd":
+		var folder := folder_system(path)
+		return folder if folder in ["segacd", "psx"] else ""
 	var system := extension_system(extension)
 	if not system.is_empty(): return system
 	# .md also means Markdown, so do not list arbitrary documentation as ROMs.
 	if extension in ["bin", "md"]:
 		var file := FileAccess.open(path, FileAccess.READ)
-		if file != null: return header_system(file.get_buffer(0x110), extension)
+		if file != null:
+			system = header_system(file.get_buffer(0x110), extension)
+			if system.is_empty() and extension == "bin" and psx_disc(file): system = "psx"
+			return system
+	if extension == "iso": return "psx" if psx_disc(FileAccess.open(path, FileAccess.READ)) else ""
 	return ""
 
 static func extension_system(extension: String) -> String:
@@ -67,7 +87,9 @@ static func folder_system(path: String) -> String:
 static var archive_cache := {}
 
 ## The cartridge inside a ZIP as {system, entry, size}, or {} when it holds
-## none. Discs are never read from ZIPs: they would be unpacked whole.
+## none. A PlayStation disc ZIP (its cue and tracks, or one image) in a
+## PlayStation folder is {system, entry, size, disc: true}: it is unpacked whole
+## before play. Other discs are not read from ZIPs.
 static func archive_game(path: String) -> Dictionary:
 	var stamp := FileAccess.get_modified_time(path)
 	var cached: Dictionary = archive_cache.get(path, {})
@@ -82,12 +104,27 @@ static func archive_game(path: String) -> Dictionary:
 		if not system.is_empty() and entry.size <= Archive.PLAY_LIMIT:
 			game = {"system": system, "entry": entry.name, "size": entry.size}
 			break
+	if game.is_empty(): game = archived_disc(path)
 	archive_cache[path] = {"stamp": stamp, "game": game}
 	return game
+
+## A disc in a ZIP, judged by its folder like a CHD: its tracks are compressed.
+## The cue leads; a ZIP holding just one image plays that image.
+static func archived_disc(path: String) -> Dictionary:
+	if folder_system(path) != "psx": return {}
+	var items := Archive.entries(path)
+	var total := 0
+	for item in items: total += item.size
+	for wanted in ["cue", "pbp", "iso", "bin"]:
+		for item in items:
+			if item.name.get_extension().to_lower() == wanted and (wanted == "cue" or items.size() == 1):
+				return {"system": "psx", "entry": item.name, "size": total, "disc": true}
+	return {}
 
 ## Hashes of plain files by path, with the size and modified time they were
 ## made at: menus ask for a game's resume point on every redraw.
 static var hash_cache := {}
+const LARGE_IMAGE := 64 * 1024 * 1024
 
 ## SHA-256 naming the game's saves: of the file; for a ZIP, of the cartridge
 ## inside, so saves are shared with the same game unzipped; for a CHD, of its
@@ -102,6 +139,16 @@ static func content_hash(path: String) -> String:
 		hashing.start(HashingContext.HASH_SHA256)
 		hashing.update(disc.get_buffer(4096))
 		return hashing.finish().hex_encode()
+	# PlayStation images run to hundreds of megabytes: their opening megabyte holds
+	# the volume and boot data that tell discs apart, and the size goes in too.
+	if extension in ["pbp", "iso"] or (extension == "bin" and FileAccess.get_size(path) > LARGE_IMAGE and identify(path) == "psx"):
+		var image := FileAccess.open(path, FileAccess.READ)
+		if image == null: return ""
+		var sampled := HashingContext.new()
+		sampled.start(HashingContext.HASH_SHA256)
+		sampled.update(var_to_bytes(image.get_length()))
+		sampled.update(image.get_buffer(1024 * 1024))
+		return sampled.finish().hex_encode()
 	if extension != "zip":
 		var stamp := [FileAccess.get_modified_time(path), FileAccess.get_size(path)]
 		var known: Dictionary = hash_cache.get(path, {})
@@ -109,6 +156,12 @@ static func content_hash(path: String) -> String:
 		return known.sha256
 	var game := archive_game(path)
 	if game.is_empty(): return ""
+	# A disc ZIP's directory already carries each track's CRC-32 and size.
+	if game.get("disc", false) and not game.has("sha256"):
+		var listing := HashingContext.new()
+		listing.start(HashingContext.HASH_SHA256)
+		for item in Archive.entries(path): listing.update(("%s|%08x|%d\n" % [item.name.get_file(), item.crc, item.size]).to_utf8_buffer())
+		game["sha256"] = listing.finish().hex_encode()
 	if not game.has("sha256"):
 		var bytes := Archive.read(path, game.entry)
 		if bytes.is_empty(): return ""
@@ -119,15 +172,26 @@ static func content_hash(path: String) -> String:
 	return game.sha256
 
 ## A file a core can open: the game itself, or its cartridge unpacked from a
-## ZIP into the content cache. "" when it cannot be unpacked.
+## ZIP into the content cache. "" when it cannot be unpacked, or for a disc ZIP
+## that has not been unpacked yet (see needs_unpacking).
 static func content_file(path: String) -> String:
 	if path.get_extension().to_lower() != "zip": return path
 	var game := archive_game(path)
-	return "" if game.is_empty() else Archive.extract(path, game.entry)
+	if game.is_empty(): return ""
+	if game.get("disc", false): return Archive.unpacked_disc(path, game.entry)
+	return Archive.extract(path, game.entry)
 
-static func disc_identify(cue_path: String) -> String:
-	var text := FileAccess.get_file_as_string(cue_path)
-	for line in text.split("\n"):
+## A disc ZIP whose files are not yet in the content cache: too large to unpack
+## while the view waits, so the caller unpacks it in the background first.
+static func needs_unpacking(path: String) -> bool:
+	if path.get_extension().to_lower() != "zip": return false
+	var game := archive_game(path)
+	return game.get("disc", false) and Archive.unpacked_disc(path, game.entry).is_empty()
+
+## The images a cue sheet names, as full paths, in order.
+static func cue_files(cue_path: String) -> Array[String]:
+	var files: Array[String] = []
+	for line in FileAccess.get_file_as_string(cue_path).split("\n"):
 		var trimmed := line.strip_edges()
 		if not trimmed.to_upper().begins_with("FILE"): continue
 		var name := ""
@@ -140,12 +204,93 @@ static func disc_identify(cue_path: String) -> String:
 			var words := trimmed.split(" ", true)
 			if words.size() < 2: continue
 			name = words[1]
-		var image := FileAccess.open(cue_path.get_base_dir().path_join(name).simplify_path(), FileAccess.READ)
-		var found := image != null and tag_at(image.get_buffer(0x110), 0x100, "SEGADISCSYSTEM")
-		if image != null: image.close()
-		# The first image decides; a PlayStation cue stays an unsupported disc.
-		return "segacd" if found else ""
+		files.append(cue_path.get_base_dir().path_join(name).simplify_path())
+	return files
+
+static func disc_identify(cue_path: String) -> String:
+	var files := cue_files(cue_path)
+	if files.is_empty(): return ""
+	# The first image (the data track) decides.
+	var image := FileAccess.open(files[0], FileAccess.READ)
+	if image == null: return ""
+	if tag_at(image.get_buffer(0x110), 0x100, "SEGADISCSYSTEM"): return "segacd"
+	return "psx" if psx_disc(image) else ""
+
+## The discs an .m3u playlist lists, as full paths; comments and blank lines skipped.
+static func playlist_files(m3u_path: String) -> Array[String]:
+	var files: Array[String] = []
+	for line in FileAccess.get_file_as_string(m3u_path).split("\n"):
+		var name := line.strip_edges()
+		if name.is_empty() or name.begins_with("#"): continue
+		files.append(name if name.is_absolute_path() else m3u_path.get_base_dir().path_join(name).simplify_path())
+	return files
+
+## A playlist of PlayStation discs (multi-disc games); its first disc decides.
+static func playlist_identify(m3u_path: String) -> String:
+	var files := playlist_files(m3u_path)
+	if files.is_empty() or files[0].get_extension().to_lower() in ["m3u", "zip"]: return ""
+	return "psx" if identify(files[0]) == "psx" else ""
+
+## Files a cue sheet or playlist among paths already stands for, so a game appears
+## once rather than as its cue, its tracks and each disc of its playlist.
+static func playlist_members(paths: Array) -> Dictionary:
+	var members := {}
+	for path in paths:
+		var extension: String = path.get_extension().to_lower()
+		if extension == "cue":
+			for file in cue_files(path): members[file] = true
+		elif extension == "m3u":
+			for file in playlist_files(path): members[file] = true
+	return members
+
+## Sector layouts of disc images: raw 2352-byte sectors (Mode 2, then Mode 1),
+## then plain 2048-byte ISO sectors, each as [sector size, data offset].
+const DISC_LAYOUTS := [[2352, 24], [2352, 16], [2048, 0]]
+
+static func disc_sector(file: FileAccess, layout: Array, sector: int) -> PackedByteArray:
+	var offset: int = sector * layout[0] + layout[1]
+	if offset + 2048 > file.get_length(): return PackedByteArray()
+	file.seek(offset)
+	return file.get_buffer(2048)
+
+## A PlayStation disc: its ISO 9660 volume names the PLAYSTATION system. PS2 discs
+## share that name, so one whose SYSTEM.CNF boots with BOOT2 is not one.
+static func psx_disc(file: FileAccess) -> bool:
+	if file == null: return false
+	for layout in DISC_LAYOUTS:
+		var volume := disc_sector(file, layout, 16)
+		if volume.size() < 2048 or not tag_at(volume, 1, "CD001") or not tag_at(volume, 8, "PLAYSTATION"): continue
+		return not system_cnf(file, layout, volume).contains("BOOT2")
+	return false
+
+## The text of SYSTEM.CNF in the disc's root directory, or "".
+static func system_cnf(file: FileAccess, layout: Array, volume: PackedByteArray) -> String:
+	var root := volume.decode_u32(156 + 2)
+	var length := mini(volume.decode_u32(156 + 10), 4 * 2048)
+	for index in range(ceili(length / 2048.0)):
+		var sector := disc_sector(file, layout, root + index)
+		var at := 0
+		while at + 33 < sector.size():
+			var size := sector[at]
+			if size == 0: break
+			var name := sector.slice(at + 33, at + 33 + sector[at + 32]).get_string_from_ascii()
+			if name.to_upper().begins_with("SYSTEM.CNF"):
+				return disc_sector(file, layout, sector.decode_u32(at + 2)).get_string_from_ascii()
+			at += size
 	return ""
+
+## A PlayStation eboot (a PSP-format .pbp holding a PS1 disc): its DATA.PSAR
+## starts with PSISOIMG (one disc) or PSTITLEIMG (several). PSP games do not.
+static func psx_eboot(path: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null or file.get_length() < 0x28: return false
+	var header := file.get_buffer(0x28)
+	if header.slice(0, 4) != PackedByteArray([0, 0x50, 0x42, 0x50]): return false
+	var data := header.decode_u32(0x24)
+	if data + 12 > file.get_length(): return false
+	file.seek(data)
+	var magic := file.get_buffer(12).get_string_from_ascii()
+	return magic.begins_with("PSISOIMG") or magic.begins_with("PSTITLEIMG")
 
 static func core_path(system: String) -> String:
 	var override := OS.get_environment("CRT_XR_CORE")
@@ -196,6 +341,11 @@ static func preferred_bios_folder() -> String:
 static func bios_file(name: String) -> String:
 	for folder in bios_sources():
 		if FileAccess.file_exists(folder.path_join(name)): return folder.path_join(name)
+		# Dumps are named SCPH5501.BIN as often as scph5501.bin, and the Steam
+		# Deck's file system tells the two apart.
+		if not DirAccess.dir_exists_absolute(folder): continue
+		for file in DirAccess.get_files_at(folder):
+			if file.to_lower() == name.to_lower(): return folder.path_join(file)
 	return ""
 
 static func bios_satisfied(system: String) -> bool:
@@ -206,7 +356,7 @@ static func bios_satisfied(system: String) -> bool:
 	return false
 
 static func stage_bios(system: String, destination: String) -> void:
-	for name in SYSTEMS[system].get("bios_any", []):
+	for name in SYSTEMS[system].get("bios_any", []) + SYSTEMS[system].get("bios_optional", []):
 		var source := bios_file(name)
 		if source.is_empty(): continue
 		var target := destination.path_join(name)
@@ -232,4 +382,5 @@ static func controls(system: String) -> String:
 		"atarilynx": return "Atari Lynx: bottom = A, right = B; L1/R1 = Option 1/2. Start = Option."
 		"atari2600": return "Atari 2600: bottom = the joystick Fire button. Start = console Reset."
 		"vectrex": return "Vectrex: right = button 1, bottom = 2, top = 3, left = 4."
+		"psx": return "PlayStation: bottom/right/left/top = Cross/Circle/Square/Triangle. L1/R1 and the triggers = L1/R1/L2/R2. Sticks = DualShock sticks. Back = Select."
 	return "SNES: bottom/right/left/top = B/A/Y/X. L1/R1 = L/R. Back = Select."

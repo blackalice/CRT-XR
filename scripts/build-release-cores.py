@@ -37,6 +37,17 @@ SPECS=[
   'licenses':[['License.txt','Stella-LICENSE.txt']]},
  {'core':'vecx','repository':'vecx','revision':'dccff5402a16d1ea7c112095a8e42632bf149506','directory':'','makefile':'Makefile.libretro','args':['HAS_GPU=0'],
   'licenses':[['LICENSE.md','Vecx-LICENSE.md']]},
+ # PlayStation. Software GPU (the CRT wants native resolution); Lightrec dynarec on x86-64,
+ # built from the bundled GNU Lightning. HAVE_PHYSICAL_CDROM is libretro-common drive access,
+ # which a frontend without a cdrom:// browser never uses. CHD comes from the bundled libchdr,
+ # with its LZMA, miniz and zstd sources (miniz and zstd carry their licences in their headers,
+ # kept in the source archive).
+ {'core':'pcsx_rearmed','repository':'pcsx_rearmed','revision':'c8816799b50388e61cfe237fe2cdbb7d8175f20a','directory':'','makefile':'Makefile.libretro',
+  'args':['HAVE_PHYSICAL_CDROM=0'],
+  'licenses':[['COPYING','PCSX-ReARMed-LICENSE.txt'],['deps/lightrec/COPYING','Lightrec-LICENSE.txt'],
+   ['deps/lightning/COPYING.LESSER','GNU-Lightning-LICENSE.txt'],['deps/lightning/COPYING','GNU-Lightning-GPL-3.0-LICENSE.txt'],
+   ['deps/libchdr/LICENSE.txt','PCSX-ReARMed-libchdr-LICENSE.txt'],['deps/libchdr/deps/lzma-26.02/LICENSE','PCSX-ReARMed-LZMA-LICENSE.txt'],
+   ['deps/mman/README.md','mman-win32-LICENSE.md']]},
 ]
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def output(*args):return subprocess.check_output(args,text=True).strip()

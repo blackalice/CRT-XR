@@ -13,7 +13,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows export failed.' }
 & python (Join-Path $root 'scripts/set-windows-dpi.py') (Join-Path $out 'CRT-XR.exe')
 if ($LASTEXITCODE -ne 0) { throw 'Windows DPI manifest update failed.' }
 New-Item -ItemType Directory -Force (Join-Path $out 'cores'), (Join-Path $out 'assets'), (Join-Path $out 'licenses/shaders') | Out-Null
-foreach ($core in @('snes9x','nestopia','genesis_plus_gx','gambatte','mgba','mednafen_pce_fast','mednafen_lynx','mednafen_ngp','stella','vecx')) {
+foreach ($core in @('snes9x','nestopia','genesis_plus_gx','gambatte','mgba','mednafen_pce_fast','mednafen_lynx','mednafen_ngp','stella','vecx','pcsx_rearmed')) {
     Copy-Item -LiteralPath (Join-Path $root "cores/${core}_libretro.dll") -Destination (Join-Path $out 'cores')
 }
 Copy-Item -Path (Join-Path $root 'cores/*LICENSE*') -Destination (Join-Path $out 'cores')

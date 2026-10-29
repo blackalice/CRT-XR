@@ -5,6 +5,10 @@ signal content_changed(texture: Texture2D)
 signal frame_presented(image: Image)
 signal status_changed(message: String)
 signal game_changed(active: bool)
+## A disc ZIP being unpacked before play: bytes done of total, then the outcome
+## ("" when the disc is ready).
+signal unpack_progress(path: String, done: int, total: int)
+signal unpack_finished(path: String, error: String)
 
 var auto_saved := true
 var core: RefCounted
@@ -47,6 +51,13 @@ var preview_copy := "" # "", "ready" or "failed" for the loaded game
 var preview_time_usec := 0
 var preview_count := 0
 var gamepad := preload("res://scripts/emulation/gamepad_input.gd").new()
+## The loaded console's sticks and triggers (see Registry.SYSTEMS).
+var analog_input := false
+var trigger_input := false
+var unpack_thread: Thread
+var unpacking := ""
+var unpack_cancelled := false
+var unpack_reported := 0
 
 func _ready() -> void:
 	# Poll close to frame execution, after ordinary scene/UI processing.
@@ -74,7 +85,7 @@ func load_rom(path: String) -> bool:
 		return false
 	var detected := Registry.identify(path)
 	if detected.is_empty():
-		report("Unsupported game file. Use a cartridge for a supported system, alone or in a ZIP; .bin needs a SEGA or SEGADISCSYSTEM header, and CHD discs go in a Sega CD folder.", true)
+		report("Unsupported game file. Use a cartridge for a supported system, alone or in a ZIP; .bin needs a SEGA or SEGADISCSYSTEM header or a PlayStation disc; CHD discs and zipped PlayStation discs go in their console's folder.", true)
 		return false
 	var selected_path := Registry.core_path(detected)
 	if not FileAccess.file_exists(selected_path):
@@ -82,6 +93,10 @@ func load_rom(path: String) -> bool:
 		return false
 	if not Registry.bios_satisfied(detected):
 		report("%s needs its BIOS. Put one of %s in the bios folder next to your roms folder, or in %s, then reload the game." % [Registry.SYSTEMS[detected].name, ", ".join(PackedStringArray(Registry.SYSTEMS[detected].bios_any)), Registry.preferred_bios_folder()], true)
+		return false
+	# Checked before the playing game stops: the menu unpacks discs beforehand.
+	if Registry.needs_unpacking(path):
+		report("The disc in " + path.get_file() + " has to be unpacked first. Choose the game again from the library.", true)
 		return false
 	if not save_auto(): return false
 	stop()
@@ -102,6 +117,9 @@ func load_rom(path: String) -> bool:
 		report("Cannot create save directory: " + error_string(error), true)
 		return false
 	Registry.stage_bios(system_id, saves)
+	var spec: Dictionary = Registry.SYSTEMS[system_id]
+	if spec.has("controller"): core.set_controller(spec.controller)
+	for key in spec.get("options", {}): core.set_option(key, spec.options[key])
 	var content := Registry.content_file(path)
 	if content.is_empty():
 		report("Could not unpack the game from " + path.get_file() + ". Its ZIP may be damaged or use a compression method other than Deflate.", true)
@@ -112,12 +130,18 @@ func load_rom(path: String) -> bool:
 	rom_path = path
 	content_path = content
 	preview_copy = ""
-	# A ZIP's cartridge was just unpacked: hash that copy and remember it.
-	if content != path:
+	# A ZIP's cartridge was just unpacked: hash that copy and remember it. A disc
+	# ZIP is named by its directory's track checksums instead.
+	var disc_zip: bool = path.get_extension().to_lower() == "zip" and Registry.archive_game(path).get("disc", false)
+	if disc_zip: rom_hash = Registry.content_hash(path)
+	elif content != path:
 		rom_hash = FileAccess.get_sha256(content)
 		Registry.archive_game(path)["sha256"] = rom_hash
 	else: rom_hash = Registry.content_hash(path)
 	var info: Dictionary = core.info()
+	analog_input = spec.get("analog", false)
+	trigger_input = spec.get("triggers", false)
+	gamepad.right_stick_game = analog_input
 	core_identity = str(info.name)
 	fps = float(info.fps)
 	auto_saved = true
@@ -132,7 +156,7 @@ func load_rom(path: String) -> bool:
 	skip_delta = true
 	preview_time_usec = 0
 	preview_count = 0
-	var sram_path := save_directory.path_join(rom_hash + ".srm")
+	var sram_path := battery_path()
 	sram_restore_ok = true
 	sram_written = PackedByteArray()
 	if FileAccess.file_exists(sram_path):
@@ -149,7 +173,7 @@ func load_rom(path: String) -> bool:
 			report("Could not restore SRAM: " + str(core.last_error()), true)
 	# Load the preview copy now, inside the game-load pause, rather than as a
 	# visible hitch on the first previewed frame.
-	if run_ahead > 0 and separate_preview: prepare_preview_copy()
+	if run_ahead > 0 and separate_preview and Registry.SYSTEMS[system_id].get("preview", true): prepare_preview_copy()
 	var generator := AudioStreamGenerator.new()
 	generator.mix_rate_mode = AudioStreamGenerator.MIX_RATE_CUSTOM
 	generator.mix_rate = float(info.sample_rate)
@@ -173,6 +197,9 @@ func _process(delta: float) -> void:
 	var frames := 0
 	var rendered := false
 	var buttons := input_mask()
+	if analog_input:
+		var sticks: PackedInt32Array = gamepad.analog()
+		core.set_analog(sticks[0], sticks[1], sticks[2], sticks[3])
 	while accumulator >= period and frames < 8:
 		if not core.run_frame(buttons):
 			set_paused(true)
@@ -206,7 +233,7 @@ func _process(delta: float) -> void:
 		flush_sram()
 
 func preview_possible() -> bool:
-	if preview_suspended: return false
+	if preview_suspended or not Registry.SYSTEMS[system_id].get("preview", true): return false
 	return (separate_preview and preview_copy != "failed") or Registry.preview_safe(system_id)
 
 func set_separate_preview(value: bool) -> void:
@@ -295,7 +322,10 @@ const KEYBOARD_PAD := [KEY_Z, KEY_A, KEY_TAB, KEY_ENTER, KEY_UP, KEY_DOWN, KEY_L
 
 func input_mask() -> int:
 	if gamepad.menu_active: return 0
-	var mask: int = gamepad.mask()
+	# Consoles with sticks keep the left stick for themselves; L2/R2 reach only
+	# consoles with triggers (other cores give those IDs unrelated jobs).
+	var mask: int = gamepad.mask(not analog_input)
+	if not trigger_input: mask &= ~((1 << 12) | (1 << 13))
 	for id in range(12):
 		var pressed := Input.is_physical_key_pressed(KEYBOARD_PAD[id])
 		if pressed: mask |= 1 << id
@@ -340,7 +370,21 @@ func flush_sram() -> void:
 	if not loaded or not sram_restore_ok: return
 	var ram: PackedByteArray = core.save_ram()
 	if ram.is_empty() or ram == sram_written: return
-	if write_bytes_atomic(save_directory.path_join(rom_hash + ".srm"), ram): sram_written = ram
+	if write_bytes_atomic(battery_path(), ram): sram_written = ram
+
+## The battery save (or memory card) of the loaded game. A PlayStation memory card
+## belongs to the game rather than one disc: discs sold as separate files
+## ("Game (Disc 2).zip") share it, so a save made on disc 1 loads on disc 2.
+func battery_path() -> String:
+	if system_id == "psx": return save_directory.path_join("card-" + memory_card_name(rom_path) + ".srm")
+	return save_directory.path_join(rom_hash + ".srm")
+
+## The game's name without its disc number or extension, as a file name.
+static func memory_card_name(path: String) -> String:
+	var title := path.get_file().get_basename()
+	var disc := RegEx.create_from_string(r"\s*\((Disc|CD) ?\d+( of \d+)?\)")
+	title = disc.sub(title, "", true).strip_edges()
+	return title.validate_filename()
 
 func state_path(slot := 0) -> String:
 	return save_directory.path_join("%s.slot%d.rst" % [rom_hash, slot])
@@ -444,9 +488,58 @@ func stop() -> void:
 	paused = false
 	texture = null
 	last_frame = null
+	analog_input = false
+	trigger_input = false
+	gamepad.right_stick_game = false
 	game_changed.emit(false)
 
+## The loaded game's discs: {count, index, labels}; count is 0 for one-disc games.
+func disc_info() -> Dictionary:
+	return core.disc_info() if loaded else {"count": 0, "index": 0, "labels": PackedStringArray()}
+
+func change_disc(index: int) -> bool:
+	if not loaded: return false
+	if not core.change_disc(index):
+		report(str(core.last_error()), true)
+		return false
+	auto_saved = false
+	report("Disc %d inserted • %s" % [index + 1, rom_path.get_file().get_basename()])
+	return true
+
+## A disc ZIP still to be unpacked (see Registry.needs_unpacking).
+func needs_unpacking(path: String) -> bool:
+	return Registry.needs_unpacking(path)
+
+## Unpacks a disc ZIP on a worker thread; unpack_finished reports the outcome.
+## Only one disc unpacks at a time; returns false while another is under way.
+func unpack_disc(path: String) -> bool:
+	if not unpacking.is_empty(): return unpacking == path
+	if unpack_thread != null: unpack_thread.wait_to_finish()
+	unpacking = path
+	unpack_cancelled = false
+	unpack_reported = 0
+	unpack_thread = Thread.new()
+	unpack_thread.start(_unpack.bind(path))
+	return true
+
+func _unpack(path: String) -> void:
+	var error: String = Registry.Archive.unpack_disc(path, func(done: int, total: int):
+		# A few updates a second are plenty for a progress line.
+		if done - unpack_reported >= 16 * 1024 * 1024 or done == total:
+			unpack_reported = done
+			unpack_progress.emit.call_deferred(path, done, total),
+		func(): return unpack_cancelled)
+	_unpacked.call_deferred(path, error)
+
+func _unpacked(path: String, error: String) -> void:
+	if unpack_thread != null: unpack_thread.wait_to_finish()
+	unpack_thread = null
+	unpacking = ""
+	unpack_finished.emit(path, error)
+
 func _exit_tree() -> void:
+	unpack_cancelled = true
+	if unpack_thread != null: unpack_thread.wait_to_finish()
 	save_auto()
 	stop()
 	if core != null: core.close()

@@ -24,3 +24,4 @@ Fetch-Pinned 'beetle-lynx' 'https://github.com/libretro/beetle-lynx-libretro.git
 Fetch-Pinned 'beetle-ngp' 'https://github.com/libretro/beetle-ngp-libretro.git' 'a50d5ac288a81f2104ddf43195a4efdd15c72227'
 Fetch-Pinned 'stella' 'https://github.com/libretro/stella.git' 'ba52c43b9eda950eb0c0eec69cda9b17dee8c39b'
 Fetch-Pinned 'vecx' 'https://github.com/libretro/libretro-vecx.git' 'dccff5402a16d1ea7c112095a8e42632bf149506'
+Fetch-Pinned 'pcsx_rearmed' 'https://github.com/libretro/pcsx_rearmed.git' 'c8816799b50388e61cfe237fe2cdbb7d8175f20a'

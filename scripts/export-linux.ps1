@@ -67,7 +67,7 @@ if ((Test-Path -LiteralPath $cabinet) -or (Test-Path -LiteralPath (Join-Path $pr
         Copy-Item -LiteralPath (Join-Path $ao 'bake.json') -Destination (Join-Path $assetOut 'ao')
     }
 }
-$allCores = @('snes9x','nestopia','genesis_plus_gx','gambatte','mgba','mednafen_pce_fast','mednafen_lynx','mednafen_ngp','stella','vecx')
+$allCores = @('snes9x','nestopia','genesis_plus_gx','gambatte','mgba','mednafen_pce_fast','mednafen_lynx','mednafen_ngp','stella','vecx','pcsx_rearmed')
 foreach ($coreName in $allCores) {
     $core = Join-Path $root "cores/${coreName}_libretro.so"
     if (-not (Test-Path -LiteralPath $core)) { throw "Missing emulator core: $coreName" }

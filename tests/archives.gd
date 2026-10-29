@@ -60,7 +60,8 @@ func run() -> void:
 	touch(base + "/roms/Loose.chd")
 	check(Registry.identify(base + "/roms/segacd/Sonic CD (USA).chd") == "segacd", "A CHD in a Sega CD folder is a Sega CD disc")
 	check(Registry.identify(base + "/roms/megacd/USA/Popful Mail.chd") == "segacd", "A CHD in a region folder inside Mega-CD is too")
-	check(Registry.identify(base + "/roms/psx/Final Fantasy VII.chd").is_empty() and Registry.identify(base + "/roms/Loose.chd").is_empty(), "CHDs elsewhere are not offered")
+	check(Registry.identify(base + "/roms/psx/Final Fantasy VII.chd") == "psx", "A CHD in a PlayStation folder is a PlayStation disc")
+	check(Registry.identify(base + "/roms/Loose.chd").is_empty(), "CHDs elsewhere are not offered")
 
 	# A disc's identity comes from its header (which carries the disc's own
 	# SHA-1), never from reading hundreds of megabytes on the main thread.
@@ -81,7 +82,7 @@ func run() -> void:
 	for system in index.games:
 		for game in index.games[system]: labels[game.label] = system
 	check(labels.get("Probe (USA)") == "snes" and labels.get("Sega Probe") == "megadrive" and labels.get("Advance") == "gba" and labels.get("Commented") == "nes", "The library scan lists zipped games under their own names")
-	check(labels.get("Sonic CD (USA)") == "segacd" and labels.get("Popful Mail") == "segacd" and not labels.has("Final Fantasy VII"), "The library scan lists Sega CD CHDs only")
+	check(labels.get("Sonic CD (USA)") == "segacd" and labels.get("Popful Mail") == "segacd" and labels.get("Final Fantasy VII") == "psx" and not labels.has("Loose"), "The library scan lists CHDs under their console folder's system")
 	check(not labels.has("notes") and not labels.has("broken") and not labels.has("Disc"), "Non-games stay out of the library")
 	var library = load("res://scripts/ui/rom_library.gd").new()
 	library.show_folder(ProjectSettings.globalize_path(base + "/roms/snes"))

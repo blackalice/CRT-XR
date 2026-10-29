@@ -89,6 +89,19 @@ func reset_game() -> void:
 		if host.emulator.reset_game(): host.close_settings(); host.show_notice(host.emulator.status)
 		else: menu.show_error(host.emulator.status))
 
+## Multi-disc games (an .m3u playlist) swap to the next disc, wrapping round, as
+## the game asks for it.
+func disc_tile(discs: Dictionary) -> Dictionary:
+	var count: int = discs.count
+	var next: int = (int(discs.index) + 1) % count
+	return menu.tile(menu.catalog.action("change_disc","Change disc",func(): change_disc(next, count),
+		"Disc %d of %d is in. Opens the tray and puts in disc %d, when the game asks for it." % [int(discs.index) + 1, count, next + 1]),"disc")
+
+func change_disc(index: int, count: int) -> void:
+	menu.ask("Insert disc %d?" % (index + 1),"Changes to disc %d of %d. Do this when the game asks for the next disc; it is like opening the console's lid." % [index + 1, count],func():
+		if host.emulator.change_disc(index): host.close_settings(); host.show_notice(host.emulator.status)
+		else: menu.show_error(host.emulator.status))
+
 func perform_state_action(saving: bool, slot := 0) -> void:
 	var succeeded: bool = host.emulator.save_state(slot) if saving else host.emulator.load_state(slot)
 	if succeeded:
@@ -139,4 +152,10 @@ func pause_items() -> Array:
 		menu.tile(menu.catalog.action("quick","Quick settings",func(): menu.category=7; menu.subsection=0; menu.open_settings(),"Everyday picture, placement and volume controls."),"sliders"),
 		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear"),
 		menu.tile(menu.catalog.action("exit","Exit CRT XR",func(): menu.ask("Exit CRT XR?","An automatic resume point, settings and cartridge SRAM will be saved.",h.request_exit),"Close the application."),"exit","danger")])
+	# Beside Reset game, for games on several discs.
+	var discs: Dictionary = h.emulator.disc_info()
+	if int(discs.get("count", 0)) > 1:
+		for index in range(result.size()):
+			if result[index].get("id", "") == "reset_game":
+				result.insert(index + 1, disc_tile(discs)); break
 	return result

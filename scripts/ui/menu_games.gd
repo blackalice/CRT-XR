@@ -45,7 +45,7 @@ func library_items() -> Array:
 		menu.card(menu.catalog.action("library.favourites","Favourites",func(): open_history("favourites"),"Your favourites across every supported console. Press X on a game to add it.",h.play_history.favourites.is_empty(),"%d game%s" % [h.play_history.favourites.size(),"" if h.play_history.favourites.size()==1 else "s"]),"YOUR PERSONAL SHELF","favourites",Color("dfb984"),"QUICK ACCESS"))
 	var watching: Array=host.video_library.continue_watching(5) if menu.videos.videos_shown() else []
 	if not watching.is_empty(): result.append(menu.videos.continue_card(watching.size(),"QUICK ACCESS"))
-	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"]}
+	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"],"psx":["SONY · 32-BIT CD","a9b6cf"]}
 	for system in menu.library.Registry.SYSTEMS:
 		var id: String=system
 		var count: int=menu.rom_index.games.get(id,[]).size()
@@ -196,14 +196,44 @@ func select_file(path: String) -> void:
 	else: launch_game(path,false)
 
 func launch_game(path: String, continuing: bool) -> void:
+	# A zipped disc is hundreds of megabytes: unpack it in the background while
+	# the room keeps tracking, then start it.
+	if host.emulator.needs_unpacking(path): unpack_then_launch(path, continuing); return
 	if not host.load_game(path): menu.show_error(host.startup_message); return
 	if continuing and not host.emulator.load_auto():
+		if not menu.visible: host.toggle_settings() # after an unpack the menu is closed
 		menu.show_error(host.emulator.status+" Select Start fresh to play without this save.")
 		return
 	var feedback: String = host.emulator.status
 	host.was_paused_before_menu=false
 	host.close_settings()
 	if continuing: host.show_notice(feedback)
+
+## Back to the room while the disc unpacks: the TV shows the loading card and its
+## progress, then the game boots behind it.
+func unpack_then_launch(path: String, continuing: bool) -> void:
+	var emulator: Node = host.emulator
+	if not emulator.unpacking.is_empty() and emulator.unpacking != path:
+		menu.show_error("Another disc is still being unpacked. Try again when it is ready."); return
+	if not host.stop_for_disc(path): menu.show_error(emulator.status); return
+	emulator.unpack_disc(path)
+	if not emulator.unpack_progress.is_connected(show_unpack_progress): emulator.unpack_progress.connect(show_unpack_progress)
+	# One launch per unpack: a second choice of the same game replaces the first.
+	for connection in emulator.unpack_finished.get_connections(): emulator.unpack_finished.disconnect(connection.callable)
+	emulator.unpack_finished.connect(func(finished: String, error: String):
+		# Something else was chosen meanwhile: the disc is ready for next time.
+		if finished != path or host.loading_path != path: return
+		if not error.is_empty():
+			host.end_loading()
+			if not menu.visible: host.toggle_settings()
+			menu.show_error("Could not unpack %s: %s" % [path.get_file().get_basename(), error]); return
+		launch_game(path, continuing),
+		CONNECT_ONE_SHOT)
+	host.was_paused_before_menu = false
+	host.close_settings()
+
+func show_unpack_progress(path: String, done: int, total: int) -> void:
+	host.update_loading(path, float(done) / maxi(total, 1))
 
 func open_history(which: String) -> void:
 	menu.remember(); menu.clear_input(); menu.search_query=""; menu.search_field.text=""; menu.mode=which; menu.render()

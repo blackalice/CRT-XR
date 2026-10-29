@@ -57,6 +57,10 @@ func _draw() -> void:
 			draw_line(Vector2(5, 15), Vector2(25, 15), c, 2, true)
 			draw_arc(Vector2(15, 15), 4.5, -PI / 2, PI / 2, 16, c, 2, true)
 			draw_arc(Vector2(15, 15), 4.5, PI / 2, 3 * PI / 2, 16, c, 2, true)
+		"disc":
+			draw_circle(Vector2(15, 15), 11, c)
+			draw_circle(Vector2(15, 15), 3.5, ink)
+			draw_arc(Vector2(15, 15), 7.5, -2.4, -1.2, 10, ink, 1.5, true)
 		"refresh":
 			draw_arc(Vector2(15, 15), 9, 0.4, TAU - 0.9, 28, c, 3, true)
 			draw_colored_polygon(PackedVector2Array([Vector2(24, 4), Vector2(25, 13), Vector2(17, 10)]), c)

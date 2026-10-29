@@ -29,7 +29,7 @@
 - **A CRT in your space.** A detailed television, wooden table and baked contact shadows, with a dim red clock radio showing the real time, a VCR on a shelf and a stack of game boxes. Switch props off individually and choose 90s confetti carpet (the default), wool carpet or wooden floorboards. Light the room by the TV alone, add rain on the window or a ticking clock, and see the playing game's cover on the table. The surroundings fade into black to suit XR glasses.
 - **Stereo and head tracking.** Full side-by-side rendering and rotational **3DoF** tracking let you look around an anchored screen. Adjust its distance, height, size and curvature, then recenter with a stick click.
 - **A picture you can tune and keep.** Scanlines, phosphor detail, glass reflections, PAL/NTSC-inspired signal effects and colour controls. Trying a preset preserves your custom picture; restore it with **Custom**, or save up to three named picture presets. Screen-fitting options keep the full game image inside the tube.
-- **Thirteen classic systems.** SNES, NES, Mega Drive / Genesis, Master System, Game Gear, Game Boy / Game Boy Color, Game Boy Advance, PC Engine / TurboGrafx-16, Sega CD / Mega-CD, Atari 2600, Atari Lynx, Neo Geo Pocket / Color and Vectrex, powered by libretro cores.
+- **Fourteen classic systems.** SNES, NES, Mega Drive / Genesis, Master System, Game Gear, Game Boy / Game Boy Color, Game Boy Advance, PC Engine / TurboGrafx-16, Sega CD / Mega-CD, PlayStation, Atari 2600, Atari Lynx, Neo Geo Pocket / Color and Vectrex, powered by libretro cores. PlayStation games can stay zipped: they unpack in the background behind a spinning-disc loading screen on the TV.
 - **Your videos on the tube.** Choose a video folder and your MP4, M4V and MKV files play on the CRT with the same picture, light and sound as games: letterbox, 14:9 or fill for widescreen, subtitles, resume and Continue watching. The VCR joins in with green on-screen text, an optional VHS or worn-tape look and its mechanism sounds. The Steam Deck uses SteamOS's own FFmpeg; Windows downloads FFmpeg's video libraries once, on request.
 - **A library that understands your folders.** Pick your ROM root or SD card and browse supported systems, Recent and Favourites. Unrelated console folders stay out of the way. If you've scraped box art with EmuDeck, ES-DE or RetroDECK, CRT XR shows it from your existing `downloaded_media` (or `media` folders beside your ROMs); nothing is downloaded.
 - **Your music, in the room.** Play MP3 albums or direct MP3 web radio with positional sound and optional room reverb. Use the pause-menu transport and seek bar, and optionally lower game audio while music plays. The last track and position are restored, ready for you to press Play.
@@ -122,6 +122,10 @@ roms/
 ├── segacd/          # megacd/ also works; needs the BIOS files
 │   ├── Game.cue
 │   └── Game.bin
+├── psx/             # ps1/ playstation/ also work; a BIOS is optional
+│   ├── Game (USA).zip       # a zipped cue and its tracks
+│   ├── Other Game.chd
+│   └── Long Game.m3u        # lists each disc, for Change disc
 ├── atari2600/       # atari/ atarivcs/ also work
 │   └── Game.a26
 ├── atarilynx/       # needs lynxboot.img
@@ -136,9 +140,9 @@ Windows users can open **Computer drives** directly in the browser, including ma
 
 CRT XR discovers supported games in subfolders and presents them by system; you do not need to move ROMs into the app folder. Common folder aliases such as `genesis`, `superfamicom`, `sms` and `gg` are recognised. Folder names help discovery, while the supported file type/content chooses the emulator core. You can also select a single supported system folder or browse to a game directly.
 
-Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Supported, recognised games appear, including zipped cartridges and Sega CD CHDs. No ROMs are supplied.
+Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Supported, recognised games appear, including zipped cartridges, Sega CD CHDs and PlayStation discs (cue/bin, CHD, PBP, M3U or zipped). No ROMs are supplied.
 
-PC Engine, Atari 2600, Lynx and Vectrex still need real-game testing beyond diagnostic programs. PC Engine CD, SuperGrafx, Sega 32X, 7z/RAR archives and discs inside ZIPs are unsupported. Sega CD needs the BIOS matching the disc's region; a different region's BIOS can produce a generic load error. See [supported formats and BIOS setup](docs/emulation.md).
+PC Engine, Atari 2600, Lynx and Vectrex still need real-game testing beyond diagnostic programs. PC Engine CD, SuperGrafx, Sega 32X, 7z/RAR archives and Sega CD discs inside ZIPs are unsupported. PlayStation has been played on the Steam Deck; a real BIOS (`scph5501.bin` and friends, in the `bios` folder) improves compatibility. Sega CD needs the BIOS matching the disc's region; a different region's BIOS can produce a generic load error. See [supported formats and BIOS setup](docs/emulation.md).
 
 ## Videos
 
