@@ -10,7 +10,7 @@ var text := "":
 		text=value; last_controller=controller
 		for child in get_children(): remove_child(child); child.queue_free()
 		for action in value.replace("   "," · ").split(" · ",false):
-			var group := HBoxContainer.new(); group.add_theme_constant_override("separation",4); add_child(group)
+			var group := HBoxContainer.new(); group.add_theme_constant_override("separation",8); add_child(group)
 			for word in action.split(" ",false):
 				if controller and InputGlyph.knows(word): group.add_child(InputGlyph.new(word, GLYPH_HEIGHT))
 				else:

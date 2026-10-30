@@ -22,3 +22,13 @@ VCR on-screen text drawn on videos.
 * Terms: dafont lists the font as "100% Free", and a comment on the dafont
   page states it is fully free to use. The download contains only the font
   file, with no licence text.
+
+# DotGothic16
+
+`assets/fonts/DotGothic16.ttf` is the unmodified `DotGothic16-Regular.ttf`,
+Copyright 2020 The DotGothic16 Project Authors, under the SIL Open Font
+License 1.1 (`DotGothic16-OFL.txt`). The menus use it for their 16-bit look.
+
+* Source: https://github.com/google/fonts/tree/6157dfaa640ca5738b4d1a7070fe389c3036d7fc/ofl/dotgothic16
+* Upstream project: https://github.com/fontworks-fonts/DotGothic16
+* SHA-256: `3ad9af88726d42b40f7f365f0dcac785af73cf20ea6f1d5b44e57cc21150b8f1`

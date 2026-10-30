@@ -16,9 +16,10 @@ extends RefCounted
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const GlyphText = preload("res://scripts/ui/glyph_text.gd")
-const CARD := Color("20242a")
-const CHIP := Color("2b3037")
-const RULE := Color("3a3631")
+const CARD := Color("102860")
+const CHIP := Color("000c30")
+const RULE := Color("3858a0")
+const EDGE := Color("3858a0")
 
 ## Blocks as [kind, text, extra]: kinds heading, step, bullet, control, card,
 ## tip, fact, logo and text. Steps carry their number; controls their chips;
@@ -113,7 +114,7 @@ static func build(copy: String, large: bool) -> Control:
 				article.add_child(marked(keys, block[1], size))
 			"card":
 				var panel := PanelContainer.new()
-				panel.add_theme_stylebox_override("panel", MenuSkin.box(CARD, Color("34383f"), 1, 16))
+				panel.add_theme_stylebox_override("panel", MenuSkin.box(CARD, EDGE, 2, 16))
 				var column := VBoxContainer.new()
 				column.add_theme_constant_override("separation", 4)
 				column.add_child(label(block[1], size, MenuSkin.SEMIBOLD, MenuSkin.TEXT))
@@ -137,8 +138,7 @@ static func build(copy: String, large: bool) -> Control:
 				article.add_child(row)
 			"tip":
 				var tip := PanelContainer.new()
-				var style := MenuSkin.box(Color("2a2620"), Color.TRANSPARENT, 0, 14)
-				style.border_color = MenuSkin.AMBER
+				var style := MenuSkin.box(CHIP, MenuSkin.AMBER, 0, 14)
 				style.border_width_left = 4
 				tip.add_theme_stylebox_override("panel", style)
 				tip.add_child(label(block[1], size - 2, MenuSkin.REGULAR, MenuSkin.TEXT))
@@ -181,11 +181,11 @@ static func prose(text: String, size: int, colour: Color) -> Control:
 
 static func badge(number: String, size: int) -> Control:
 	var panel := PanelContainer.new()
-	var style := MenuSkin.box(MenuSkin.AMBER, Color.TRANSPARENT, 0, 0)
-	style.set_corner_radius_all(16)
-	panel.add_theme_stylebox_override("panel", style)
+	# A square lit plate, like the menus' open category.
+	panel.add_theme_stylebox_override("panel", MenuSkin.box(Color("2c58c0"), Color("88a8e8"), 2, 0))
 	panel.custom_minimum_size = Vector2(32, 32)
-	var digit := label(number, size - 6, MenuSkin.BOLD, MenuSkin.INK)
+	var digit := label(number, size - 6, MenuSkin.BOLD, MenuSkin.TEXT)
+	MenuSkin.shadow(digit)
 	digit.autowrap_mode = TextServer.AUTOWRAP_OFF
 	digit.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	digit.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -198,10 +198,9 @@ static func chip(text: String, size: int, keyboard: bool) -> Control:
 	if not keyboard and Array(text.split(" ", false)).any(func(word): return InputGlyph.knows(word)):
 		return InputGlyph.row(text, size + 14.0, size - 2, MenuSkin.MUTED)
 	var panel := PanelContainer.new()
-	var style := MenuSkin.box(Color.TRANSPARENT if keyboard else CHIP, Color("4a4f57") if keyboard else Color("5b6068"), 1, 0)
+	var style := MenuSkin.box(Color.TRANSPARENT if keyboard else CHIP, Color("1c3068") if keyboard else EDGE, 2, 0)
 	style.content_margin_left = 10; style.content_margin_right = 10
 	style.content_margin_top = 2; style.content_margin_bottom = 2
-	style.set_corner_radius_all(6)
 	panel.add_theme_stylebox_override("panel", style)
 	var key := label(text, size, MenuSkin.SEMIBOLD, MenuSkin.MUTED if keyboard else MenuSkin.TEXT)
 	key.autowrap_mode = TextServer.AUTOWRAP_OFF

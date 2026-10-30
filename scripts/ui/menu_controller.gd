@@ -14,6 +14,8 @@ const LocationBar = preload("res://scripts/ui/location_bar.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 ## Page builders and actions, one helper per area; each reaches the menu and host.
+var backdrop: ColorRect
+var help_frame: PanelContainer
 var pictures := preload("res://scripts/ui/menu_pictures.gd").new()
 var videos := preload("res://scripts/ui/menu_videos.gd").new()
 var music := preload("res://scripts/ui/menu_music.gd").new()
@@ -88,6 +90,10 @@ var device := -1
 var default_armed := false
 var rendering := false
 var layout_revision := 0
+## Frames a re-rendered page needs to settle (wrapped text, then the saved
+## scroll); main holds the menu's last finished picture for that long.
+const SETTLE_FRAMES := 3
+var hold_frames := 0
 var selecting := false
 var scan_refresh_elapsed := 0.0
 var scan_revision := -1
@@ -105,7 +111,7 @@ var rename_preset := -1
 ## Your own room being looked at or renamed (-1 when none).
 var my_room := -1
 var rename_room := -1
-var status_line: HBoxContainer
+var status_line: Control
 var help_title := ""
 var help_copy := ""
 var help_origin: Dictionary = {}
@@ -123,14 +129,27 @@ func _ready() -> void:
 	size = Vector2(888,664)
 	catalog.host = host; catalog.menu = self
 	library.default_dir = host.default_rom_dir
+	# The space backdrop fills the whole panel; the page sits inside its frame.
+	backdrop=MenuSkin.space_backdrop(); add_child(backdrop)
+	var frame := MarginContainer.new()
+	for side in ["left","top","right","bottom"]: frame.add_theme_constant_override("margin_"+side,18)
+	add_child(frame)
 	var layout := VBoxContainer.new()
 	layout.add_theme_constant_override("separation",8)
-	add_child(layout)
+	frame.add_child(layout)
 	var top := HBoxContainer.new()
 	layout.add_child(top)
 	heading = Label.new(); heading.text = "CRT XR"
 	heading.add_theme_font_size_override("font_size",32)
 	MenuSkin.weigh(heading,MenuSkin.BOLD)
+	# Chrome lettering with a dark outline and a one-cell drop shadow.
+	heading.add_theme_color_override("font_color",Color.WHITE)
+	heading.add_theme_color_override("font_outline_color",Color("000418"))
+	heading.add_theme_constant_override("outline_size",6)
+	heading.add_theme_color_override("font_shadow_color",Color("000418"))
+	heading.add_theme_constant_override("shadow_offset_x",3); heading.add_theme_constant_override("shadow_offset_y",3)
+	var chrome := ShaderMaterial.new(); chrome.shader=preload("res://shaders/menu_chrome.gdshader"); heading.material=chrome
+	heading.resized.connect(func(): chrome.set_shader_parameter("height",heading.size.y))
 	heading.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	# A long game title shortens with an ellipsis instead of widening the panel
 	# past its edge (with the Deck's battery beside it, it did).
@@ -169,7 +188,7 @@ func _ready() -> void:
 	layout.add_child(body)
 	# Categories sit on their own surface so they read apart from the page.
 	sidebar_panel = PanelContainer.new()
-	sidebar_panel.add_theme_stylebox_override("panel",MenuSkin.box(Color("202328"),Color.TRANSPARENT,0,6))
+	sidebar_panel.add_theme_stylebox_override("panel",MenuSkin.box(Color("000c30"),Color("1c3068"),2,6))
 	body.add_child(sidebar_panel)
 	sidebar = VBoxContainer.new()
 	sidebar.custom_minimum_size.x = 170
@@ -194,7 +213,7 @@ func _ready() -> void:
 		button.custom_minimum_size.y = 32
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		for style in ["normal","pressed"]: button.add_theme_stylebox_override(style,sidebar_box(Color.TRANSPARENT))
-		button.add_theme_stylebox_override("hover",sidebar_box(Color("2a2e34")))
+		button.add_theme_stylebox_override("hover",sidebar_box(Color("102860")))
 		button.focus_mode = Control.FOCUS_NONE
 		button.pressed.connect(func(): switch_category(index-category))
 		sidebar.add_child(button); sidebar_buttons.append(button)
@@ -254,7 +273,13 @@ func _ready() -> void:
 	layout.add_child(compact); compact.hide()
 	help_label = GlyphText.new("", 20, MenuSkin.TEXT)
 	help_label.custom_minimum_size.y = 64
-	layout.add_child(help_label)
+	# Help sits in a framed message window, as console menus put their text.
+	help_frame = PanelContainer.new()
+	var window := MenuSkin.box(Color("000c30"),Color("3858a0"),2,0)
+	window.content_margin_left=14; window.content_margin_right=14; window.content_margin_top=6; window.content_margin_bottom=6
+	help_frame.add_theme_stylebox_override("panel",window)
+	help_frame.add_child(help_label)
+	layout.add_child(help_frame)
 	hints = preload("res://scripts/ui/shortcut_footer.gd").new()
 	hints.add_theme_font_size_override("font_size",18)
 	hints.add_theme_color_override("font_color",MenuSkin.MUTED)
@@ -266,17 +291,21 @@ func _ready() -> void:
 	top.add_child(preview_button)
 	preview_button.flat=true; preview_button.add_theme_font_size_override("font_size",16); MenuSkin.weigh(preview_button,MenuSkin.REGULAR)
 	preview_glyph=InputGlyph.new("X", 30.0); top.add_child(preview_glyph)
+	# The LCD clock is pinned to the right corner; context buttons change to its left.
+	top.move_child(status_line,-1)
+	top.add_theme_constant_override("separation",10)
 	visibility_changed.connect(func(): set_process(visible))
 	open_pause()
 	hide()
 
 # Left-aligned category labels need side padding without taller buttons.
 func sidebar_box(colour: Color, chosen := false) -> StyleBoxFlat:
-	var style := MenuSkin.box(colour,MenuSkin.AMBER,0,6)
+	# The open category is a lit bar with a light top-left edge.
+	var style := MenuSkin.box(Color("2c58c0") if chosen else colour,Color("88a8e8"),0,6)
 	style.content_margin_left=12; style.content_margin_right=12
 	# Nine categories must fit beside a page with three lines of help.
 	style.content_margin_top=3; style.content_margin_bottom=3
-	if chosen: style.border_width_left=3; style.content_margin_left=11
+	if chosen: style.border_width_top=2; style.border_width_left=2; style.content_margin_left=10
 	return style
 
 ## A small key chip, such as "Q / E", so shortcuts read apart from content.
@@ -285,8 +314,8 @@ func key_hint() -> Label:
 	label.add_theme_font_size_override("font_size",14)
 	label.add_theme_color_override("font_color",Color("c9cbce"))
 	MenuSkin.weigh(label,MenuSkin.SEMIBOLD)
-	var chip := MenuSkin.box(Color("2c3036"),Color.TRANSPARENT,0,0)
-	chip.set_corner_radius_all(5); chip.content_margin_left=8; chip.content_margin_right=8; chip.content_margin_top=2; chip.content_margin_bottom=2
+	var chip := MenuSkin.box(Color("000c30"),Color("3858a0"),2,0)
+	chip.content_margin_left=8; chip.content_margin_right=8; chip.content_margin_top=2; chip.content_margin_bottom=2
 	label.add_theme_stylebox_override("normal",chip)
 	label.size_flags_horizontal=Control.SIZE_SHRINK_BEGIN
 	return label
@@ -751,6 +780,7 @@ func render() -> void:
 	position = Vector2(36,522) if preview else Vector2(36,28)
 	size = Vector2(888,170) if preview else Vector2(888,664)
 	help_label.visible = not preview and mode!="help" # help pages use the room for the article
+	help_frame.visible = help_label.visible
 	if preview: heading.add_theme_font_size_override("font_size",22)
 	else: heading.add_theme_font_size_override("font_size",32)
 	var saved: Dictionary = memory.get(state_key(),{})
@@ -786,6 +816,7 @@ func render() -> void:
 	elif not preview: reveal_after_layout.call_deferred(layout_revision)
 	fit_panel.call_deferred()
 	refresh_labels()
+	hold_frames = SETTLE_FRAMES
 
 func fit_panel() -> void:
 	position = Vector2(36,522) if preview else Vector2(36,28)
@@ -860,11 +891,26 @@ func reveal_selected() -> void:
 	var block: Control=row
 	while block.get_parent()!=column and block.get_parent() is Control: block=block.get_parent()
 	var position: int=rows.find(row)
-	if position==0: scroll.scroll_vertical=0
+	var shown := within_column(row)
+	var top := shown.position.y
+	if position==0: top=0.0
 	elif block!=row:
-		if not block.is_ancestor_of(rows[position-1]): scroll.ensure_control_visible(block)
-	elif row.get_index()>0 and column.get_child(row.get_index()-1) is Label: scroll.ensure_control_visible(column.get_child(row.get_index()-1))
-	scroll.ensure_control_visible(row)
+		if not block.is_ancestor_of(rows[position-1]): top=within_column(block).position.y
+	elif row.get_index()>0 and column.get_child(row.get_index()-1) is Label: top=within_column(column.get_child(row.get_index()-1)).position.y
+	# One scroll that shows the lead-in and the row. (Two ensure_control_visible
+	# calls in a row overshot: the second measured positions the first had
+	# already scrolled away from, leaving the selected row out of view.)
+	var view := scroll.size.y
+	var bottom := shown.end.y
+	if bottom - top > view: top = bottom - view
+	var at := float(scroll.scroll_vertical)
+	if top < at: at = top
+	elif bottom > at + view: at = bottom - view
+	scroll.scroll_vertical = int(at)
+
+## A control's place inside the scrolled column, which does not move as it scrolls.
+func within_column(control: Control) -> Rect2:
+	return Rect2(control.get_global_position() - column.get_global_position(), control.size)
 
 func refresh_labels() -> void:
 	if is_instance_valid(music_heading): music_heading.text=host.music.now_playing()
@@ -907,7 +953,9 @@ func refresh_labels() -> void:
 	else: subtitle.text = ""
 	# Highlighted when Picture changes belong to one game or to videos, not everything.
 	subtitle.add_theme_color_override("font_color",MenuSkin.AMBER if mode=="settings" and category==1 and not host.active_game_key.is_empty() else MenuSkin.MUTED)
-	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible
+	# The pause menu and settings keep their words for the help window; the line
+	# under the title stays for browsing, where it says where you are.
+	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible and not mode in ["pause","settings"]
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0 and notification_context==state_key(): help_label.text = notification
 	elif mode=="help": help_label.text=""
@@ -1315,6 +1363,7 @@ func open_help(title: String, copy: String) -> void:
 
 func apply_accessibility() -> void:
 	host.power_on.reduced_motion=host.menu_reduced_motion
+	MenuSkin.set_motion(not host.menu_reduced_motion)
 	if host.menu_reduced_motion and is_instance_valid(focus_tween): focus_tween.kill()
 	refresh()
 
@@ -1330,8 +1379,10 @@ func style_rows() -> void:
 			row.title_label.add_theme_color_override("font_color",Color.WHITE)
 			row.value_label.add_theme_color_override("font_color",Color.WHITE)
 			row.unavailable_label.add_theme_color_override("font_color",Color("dddddd"))
-	if host.menu_high_contrast: add_theme_stylebox_override("panel",MenuSkin.box(Color("080a0d"),Color("cccccc"),1,18))
+	# Stronger contrast trades the space backdrop for plain black and a light frame.
+	if host.menu_high_contrast: add_theme_stylebox_override("panel",MenuSkin.box(Color("000000"),Color("cccccc"),2,0))
 	else: remove_theme_stylebox_override("panel")
+	backdrop.visible=not host.menu_high_contrast
 
 
 

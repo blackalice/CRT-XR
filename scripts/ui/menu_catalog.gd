@@ -295,8 +295,8 @@ func pages(category: int) -> Array:
 				toggle("access.contrast","Stronger menu contrast",h,"menu_high_contrast",false,"Brighter text and clearer borders on a dark background.",menu.apply_accessibility,false),
 				toggle("access.motion","Reduced animation",h,"menu_reduced_motion",false,"Instant focus changes and no TV warm-up animation.",menu.apply_accessibility,false),
 				toggle("access.sounds","Menu sounds",h,"menu_sounds",false,"Quiet feedback for focus and confirmation.",unchanged,false),
-				toggle("access.depth","Menu depth",h,"menu_depth",true,"In side-by-side 3D the menu floats in front of the TV, the selected item lifts towards you and the room dims behind. Off gives a flat menu.",func(): menu.refresh(),false),
-				unavailable(toggle("access.curve","Curved menu",h,"menu_curve",false,"Bends the menu gently towards you at its sides, like a curved monitor. Best in side-by-side 3D.",unchanged,false).merged({"disabled":not h.menu_depth},true),"Needs Menu depth."),
+				toggle("access.tv","Menu on the TV",h,"menu_on_tv",true,"Shows the menu on the TV itself, with the TV drawn in close so it reads clearly. Adjust with preview still floats the menu over the game. Off floats the menu in front of the TV.",func(): menu.refresh(),false),
+				toggle("access.depth","Menu depth",h,"menu_depth",true,"In side-by-side 3D the menu floats in front of the TV as one flat panel and the room dims behind. Off gives a flat menu.",func(): menu.refresh(),false),
 				toggle("access.haptics","Controller vibration",h,"menu_haptics",false,"A light tick as the selection moves and a firmer one when you confirm.",func(): menu.refresh(),false),
 				unavailable(number("access.haptic_strength","Vibration strength",h,"haptic_strength",0.1,1.0,0.1,0.8,"percent","How strong the ticks feel. The Steam Deck passes on only part of it, so it may need to be higher there.",func(): h.menu_vibrate(1.0, 0.07),false).merged({"disabled":not h.menu_haptics},true),"Turn on Controller vibration first.")])]
 		8:

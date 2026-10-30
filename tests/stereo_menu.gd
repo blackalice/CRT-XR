@@ -14,6 +14,7 @@ func press(code:int):
   Input.parse_input_event(e);Input.flush_buffered_events();await settle()
 func run():
  app=load("res://scenes/main.tscn").instantiate();root.add_child(app)
+ app.menu_on_tv=false # these checks are for the floating menu; menu_on_tv.gd has its own
  app.use_tracking(false);app.set_stereo(true)
  if not app.menu.visible:app.toggle_settings()
  await settle()

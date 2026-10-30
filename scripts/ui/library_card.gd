@@ -16,6 +16,7 @@ func configure(definition: Dictionary) -> void:
 	value_label=Label.new();value_label.add_theme_font_size_override("font_size",20); words.add_child(value_label)
 	value_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	track=ProgressBar.new();track.hide();add_child(track)
+	MenuSkin.shadow(title_label); MenuSkin.shadow(value_label)
 	pressed.connect(func(): selected.emit(item.id))
 	focus_entered.connect(func(): selected.emit(item.id))
 	refresh()

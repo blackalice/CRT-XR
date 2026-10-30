@@ -15,6 +15,8 @@ const LIFT := 0.97
 const PAGE_BACK := 1.12
 ## Curved menu: how much closer the side edges are than the centre, in metres.
 const CURVE_DEPTH := 0.06
+## The menu's pixel grid: shifts are whole cells of it.
+const CELL := 2.0
 const OPEN_SECONDS := 0.22
 const PAGE_SECONDS := 0.18
 const LIFT_SECONDS := 0.14
@@ -85,7 +87,8 @@ func _process(delta: float) -> void:
 		lifting = 0.0 if depth else 1.0
 	lifting = advance(lifting, LIFT_SECONDS, delta)
 	menu.column.modulate.a = lerpf(0.35, 1.0, ease_out(paging))
-	var want_dim := 1.0 if depth and not menu.preview else 0.0
+	# The menu on the TV is the TV's own picture: nothing floats, so nothing dims.
+	var want_dim := 1.0 if depth and not menu.preview and not host.tv_menu.active else 0.0
 	dimming = move_toward(dimming, want_dim, delta / 0.2) if not host.menu_reduced_motion else want_dim
 	for i in range(materials.size()):
 		apply_eye(i, layout, depth)
@@ -129,22 +132,12 @@ func apply_eye(i: int, layout: Dictionary, depth: bool) -> void:
 	# Opening glides in from behind the TV to the menu's place.
 	var start := maxf(float(host.convergence), float(host.distance)) + 0.5
 	var here := lerpf(start, near, open)
-	var base := shift(i, here)
-	var page := shift(i, near * lerpf(PAGE_BACK, 1.0, ease_out(paging))) - shift(i, near)
-	var lift := ease_out(lifting)
-	var lifted: Rect2 = layout.lift
-	material.set_shader_parameter("base_shift", base)
-	# The curve keeps its shape as the menu glides in, centred on its distance.
-	var edge := here - CURVE_DEPTH if host.menu_curve else here
-	material.set_shader_parameter("curve_shift", shift(i, edge) - shift(i, here))
-	material.set_shader_parameter("curve_height", here / edge - 1.0)
-	material.set_shader_parameter("scale", lerpf(0.96, 1.0, open))
+	# The 16-bit menu is one flat plane: no curve, no page step, no lifted row.
+	# Each of those resampled the 2-pixel grid differently for each eye, and the
+	# mismatch shimmered. Shifting by whole cells keeps both eyes on the grid.
+	material.set_shader_parameter("base_shift", roundf(shift(i, here) / CELL) * CELL)
+	for key in ["page_shift", "lift_shift", "shadow", "curve_shift", "curve_height"]: material.set_shader_parameter(key, 0.0)
+	for key in ["page_rect", "lift_rect"]: material.set_shader_parameter(key, Vector4.ZERO)
+	material.set_shader_parameter("lift_scale", 1.0)
+	material.set_shader_parameter("scale", lerpf(0.96, 1.0, open) if open < 1.0 else 1.0)
 	material.set_shader_parameter("fade", open)
-	material.set_shader_parameter("page_rect", as_vec4(layout.page))
-	material.set_shader_parameter("page_shift", page)
-	material.set_shader_parameter("lift_rect", as_vec4(lifted))
-	material.set_shader_parameter("lift_shift", (shift(i, near * LIFT) - shift(i, near)) * lift)
-	# Mono has no depth, so the lifted row grows a touch over a soft shadow.
-	# In stereo the depth alone reads as lifted; a shadow there looks detached.
-	material.set_shader_parameter("lift_scale", 1.0 if host.stereo else 1.0 + 0.008 * lift)
-	material.set_shader_parameter("shadow", lift if not host.stereo and lifted.size != Vector2.ZERO else 0.0)

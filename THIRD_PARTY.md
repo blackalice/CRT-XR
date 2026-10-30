@@ -191,6 +191,8 @@ Only FFmpeg's public headers are vendored, for compiling the loader: 7.1.1 in `n
 
 Open Sans, Copyright 2020 The Open Sans Project Authors, under the SIL Open Font License 1.1. The unmodified variable font is `assets/fonts/OpenSans.ttf`; its licence, pinned source and SHA-256 are in `third_party/fonts/` and included with exported builds under `licenses/fonts/`.
 
+DotGothic16, Copyright 2020 The DotGothic16 Project Authors, under the SIL Open Font License 1.1. The unmodified font is `assets/fonts/DotGothic16.ttf`, used for the menus; its licence, pinned source and SHA-256 are in `third_party/fonts/` and included with exported builds under `licenses/fonts/`.
+
 VCR OSD Mono, by Riciery Leal, is used unmodified (`assets/fonts/VCR_OSD_MONO.ttf`) for the green VCR on-screen text on videos. dafont lists it as "100% Free", and a comment on its dafont page states it is fully free to use; the download itself carries no licence text. Source, retrieval date and SHA-256 are in `third_party/fonts/README.md`.
 
 ## Super Retro Game Console

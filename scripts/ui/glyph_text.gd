@@ -40,7 +40,7 @@ func rebuild() -> void:
 		child.queue_free()
 	for line in text.split("\n"):
 		var flow := HFlowContainer.new()
-		flow.add_theme_constant_override("h_separation", int(font_size * 0.28))
+		flow.add_theme_constant_override("h_separation", int(font_size * 0.4))
 		flow.add_theme_constant_override("v_separation", 0)
 		flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if centred: flow.alignment = FlowContainer.ALIGNMENT_CENTER

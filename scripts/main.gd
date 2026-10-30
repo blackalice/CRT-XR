@@ -60,6 +60,10 @@ var menu_sounds := false
 var menu_depth := true
 ## With menu depth on, the menu bends gently towards you at its sides.
 var menu_curve := false
+## The menu on the TV itself (menu_on_tv.gd), or floating in front of it.
+var menu_on_tv := true
+var tv_menu: Node
+var menu_was_open := false
 ## A light controller tick as the menu selection moves, and on confirm.
 var menu_haptics := false
 ## How strong those ticks are, 10% to 100% of the motors' range.
@@ -75,6 +79,10 @@ var power_on: Node
 var tv_effects: Node
 var exiting := false
 var signal_view: SubViewport
+## The loading card as the tube shows it: its 256x240 graphics three times over
+## with hard pixels, and its words sharp on top (loading_text.gd), 720 lines
+## like the menu.
+var card_view: SubViewport
 var was_paused_before_menu := false
 var provider: TrackingProvider = Simulated.new()
 ## "glasses" (XR Gaming on Linux, VITURE SDK on Windows) or "opentrack" (UDP 4242).
@@ -287,6 +295,21 @@ func start_application() -> void:
 	loading_screen.visible = false
 	loading_screen.set_process(false)
 	signal_view.add_child(loading_screen)
+	card_view = SubViewport.new()
+	card_view.size = Vector2i(768, 720)
+	card_view.disable_3d = true
+	card_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	add_child(card_view)
+	var card_pixels := TextureRect.new()
+	card_pixels.texture = signal_view.get_texture()
+	card_pixels.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	card_pixels.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	card_pixels.stretch_mode = TextureRect.STRETCH_SCALE
+	card_pixels.size = Vector2(card_view.size)
+	card_view.add_child(card_pixels)
+	var card_words := preload("res://scripts/content/loading_text.gd").new()
+	card_words.card = loading_screen
+	card_view.add_child(card_words)
 	row = HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	row.add_theme_constant_override("separation", 0)
@@ -372,7 +395,7 @@ func start_application() -> void:
 		if not loading_path.is_empty():
 			if not picture_started(image): return
 			end_loading()
-		world.screen_light.set_image(image)
+		if tv_menu == null or tv_menu.lights_room(): world.screen_light.set_image(image)
 		world.picture.frame_presented(image))
 	emulator.game_changed.connect(func(active):
 		# A game stopped from the menu takes its loading card with it.
@@ -398,7 +421,8 @@ func start_application() -> void:
 		vcr_sounds.volume_db = emulator.player.volume_db
 		vcr_sounds.mechanism(event))
 	video.content_changed.connect(func(texture): world.picture.set_source(texture, true))
-	video.frame_presented.connect(world.screen_light.set_image)
+	video.frame_presented.connect(func(image: Image):
+		if tv_menu == null or tv_menu.lights_room(): world.screen_light.set_image(image))
 	video.frame_presented.connect(world.picture.frame_presented)
 	# The decoder always delivers a 4:3 frame; display styles are applied inside it.
 	video.active_changed.connect(func(active):
@@ -462,6 +486,10 @@ func start_application() -> void:
 	menu_depth_view.name = "MenuDepth"
 	add_child(menu_depth_view)
 	menu_depth_view.setup(self, menu_overlays, panels)
+	tv_menu = preload("res://scripts/ui/menu_on_tv.gd").new()
+	tv_menu.name = "MenuOnTV"
+	tv_menu.host = self
+	add_child(tv_menu)
 	set_stereo(sbs_startup or "--sbs" in OS.get_cmdline_user_args() or "--full-sbs" in OS.get_cmdline_user_args())
 	if "--full-sbs" in OS.get_cmdline_user_args() or sbs_startup:
 		set_stereo(true)
@@ -495,6 +523,7 @@ func apply_settings(config: ConfigFile) -> void:
 	room_preset_signature=str(config.get_value("menu","room_preset_signature",""))
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,bool(config.get_value("accessibility",key,false)))
 	menu_depth = bool(config.get_value("accessibility","menu_depth",true))
+	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
 	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
 	for key in music.DEFAULTS: music.set(key,config.get_value("music",key,music.DEFAULTS[key]))
 	music.apply()
@@ -580,19 +609,29 @@ func _process(delta: float) -> void:
 		bar.track(video.path.get_file().get_basename(), video.clock, float(video.info.get("duration", 0.0)), video.paused, delta, bar_allowed)
 	for notice in notices: notice.visible = notice_time > 0.0
 	var menu_open := settings_panel.visible
+	tv_menu.update(delta)
 	recovery_elapsed += delta
 	if recovery_elapsed >= 1.0:
 		recovery_elapsed = 0.0
 		refresh_startup_status()
-	world.picture.paused = menu_open or (emulator.paused if emulator.loaded else pattern.paused)
+	# The menu on the TV is a live picture, so the tube keeps updating under it.
+	world.picture.paused = (menu_open and not tv_menu.active) or (emulator.paused if emulator.loaded else pattern.paused) and not tv_menu.active
 	if right_stick_distance and not menu_open:
 		adjust_distance(emulator.gamepad.view_distance_axis() * distance_speed * delta)
 	if distance_save_delay >= 0.0:
 		distance_save_delay -= delta
 		if distance_save_delay < 0.0: save_settings()
-	for overlay in menu_overlays: overlay.visible = menu_open
+	for overlay in menu_overlays: overlay.visible = menu_open and not tv_menu.active
 	for hud in diagnostics: hud.modulate.a = 0.0 if menu_open else 1.0
 	var menu_mode := SubViewport.UPDATE_ALWAYS if menu_open else SubViewport.UPDATE_DISABLED
+	# A page re-rendered while the menu is up lays its rows out over a few
+	# frames; keep showing the last finished picture until it has settled, so
+	# changing a setting does not flicker. (Not on opening: that would show a
+	# stale menu.)
+	if menu.hold_frames > 0:
+		menu.hold_frames -= 1
+		if menu_open and menu_was_open: menu_mode = SubViewport.UPDATE_DISABLED
+	menu_was_open = menu_open
 	if menu_view.render_target_update_mode != menu_mode: menu_view.render_target_update_mode = menu_mode
 	provider.enabled = not menu_open and not emulator.loaded
 	display_report_elapsed += delta
@@ -628,7 +667,7 @@ func _process(delta: float) -> void:
 		target = PosePrediction.extrapolate(target, provider.angular_velocity, motion_predict)
 	displayed = displayed.slerp(target, 1.0 - exp(-delta / smoothing)) if smoothing > 0.001 else target
 	# Write only on change: each transform write dirties the TV subtree and its lights.
-	var tv_position := Vector3(0, 1.25 + height_offset, -distance)
+	var tv_position: Vector3 = tv_menu.lean_position(Vector3(0, 1.25 + height_offset, -distance))
 	if world.television.position != tv_position: world.television.position = tv_position
 	if world.television.scale != Vector3.ONE * tv_scale: world.television.scale = Vector3.ONE * tv_scale
 	emulator.tv_audio.update_pose(displayed,Vector3(0,1.25,0),world.television.position,delta)
@@ -902,7 +941,8 @@ func show_programme(active: bool, rate: float, aspect: float) -> void:
 		world.picture.source_rate = 60.0
 		world.picture.source_aspect = 4.0 / 3.0
 		world.screen_light.set_image(null)
-		world.picture.set_source(signal_view.get_texture())
+		# A disc's card has its own picture (card_view); the test signal is underneath it.
+		world.picture.set_source(card_view.get_texture() if loading else signal_view.get_texture())
 
 ## Puts the loading card for a disc game on the TV, with progress 0..1 while it
 ## unpacks or negative while it boots (which restarts the black-screen timeout).
@@ -918,10 +958,11 @@ func show_loading(path: String, progress := -1.0) -> void:
 	pattern.visible = false
 	pattern.set_process(false)
 	signal_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	card_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	world.screen_light.set_image(null)
 	world.picture.source_rate = 60.0
 	world.picture.source_aspect = 4.0 / 3.0
-	world.picture.set_source(signal_view.get_texture())
+	world.picture.set_source(card_view.get_texture())
 	if starting and power_on.progress >= 1.0: tv_effects.play("channel")
 
 func update_loading(path: String, progress: float) -> void:
@@ -933,6 +974,7 @@ func end_loading() -> void:
 	loading_path = ""
 	loading_screen.visible = false
 	loading_screen.set_process(false)
+	card_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	if emulator.loaded and emulator.texture != null:
 		signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		world.picture.source_rate = emulator.fps
@@ -1258,6 +1300,7 @@ func reset_all_options() -> void:
 	music.reset_defaults()
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,false)
 	menu_depth = true
+	menu_on_tv = true
 	haptic_strength = 0.8
 	power_on.enabled=true; power_on.sound_level=.60; power_on.reduced_motion=false; power_on.apply()
 	tv_effects.channel_change=true; tv_effects.power_off_effect=true; tv_effects.reduced_motion=false
@@ -1389,7 +1432,7 @@ func capture_settings() -> ConfigFile:
 	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_depth","menu_curve","haptic_strength"]: config.set_value("accessibility",key,get(key))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_depth","menu_on_tv","menu_curve","haptic_strength"]: config.set_value("accessibility",key,get(key))
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
 	config.set_value("emulation", "separate_preview", emulator.separate_preview)
 	config.set_value("view", "right_stick_distance", right_stick_distance)

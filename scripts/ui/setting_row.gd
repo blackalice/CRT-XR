@@ -5,10 +5,13 @@ const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
+const SegmentBar = preload("res://scripts/ui/segment_bar.gd")
+## Values read in the yellow the console menus used for numbers.
+const VALUE := Color("f8d040")
 ## Optional item keys: "row_icon" (see row_icon.gd) leads the row; "emphasis" is
 ## "primary" for a screen's main action or "danger" for one that forgets
 ## something; "compact" draws a smaller row for secondary places.
-const DANGER := Color("e0907f")
+const DANGER := Color("f87860")
 var item: Dictionary
 var title_label: Label
 var unavailable_label: Label
@@ -28,6 +31,9 @@ var descriptive_value := false
 ## Video rows lead with a small picture; it arrives later, so the video icon
 ## holds its place until set_thumbnail() is called.
 var thumbnail: TextureRect
+## The row's pixel panel, drawn behind everything; the marquee when selected.
+var panel: ColorRect
+var segments: Control
 
 func configure(definition: Dictionary) -> void:
 	item=definition
@@ -70,11 +76,14 @@ func configure(definition: Dictionary) -> void:
 	title_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	title_label.max_lines_visible=3
 	title_label.mouse_filter=Control.MOUSE_FILTER_IGNORE; words.add_child(title_label)
+	MenuSkin.shadow(title_label)
 	if emphasis in ["primary","danger"]: title_label.add_theme_color_override("font_color",tint)
 	value_group=HBoxContainer.new(); value_group.add_theme_constant_override("separation",8)
 	value_group.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	value_group.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(value_group)
 	value_label=Label.new(); value_label.add_theme_font_size_override("font_size",22)
+	value_label.add_theme_color_override("font_color",VALUE)
+	MenuSkin.shadow(value_label)
 	value_label.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
 	value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
 	value_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -98,6 +107,8 @@ func configure(definition: Dictionary) -> void:
 		for direction in [-1,1]:
 			var arrow := Button.new(); arrow.text="‹" if direction<0 else "›"
 			arrow.custom_minimum_size=Vector2(30,30)
+			# The dot font's taller lines would push a 22 px arrow past the row's bounds.
+			arrow.add_theme_font_size_override("font_size",18)
 			arrow.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 			arrow.focus_mode=Control.FOCUS_NONE
 			for style in ["normal","hover","pressed","disabled"]:
@@ -114,12 +125,15 @@ func configure(definition: Dictionary) -> void:
 		label.add_theme_color_override("font_color",MenuSkin.MUTED)
 		label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	meter.add_child(range_min_label)
-	track=ProgressBar.new(); track.custom_minimum_size.y=4; track.max_value=1
+	track=ProgressBar.new(); track.custom_minimum_size.y=16; track.max_value=1
 	track.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	track.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	track.show_percentage=false; track.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	track.add_theme_stylebox_override("background",MenuSkin.box(Color("42464c"),Color.TRANSPARENT,0,0))
 	track.add_theme_stylebox_override("fill",MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0))
+	# The bar is drawn as segments; the ProgressBar keeps the value and the fill style.
+	track.self_modulate.a=0.0
+	segments=SegmentBar.new(); track.add_child(segments)
 	meter.add_child(track); meter.add_child(range_max_label)
 	unavailable_label=Label.new(); unavailable_label.add_theme_font_size_override("font_size",16)
 	unavailable_label.add_theme_color_override("font_color",MenuSkin.MUTED)
@@ -153,6 +167,7 @@ func refresh() -> void:
 	if meter!=null: meter.visible=track.visible
 	if track.visible:
 		track.add_theme_stylebox_override("fill",FILL_SELECTED if selected_now else FILL_IDLE)
+		segments.bright=selected_now
 		track.value=inverse_lerp(float(item.min),float(item.max),float(item.getter.call()))
 		if range_min_label!=null:
 			range_min_label.text=format_limit(float(item.min))
@@ -188,11 +203,14 @@ func set_selected(value: bool) -> void:
 	selected_now=value
 	refresh(); update_selection_style()
 
+func _ready() -> void:
+	update_selection_style()
+
 func update_selection_style() -> void:
-	var selected_style := MenuSkin.box(Color("3b3022"),MenuSkin.AMBER,2)
-	add_theme_stylebox_override("normal",selected_style if selected_now else MenuSkin.box(Color("23272d")))
-	add_theme_stylebox_override("hover",selected_style if selected_now else MenuSkin.box(Color("2d323a"),Color("65666a"),1))
-	add_theme_stylebox_override("focus",StyleBoxEmpty.new())
+	if panel==null:
+		panel=MenuSkin.pixel_panel("row"); add_child(panel); move_child(panel,0)
+		for style in ["normal","hover","pressed","disabled","focus"]: add_theme_stylebox_override(style,StyleBoxEmpty.new())
+	panel.material=MenuSkin.panel_material("selected" if selected_now else "row")
 
 func changed_from_default() -> bool:
 	if not item.has("default") or not item.has("getter"): return false
