@@ -2,9 +2,9 @@ extends Node
 ## Shows the menu on the TV itself, as consoles did: the tube switches to the
 ## menu like changing to another input, with a picture made for reading (RGB,
 ## a sharp beam, light scanlines and mask, little glass or curve), and the TV
-## eases in until the tube nearly fills the view. Closing the menu puts the
-## programme, your picture settings and the view back; nothing is saved from
-## the menu's picture. The preview strip, used to judge the picture against a
+## eases in until the tube nearly fills the view. The menu's picture is drawn
+## over your picture settings, not into them, so the menus read and change your
+## own; closing the menu puts the programme, your picture and the view back. The preview strip, used to judge the picture against a
 ## game, keeps the floating menu.
 const LEAN_SECONDS := 0.35
 ## The menu's tube: lighter than any picture preset, so small text stays clear.
@@ -35,6 +35,11 @@ func update(delta: float) -> void:
 	if want and not active: enter()
 	elif active and not want: leave()
 	elif active and host.world.picture.source_texture != menu_texture(): adopt()
+	# At startup the menu can open before the TV's warm-up, which waits for the
+	# menu to close: on the TV the menu then sat on a dark tube. Switch the TV on
+	# once nothing else is showing: checked every frame, because with glasses
+	# the setup screen hands over after the menu is already up.
+	if active and not host.power_on.started and not is_instance_valid(host.get("sbs_prompt")): host.power_on.begin()
 	if active and light_countdown >= 0:
 		light_countdown -= 1
 		if light_countdown < 0: light_from_menu()
@@ -54,21 +59,14 @@ func lean_position(base: Vector3) -> Vector3:
 func enter() -> void:
 	active = true
 	var picture: Node = host.world.picture
-	saved = {"mode": picture.mode, "values": picture.values.duplicate(), "keep_aspect": picture.keep_aspect,
-		"light": host.world.screen_light.source}
+	saved = {"light": host.world.screen_light.source}
 	light_countdown = LIGHT_DELAY
 	remember_programme()
-	picture.mode = 0
-	picture.keep_aspect = true
-	for key in BEAM: picture.values[key] = BEAM[key]
-	for key in ["width", "height"]: picture.values[key] = 1.0
-	for key in ["shift_x", "shift_y"]: picture.values[key] = 0.0
+	var drawn := BEAM.duplicate()
+	drawn.merge({"width": 1.0, "height": 1.0, "shift_x": 0.0, "shift_y": 0.0})
+	picture.override = {"mode": 0, "keep_aspect": true, "values": drawn}
 	show_menu()
 	tube(TUBE.scanlines, TUBE.mask, TUBE.glow, TUBE.glass, minf(float(host.screen_curvature), TUBE.curvature))
-	# At startup the menu opens before the TV's warm-up, which waited for the
-	# menu to close: on the TV, the menu sat on a dark tube. Switch it on now,
-	# so the menu appears with the tube.
-	if not host.power_on.started and not is_instance_valid(host.get("sbs_prompt")): host.power_on.begin()
 
 ## A game or video started while the menu was up: return to that instead.
 func adopt() -> void:
@@ -91,9 +89,7 @@ func show_menu() -> void:
 func leave() -> void:
 	active = false
 	var picture: Node = host.world.picture
-	picture.mode = saved.mode
-	picture.values = saved.values
-	picture.keep_aspect = saved.keep_aspect
+	picture.override = {}
 	# Choosing a game loads it (the loading card or its picture takes the tube)
 	# and closes the menu in the same frame, before update() can adopt it. Put
 	# the old programme back only if nothing has replaced the menu since:
@@ -110,6 +106,7 @@ func leave() -> void:
 ## One small snapshot is enough: the menu's colours hardly change between pages,
 ## and reading the menu back every frame would cost the Deck too much.
 func light_from_menu() -> void:
+	if DisplayServer.get_name() == "headless": return # no picture to read back
 	var image := menu_texture().get_image()
 	if image == null: return
 	image.resize(48, 36, Image.INTERPOLATE_BILINEAR)

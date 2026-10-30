@@ -35,7 +35,8 @@ func run() -> void:
 	await settle()
 	check(app.tv_menu.active and app.world.picture.source_texture == app.menu_view.get_texture(), "Opening the menu switches the tube to the menu")
 	check(not app.menu_overlays[0].visible and not app.menu_depth_view.dim_nodes[0].visible, "Nothing floats over the room and the room stays undimmed")
-	check(app.world.picture.mode == 0 and float(app.world.screen_material.get_shader_parameter("scanlines")) < scanlines, "The tube switches to a clean RGB picture with light scanlines")
+	check(app.world.picture.effective_mode() == 0 and float(app.world.screen_material.get_shader_parameter("scanlines")) < scanlines, "The tube switches to a clean RGB picture with light scanlines")
+	check(app.world.picture.mode == mode, "The menus still read your own connection, not the menu's picture")
 	check(app.world.television.position.z > place.z and is_equal_approx(app.world.television.position.x, 0.0), "The TV leans in towards you, centred (%.2f m from %.2f m)" % [-app.world.television.position.z, -place.z])
 	check(not app.world.picture.paused, "The tube keeps updating while it shows the menu")
 	# Changing a setting re-renders the page; its rows settle over a few frames.
@@ -56,9 +57,14 @@ func run() -> void:
 	check(app.menu.preview and not app.tv_menu.active and app.menu_overlays[0].visible and app.world.picture.source_texture == programme, "Adjust with preview floats the menu over the programme")
 	app.menu.toggle_preview(); await settle()
 	check(app.tv_menu.active, "Leaving the preview puts the menu back on the TV")
+	# A picture change made on the TV menu (the Quick settings Picture tile) is kept.
+	var brightness: float = app.world.picture.values.brightness
+	app.world.picture.set_value("brightness", brightness + 0.05)
 	app.close_settings()
 	await settle()
 	check(not app.tv_menu.active and app.world.picture.source_texture == programme, "Closing gives the tube back to the programme")
+	check(is_equal_approx(float(app.world.picture.values.brightness), brightness + 0.05), "A picture change made on the TV menu is kept when it closes")
+	app.world.picture.set_value("brightness", brightness)
 	check(is_equal_approx(float(app.world.screen_material.get_shader_parameter("scanlines")), scanlines) and app.world.picture.mode == mode, "Your scanlines and connection come back")
 	check(app.world.television.position.is_equal_approx(place), "The TV returns to its place")
 	check(app.world.screen_light.source == null or app.world.screen_light.source.get_width() != 48, "The room's light goes back to the programme")
@@ -72,6 +78,15 @@ func run() -> void:
 	await settle()
 	check(app.world.picture.source_texture == app.card_view.get_texture(), "A game chosen from the TV menu keeps its loading card, not the last game's frame")
 	app.end_loading(); await settle()
+	# With glasses, the setup screen is still up when the menu opens, and hands
+	# over afterwards: the TV must switch on then, with the menu already showing.
+	app.power_on.started = false
+	var setup := Control.new(); app.add_child(setup); app.sbs_prompt = setup
+	app.toggle_settings(); await settle()
+	check(app.tv_menu.active and not app.power_on.started, "While the glasses setup screen is up, the TV stays off")
+	setup.free(); await settle()
+	check(app.power_on.started, "Once the setup screen hands over, the TV switches on under the menu")
+	app.close_settings(); await settle()
 	var saved: ConfigFile = app.capture_settings()
 	check(saved.get_value("accessibility", "menu_on_tv") == true, "Menu on the TV is saved")
 	app.menu_on_tv = false
