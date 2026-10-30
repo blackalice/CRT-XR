@@ -47,6 +47,17 @@ func run():
 						if row.unavailable_label.visible: contents_ok=contents_ok and inside(row,row.unavailable_label)
 						for arrow in row.adjust_buttons: contents_ok=contents_ok and inside(row,arrow) and arrow.size.y<=36
 					check(contents_ok,"Text, sliders and small arrows stay inside their row: "+context)
+			page(10,0); m.select("controls.preview",false); await settle()
+			var performance_help_rect: Rect2 = m.help_frame.get_rect()
+			m.select("controls.separate_preview",false); await settle()
+			check(m.help_frame.get_rect()==performance_help_rect, "Emulation help does not shift the layout: %s large=%s" % [kind,large])
+			page(1,4); m.select("picture.connection",false); await settle()
+			var selector = m.selected_row()
+			for choice in range(selector.item.choices.size()):
+				selector.item.setter.call(choice); await settle()
+				selector = m.selected_row()
+				var label_width: float = selector.value_label.get_theme_font("font").get_string_size(selector.value_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, selector.value_label.get_theme_font_size("font_size")).x
+				check(selector.value_label.size.x - label_width <= 6.0 and inside(selector,selector.adjust_buttons[0]) and inside(selector,selector.adjust_buttons[1]), "Signal selector keeps arrows close to %s: %s large=%s" % [selector.value_label.text,kind,large])
 			page(2); m.select("music.game_volume",false); await settle()
 			await capture("audio-"+kind+("-large" if large else ""))
 			page(1,1); m.select("crt.scanlines",false); await capture("crt-"+kind+("-large" if large else ""))

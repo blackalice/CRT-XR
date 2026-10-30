@@ -10,6 +10,10 @@ func configure(definition: Dictionary) -> void:
 	detail_label.add_theme_font_size_override("font_size",18)
 	detail_label.add_theme_color_override("font_color",MenuSkin.MUTED)
 	detail_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	if item.get("game_grid",false):
+		detail_label.autowrap_mode=TextServer.AUTOWRAP_OFF
+		detail_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+		detail_label.max_lines_visible=1
 	detail_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	MenuSkin.shadow(detail_label)
 	detail_label.visible=not detail_label.text.is_empty()

@@ -15,7 +15,7 @@ frames. No preview snapshots are written to disk. This is the
 costs about twice the preview work. A saved boolean setting migrates to
 Off or 1 frame on first start.
 
-**Separate preview core** (Controls & XR, on by default) runs the preview in a
+**Separate preview core** (Emulation, on by default) runs the preview in a
 second, renamed copy of the core library that loads the playing core's state each
 frame. The playing core is never rewound, so its audio is byte-identical to running
 with no preview. Measured on the Steam Deck (1,500 frames), the preview costs
@@ -29,7 +29,7 @@ frame edge: an audible buzz on Game Boy/Color and Sega games. Measured on 22 Oct
 (1,500 frames, mean sample jump at frame edges ÷ jump inside frames; 1.0 is seamless):
 Snes9x 0.96 → 0.96, Nestopia 0.91 → 1.32, mGBA 0.66 → 1.49, NeoPop 0.98 → 3.12,
 Genesis Plus GX 0.97 → 6.01, Gambatte 1.08 → 18.0. For other cores the setting is kept
-but not applied, and Controls & XR explains why. A core that cannot serialize disables preview. A failed restoration pauses
+but not applied, and Emulation explains why. A core that cannot serialize disables preview. A failed restoration pauses
 emulation and reports that the game needs reloading with preview disabled.
 VSync, display refresh, shaders and graphics quality are unchanged by this update.
 

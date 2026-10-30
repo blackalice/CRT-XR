@@ -142,7 +142,7 @@ func run():
     check(m.direction==Vector2i.ZERO,"Focus loss clears held navigation")
     m.open_pause();m.select("home.exit",false);await button(JOY_BUTTON_A);await button(JOY_BUTTON_B)
     check(m.mode=="pause" and m.selected_id=="home.exit","Exit cancellation restores selection")
-    m.open_settings();page(6,0);m.select("system.reset",false);await button(JOY_BUTTON_A)
+    m.open_settings();page(6,1);m.select("system.reset",false);await button(JOY_BUTTON_A)
     check(m.mode=="confirm" and m.selected_id=="cancel","Reset-all confirmation defaults to Cancel")
     await button(JOY_BUTTON_B)
     check(m.mode=="settings" and m.selected_id=="system.reset","Cancelling reset restores selection")

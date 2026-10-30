@@ -49,10 +49,10 @@ func glasses_guide() -> String:
 			"2. On your normal monitor, choose the glasses' display and select Open glasses view.",
 			"## Head tracking",
 			"- VITURE: put the VITURE Windows SDK in a folder named sdk beside CRT-XR.exe.",
-			"- Other glasses: use a tool that sends OpenTrack, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo), then choose Controls & XR → Tracking source → OpenTrack.",
+			"- Other glasses: use a tool that sends OpenTrack, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo), then choose View → Tracking → Tracking source → OpenTrack.",
 			"## While playing",
 			"R3 | R :: Recentre the view",
-			"> Turning the wrong way? Invert that axis in Controls & XR.",
+			"> Turning the wrong way? Invert that axis in View → Tracking.",
 			"!! Fixed view",
 			"There's no tracking yet, so the TV stays still. It's also how CRT XR plays on a normal screen."])
 	return "\n".join([
@@ -68,11 +68,11 @@ func glasses_guide() -> String:
 		"2. Press the glasses' SBS button to go back to 2D. CRT XR closes when they do.",
 		"## While playing",
 		"R3 :: Recentre the view",
-		"> Turning the wrong way? Invert that axis in Controls & XR.",
+		"> Turning the wrong way? Invert that axis in View → Tracking.",
 		"## Your glasses",
 		"CRT XR recognises VITURE, XREAL, Rokid and RayNeo displays. Only the VITURE Pro 2 has been tested.",
 		"!! Fixed view",
-		"There's no tracking yet, so the TV stays still. Check XR Gaming sees the glasses, then use Controls & XR → Connect glasses."])
+		"There's no tracking yet, so the TV stays still. Check XR Gaming sees the glasses, then use View → Tracking → Connect glasses."])
 
 func state_action(saving: bool) -> void:
 	if not saving:

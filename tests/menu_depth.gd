@@ -76,8 +76,8 @@ func run() -> void:
 	var saved: ConfigFile = app.capture_settings()
 	check(saved.get_value("accessibility", "menu_depth") == true and saved.get_value("accessibility", "menu_haptics") == true and saved.get_value("accessibility", "menu_curve") == false, "Menu depth, curve and controller vibration are saved")
 	var rows: Array = []
-	for page in app.menu.catalog.pages(6): rows.append_array(page.rows.map(func(row): return row.id))
-	check("access.depth" in rows and not "access.curve" in rows and "access.haptics" in rows and "access.haptic_strength" in rows, "Accessibility offers Menu depth, Controller vibration and its strength; the flat 16-bit menu has no curve option")
+	for page in app.menu.catalog.pages(9): rows.append_array(page.rows.map(func(row): return row.id))
+	check("access.depth" in rows and not "access.curve" in rows and "access.haptics" in rows and "access.haptic_strength" in rows, "Menu settings offer Menu depth, Controller vibration and its strength; the flat 16-bit menu has no curve option")
 	check(is_equal_approx(float(saved.get_value("accessibility", "haptic_strength")), 0.8), "Vibration strength is saved (80% by default)")
 	print("MENU DEPTH CHECKS COMPLETE: %d failures" % failures)
 	quit(1 if failures else 0)

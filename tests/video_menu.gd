@@ -134,7 +134,7 @@ func run() -> void:
 	menu.switch_category(1)
 	check(menu.category == 8, "Next category from Room is Videos")
 	menu.switch_category(1)
-	check(menu.category == 4, "and then Controls & XR")
+	check(menu.category == 4, "and then Controls")
 	menu.games.open_library()
 	if OS.get_name() == "Windows":
 		var setup: Array = menu.videos.video_setup_items("VIDEOS · OPTIONAL")

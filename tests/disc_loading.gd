@@ -45,6 +45,7 @@ func run() -> void:
 	check(not app.menu.visible, "Choosing a zipped disc goes back to the room")
 	check(app.loading_path == zipped and app.loading_screen.visible and not app.pattern.visible, "The TV shows the loading card, not the test signal")
 	check(app.world.picture.source_texture == app.card_view.get_texture(), "The card is the picture on the tube")
+	check(app.card_words.visible and not app.pattern_words.visible, "Loading shows only the loading text")
 	for i in range(600):
 		if app.emulator.loaded or app.loading_path.is_empty(): break
 		await process_frame
@@ -71,6 +72,7 @@ func run() -> void:
 	app.show_loading(zipped)
 	app.emulator.stop()
 	check(app.loading_path.is_empty() and app.pattern.visible, "Stopping the game takes the card down for the test signal")
+	check(app.pattern_words.visible and not app.card_words.visible and app.card_view.render_target_update_mode == SubViewport.UPDATE_ALWAYS and app.world.picture.source_texture == app.card_view.get_texture(), "Idle signal uses the sharp text overlay and keeps updating")
 	app.show_loading(zipped)
 	app.loading_started -= app.LOADING_TIMEOUT_MSEC + 1
 	check(app.picture_started(black), "A game still black after the timeout is shown anyway")

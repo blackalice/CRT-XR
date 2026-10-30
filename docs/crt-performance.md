@@ -148,7 +148,7 @@ Changes:
   Preview cost per frame (Linux build, same games): SNES 1.29→1.22 ms,
   GB 0.13→0.09, Mega Drive 0.55→0.46, GBA 0.75→0.68, NGPC 0.39→0.36.
 * Sustained late frames with the input preview on suspend the preview for that
-  game (Controls & XR explains why) instead of dropping game frames.
+  game (Emulation explains why) instead of dropping game frames.
 
 Not changed: a worker thread for emulation. The core, preview and upload must
 finish before the frame renders, and Compatibility submits GL on the main

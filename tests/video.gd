@@ -222,7 +222,7 @@ func run() -> void:
 	check(app.world.picture.source_texture == app.video.output and app.video.texture != null and not app.pattern.visible,
 		"The TV shows the second video, not the test signal")
 	app.video.stop()
-	check(app.pattern.visible and app.world.picture.source_texture == app.signal_view.get_texture(), "Stopping returns the TV to the test signal")
+	check(app.pattern.visible and app.world.picture.source_texture == app.card_view.get_texture() and app.pattern_words.visible, "Stopping returns the TV to the test signal")
 	app._process(0.0)
 	app.world._update_prop_clocks(1.0)
 	var now := Time.get_time_dict_from_system()

@@ -18,7 +18,7 @@ X :: Preview the picture"""
 const WEBSITE := "stua.rtfoy.co.uk"
 const PROJECT_PAGE := "github.com/blackalice/CRT-XR"
 const TROUBLESHOOTING_GUIDE := """!! Tracking unavailable
-Retry the glasses in Controls & XR → Tracking, or choose Fixed view.
+Retry the glasses in View → Tracking, or choose Fixed view.
 
 !! Double image
 Match the glasses' SBS mode with View → Display.
@@ -148,6 +148,47 @@ func playback_rows() -> Array:
 			"help":"Decodes on the GPU (VA-API on Steam Deck), leaving the CPU for the room and tracking. Falls back to software by itself when a file or GPU cannot use it. Applies from the next video."},
 		action("video.folder","Video folder",func(): menu.videos.open_video_folder_picker(),"Choose where CRT XR looks for videos. Subfolders are included.",false,h.video_dir)]
 
+## Read-only information uses the same live game and BIOS detection as the emulator.
+func emulation_game_info() -> String:
+	var em = host.emulator
+	if not em.loaded: return "!! No game loaded\nStart a game to see its console, emulator core and game frame rate."
+	var spec: Dictionary = em.Registry.SYSTEMS[em.system_id]
+	return "## Current game\nGame := %s\nConsole := %s\nEmulator core := %s\nGame frame rate := %.2f fps" % [em.rom_path.get_file(), spec.name, em.core_identity, em.fps]
+
+func emulation_bios_info() -> String:
+	var registry = host.emulator.Registry
+	var lines: Array[String] = ["BIOS files are detected by filename. Detection does not verify their contents."]
+	for id in ["segacd", "atarilynx", "psx"]:
+		var spec: Dictionary = registry.SYSTEMS[id]
+		var required: bool = spec.has("bios_any")
+		var names: Array = spec.get("bios_any", spec.get("bios_optional", []))
+		var found: Array[String] = []
+		for filename in names:
+			if not registry.bios_file(filename).is_empty(): found.append(filename)
+		var status := ("Required" if required else "Optional") + (" · none found" if found.is_empty() else " · found: " + ", ".join(found))
+		lines.append("!! " + spec.name)
+		lines.append(status + (". Sega CD needs the BIOS matching the disc region." if id == "segacd" else (". A real BIOS can improve compatibility." if id == "psx" else ".")))
+		if found.is_empty(): lines.append("Expected: " + ", ".join(names))
+	lines.append("## Searched folders")
+	for folder in registry.bios_sources(): lines.append("- " + folder)
+	return "\n".join(lines)
+
+func tracking_rows() -> Array:
+	var h = host
+	var unchanged := func(): pass
+	var glasses_source: String = "VITURE glasses" if OS.get_name() == "Windows" else "XR Gaming"
+	var tracking: Array = [
+		{"id":"tracking.source","label":"Tracking source","kind":"choice","choices":[glasses_source,"OpenTrack"],"default":0,
+			"getter":func(): return 1 if h.tracking_source == "opentrack" else 0,"setter":func(value): h.set_tracking_source("opentrack" if int(value) == 1 else "glasses"); menu.refresh(),
+			"help":"OpenTrack lets other glasses track: run a tool that sends OpenTrack UDP to 127.0.0.1 port 4242, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo). If a direction is reversed, invert that axis below."},
+		action("tracking.real","Connect glasses",func(): h.use_tracking(true); menu.refresh(),"Connects or retries the glasses' tracking driver."),
+		action("tracking.fixed","Use fixed view",func(): h.use_tracking(false); h.recenter(); menu.refresh(),"Uses a steady view. On desktop, mouse/keyboard simulation remains available."),
+		toggle("tracking.diagnostics","Metrics overlay",h,"metrics_visible",false,"Shows frame rate, pose and tracking details. Off by default for a clean view. F1 also toggles it.",unchanged,false)]
+	for axis in ["yaw","pitch","roll"]:
+		tracking.append(toggle("tracking."+axis,"Invert "+axis,h.provider,"invert_"+axis,false,"Use if movement feels reversed.",unchanged,false))
+
+	return tracking
+
 func pages(category: int) -> Array:
 	var h = host
 	var w = h.world
@@ -164,7 +205,17 @@ func pages(category: int) -> Array:
 				page("Display",[
 				toggle("view.stereo","Side-by-side stereo",h,"stereo",false,"Use with the glasses' physical SBS mode. This does not switch the glasses themselves.",func(): h.set_stereo(h.stereo)),
 				action("view.fullscreen","Toggle fullscreen",h.toggle_fullscreen,"Switch the local application window between fullscreen and windowed mode."),
-				property_row("edge_fade","Soft view edges",0,.2,.005,"percent","Fades the edges of the glasses' viewing window into black.")])]
+				property_row("edge_fade","Soft view edges",0,.2,.005,"percent","Fades the edges of the glasses' viewing window into black.")]),
+				page("Tracking",tracking_rows()),page("Advanced calibration",[
+				property_row("ipd","IPD (m)",0,.08,.001,"mm","Virtual eye separation; match your interpupillary distance."),
+				property_row("convergence","Convergence (m)",1,10,.1,"m","Depth at which the stereo views have zero horizontal disparity."),
+				property_row("vertical_fov","Vertical field of view",18,70,.5,"degrees","Advanced camera calibration. The glasses normally use 24 degrees."),
+				property_row("smoothing","Smoothing (seconds)",0,.15,.01,"ms","Tracking smoothing; higher values can feel less immediate."),
+				property_row("motion_predict","Motion prediction (seconds)",0,.08,.005,"ms","Optional lead for recent head movement. Recommended default: 0 ms for raw driver timing. Increase only if tracking feels delayed; too much can feel oversensitive."),
+				unavailable(action("system.signal","Stop and show test signal",func():
+					if h.video.loaded: h.stop_video()
+					if h.emulator.loaded: h.emulator.stop()
+					menu.open_pause(),"Stops the game or video and shows the calibration pattern.",not h.emulator.loaded and not h.video.loaded),"Nothing is playing.")])]
 		1:
 			var crt: Array = []
 			for field in [["scanlines","Scanlines",.7,.05],["phosphor_mask","Phosphor mask",.5,.05],["phosphor_glow","Phosphor glow",.4,.02],["glass_reflections","Glass reflections",.4,.02],["screen_curvature","Screen curvature (0 = flat)",1,.05]]:
@@ -243,38 +294,25 @@ func pages(category: int) -> Array:
 			return [page("Presets",presets),page("Lighting",groups.Lighting),page("Materials",groups.Materials),page("Props",props),page("Sound",sound),page("Placement",groups["Placement"])]
 
 		4:
-			var glasses_source: String = "VITURE glasses" if OS.get_name() == "Windows" else "XR Gaming"
-			var tracking: Array = [
-				{"id":"tracking.source","label":"Tracking source","kind":"choice","choices":[glasses_source,"OpenTrack"],"default":0,
-					"getter":func(): return 1 if h.tracking_source == "opentrack" else 0,"setter":func(value): h.set_tracking_source("opentrack" if int(value) == 1 else "glasses"); menu.refresh(),
-					"help":"OpenTrack lets other glasses track: run a tool that sends OpenTrack UDP to 127.0.0.1 port 4242, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo). If a direction is reversed, invert that axis below."},
-				action("tracking.real","Connect glasses",func(): h.use_tracking(true); menu.refresh(),"Connects or retries the glasses' tracking driver."),
-				action("tracking.fixed","Use fixed view",func(): h.use_tracking(false); h.recenter(); menu.refresh(),"Uses a steady view. On desktop, mouse/keyboard simulation remains available."),
-				toggle("tracking.diagnostics","Metrics overlay",h,"metrics_visible",false,"Shows frame rate, pose and tracking details. Off by default for a clean view. F1 also toggles it.",unchanged,false)]
-			for axis in ["yaw","pitch","roll"]:
-				tracking.append(toggle("tracking."+axis,"Invert "+axis,h.provider,"invert_"+axis,false,"Use if movement feels reversed.",unchanged,false))
+			return [page("Game controls",menu.controls.rows()),page("Controller",[
+				toggle("controls.distance","Right stick adjusts distance",h,"right_stick_distance",true,"Stick up brings the TV closer; stick down moves it farther away.",unchanged,false),
+				property_row("distance_speed","Distance adjustment speed",.2,2,.1,"m/s","Speed of the right-stick distance control, in metres per second.",false),
+				 ])]
+
+		10:
 			var input_delay: Dictionary = {"id":"controls.preview","label":"Reduce input delay","kind":"choice","choices":["Off","1 frame","2 frames"],"default":1,"visual":false,"getter":func(): return h.emulator.run_ahead,"setter":func(value): h.emulator.run_ahead=value,"help":"Runs extra presentation-only game frames from a snapshot that is then restored. Two frames costs about twice the preview work."}
 			if h.emulator.loaded and not h.emulator.preview_possible():
 				input_delay.disabled=true
 				var console: String=h.emulator.Registry.SYSTEMS[h.emulator.system_id].name
 				if h.emulator.preview_suspended: input_delay.disabled_reason="Paused for this game: it needs the full frame time. Reload the game to try again."
+				elif not h.emulator.Registry.SYSTEMS[h.emulator.system_id].get("preview", true): input_delay.disabled_reason="Input preview is unavailable for %s." % console
 				elif h.emulator.separate_preview: input_delay.disabled_reason="The separate preview core could not start for %s." % console
 				else: input_delay.disabled_reason="%s needs Separate preview core: its sound buzzes with a same-core preview." % console
-			var separate_preview := toggle("controls.separate_preview","Separate preview core",h.emulator,"separate_preview",true,"Runs the input preview in a second copy of the emulator, so game sound is never rewound. Works on every console; uses a little more memory. Off limits the preview to SNES.",func(): h.emulator.set_separate_preview(h.emulator.separate_preview); menu.refresh(),false)
-			return [page("Game controls",menu.controls.rows()),page("Controller",[
-				toggle("controls.distance","Right stick adjusts distance",h,"right_stick_distance",true,"Stick up brings the TV closer; stick down moves it farther away.",unchanged,false),
-				property_row("distance_speed","Distance adjustment speed",.2,2,.1,"m/s","Speed of the right-stick distance control, in metres per second.",false),
-				input_delay,separate_preview]),
-				page("Tracking",tracking),page("Advanced calibration",[
-				property_row("ipd","IPD (m)",0,.08,.001,"mm","Virtual eye separation; match your interpupillary distance."),
-				property_row("convergence","Convergence (m)",1,10,.1,"m","Depth at which the stereo views have zero horizontal disparity."),
-				property_row("vertical_fov","Vertical field of view",18,70,.5,"degrees","Advanced camera calibration. The glasses normally use 24 degrees."),
-				property_row("smoothing","Smoothing (seconds)",0,.15,.01,"ms","Tracking smoothing; higher values can feel less immediate."),
-				property_row("motion_predict","Motion prediction (seconds)",0,.08,.005,"ms","Optional lead for recent head movement. Recommended default: 0 ms for raw driver timing. Increase only if tracking feels delayed; too much can feel oversensitive."),
-				unavailable(action("system.signal","Stop and show test signal",func():
-					if h.video.loaded: h.stop_video()
-					if h.emulator.loaded: h.emulator.stop()
-					menu.open_pause(),"Stops the game or video and shows the calibration pattern.",not h.emulator.loaded and not h.video.loaded),"Nothing is playing.")])]
+			var separate_preview := toggle("controls.separate_preview","Separate preview core",h.emulator,"separate_preview",true,"Runs preview in a second core to keep audio clean. Uses more memory. PS1/N64: unavailable; off: SNES only.",func(): h.emulator.set_separate_preview(h.emulator.separate_preview); menu.refresh(),false)
+			return [page("Performance",[input_delay,separate_preview]),page("Info",[
+				action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate."),
+				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")])]
+
 		5:
 			var slots: Array = [action("slot.showcase","Deck Showcase",h.load_showcase_setup,"The tuned Deck picture, placement, dark room and TV audio. Display mode, tracking and per-game settings stay as they are; you can undo it.",false,"Built-in")]
 			for i in range(3):
@@ -296,13 +334,21 @@ func pages(category: int) -> Array:
 				action("system.credits","Credits & licences",func(): menu.open_help("Credits & licences",FileAccess.get_file_as_string("res://THIRD_PARTY.md")),"Godot, libretro, and the artists and developers behind CRT XR."),
 				action("system.diagnostics","Copy diagnostics",func():
 					DisplayServer.clipboard_set("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))+" | "+OS.get_name()+" | Godot "+str(Engine.get_version_info().string)+" | "+DisplayServer.get_name()); menu.notify("Version and platform details copied; no ROM or music paths included."),"Copies version/platform information for a bug report."),
-				action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")]),page("Accessibility",[
+				 ]),page("Settings management",[
+				action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")])]
+		9:
+			return [page("Accessibility",[
 				toggle("access.large","Larger menu text",h,"menu_large_text",false,"Larger text and taller rows; lists scroll to keep focus visible.",menu.apply_accessibility,false),
 				toggle("access.contrast","Stronger menu contrast",h,"menu_high_contrast",false,"Brighter text and clearer borders on a dark background.",menu.apply_accessibility,false),
 				toggle("access.motion","Reduced animation",h,"menu_reduced_motion",false,"Instant focus changes and no TV warm-up animation.",menu.apply_accessibility,false),
-				toggle("access.sounds","Menu sounds",h,"menu_sounds",false,"Quiet feedback for focus and confirmation.",unchanged,false),
+				]),page("Layout & placement",[
+				{"id":"access.game_columns","label":"Game list columns","kind":"choice","choices":["1 column", "2 columns", "3 columns"],"default":0,"visual":false,
+					"getter":func(): return h.game_list_columns - 1,"setter":func(value): h.game_list_columns=int(value)+1,
+					"help":"Choose the layout for console, recent and favourite game lists. Left and right move between games in multi-column views."},
 				toggle("access.tv","Menu on the TV",h,"menu_on_tv",true,"Shows the menu on the TV. Adjust with preview keeps it floating over the game.",func(): menu.refresh(),false),
-				toggle("access.depth","Menu depth",h,"menu_depth",true,"In side-by-side 3D the menu floats in front of the TV as one flat panel and the room dims behind. Off gives a flat menu.",func(): menu.refresh(),false),
+				toggle("access.depth","Menu depth",h,"menu_depth",true,"When the menu floats, side-by-side 3D places it in front of the TV and dims the room. Off gives a flat menu. Has no effect while the menu is on the TV.",func(): menu.refresh(),false),
+				]),page("Feedback",[
+				toggle("access.sounds","Menu sounds",h,"menu_sounds",false,"Quiet feedback for focus and confirmation.",unchanged,false),
 				toggle("access.haptics","Controller vibration",h,"menu_haptics",false,"A light tick as the selection moves and a firmer one when you confirm.",func(): menu.refresh(),false),
 				unavailable(number("access.haptic_strength","Vibration strength",h,"haptic_strength",0.1,1.0,0.1,0.8,"percent","How strong the ticks feel. The Steam Deck passes on only part of it, so it may need to be higher there.",func(): h.menu_vibrate(1.0, 0.07),false).merged({"disabled":not h.menu_haptics},true),"Turn on Controller vibration first.")])]
 		8:
@@ -341,21 +387,20 @@ func pages(category: int) -> Array:
 					audio_rows[index].disabled_reason="Available with TV speakers or TV in room mode." if index==2 else "Available in TV in room mode."
 					audio_rows[index].help += " " + audio_rows[index].disabled_reason
 			audio_rows.append(action("audio.preview","Preview sound",audio.preview_sample,"Plays a short sample through the selected sound mode while the game stays paused."))
-			audio_rows.append(toggle("atmosphere.power_on","TV power-on effect",h.power_on,"enabled",true,"Brief tube warm-up and switch sound when first revealed.",func(): h.power_on.apply(); menu.refresh(),false))
-			audio_rows.append(toggle("atmosphere.channel_change","Channel change effect",h.tv_effects,"channel_change",true,"A burst of static and a rolling picture when a game or video starts, like changing channel.",menu.refresh,false))
-			audio_rows.append(toggle("atmosphere.power_off","Power-off effect",h.tv_effects,"power_off_effect",true,"The picture shrinks to a fading dot as CRT XR closes.",menu.refresh,false))
+			var effect_rows: Array = []
+			effect_rows.append(toggle("atmosphere.power_on","TV power-on effect",h.power_on,"enabled",true,"Brief tube warm-up and switch sound when first revealed.",func(): h.power_on.apply(); menu.refresh(),false))
+			effect_rows.append(toggle("atmosphere.channel_change","Channel change effect",h.tv_effects,"channel_change",true,"A burst of static and a rolling picture when a game or video starts, like changing channel.",menu.refresh,false))
+			effect_rows.append(toggle("atmosphere.power_off","Power-off effect",h.tv_effects,"power_off_effect",true,"The picture shrinks to a fading dot as CRT XR closes.",menu.refresh,false))
 			var volume=number("atmosphere.power_sound","TV effect sounds",h.power_on,"sound_level",0,1,.05,.60,"percent","Volume of the switch, static, degauss and power-off sounds. Zero keeps them silent.",h.power_on.apply,false)
-			if not (h.power_on.enabled or h.tv_effects.channel_change or h.tv_effects.power_off_effect):
-				volume.disabled=true; volume.disabled_reason="Turn on a TV effect first."; volume.help += " " + volume.disabled_reason
-			audio_rows.append(volume)
-			audio_rows.append(action("atmosphere.preview","Preview TV power-on",h.preview_power_on,"Closes settings and replays the picture and sound effect.",not h.power_on.enabled))
+			effect_rows.append(volume)
+			effect_rows.append(action("atmosphere.preview","Preview TV power-on",h.preview_power_on,"Closes settings and replays the picture and sound effect.",not h.power_on.enabled))
 			var music = h.music
 			audio_rows.push_front(number("music.game_volume","Game volume",music,"game_volume",0,1,.05,1,"percent","Independent of music volume. Game sound pauses with emulation.",music.apply,false))
 			var duck_toggle=toggle("music.duck_game","Dip game during music",music,"duck_game",false,"Automatically lowers game audio while music is audible; restores it when paused or stopped.",func(): music.apply(); menu.refresh(),false)
 			var duck_amount=number("music.duck_amount","Game volume dip",music,"duck_amount",0,1,.05,.5,"percent","How much to reduce the chosen game volume while music plays. Fades smoothly.",music.apply,false)
 			if not music.duck_game:
 				duck_amount.disabled=true; duck_amount.disabled_reason="Enable Dip game during music first."
-			return [page("TV sound",audio_rows),page("Music balance",[duck_toggle,duck_amount]),page("Music & radio",[
+			return [page("TV sound",audio_rows),page("Balance",[duck_toggle,duck_amount]),page("Music",[
 				action("music.file","Choose music / album",menu.music.open_music_browser,"Browse local storage or an SD card. Music keeps playing in menus."),
 				unavailable(action("music.replay","Play last MP3",func(): music.play_last_file(); menu.refresh(); menu.notify(music.status),"Continues the saved track and position without changing the game.",music.last_file.is_empty()),"No MP3 has been played yet."),
 				action("music.url","Radio stream URL",menu.music.edit_radio_url,"Enter a direct MP3 stream URL. Station webpages, AAC and HLS are not supported.",false,"Edit"),
@@ -365,5 +410,5 @@ func pages(category: int) -> Array:
 				toggle("music.loop","Repeat album",music,"loop",true,"Repeat the folder after its last track. Off stops at the album end.",music.apply,false)]),page("Music space",[
 				number("music.reverb","Music room reverb",music,"reverb",0,.3,.01,.12,"percent","Short, subtle reflections from the room; zero disables the effect.",music.apply,false),
 				number("music.directional","Music direction",music,"directional",0,1,.05,.8,"percent","Sound stays beside the TV as you turn your head. Zero keeps normal stereo.",music.apply,false),
-				number("music.side","Radio position",music,"side",-2,2,.1,-1.1,"m","Position left or right of the TV, independent of the game speakers.",music.apply,false)])]
+				number("music.side","Radio position",music,"side",-2,2,.1,-1.1,"m","Position left or right of the TV, independent of the game speakers.",music.apply,false)]),page("TV effects",effect_rows)]
 	return []

@@ -13,13 +13,15 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 | Category | Subsections |
 |---|---|
 | Quick settings | TV distance; height; recenter; picture preset; game volume; music volume |
-| View | Placement; Display |
+| View | Placement; Display; Tracking; Advanced calibration |
 | Picture | Presets; CRT; Screen fit; Colour; Signal |
-| Audio | TV sound; Music balance; Music & radio; Music space |
+| Audio | TV sound; Balance; Music; Music space; TV effects |
 | Room | Presets; Lighting; Materials; Props; Sound; Placement |
-| Controls & XR | Controller; Tracking; Advanced calibration |
+| Controls | Game controls; Controller |
+| Emulation | Performance; Info (current game and BIOS status) |
 | Saved setups | Setup slots; Per-game picture |
-| About & Help | About, controls, device status, troubleshooting, credits, diagnostics and reset; Accessibility |
+| Menu | Accessibility; Layout & placement; Feedback |
+| About & Help | About, controls, device status, troubleshooting, credits and diagnostics; Settings management |
 
 Up/down selects, left/right adjusts immediately, A toggles switches or opens actions,
 and Y resets only the selected option. There is no edit lock. L1/R1 changes category;
@@ -64,8 +66,7 @@ selects Cancel first. Older saves remain readable and can lack thumbnails. Conti
 shows the automatic resume preview. Preview capture reuses the presented CPU frame.
 
 About & Help includes scrollable controls, troubleshooting, device status, full credits
-and diagnostics. Device status stays separate from the selected action’s help. Accessibility
-provides larger text, stronger contrast, reduced animation and optional quiet menu sounds.
+and diagnostics. Device status stays separate from the selected action’s help. Menu → Accessibility provides larger text, stronger contrast and reduced animation. Menu layout and placement, sounds and vibration have their own sections.
 Focus transitions only change colour; the UI remains a sharp shared 2D texture.
 Controller shortcuts use drawn button icons and follow the last input method.
 
@@ -135,7 +136,7 @@ Without a game to autostart, launch selects Continue when the last cartridge is 
 last-game path or SD folder keeps its saved location and explains how to reconnect
 or choose another folder. A ROM load failure returns to the chooser with details.
 
-Startup guidance reports unavailable tracking. **Controls & XR → Tracking** offers
+Startup guidance reports unavailable tracking. **View → Tracking** offers
 **Connect glasses** or **Use fixed view**. During a tracking drop, the existing tracking implementation
 holds the last view; a notice directs you to recovery. Reconnection retains its
 existing continuity behaviour. The application does not infer USB detection just
@@ -201,6 +202,6 @@ The default setup was captured from the user's saved Steam Deck preferences on 1
 
 **Picture → Presets → Deck Showcase (PAL)** restores the picture, glass and curvature while retaining screen fitting, room and view. **Saved setups → Setup slots → Deck Showcase** restores the full built-in view/room/picture/audio setup and hides metrics, with Undo available. It occupies none of the three writable setup slots and retains the current display mode, platform field of view, tracking axes and per-game preference. Other CRT/composite presets now use stronger scanline/mask/glow settings and composite movement; Clean source remains the comparison reference.
 
-Existing saved settings and per-game overrides are retained. New installs and explicit defaults resets use Showcase. Metrics is a persistent toggle under **Controls & XR → Tracking → Metrics overlay**; F1 also toggles it. Closing the menu saves the choice. Native FOV remains platform-specific (24° for glasses tracking, 50° for the desktop simulation), rather than forcing the captured glasses calibration into desktop previews.
+Existing saved settings and per-game overrides are retained. New installs and explicit defaults resets use Showcase. Metrics is a persistent toggle under **View → Tracking → Metrics overlay**; F1 also toggles it. Closing the menu saves the choice. Native FOV remains platform-specific (24° for glasses tracking, 50° for the desktop simulation), rather than forcing the captured glasses calibration into desktop previews.
 
 `tests/showcase_defaults.gd` compares fresh settings against the captured reference, checks metrics persistence, full-setup undo, per-option/reset-all consistency, stronger presets and preservation of fitting/room when applying a picture-only preset.

@@ -53,6 +53,7 @@ var rooms = preload("res://scripts/ui/room_presets.gd").new()
 ## Box art from the player's own scrapes, for game rows and Continue.
 var box_art: Node
 var menu_large_text := false
+var game_list_columns := 1
 var menu_high_contrast := false
 var menu_reduced_motion := false
 var menu_sounds := false
@@ -83,6 +84,8 @@ var signal_view: SubViewport
 ## with hard pixels, and its words sharp on top (loading_text.gd), 720 lines
 ## like the menu.
 var card_view: SubViewport
+var card_words: Node2D
+var pattern_words: Node2D
 var was_paused_before_menu := false
 var provider: TrackingProvider = Simulated.new()
 ## "glasses" (XR Gaming on Linux, VITURE SDK on Windows) or "opentrack" (UDP 4242).
@@ -298,7 +301,7 @@ func start_application() -> void:
 	card_view = SubViewport.new()
 	card_view.size = Vector2i(768, 720)
 	card_view.disable_3d = true
-	card_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	card_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 	add_child(card_view)
 	var card_pixels := TextureRect.new()
 	card_pixels.texture = signal_view.get_texture()
@@ -307,9 +310,12 @@ func start_application() -> void:
 	card_pixels.stretch_mode = TextureRect.STRETCH_SCALE
 	card_pixels.size = Vector2(card_view.size)
 	card_view.add_child(card_pixels)
-	var card_words := preload("res://scripts/content/loading_text.gd").new()
+	card_words = preload("res://scripts/content/loading_text.gd").new()
 	card_words.card = loading_screen
+	card_words.visible = false
 	card_view.add_child(card_words)
+	pattern_words = preload("res://scripts/content/test_pattern_text.gd").new()
+	card_view.add_child(pattern_words)
 	row = HBoxContainer.new()
 	row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	row.add_theme_constant_override("separation", 0)
@@ -334,7 +340,7 @@ func start_application() -> void:
 		if i == 0:
 			world = CRTWorld.new()
 			view.add_child(world)
-			world.build(signal_view.get_texture())
+			world.build(card_view.get_texture())
 		else:
 			view.world_3d = views[0].world_3d
 		var camera := Camera3D.new()
@@ -522,6 +528,7 @@ func apply_settings(config: ConfigFile) -> void:
 	room_preset_id=str(config.get_value("menu","room_preset_id",""))
 	room_preset_signature=str(config.get_value("menu","room_preset_signature",""))
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,bool(config.get_value("accessibility",key,false)))
+	game_list_columns = clampi(int(config.get_value("accessibility", "game_list_columns", 1)), 1, 3)
 	menu_depth = bool(config.get_value("accessibility","menu_depth",true))
 	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
 	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
@@ -930,6 +937,9 @@ func show_programme(active: bool, rate: float, aspect: float) -> void:
 	pattern.visible = not active and not loading
 	pattern.set_process(pattern.visible)
 	signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active and not loading else SubViewport.UPDATE_ALWAYS
+	card_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active and not loading else SubViewport.UPDATE_ALWAYS
+	pattern_words.visible = not active and not loading
+	card_words.visible = loading
 	# Switching programmes is a channel change; the first is the power-on instead.
 	# A game behind the loading card is the same channel.
 	if active and not loading and power_on.progress >= 1.0: tv_effects.play("channel")
@@ -942,7 +952,7 @@ func show_programme(active: bool, rate: float, aspect: float) -> void:
 		world.picture.source_aspect = 4.0 / 3.0
 		world.screen_light.set_image(null)
 		# A disc's card has its own picture (card_view); the test signal is underneath it.
-		world.picture.set_source(card_view.get_texture() if loading else signal_view.get_texture())
+		world.picture.set_source(card_view.get_texture())
 
 ## Puts the loading card for a disc game on the TV, with progress 0..1 while it
 ## unpacks or negative while it boots (which restarts the black-screen timeout).
@@ -955,6 +965,8 @@ func show_loading(path: String, progress := -1.0) -> void:
 	if starting: loading_screen.elapsed = 0.0
 	loading_screen.visible = true
 	loading_screen.set_process(true)
+	pattern_words.visible = false
+	card_words.visible = true
 	pattern.visible = false
 	pattern.set_process(false)
 	signal_view.render_target_update_mode = SubViewport.UPDATE_ALWAYS
@@ -974,6 +986,7 @@ func end_loading() -> void:
 	loading_path = ""
 	loading_screen.visible = false
 	loading_screen.set_process(false)
+	card_words.visible = false
 	card_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	if emulator.loaded and emulator.texture != null:
 		signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
@@ -1299,6 +1312,7 @@ func reset_all_options() -> void:
 	emulator.tv_audio.reset_defaults()
 	music.reset_defaults()
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,false)
+	game_list_columns = 1
 	menu_depth = true
 	menu_on_tv = true
 	haptic_strength = 0.8
@@ -1432,7 +1446,7 @@ func capture_settings() -> ConfigFile:
 	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_depth","menu_on_tv","menu_curve","haptic_strength"]: config.set_value("accessibility",key,get(key))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_depth","menu_on_tv","menu_curve","haptic_strength","game_list_columns"]: config.set_value("accessibility",key,get(key))
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
 	config.set_value("emulation", "separate_preview", emulator.separate_preview)
 	config.set_value("view", "right_stick_distance", right_stick_distance)

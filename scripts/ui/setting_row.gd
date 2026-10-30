@@ -106,12 +106,10 @@ func configure(definition: Dictionary) -> void:
 	for input in item.get("value_inputs", []): value_group.add_child(InputGlyph.new(input))
 	# A small mark in place of a value, such as the heart on a favourite game.
 	if item.has("value_icon"): value_group.add_child(RowIcon.new(str(item.value_icon), VALUE))
-	if item.kind=="number":
-		value_label.custom_minimum_size.x=106
+	if item.kind in ["number", "choice"]:
 		value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	if item.kind=="choice":
 		value_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-		value_label.custom_minimum_size.x=180
 	# Under a stacked tile's name, the value keeps to one line across the tile.
 	if item.get("stacked",false):
 		value_label.custom_minimum_size.x=0
@@ -166,7 +164,7 @@ func sync_content_height() -> void:
 	# Read the containers' natural minimum, never their allocated height.
 	# This lets wrapped titles and descriptions grow the row without a size loop.
 	# A hero row (Resume) stands taller than the rows around it.
-	custom_minimum_size.y=maxf(44 if item.get("compact",false) else (72 if item.get("hero",false) else 56),content_margin.get_combined_minimum_size().y)
+	custom_minimum_size.y=maxf(float(item.get("min_height", 44 if item.get("compact",false) else (72 if item.get("hero",false) else 56))),content_margin.get_combined_minimum_size().y)
 
 # Shared: refresh() runs ten times a second per row while the menu is open.
 static var FILL_SELECTED := MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0)
@@ -175,6 +173,11 @@ static var FILL_IDLE := MenuSkin.box(Color("92969c"),Color.TRANSPARENT,0,0)
 func refresh() -> void:
 	disabled=item.get("disabled",false)
 	value_label.text=formatted_value()
+	if item.kind in ["number", "choice"] and not item.get("stacked",false):
+		# Keep both arrows close to the actual value, while allowing long choices to wrap.
+		var font := value_label.get_theme_font("font")
+		var text_width := font.get_string_size(value_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, value_label.get_theme_font_size("font_size")).x
+		value_label.custom_minimum_size.x = minf(180.0, ceilf(text_width) + 4.0)
 	title_label.text=str(item.label)+(" •" if changed_from_default() else "")
 	for button in adjust_buttons:
 		button.visible=true; button.disabled=disabled

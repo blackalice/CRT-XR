@@ -44,7 +44,7 @@ func run():
 	app.use_tracking(true)
 	check(app.vertical_fov==26.0,"Returning to XR restores custom glasses calibration")
 	check(app.menu.visible and app.menu.selected_id=="home.library","Startup selects Choose game in the shared pause menu")
-	check(app.menu.CATEGORIES.size()==9,"Settings include Quick settings and all detailed categories")
+	check(app.menu.CATEGORIES.size()==11,"Settings include Quick settings and all detailed categories")
 	UI.page(app,1,2)
 	await settle()
 	check(app.menu.catalog.pages(1)[app.menu.subsection].title=="Screen fit" and app.menu.selected_row()!=null,"Screen-fit page focuses its first editable row")

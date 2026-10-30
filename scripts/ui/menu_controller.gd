@@ -21,7 +21,7 @@ var help_frame: PanelContainer
 var subtitle_row: HBoxContainer
 var scan_icon: Control
 ## Each category's icon in the sidebar, by CATEGORIES order.
-const CATEGORY_ICONS := ["fit","tv","audio","lamp","gamepad","save","help","sliders","play"]
+const CATEGORY_ICONS := ["fit","tv","audio","lamp","gamepad","save","help","sliders","play","sliders","gear"]
 var pictures := preload("res://scripts/ui/menu_pictures.gd").new()
 var videos := preload("res://scripts/ui/menu_videos.gd").new()
 var music := preload("res://scripts/ui/menu_music.gd").new()
@@ -40,7 +40,7 @@ const HelpArticle = preload("res://scripts/ui/help_article.gd")
 ## Confirmation answers shown in the danger colour.
 const DESTRUCTIVE := ["Exit","Delete","Forget","Remove","Reset","Overwrite","Stop","Replace"]
 var location_bar: PanelContainer
-const CATEGORIES := ["View","Picture","Audio","Room","Controls & XR","Saved setups","About & Help","Quick settings","Videos"]
+const CATEGORIES := ["View","Picture","Audio","Room","Controls","Saved setups","About & Help","Quick settings","Videos","Menu","Emulation"]
 var host
 var catalog := Catalog.new()
 var library := Library.new()
@@ -257,6 +257,8 @@ func _ready() -> void:
 	sidebar.move_child(sidebar_buttons[7],1)
 	sidebar_buttons[EVERYDAY].hide()
 	sidebar.move_child(sidebar_buttons[8],sidebar_buttons[3].get_index()+1)
+	sidebar.move_child(sidebar_buttons[10],sidebar_buttons[5].get_index())
+	sidebar.move_child(sidebar_buttons[9],sidebar_buttons[6].get_index())
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation",8)
@@ -344,7 +346,7 @@ func sidebar_box(colour: Color, chosen := false) -> StyleBoxFlat:
 	# The open category is a lit bar with a light top-left edge.
 	var style := MenuSkin.box(Color("2c58c0") if chosen else colour,Color("88a8e8"),0,6)
 	style.content_margin_left=12; style.content_margin_right=12
-	# Nine categories must fit beside a page with three lines of help. With their
+	# Categories must fit beside a page with three lines of help. With their
 	# icons they get a little more room; Larger text hides the icons and keeps it tight.
 	var room := 3 if host.menu_large_text else 5
 	style.content_margin_top=room; style.content_margin_bottom=room
@@ -724,6 +726,9 @@ func render() -> void:
 	var tile_group := ""
 	var tile_counts := {}
 	var tile_numbers := {}
+	var game_grid: GridContainer
+	var game_grid_count := items.filter(func(entry): return entry.get("layout", "")=="game" and entry.has("rom_path")).size()
+	var game_grid_index := 0
 	for entry in items:
 		if entry.get("layout","")=="tile":
 			var named := str(entry.get("group","tiles")); tile_counts[named]=int(tile_counts.get(named,0))+1
@@ -779,6 +784,17 @@ func render() -> void:
 			parent=tiles
 			item["tile_index"]=int(tile_numbers.get(named,0)); item["tile_count"]=int(tile_counts[named]); item["tile_columns"]=tiles.columns
 			tile_numbers[named]=int(item.tile_index)+1
+		if mode in ["games", "recent", "favourites"] and host.game_list_columns > 1 and item.get("layout", "") == "game" and item.has("rom_path"):
+			if game_grid == null:
+				game_grid = GridContainer.new(); game_grid.columns = host.game_list_columns
+				game_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+				game_grid.add_theme_constant_override("h_separation", 8); game_grid.add_theme_constant_override("v_separation", 6)
+				column.add_child(game_grid)
+			parent = game_grid
+			item["game_grid"] = true; item["tile_index"] = game_grid_index
+			item["tile_count"] = game_grid_count; item["tile_columns"] = host.game_list_columns
+			item["min_height"] = 108 if host.game_list_columns == 2 else 124
+			game_grid_index += 1
 		if item.get("layout","") in ["letter","key"]:
 			if grid==null:
 				grid=GridContainer.new(); grid.columns=10 if item.get("layout","")=="key" else 6; grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); column.add_child(grid)
@@ -1126,7 +1142,7 @@ func refresh_hints(row) -> void:
 	preview_button.text="Preview" if pad else "Preview  [X]"
 	preview_glyph.visible=false
 	# One vocabulary everywhere: Deck glyphs for the pad, key names for the keyboard.
-	var parts: Array=["↑↓ Select"]
+	var parts: Array=["D-pad Select" if mode in ["games","recent","favourites"] and host.game_list_columns>1 else "↑↓ Select"]
 	var open := "A Open" if pad else "Enter Open"
 	var go_back := "B Back" if pad else "Backspace Back"
 	if mode=="settings":
@@ -1205,7 +1221,7 @@ func navigate(next: Vector2i) -> void:
 		if rows[i].item.id==selected_id: index=i
 	if index<0: return
 	var from_row = rows[index]
-	if rows[index].item.get("layout","")=="tile":
+	if rows[index].item.get("layout","")=="tile" or rows[index].item.get("game_grid",false):
 		var position: int=rows[index].item.tile_index
 		var count: int=rows[index].item.tile_count
 		var columns: int=int(rows[index].item.get("tile_columns",2))

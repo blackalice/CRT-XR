@@ -69,8 +69,8 @@ func run() -> void:
 	check(app.provider is OpenTrack and app.provider.real, "Choosing OpenTrack switches the live tracking source")
 	check(app.capture_settings().get_value("tracking", "source") == "opentrack", "The choice is saved with the settings")
 	var rows: Array = []
-	for page in app.menu.catalog.pages(4): rows.append_array(page.rows.map(func(row): return row.id))
-	check("tracking.source" in rows, "Controls & XR offers the tracking source")
+	for page in app.menu.catalog.pages(0): rows.append_array(page.rows.map(func(row): return row.id))
+	check("tracking.source" in rows, "View offers the tracking source")
 	app.set_tracking_source("glasses")
 	check(not app.provider is OpenTrack, "Back to the glasses' own tracking")
 	print("OPENTRACK CHECKS COMPLETE: %d failures" % failures)

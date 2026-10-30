@@ -91,7 +91,7 @@ The bridge also forwards the driver's own timestamp. The app estimates
 body-frame angular velocity from consecutive driver-timed poses, low-passes
 and clamps it to 8 rad/s, and extrapolates the camera target toward the
 frame being drawn by the **Motion prediction** delay (default 30 ms,
-range 0-80 ms) in Controls & XR settings. The reported orientation itself is
+range 0-80 ms) in View settings. The reported orientation itself is
 never modified, so recentering and reconnect rebasing remain exact; only the
 view target is extrapolated. Zero keeps raw driver timing. The estimator and
 extrapolation are checked by `tests/pose_prediction.gd`; the live chain
