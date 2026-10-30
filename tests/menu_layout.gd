@@ -24,10 +24,18 @@ func run():
 		app.menu_large_text=large
 		for kind in ["keyboard","controller"]:
 			m.set_input_kind(kind)
+			page(7); m.select("quick.game_volume",false); await settle()
+			var empty_help_rect: Rect2 = m.help_frame.get_rect()
+			check(m.help_label.text.is_empty() and m.help_frame.modulate.a==0.0,"Empty help hides its frame: "+kind+str(large))
+			m.select("quick.view.distance",false); await settle()
+			check(not m.help_label.text.is_empty() and m.help_frame.modulate.a==1.0 and m.help_frame.get_rect()==empty_help_rect,"Help returns without shifting layout: "+kind+str(large))
+			var sidebar_width := -1.0
 			for cat in range(m.CATEGORIES.size()):
 				for section in range(m.catalog.pages(cat).size()):
 					page(cat,section); await settle()
 					var context := "%d/%d %s large=%s" % [cat,section,kind,large]
+					if sidebar_width < 0: sidebar_width = m.sidebar_panel.size.x
+					check(is_equal_approx(m.sidebar_panel.size.x, sidebar_width), "Category sidebar width stays fixed: " + context)
 					var tabs_ok := true
 					for tab in m.section_tabs.get_children():
 						tabs_ok=tabs_ok and inside(m.section_bar,tab) and is_equal_approx(tab.position.y,0)

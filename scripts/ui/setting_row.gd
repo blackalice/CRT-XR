@@ -34,6 +34,8 @@ var thumbnail: TextureRect
 ## The row's pixel panel, drawn behind everything; the marquee when selected.
 var panel: ColorRect
 var segments: Control
+## A quick tile being adjusted: its arrows show and its marquee turns amber.
+var editing := false
 
 func configure(definition: Dictionary) -> void:
 	item=definition
@@ -55,7 +57,8 @@ func configure(definition: Dictionary) -> void:
 	# The outline carries focus; do not reserve a competing arrow column.
 	marker=Label.new(); marker.hide(); add_child(marker)
 	var emphasis := str(item.get("emphasis",""))
-	var tint := MenuSkin.AMBER if emphasis=="primary" else (DANGER if emphasis=="danger" else MenuSkin.MUTED)
+	var is_exit := str(item.get("id", "")) in ["exit", "home.exit"]
+	var tint := MenuSkin.TEXT if is_exit else (MenuSkin.AMBER if emphasis=="primary" else (DANGER if emphasis=="danger" else MenuSkin.MUTED))
 	if item.has("thumbnail_path"):
 		# Video frames fill a 4:3 slot; box art and saves fit theirs whole.
 		var slot_size: Vector2 = item.get("thumbnail_size",Vector2(64,48))
@@ -94,13 +97,27 @@ func configure(definition: Dictionary) -> void:
 		value_label.add_theme_color_override("font_color",MenuSkin.MUTED)
 		words.add_child(value_label)
 	else: value_group.add_child(value_label)
+	# A stacked tile puts its value under its name: ‹ value › across the tile.
+	if item.get("stacked",false):
+		line.remove_child(value_group); content.add_child(value_group)
+		value_group.alignment=BoxContainer.ALIGNMENT_CENTER
+		value_group.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		content.add_theme_constant_override("separation",2)
 	for input in item.get("value_inputs", []): value_group.add_child(InputGlyph.new(input))
+	# A small mark in place of a value, such as the heart on a favourite game.
+	if item.has("value_icon"): value_group.add_child(RowIcon.new(str(item.value_icon), VALUE))
 	if item.kind=="number":
 		value_label.custom_minimum_size.x=106
 		value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	if item.kind=="choice":
 		value_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 		value_label.custom_minimum_size.x=180
+	# Under a stacked tile's name, the value keeps to one line across the tile.
+	if item.get("stacked",false):
+		value_label.custom_minimum_size.x=0
+		value_label.autowrap_mode=TextServer.AUTOWRAP_OFF
+		value_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+		value_label.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	if item.kind in ["number","choice"]:
 		# ‹ value › reads as a selector and fills the row's edge like toggle values.
@@ -161,9 +178,12 @@ func refresh() -> void:
 	title_label.text=str(item.label)+(" •" if changed_from_default() else "")
 	for button in adjust_buttons:
 		button.visible=true; button.disabled=disabled
-		button.modulate.a=1.0 if selected_now else 0.35
+		# A quick tile shows its arrows only while it is being adjusted.
+		var lit := (editing and selected_now) if item.get("quick",false) else selected_now
+		button.modulate.a=1.0 if lit else (0.0 if item.get("quick",false) else 0.35)
 		button.mouse_filter=Control.MOUSE_FILTER_STOP if selected_now else Control.MOUSE_FILTER_IGNORE
-	track.visible=item.kind=="number"
+	# A compact control on the pause menu shows its value without the bar.
+	track.visible=item.kind=="number" and item.get("meter",true)
 	if meter!=null: meter.visible=track.visible
 	if track.visible:
 		track.add_theme_stylebox_override("fill",FILL_SELECTED if selected_now else FILL_IDLE)
@@ -210,7 +230,10 @@ func update_selection_style() -> void:
 	if panel==null:
 		panel=MenuSkin.pixel_panel("row"); add_child(panel); move_child(panel,0)
 		for style in ["normal","hover","pressed","disabled","focus"]: add_theme_stylebox_override(style,StyleBoxEmpty.new())
-	panel.material=MenuSkin.panel_material("selected" if selected_now else "row")
+	var kind := ("editing" if editing else "selected") if selected_now else "row"
+	if item.get("skin", "") == "music": kind = "music_selected" if selected_now else "music_row"
+	if str(item.get("id", "")) in ["exit", "home.exit"]: kind = "exit_selected" if selected_now else "exit_row"
+	panel.material=MenuSkin.panel_material(kind)
 
 func changed_from_default() -> bool:
 	if not item.has("default") or not item.has("getter"): return false

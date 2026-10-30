@@ -18,8 +18,15 @@ const BOLD := 700
 const PANELS := {
 	"row": ["102860", "081440", "3858a0", "000418", false, false],
 	"selected": ["2c58c8", "143090", "88a8e8", "000418", false, true],
+	# A quick tile being adjusted: the marquee runs in amber.
+	"editing": ["2c58c8", "143090", "88a8e8", "000418", false, true, ["fff0b0", "f8c048", "c07818"]],
 	"chosen": ["3868d0", "1838a0", "b0c8f8", "000418", false, false],
 	"well": ["081440", "000c30", "3858a0", "000418", true, false],
+	"exit_row": ["b83838", "701c28", "e87870", "300810", false, false],
+	"exit_selected": ["e85848", "982830", "ffc0a8", "300810", false, true, ["fff0b0", "f8c048", "c07818"]],
+	"music_well": ["5b6269", "2d3339", "9ca5ad", "181c20", true, false],
+	"music_row": ["80868d", "4d535a", "b4babc", "262a2d", false, false],
+	"music_selected": ["aeb5b5", "6d747c", "e0e4e4", "262a2d", false, true, ["fff0b0", "f8c048", "c07818"]],
 	"lcd": ["000c20", "000c20", "3858a0", "000418", true, false],
 }
 static var weights := {}
@@ -65,6 +72,8 @@ static func panel_material(kind: String) -> ShaderMaterial:
 		material.set_shader_parameter("lo_colour", Color(spec[3]))
 		material.set_shader_parameter("recessed", spec[4])
 		material.set_shader_parameter("marquee", spec[5])
+		if spec.size() > 6:
+			for i in range(3): material.set_shader_parameter(["cycle_a", "cycle_b", "cycle_c"][i], Color(spec[6][i]))
 		materials[kind] = material
 	return materials[kind]
 
@@ -94,7 +103,7 @@ static func space_backdrop() -> ColorRect:
 
 ## Reduce animation holds the marquee and the stars still.
 static func set_motion(moving: bool) -> void:
-	panel_material("selected").set_shader_parameter("marquee_speed", 8.0 if moving else 0.0)
+	for kind in ["selected", "editing", "music_selected", "exit_selected"]: panel_material(kind).set_shader_parameter("marquee_speed", 8.0 if moving else 0.0)
 	if materials.has("space"): materials.space.set_shader_parameter("motion", 1.0 if moving else 0.0)
 
 static func create() -> Theme:

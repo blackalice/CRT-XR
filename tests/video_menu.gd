@@ -216,7 +216,7 @@ func run() -> void:
 	app._process(1.0 / 60.0)
 	check(not app.video_bars[0].visible, "The bar gives way to the menu")
 	check(app.settings_panel.visible and menu.mode == "pause" and app.video.paused, "B opens the menu and pauses the video")
-	check(menu.selected_id == "resume" and ids().slice(0, 2) == ["resume", "video.seek"] and "video.style" in ids() and "video.stop" in ids(),
+	check(menu.selected_id == "resume" and ids().slice(0, 2) == ["video.seek", "resume"] and "video.style" in ids() and "video.stop" in ids(),
 		"The menu opens on Resume above a timeline, with picture shape and Stop: %s" % [ids()])
 	check(str(item("video.seek").progress.call()) == "0:25 / 1:00", "The timeline shows where you are")
 	check(is_equal_approx(app.video_library.position(long), 25.0) and app.video_library.style(long) == 1, "Opening the menu saves the place and shape")
@@ -288,7 +288,7 @@ func run() -> void:
 	for i in range(menu.rows.size()):
 		menu.navigate(Vector2i(0, -1)); await process_frame
 	await process_frame
-	check(menu.selected_id == "resume" and menu.scroll.scroll_vertical == 0, "Back at the top of the pause menu, the whole Now playing panel shows (scroll %d)" % menu.scroll.scroll_vertical)
+	check(menu.selected_id == "video.seek" and menu.scroll.scroll_vertical == 0, "Back at the top of the pause menu, the whole Now playing panel shows (scroll %d)" % menu.scroll.scroll_vertical)
 	menu.select("video.subtitles", false)
 	menu.adjust(1)
 	check(app.video.subtitle_choice == 0 and app.video_library.subtitle(episode) == "File · Episode 2.en.srt", "Choosing subtitles turns them on and remembers the choice")

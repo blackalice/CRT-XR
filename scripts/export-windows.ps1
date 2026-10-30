@@ -49,6 +49,8 @@ New-Item -ItemType Directory -Force (Join-Path $out 'licenses/audio') | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $out 'licenses/fonts') | Out-Null
 Copy-Item -Path (Join-Path $root 'third_party/fonts/*') -Destination (Join-Path $out 'licenses/fonts')
 Copy-Item -Path (Join-Path $root 'third_party/audio/*') -Destination (Join-Path $out 'licenses/audio')
+New-Item -ItemType Directory -Force (Join-Path $out 'licenses/icons') | Out-Null
+Copy-Item -Path (Join-Path $root 'third_party/icons/*') -Destination (Join-Path $out 'licenses/icons')
 $table = Join-Path $root 'build/wood-table'
 if (Test-Path -LiteralPath (Join-Path $table 'table.scn')) {
     New-Item -ItemType Directory -Force (Join-Path $out 'assets') | Out-Null

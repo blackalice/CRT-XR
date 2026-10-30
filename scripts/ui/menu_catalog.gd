@@ -66,7 +66,13 @@ func toggle(id: String, label: String, target: Object, key: String, fallback: bo
 	return {"id":id,"label":label,"kind":"toggle","default":fallback,"help":help,"visual":visual,
 		"getter":func(): return target.get(key),"setter":func(value): target.set(key,value); changed.call()}
 
+## Icons for settings rows that lead somewhere or do something, by row id.
+const ROW_ICONS := {"view.fit":"fit","view.recenter":"view","tracking.fixed":"view",
+	"system.version":"help","system.glasses":"help","system.device":"help","system.controls":"help","system.help":"help","system.credits":"help"}
+
 func page(title: String, rows: Array) -> Dictionary:
+	for row in rows:
+		if row is Dictionary and ROW_ICONS.has(row.get("id","")) and not row.has("row_icon"): row["row_icon"]=ROW_ICONS[row.id]
 	return {"title":title,"rows":rows}
 
 func property_row(key: String, caption: String, low: float, high: float, step: float, unit: String, help: String, visual := true) -> Dictionary:
@@ -105,7 +111,7 @@ func video_picture_rows() -> Array:
 	var h = host
 	return [{"id":"video.own_picture","label":"Video picture","kind":"choice","choices":["Own settings","Same as games"],"default":0,
 			"getter":func(): return 0 if h.video_own_picture else 1,"setter":func(value): h.set_video_own_picture(int(value)==0); menu.refresh(),
-			"help":"Own settings: every video shares one picture, starting from Auto composite so videos look like broadcast TV. While a video plays, the Picture settings change it. Same as games: videos use your global picture."},
+			"help":"Own settings gives videos a shared picture. Same as games uses the global picture."},
 		unavailable(action("video.reset_picture","Reset video picture",func(): menu.ask("Reset the video picture?","Videos go back to your global picture with Auto composite. Games are not affected.",h.reset_video_picture),
 			"Starts the video picture again from your global picture, with Auto composite.",not h.video_own_picture,""),"Videos use your global picture."),
 		{"id":"video.default_style","label":"Picture shape for new videos","kind":"choice","choices":VideoSession.STYLES,"default":0,
@@ -123,7 +129,7 @@ func vcr_rows() -> Array:
 	var h = host
 	return [{"id":"video.tape","label":"Tape look","kind":"choice","choices":["Off","VHS","Worn VHS"],"default":0,
 			"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); h.video.set_tape(h.video_tape); h.save_library(),
-			"help":"Plays videos as if from a VHS tape: softer detail, smeared colour, wobbling lines and a torn bottom edge, with noise bars when you fast-forward or rewind. Worn VHS adds more noise, dropouts and a shaky pause. Also in the Start menu while watching."},
+			"help":"Adds VHS picture wear and noise bars during fast-forward and rewind. Worn VHS adds more wear."},
 		{"id":"video.osd","label":"On-screen text","kind":"toggle","default":true,
 			"getter":func(): return h.video_osd,"setter":func(value): h.video_osd=bool(value); h.video.osd_enabled=h.video_osd; h.video.update_osd(); h.save_library(),
 			"help":"Shows PLAY, PAUSE, FF and REW in green VCR lettering on the picture, like a video recorder."},
@@ -199,9 +205,9 @@ func pages(category: int) -> Array:
 				"shadow_strength":"Darkness of live shadows on unbaked objects. Baked contact shading stays fixed.",
 				"cabinet_ao_strength":"Strength of Blender-baked shading in the TV's joins and recesses.",
 				"cabinet_grain_strength":"Subtle static plastic finish. Fine grain fades at distance to avoid shimmer.",
-				"spill_strength":"Light from the picture on the casing, table and props, in the picture's own colours, left and right. Full glow lights a dark room by the TV alone; zero turns it off.",
-				"screen_bloom":"A soft halo around the bright tube, as your eyes see it in a dark room. It fades away as the room's own lights come up, so it shows in Lights off and Late night.",
-				"floor_brightness":"Brightness of the floor.","fade_begin":"Distance where the small room island begins fading to black.","fade_end":"Distance where the surroundings become fully black."}
+				"spill_strength":"Casts the picture's colours onto the TV and nearby objects.",
+				"screen_bloom":"Adds a halo around the tube, most visible in a dark room.",
+				"floor_brightness":"","fade_begin":"Distance where the small room island begins fading to black.","fade_end":"Distance where the surroundings become fully black."}
 			for field in h.ROOM_FIELDS:
 				var key: String = field[0]
 				var group := "Materials" if key in ["cabinet_ao_strength","cabinet_grain_strength","floor_brightness","spill_strength","screen_bloom"] else ("Placement" if key in ["lamp_height","lamp_side","fade_begin","fade_end"] else "Lighting")
@@ -216,7 +222,7 @@ func pages(category: int) -> Array:
 				toggle("room.clock_radio","Clock radio",w,"show_clock_radio",true,"A clock radio beside the TV showing the time on a dim red display. Music plays from its side of the room.",w.apply_room_settings),
 				toggle("room.clock_24_hour","24-hour clock",w,"clock_24_hour",false,"Shows the clock radio and VCR time in 24-hour format.",w.apply_room_settings),
 				toggle("room.vcr","VCR",w,"show_vcr",true,"A video recorder on the shelf under the TV. Its display shows the time, or the tape counter while a video plays.",w.apply_room_settings),
-				toggle("room.game_boxes","Game boxes",w,"show_game_boxes",true,"A small stack of game boxes beside the TV.",func(): w.apply_room_settings(); menu.refresh()),
+				toggle("room.game_boxes","Game boxes",w,"show_game_boxes",true,"",func(): w.apply_room_settings(); menu.refresh()),
 				toggle("room.game_cover","Your game on the box",w,"show_game_cover",true,"The top box shows the playing game's cover, from your existing scrapes (covers or box2dfront).",w.apply_room_settings)]
 			if not w.show_game_boxes:
 				props[-1].disabled=true; props[-1].disabled_reason="Show the game boxes first."; props[-1].help += " " + props[-1].disabled_reason
@@ -246,7 +252,7 @@ func pages(category: int) -> Array:
 				action("tracking.fixed","Use fixed view",func(): h.use_tracking(false); h.recenter(); menu.refresh(),"Uses a steady view. On desktop, mouse/keyboard simulation remains available."),
 				toggle("tracking.diagnostics","Metrics overlay",h,"metrics_visible",false,"Shows frame rate, pose and tracking details. Off by default for a clean view. F1 also toggles it.",unchanged,false)]
 			for axis in ["yaw","pitch","roll"]:
-				tracking.append(toggle("tracking."+axis,"Invert "+axis,h.provider,"invert_"+axis,false,"Reverses this tracking axis. Only change it if movement feels reversed.",unchanged,false))
+				tracking.append(toggle("tracking."+axis,"Invert "+axis,h.provider,"invert_"+axis,false,"Use if movement feels reversed.",unchanged,false))
 			var input_delay: Dictionary = {"id":"controls.preview","label":"Reduce input delay","kind":"choice","choices":["Off","1 frame","2 frames"],"default":1,"visual":false,"getter":func(): return h.emulator.run_ahead,"setter":func(value): h.emulator.run_ahead=value,"help":"Runs extra presentation-only game frames from a snapshot that is then restored. Two frames costs about twice the preview work."}
 			if h.emulator.loaded and not h.emulator.preview_possible():
 				input_delay.disabled=true
@@ -295,7 +301,7 @@ func pages(category: int) -> Array:
 				toggle("access.contrast","Stronger menu contrast",h,"menu_high_contrast",false,"Brighter text and clearer borders on a dark background.",menu.apply_accessibility,false),
 				toggle("access.motion","Reduced animation",h,"menu_reduced_motion",false,"Instant focus changes and no TV warm-up animation.",menu.apply_accessibility,false),
 				toggle("access.sounds","Menu sounds",h,"menu_sounds",false,"Quiet feedback for focus and confirmation.",unchanged,false),
-				toggle("access.tv","Menu on the TV",h,"menu_on_tv",true,"Shows the menu on the TV itself, with the TV drawn in close so it reads clearly. Adjust with preview still floats the menu over the game. Off floats the menu in front of the TV.",func(): menu.refresh(),false),
+				toggle("access.tv","Menu on the TV",h,"menu_on_tv",true,"Shows the menu on the TV. Adjust with preview keeps it floating over the game.",func(): menu.refresh(),false),
 				toggle("access.depth","Menu depth",h,"menu_depth",true,"In side-by-side 3D the menu floats in front of the TV as one flat panel and the room dims behind. Off gives a flat menu.",func(): menu.refresh(),false),
 				toggle("access.haptics","Controller vibration",h,"menu_haptics",false,"A light tick as the selection moves and a firmer one when you confirm.",func(): menu.refresh(),false),
 				unavailable(number("access.haptic_strength","Vibration strength",h,"haptic_strength",0.1,1.0,0.1,0.8,"percent","How strong the ticks feel. The Steam Deck passes on only part of it, so it may need to be higher there.",func(): h.menu_vibrate(1.0, 0.07),false).merged({"disabled":not h.menu_haptics},true),"Turn on Controller vibration first.")])]
@@ -319,8 +325,8 @@ func pages(category: int) -> Array:
 				elif id.begins_with("mine."): menu.pictures.apply_my_preset(int(id.get_slice(".",1)))
 				else: menu.pictures.apply_preset(id),"help":"Choose a look. Custom brings back your own tuned picture; save your own on Picture → Presets.","visual":true})
 			quick.append(menu.room_choice("quick.room"))
-			quick.append(number("quick.game_volume","Game volume",h.music,"game_volume",0,1,.05,1,"percent","Independent game volume.",h.music.apply,false))
-			quick.append(number("quick.music_volume","Music volume",h.music,"volume",0,1,.05,.45,"percent","Independent music volume.",h.music.apply,false))
+			quick.append(number("quick.game_volume","Game volume",h.music,"game_volume",0,1,.05,1,"percent","",h.music.apply,false))
+			quick.append(number("quick.music_volume","Music volume",h.music,"volume",0,1,.05,.45,"percent","",h.music.apply,false))
 			return [page("Everyday",quick)]
 		2:
 			var audio = h.emulator.tv_audio
@@ -353,7 +359,7 @@ func pages(category: int) -> Array:
 				action("music.file","Choose music / album",menu.music.open_music_browser,"Browse local storage or an SD card. Music keeps playing in menus."),
 				unavailable(action("music.replay","Play last MP3",func(): music.play_last_file(); menu.refresh(); menu.notify(music.status),"Continues the saved track and position without changing the game.",music.last_file.is_empty()),"No MP3 has been played yet."),
 				action("music.url","Radio stream URL",menu.music.edit_radio_url,"Enter a direct MP3 stream URL. Station webpages, AAC and HLS are not supported.",false,"Edit"),
-				unavailable(action("music.radio","Play radio",func(): music.play_station(music.station_url); menu.refresh(); menu.notify(music.status),"Streams a direct MP3 radio station with a bounded audio buffer.",music.station_url.is_empty()),"Add a radio stream URL first."),
+				unavailable(action("music.radio","Play radio",func(): music.play_station(music.station_url); menu.refresh(); menu.notify(music.status),"",music.station_url.is_empty()),"Add a radio stream URL first."),
 				action("music.stop","Stop music",func(): music.stop(); menu.refresh(); menu.notify(music.status),"Stops music or radio. Leaves game sound unchanged.",music.player.stream==null and not music.connecting),
 				number("music.volume","Music volume",music,"volume",0,1,.05,.45,"percent","Independent music level. Continues while the game is paused.",music.apply,false),
 				toggle("music.loop","Repeat album",music,"loop",true,"Repeat the folder after its last track. Off stops at the album end.",music.apply,false)]),page("Music space",[

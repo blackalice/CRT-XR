@@ -9,6 +9,10 @@ extends Control
 ## menus use (A/B/X/Y in Deck/Xbox positions, L1, R3, Start, D-pad, ↑↓, ←→);
 ## the Back button is drawn from its input name, "back".
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
+const RowIcon = preload("res://scripts/ui/row_icon.gd")
+## The D-pad from Kenney's 1-Bit Pack: the cross, and each arm to light on it.
+const DPAD := "res://assets/icons/glyphs/dpad.png"
+const DPAD_ARM := "res://assets/icons/glyphs/dpad-%s.png"
 const FACE := {"north": Vector2(0, -1), "south": Vector2(0, 1), "west": Vector2(-1, 0), "east": Vector2(1, 0)}
 const DIRECTIONS := {"up": Vector2(0, -1), "down": Vector2(0, 1), "left": Vector2(-1, 0), "right": Vector2(1, 0)}
 ## D-pad drawings for whole axes: which arms are filled.
@@ -31,6 +35,7 @@ func _init(name := "south", height := DESIGN) -> void:
 	custom_minimum_size = Vector2(width, DESIGN) * scale_factor
 	size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
 	# Its grid snap depends on where it sits, so moving redraws it.
 	set_notify_transform(true)
 
@@ -96,6 +101,10 @@ func _draw() -> void:
 		# Four circles in a diamond, the meant one filled, as Nintendo's menus draw them.
 		for position in FACE_AT:
 			bitmap(DOT if position == input else RING, FACE_AT[position], colour if position == input else dim)
+	elif (DIRECTIONS.has(input) or DPADS.has(input)) and RowIcon.cached(DPAD) != null:
+		# The D-pad: the cross dim, the meant arms lit over it.
+		RowIcon.draw_on_grid(self, RowIcon.cached(DPAD), dim)
+		for arm in DPADS.get(input, [input]): RowIcon.draw_on_grid(self, RowIcon.cached(DPAD_ARM % arm), colour)
 	elif DIRECTIONS.has(input) or DPADS.has(input):
 		# The D-pad: a cross outline with the meant arms filled.
 		var lit: Array = DPADS.get(input, [input])

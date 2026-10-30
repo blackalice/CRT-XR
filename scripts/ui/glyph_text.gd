@@ -6,6 +6,7 @@ extends VBoxContainer
 ## button's name. Lines break at "\n" and words wrap like a label's. `text`
 ## keeps the string as written, so it reads back like a Label's.
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
+const RowIcon = preload("res://scripts/ui/row_icon.gd")
 ## Keyboard keys for the controller buttons the menus describe.
 const KEYBOARD := {"A": "Enter", "B": "Backspace", "R3": "R", "L1+R1+Start": "Escape"}
 var font_size := 20:
@@ -22,6 +23,9 @@ var text := "":
 	set(value):
 		if text == value: return
 		text = value; rebuild()
+## An icon (row_icon.gd kind) before the first line, such as a warning sign.
+var lead_icon := "":
+	set(value): lead_icon = value; rebuild()
 
 func _init(copy := "", size := 20, tint := Color("e6e6e6")) -> void:
 	add_theme_constant_override("separation", 2)
@@ -45,6 +49,10 @@ func rebuild() -> void:
 		flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if centred: flow.alignment = FlowContainer.ALIGNMENT_CENTER
 		add_child(flow)
+		if flow.get_index() == 0 and not lead_icon.is_empty() and not text.is_empty():
+			var mark := RowIcon.new(lead_icon, colour)
+			mark.custom_minimum_size = Vector2(32, 32)
+			flow.add_child(mark)
 		var at := 0
 		while at < line.length():
 			var open := line.find("{", at)

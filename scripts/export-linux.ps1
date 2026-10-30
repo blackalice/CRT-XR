@@ -42,6 +42,8 @@ New-Item -ItemType Directory -Force (Join-Path $out 'licenses/audio') | Out-Null
 New-Item -ItemType Directory -Force (Join-Path $out 'licenses/fonts') | Out-Null
 Copy-Item -Path (Join-Path $root 'third_party/fonts/*') -Destination (Join-Path $out 'licenses/fonts')
 Copy-Item -Path (Join-Path $root 'third_party/audio/*') -Destination (Join-Path $out 'licenses/audio')
+New-Item -ItemType Directory -Force (Join-Path $out 'licenses/icons') | Out-Null
+Copy-Item -Path (Join-Path $root 'third_party/icons/*') -Destination (Join-Path $out 'licenses/icons')
 Copy-Item -LiteralPath (Join-Path $root 'THIRD_PARTY.md') -Destination $out
 foreach ($notice in @('LICENSE','LICENSING.md')) { Copy-Item -LiteralPath (Join-Path $root $notice) -Destination $out }
 Copy-Item -LiteralPath (Join-Path $root 'docs/CORE-DISTRIBUTION.md') -Destination (Join-Path $out 'CORE-DISTRIBUTION.md')

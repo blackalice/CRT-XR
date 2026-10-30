@@ -4,6 +4,7 @@ const Row = preload("res://scripts/ui/setting_row.gd")
 const LibraryCard = preload("res://scripts/ui/library_card.gd")
 const GameRow = preload("res://scripts/ui/library_game_row.gd")
 const MusicIcon = preload("res://scripts/ui/music_transport_icon.gd")
+const LcdReadout = preload("res://scripts/ui/lcd_readout.gd")
 const MusicTimeline = preload("res://scripts/ui/music_timeline.gd")
 const ActionRow = preload("res://scripts/ui/action_row.gd")
 const Catalog = preload("res://scripts/ui/menu_catalog.gd")
@@ -13,9 +14,14 @@ const Confirmation = preload("res://scripts/ui/confirmation_panel.gd")
 const LocationBar = preload("res://scripts/ui/location_bar.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const GlyphText = preload("res://scripts/ui/glyph_text.gd")
+const RowIcon = preload("res://scripts/ui/row_icon.gd")
 ## Page builders and actions, one helper per area; each reaches the menu and host.
 var backdrop: ColorRect
 var help_frame: PanelContainer
+var subtitle_row: HBoxContainer
+var scan_icon: Control
+## Each category's icon in the sidebar, by CATEGORIES order.
+const CATEGORY_ICONS := ["fit","tv","audio","lamp","gamepad","save","help","sliders","play"]
 var pictures := preload("res://scripts/ui/menu_pictures.gd").new()
 var videos := preload("res://scripts/ui/menu_videos.gd").new()
 var music := preload("res://scripts/ui/menu_music.gd").new()
@@ -40,7 +46,12 @@ var catalog := Catalog.new()
 var library := Library.new()
 var rom_index := RomIndex.new()
 var mode := "pause"
-var category := 7
+## Settings opens on View the first time, then wherever you last were. (Quick
+## settings is no longer a category: its everyday controls sit on the pause menu.)
+var category := 0
+## The quick tile being adjusted, if any; it survives a re-render (Room rebuilds the menu).
+var editing_id := ""
+const EVERYDAY := 7
 var subsection := 0
 var sections: Dictionary = {}
 var memory: Dictionary = {}
@@ -76,6 +87,9 @@ var column: VBoxContainer
 var compact: Label
 var confirm_panel: PanelContainer
 var music_heading: Label
+## The Now playing deck's second line, and what fills both lines.
+var deck_detail: Label
+var deck_text: Callable
 var rename_field: LineEdit
 var sidebar_buttons: Array[Button] = []
 var direction := Vector2i.ZERO
@@ -132,10 +146,12 @@ func _ready() -> void:
 	# The space backdrop fills the whole panel; the page sits inside its frame.
 	backdrop=MenuSkin.space_backdrop(); add_child(backdrop)
 	var frame := MarginContainer.new()
-	for side in ["left","top","right","bottom"]: frame.add_theme_constant_override("margin_"+side,18)
+	# The page gets the height: slim margins top and bottom, wider at the sides.
+	for side in ["left","right"]: frame.add_theme_constant_override("margin_"+side,18)
+	for side in ["top","bottom"]: frame.add_theme_constant_override("margin_"+side,12)
 	add_child(frame)
 	var layout := VBoxContainer.new()
-	layout.add_theme_constant_override("separation",8)
+	layout.add_theme_constant_override("separation",6)
 	frame.add_child(layout)
 	var top := HBoxContainer.new()
 	layout.add_child(top)
@@ -167,10 +183,15 @@ func _ready() -> void:
 	subtitle.add_theme_color_override("font_color",MenuSkin.MUTED)
 	subtitle.add_theme_font_size_override("font_size",20)
 	subtitle.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
-	layout.add_child(subtitle)
+	subtitle.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	subtitle_row = HBoxContainer.new(); subtitle_row.add_theme_constant_override("separation",8)
+	scan_icon = RowIcon.new("scan", MenuSkin.AMBER); scan_icon.hide()
+	subtitle_row.add_child(scan_icon); subtitle_row.add_child(subtitle)
+	layout.add_child(subtitle_row)
 	location_bar=LocationBar.new(); location_bar.hide(); layout.add_child(location_bar)
 	# Messages name controls in braces ("press {R1}"): drawn as the same glyphs as the hints.
 	error_label = GlyphText.new("", 20, Color("ffb59c"))
+	error_label.lead_icon = "warn"
 	layout.add_child(error_label); error_label.hide()
 	confirm_panel = Confirmation.new()
 	layout.add_child(confirm_panel); confirm_panel.hide()
@@ -192,13 +213,13 @@ func _ready() -> void:
 	body.add_child(sidebar_panel)
 	sidebar = VBoxContainer.new()
 	sidebar.custom_minimum_size.x = 170
-	sidebar.add_theme_constant_override("separation",2)
+	sidebar.add_theme_constant_override("separation",0)
 	sidebar_panel.add_child(sidebar)
 	# A header lined up with the category names, with its shortcut chip on the right.
-	var category_header := HBoxContainer.new(); category_header.custom_minimum_size.y=32
+	var category_header := HBoxContainer.new(); category_header.custom_minimum_size.y=28
 	var category_title := Label.new(); category_title.text="CATEGORIES"
 	category_title.add_theme_font_size_override("font_size",14); category_title.add_theme_color_override("font_color",MenuSkin.MUTED)
-	MenuSkin.weigh(category_title,MenuSkin.BOLD)
+	MenuSkin.weigh(category_title,MenuSkin.BOLD); MenuSkin.shadow(category_title)
 	category_title.size_flags_horizontal=Control.SIZE_EXPAND_FILL; category_title.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	var title_margin := MarginContainer.new(); title_margin.add_theme_constant_override("margin_left",12)
 	title_margin.size_flags_horizontal=Control.SIZE_EXPAND_FILL; title_margin.add_child(category_title); category_header.add_child(title_margin)
@@ -210,8 +231,23 @@ func _ready() -> void:
 		var button := Button.new()
 		button.text = CATEGORIES[i]
 		button.add_theme_font_size_override("font_size",20)
+		# Button does not draw font shadows. Keep its text for sizing, and draw
+		# the visible caption with a Label, which supports the shared shadow.
+		for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color", "font_disabled_color"]:
+			button.add_theme_color_override(state, Color.TRANSPARENT)
+		var caption := Label.new(); caption.name="CategoryCaption"; caption.text=CATEGORIES[i]
+		caption.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		caption.offset_left=52; caption.offset_right=-12
+		caption.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
+		caption.add_theme_font_size_override("font_size",20); MenuSkin.shadow(caption)
+		caption.mouse_filter=Control.MOUSE_FILTER_IGNORE; button.add_child(caption)
 		button.custom_minimum_size.y = 32
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		button.icon = RowIcon.doubled(CATEGORY_ICONS[i])
+		button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+		button.add_theme_constant_override("h_separation",10)
+		button.add_theme_color_override("icon_normal_color",MenuSkin.MUTED)
+		for state in ["icon_hover_color","icon_pressed_color","icon_focus_color","icon_hover_pressed_color"]: button.add_theme_color_override(state,MenuSkin.TEXT)
 		for style in ["normal","pressed"]: button.add_theme_stylebox_override(style,sidebar_box(Color.TRANSPARENT))
 		button.add_theme_stylebox_override("hover",sidebar_box(Color("102860")))
 		button.focus_mode = Control.FOCUS_NONE
@@ -219,6 +255,7 @@ func _ready() -> void:
 		sidebar.add_child(button); sidebar_buttons.append(button)
 	# Keep category IDs stable while putting the everyday route first.
 	sidebar.move_child(sidebar_buttons[7],1)
+	sidebar_buttons[EVERYDAY].hide()
 	sidebar.move_child(sidebar_buttons[8],sidebar_buttons[3].get_index()+1)
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -262,6 +299,9 @@ func _ready() -> void:
 	edges.panel=self
 	scroll_frame.add_child(edges)
 	edges.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var pointer := preload("res://scripts/ui/menu_pointer.gd").new()
+	pointer.menu=self; pointer.scroll=scroll
+	scroll_frame.add_child(pointer)
 	column = VBoxContainer.new()
 	column.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	column.add_theme_constant_override("separation",6)
@@ -281,9 +321,10 @@ func _ready() -> void:
 	help_frame.add_child(help_label)
 	layout.add_child(help_frame)
 	hints = preload("res://scripts/ui/shortcut_footer.gd").new()
+	hints.pressed.connect(footer_pressed)
 	hints.add_theme_font_size_override("font_size",18)
 	hints.add_theme_color_override("font_color",MenuSkin.MUTED)
-	hints.custom_minimum_size.y=48
+	hints.custom_minimum_size.y=42
 	layout.add_child(hints)
 	preview_button=Button.new(); preview_button.text="Adjust with preview"
 	preview_button.focus_mode=Control.FOCUS_NONE
@@ -303,9 +344,11 @@ func sidebar_box(colour: Color, chosen := false) -> StyleBoxFlat:
 	# The open category is a lit bar with a light top-left edge.
 	var style := MenuSkin.box(Color("2c58c0") if chosen else colour,Color("88a8e8"),0,6)
 	style.content_margin_left=12; style.content_margin_right=12
-	# Nine categories must fit beside a page with three lines of help.
-	style.content_margin_top=3; style.content_margin_bottom=3
-	if chosen: style.border_width_top=2; style.border_width_left=2; style.content_margin_left=10
+	# Nine categories must fit beside a page with three lines of help. With their
+	# icons they get a little more room; Larger text hides the icons and keeps it tight.
+	var room := 3 if host.menu_large_text else 5
+	style.content_margin_top=room; style.content_margin_bottom=room
+	if chosen: style.border_width_top=2; style.border_width_left=2
 	return style
 
 ## A small key chip, such as "Q / E", so shortcuts read apart from content.
@@ -362,7 +405,7 @@ func switch_category(delta: int) -> void:
 	remember(); clear_input()
 	sections[category] = subsection
 	# Step through the sidebar as it reads, not through the category ids.
-	var order: Array = sidebar_buttons.duplicate()
+	var order: Array = sidebar_buttons.filter(func(button): return button.visible)
 	order.sort_custom(func(a, b): return a.get_index() < b.get_index())
 	category = sidebar_buttons.find(order[posmod(order.find(sidebar_buttons[category])+delta,order.size())])
 	subsection = int(sections.get(category,0))
@@ -383,6 +426,7 @@ func restore(state: Dictionary) -> void:
 	clear_input(); render()
 
 func back() -> void:
+	if not editing_id.is_empty(): finish_editing(); return
 	if preview:
 		remember(); preview = false; clear_input(); render(); return
 	remember(); clear_input()
@@ -431,6 +475,19 @@ func open_my_room(index: int) -> void:
 
 ## The room quick switch: left/right moves through Custom, the built-in moods
 ## and your saved rooms, changing the room at once.
+## The everyday controls the pause and home menus carry under Room: the picture
+## preset and game volume from the Everyday page, as compact rows you adjust
+## with left and right.
+func quick_controls() -> Array:
+	var result: Array = [room_choice("pause.room")]
+	for source in catalog.pages(EVERYDAY)[0].rows:
+		if source.id in ["quick.preset","quick.game_volume"]: result.append(source.duplicate())
+	result[1].id="pause.preset"; result[1].label="Picture"; result[1]["row_icon"]="tv"
+	result[2].id="pause.game_volume"; result[2].label="Volume"; result[2]["row_icon"]="audio"
+	for row in result:
+		row.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"stacked":true,"compact":true,"meter":false}, true)
+	return result
+
 func room_choice(id: String) -> Dictionary:
 	var choices: Array = host.rooms.choices()
 	return {"id":id,"label":"Room","kind":"choice","choices":choices.map(func(pair): return pair[1]),"visual":true,"row_icon":"lamp",
@@ -501,7 +558,7 @@ func up_entry(id: String, path: String, callback: Callable) -> Array:
 	var parent := path.get_base_dir()
 	if parent.is_empty() or parent==path: return []
 	var name := parent.get_file() if not parent.get_file().is_empty() else parent
-	return [entry(catalog.action(id,"Up to "+name,callback.bind(parent),"Go to the folder that contains this one.",false,""),SECTION_INSIDE,"up")]
+	return [entry(catalog.action(id,"Up to "+name,callback.bind(parent),"",false,""),SECTION_INSIDE,"up")]
 
 ## The other places a file screen can jump to: home, SD cards, drives, a typed path.
 func place_entries(prefix: String, open: Callable, path_entry: Callable, extra: Array = [], typed := true) -> Array:
@@ -579,8 +636,9 @@ static func short_path(path: String, keep := 2) -> String:
 
 ## A compact action in a two-column grid of tiles. Actions you go to sit in
 ## tiles; rows you adjust with left/right, and panels, stay full width.
-func tile(item: Dictionary, icon: String, emphasis := "") -> Dictionary:
-	item.merge({"layout":"tile","row_icon":icon,"compact":true,"value":""}, true)
+## A tile in a grid of tiles. Tiles of one `group` share a grid of `columns`.
+func tile(item: Dictionary, icon: String, emphasis := "", group := "tiles", columns := 2) -> Dictionary:
+	item.merge({"layout":"tile","row_icon":icon,"compact":true,"value":"","group":group,"columns":columns}, true)
 	if not emphasis.is_empty(): item["emphasis"]=emphasis
 	return item
 
@@ -657,31 +715,46 @@ func render() -> void:
 	var group := ""
 	var section := ""
 	var grid: GridContainer
-	music_heading=null
+	music_heading=null; deck_detail=null
 	var music_layout: VBoxContainer
 	var transport_grid: HBoxContainer
 	var group_row := -1
 	var group_index := 0
 	var tiles: GridContainer
-	var tile_items: Array = items.filter(func(entry): return entry.get("layout","")=="tile")
-	var tile_number := 0
+	var tile_group := ""
+	var tile_counts := {}
+	var tile_numbers := {}
+	for entry in items:
+		if entry.get("layout","")=="tile":
+			var named := str(entry.get("group","tiles")); tile_counts[named]=int(tile_counts.get(named,0))+1
 	for item in items:
 		var parent: Container=column
 		if item.get("layout","") in ["transport","music_seek","music_link","video_resume","video_seek"]:
 			if music_layout==null:
-				var watching := str(item.layout).begins_with("video_")
-				var panel := PanelContainer.new()
-				panel.add_theme_stylebox_override("panel",MenuSkin.box(Color("222a30"),Color("47535b"),1,12))
-				column.add_child(panel)
-				music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",4); panel.add_child(music_layout)
-				var badge := Label.new(); badge.text="NOW PLAYING" if watching else "MUSIC PLAYER"; badge.add_theme_font_size_override("font_size",16); MenuSkin.weigh(badge,MenuSkin.BOLD); badge.add_theme_color_override("font_color",MenuSkin.AMBER); music_layout.add_child(badge)
-				if not watching and not host.music.kind.is_empty():
-					music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
-					music_heading.autowrap_mode=TextServer.AUTOWRAP_OFF; music_heading.max_lines_visible=2; music_heading.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-					music_layout.add_child(music_heading)
+				var watching: bool = items.any(func(entry): return str(entry.get("layout","")).begins_with("video_"))
+				var helper = videos if watching else music
+				# The Now playing deck, after the Mega-CD control panel: the LCD
+				# and the title, the timeline, then one row of keys.
+				# The well fills the panel; the deck sits inside it, inset.
+				var panel := PanelContainer.new(); panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
+				panel.add_child(MenuSkin.pixel_panel("music_well"))
+				var inset := MarginContainer.new()
+				for side in ["left","top","right","bottom"]: inset.add_theme_constant_override("margin_"+side,8)
+				panel.add_child(inset); column.add_child(panel)
+				music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",6); inset.add_child(music_layout)
+				var display := HBoxContainer.new(); display.add_theme_constant_override("separation",12); music_layout.add_child(display)
+				var lcd := LcdReadout.new(); lcd.source=helper.deck_state; display.add_child(lcd)
+				var words := VBoxContainer.new(); words.add_theme_constant_override("separation",0)
+				words.size_flags_horizontal=Control.SIZE_EXPAND_FILL; words.alignment=BoxContainer.ALIGNMENT_CENTER; display.add_child(words)
+				music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
+				deck_detail=Label.new(); deck_detail.add_theme_font_size_override("font_size",16); deck_detail.add_theme_color_override("font_color",MenuSkin.MUTED)
+				for line in [music_heading,deck_detail]:
+					line.autowrap_mode=TextServer.AUTOWRAP_OFF; line.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+					MenuSkin.shadow(line); words.add_child(line)
+				deck_text=helper.deck_text
 			if item.layout=="transport":
 				if transport_grid==null:
-					transport_grid=HBoxContainer.new(); transport_grid.add_theme_constant_override("separation",12); transport_grid.alignment=BoxContainer.ALIGNMENT_CENTER; music_layout.add_child(transport_grid)
+					transport_grid=HBoxContainer.new(); transport_grid.add_theme_constant_override("separation",6); music_layout.add_child(transport_grid)
 				parent=transport_grid
 			else: parent=music_layout
 		if item.get("layout","")=="card":
@@ -694,10 +767,18 @@ func render() -> void:
 			parent=grid
 			item["nav_row"]=group_row+group_index/2; item["nav_col"]=group_index%2; group_index+=1
 		if item.get("layout","")=="tile":
-			if tiles==null:
-				tiles=GridContainer.new(); tiles.columns=2; tiles.add_theme_constant_override("h_separation",8); tiles.add_theme_constant_override("v_separation",6); column.add_child(tiles)
+			var named := str(item.get("group","tiles"))
+			if tiles==null or named!=tile_group:
+				tile_group=named
+				# A group can carry its own heading, above its grid.
+				if item.has("section") and item.section!=section:
+					section=item.section
+					var heading := Label.new(); heading.text=section; heading.add_theme_font_size_override("font_size",16); MenuSkin.weigh(heading,MenuSkin.BOLD); heading.add_theme_color_override("font_color",MenuSkin.MUTED)
+					column.add_child(heading)
+				tiles=GridContainer.new(); tiles.columns=int(item.get("columns",2)); tiles.add_theme_constant_override("h_separation",8); tiles.add_theme_constant_override("v_separation",6); column.add_child(tiles)
 			parent=tiles
-			item["tile_index"]=tile_number; item["tile_count"]=tile_items.size(); tile_number+=1
+			item["tile_index"]=int(tile_numbers.get(named,0)); item["tile_count"]=int(tile_counts[named]); item["tile_columns"]=tiles.columns
+			tile_numbers[named]=int(item.tile_index)+1
 		if item.get("layout","") in ["letter","key"]:
 			if grid==null:
 				grid=GridContainer.new(); grid.columns=10 if item.get("layout","")=="key" else 6; grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); column.add_child(grid)
@@ -732,7 +813,13 @@ func render() -> void:
 	section_rule.visible = section_bar.visible
 	for i in range(sidebar_buttons.size()):
 		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("3b3329") if i==category else Color.TRANSPARENT,i==category))
-		sidebar_buttons[i].add_theme_color_override("font_color",MenuSkin.TEXT if i==category else MenuSkin.MUTED)
+		sidebar_buttons[i].add_theme_color_override("icon_normal_color",MenuSkin.TEXT if i==category else MenuSkin.MUTED)
+		# Larger text needs the sidebar's width for its words: the icons step aside.
+		sidebar_buttons[i].icon = null if host.menu_large_text else RowIcon.doubled(CATEGORY_ICONS[i])
+		var caption: Label = sidebar_buttons[i].get_node("CategoryCaption")
+		caption.offset_left = 12 if host.menu_large_text else 52
+		caption.add_theme_color_override("font_color", MenuSkin.TEXT if i==category else MenuSkin.MUTED)
+		MenuSkin.weigh(caption,MenuSkin.SEMIBOLD if i==category else MenuSkin.REGULAR)
 		MenuSkin.weigh(sidebar_buttons[i],MenuSkin.SEMIBOLD if i==category else MenuSkin.REGULAR)
 	if mode=="settings":
 		var pages: Array = catalog.pages(category)
@@ -779,7 +866,7 @@ func render() -> void:
 	subtitle.visible = not preview and not location_bar.visible
 	position = Vector2(36,522) if preview else Vector2(36,28)
 	size = Vector2(888,170) if preview else Vector2(888,664)
-	help_label.visible = not preview and mode!="help" # help pages use the room for the article
+	help_label.visible = not preview and not mode in ["help","library"] # These pages use the room for content.
 	help_frame.visible = help_label.visible
 	if preview: heading.add_theme_font_size_override("font_size",22)
 	else: heading.add_theme_font_size_override("font_size",32)
@@ -796,6 +883,8 @@ func render() -> void:
 			selected_id = row.item.id
 			if row.item.id==preferred: break
 	rendering = false
+	if not rows.any(func(row): return row.item.id==editing_id): editing_id=""
+	for row in rows: row.editing = not editing_id.is_empty() and row.item.id==editing_id
 	select(selected_id,false)
 	style_rows()
 	if mode=="launch":
@@ -857,6 +946,38 @@ func selected_row():
 		if row.item.id==selected_id: return row
 	return null
 
+## Moving from a tile into another grid of tiles lands on the tile nearest
+## across, not always the first: down from a middle tile stays in the middle.
+func aligned(candidate: int, from_row) -> int:
+	var row = rows[candidate]
+	if row.item.get("layout","")!="tile" or from_row==null or from_row.item.get("layout","")!="tile": return candidate
+	var columns: int=int(row.item.get("tile_columns",2))
+	var first: int=candidate-int(row.item.tile_index)
+	var line: int=int(row.item.tile_index)/columns
+	var across: float=from_row.get_global_rect().get_center().x
+	var best := candidate
+	var gap := INF
+	for option in range(line*columns, mini(line*columns+columns, int(row.item.tile_count))):
+		var other = rows[first+option]
+		if other.disabled: continue
+		var distance := absf(other.get_global_rect().get_center().x-across)
+		if distance<gap: gap=distance; best=first+option
+	return best
+
+## A quick tile (Room, Picture, Volume on the pause menu) is adjusted in place:
+## A starts and finishes, left and right change it, B or moving away finishes.
+func start_editing(row) -> void:
+	editing_id=str(row.item.id)
+	for each in rows: each.editing=each.item.id==editing_id; each.update_selection_style(); each.refresh()
+	refresh_hints(row)
+
+func finish_editing() -> void:
+	if editing_id.is_empty(): return
+	editing_id=""
+	for each in rows:
+		if each.editing: each.editing=false; each.update_selection_style(); each.refresh()
+	refresh_hints(selected_row())
+
 func select(id: String, user_action := true) -> void:
 	if rendering or selecting: return
 	if user_action:
@@ -865,6 +986,7 @@ func select(id: String, user_action := true) -> void:
 	for row in rows:
 		if row.item.id==id and not row.disabled: candidate=row
 	if candidate==null: return
+	if not editing_id.is_empty() and editing_id!=id: finish_editing()
 	selecting = true
 	if user_action and selected_id!=id:
 		play_menu_sound()
@@ -913,7 +1035,10 @@ func within_column(control: Control) -> Rect2:
 	return Rect2(control.get_global_position() - column.get_global_position(), control.size)
 
 func refresh_labels() -> void:
-	if is_instance_valid(music_heading): music_heading.text=host.music.now_playing()
+	if is_instance_valid(music_heading) and deck_text.is_valid():
+		var lines: PackedStringArray=deck_text.call()
+		music_heading.text=lines[0]; deck_detail.text=lines[1] if lines.size()>1 else ""
+		deck_detail.visible=not deck_detail.text.is_empty()
 	var row = selected_row()
 	# Picture pages change whichever picture is in use; say which, plainly.
 	var context: String
@@ -933,7 +1058,7 @@ func refresh_labels() -> void:
 	elif mode=="radio_url": subtitle.text="Direct MP3 streams · On-screen keys or keyboard"
 	elif mode=="browser": subtitle.text = library.current_dir
 	elif mode=="library":
-		subtitle.text = ("Finding your games… %d found · You can browse while we look" % rom_index.total()) if rom_index.scanning else (count_caption(rom_index.total(),"game")+" · "+count_caption(rom_index.games.values().filter(func(found): return not found.is_empty()).size(),"console")+" · Ready to play" if rom_index.total()>0 else "%d consoles supported · Your files stay where they are" % library.Registry.SYSTEMS.size())
+		subtitle.text = ("Finding your games… %d found · You can browse while we look" % rom_index.total()) if rom_index.scanning else (count_caption(rom_index.total(),"game")+" · "+count_caption(rom_index.games.values().filter(func(found): return not found.is_empty()).size(),"console") if rom_index.total()>0 else "%d consoles supported · Your files stay where they are" % library.Registry.SYSTEMS.size())
 	elif mode=="games":
 		var count: int = games.game_entries().size()
 		subtitle.text = count_caption(count,"game")
@@ -956,15 +1081,20 @@ func refresh_labels() -> void:
 	# The pause menu and settings keep their words for the help window; the line
 	# under the title stays for browsing, where it says where you are.
 	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible and not mode in ["pause","settings"]
+	subtitle_row.visible = subtitle.visible
+	scan_icon.visible = mode=="library" and rom_index.scanning
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0 and notification_context==state_key(): help_label.text = notification
 	elif mode=="help": help_label.text=""
 	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in any console list and press {X}."
 	elif mode=="library" and not rom_index.message.is_empty(): help_label.text=rom_index.message
-	elif mode=="library" and host.default_rom_dir.is_empty(): help_label.text="Choose Set up your ROM library and select your main ROM folder. Your supported consoles appear here automatically."
-	elif mode=="library" and not rom_index.scanning and rom_index.total()==0: help_label.text="No supported games here yet. Check Library locations. Cartridges can be plain files or ZIPs; Sega CD discs can be .cue/.bin, or CHD in a Sega CD folder. 7z and RAR are not supported."
+	elif mode=="library": help_label.text=""
 	elif row!=null: help_label.text = str(row.item.get("help",""))
 	else: help_label.text = library.message if mode=="browser" else "Nothing here yet. {B} goes back."
+	if mode=="library":
+		help_frame.visible = not preview and not help_label.text.is_empty()
+		help_label.visible = help_frame.visible
+	help_frame.modulate.a = 0.0 if help_label.text.is_empty() else 1.0
 	if preview and row!=null: compact.text = "▸  %s    ‹  %s  ›" % [row.item.label,row.formatted_value()]
 	refresh_hints(row)
 
@@ -986,38 +1116,59 @@ func refresh_hints(row) -> void:
 	hints.controller=pad
 	var back_caption := ("Return to game" if host.emulator.loaded else "Close menu") if mode=="pause" else "Back"
 	back_button.text=back_caption+("" if pad else "  [Backspace]")
-	back_glyph.visible=pad
+	# One place for prompts: the footer. The header keeps the title and clock.
+	back_button.visible=false
+	back_glyph.visible=false
 	var category_hint: Label = sidebar.find_child("CategoryHint",true,false)
 	category_hint.text="Q / E"; category_hint.visible=not pad; category_pad_hint.visible=pad
 	section_hint.text="Z / C"; section_hint.visible=not pad; section_pad_hint.visible=pad
-	preview_button.visible=preview_available() and not preview
+	preview_button.visible=false
 	preview_button.text="Preview" if pad else "Preview  [X]"
-	preview_glyph.visible=pad and preview_button.visible
+	preview_glyph.visible=false
 	# One vocabulary everywhere: Deck glyphs for the pad, key names for the keyboard.
 	var parts: Array=["↑↓ Select"]
 	var open := "A Open" if pad else "Enter Open"
 	var go_back := "B Back" if pad else "Backspace Back"
 	if mode=="settings":
+		# Up and down need no saying here; the footer keeps room for what changes.
+		parts=[]
 		if row!=null:
 			if row.item.kind=="toggle": parts.append("←→ Change")
 			elif row.item.kind!="action": parts.append("←→ Adjust")
 			elif str(row.item.get("value",""))=="Apply": parts.append("A Apply" if pad else "Enter Apply")
 			else: parts.append(open)
 			if row.item.has("default"): parts.append("Y Reset")
-		if preview: parts.append("B Settings" if pad else "Backspace Settings")
+		if preview_available() and not preview: parts.append("X Preview")
+		parts.append(("B Settings" if pad else "Backspace Settings") if preview else go_back)
 	elif mode in ["games","recent","favourites"]:
 		parts.append(open)
 		if row!=null and row.item.has("rom_path"): parts.append_array(["X Favourite","Y Full title" if search_query.is_empty() else "Y Clear search"])
+		parts.append(go_back)
 	elif mode=="browser": parts.append_array([open,go_back,"R1 Use folder"] if pad else [open,go_back])
 	elif mode=="help": parts=["↑↓ Scroll",go_back]
 	elif mode=="library":
 		parts.append_array([open,go_back])
 		if not host.default_rom_dir.is_empty(): parts.append("R1 Refresh" if pad else "R Refresh")
-	elif mode=="pause": parts.append_array([open,("B " if pad else "Backspace ")+back_caption])
+	elif mode=="pause":
+		# While a quick tile is being adjusted, A and B both finish adjusting.
+		if row!=null and editing_id==str(row.item.id): parts=["←→ Change", "A Done" if pad else "Enter Done", "B Done" if pad else "Backspace Done"]
+		else:
+			if row!=null and row.item.get("quick",false): parts.append("A Adjust" if pad else "Enter Adjust")
+			elif row!=null and row.item.kind in ["choice","number"]: parts.append("←→ Adjust")
+			else: parts.append(open)
+			parts.append(("B " if pad else "Backspace ")+back_caption)
 	elif mode=="confirm": parts.append_array(["A Choose" if pad else "Enter Choose","B Cancel" if pad else "Backspace Cancel"])
 	elif mode in ["folder_path","rename","radio_url"]: parts=["D-pad Keys","A Type",go_back] if pad else ["Type or click keys","Enter Submit",go_back]
 	else: parts.append_array([open,go_back])
 	hints.text=" · ".join(parts)
+
+## A footer prompt clicked with the mouse does what its button would.
+func footer_pressed(action: String) -> void:
+	var control := action.get_slice(" ",0)
+	if control in ["A","Enter"]: activate()
+	elif control in ["B","Backspace"]: back()
+	elif control=="X" and action.ends_with("Preview"): toggle_preview()
+	elif control=="Y" and action.ends_with("Reset"): reset_option()
 
 func navigate_library(next: Vector2i) -> void:
 	var row=selected_row()
@@ -1053,20 +1204,31 @@ func navigate(next: Vector2i) -> void:
 	for i in range(rows.size()):
 		if rows[i].item.id==selected_id: index=i
 	if index<0: return
+	var from_row = rows[index]
 	if rows[index].item.get("layout","")=="tile":
 		var position: int=rows[index].item.tile_index
 		var count: int=rows[index].item.tile_count
+		var columns: int=int(rows[index].item.get("tile_columns",2))
 		var first: int=index-position
+		# A quick tile being adjusted takes left and right; up or down finishes.
+		if editing_id==selected_id:
+			if next.x!=0: adjust(next.x); return
+			finish_editing()
 		if next.x!=0:
 			var beside := position+next.x
-			if beside>=0 and beside<count and beside/2==position/2 and not rows[first+beside].disabled: select(rows[first+beside].item.id)
+			while beside>=0 and beside<count and beside/columns==position/columns:
+				if not rows[first+beside].disabled:
+					select(rows[first+beside].item.id); break
+				beside+=next.x
 			return
 		if next.y!=0:
-			# Step a grid row at a time; prefer the same column, else the other.
-			var line := position/2+next.y
-			while line>=0 and line*2<count:
-				for option in [line*2+position%2, line*2+1-position%2]:
-					if option<count and not rows[first+option].disabled:
+			# Step a grid row at a time; prefer the same column, else the nearest.
+			var line := position/columns+next.y
+			while line>=0 and line*columns<count:
+				var options: Array = range(line*columns, mini(line*columns+columns, count))
+				options.sort_custom(func(a, b): return absi(a%columns-position%columns) < absi(b%columns-position%columns))
+				for option in options:
+					if not rows[first+option].disabled:
 						select(rows[first+option].item.id); return
 				line+=next.y
 			# Past the grid: carry on from its first or last tile.
@@ -1077,8 +1239,8 @@ func navigate(next: Vector2i) -> void:
 			while candidate>=0 and candidate<rows.size() and rows[candidate].item.get("layout","")=="transport": candidate+=next.y
 		while candidate>=0 and candidate<rows.size():
 			if not rows[candidate].disabled:
-				if rows[candidate].item.get("layout","")=="transport": select("transport.play")
-				else: select(rows[candidate].item.id)
+				if rows[candidate].item.get("layout","")=="transport": select(lead_key(candidate))
+				else: select(rows[aligned(candidate, from_row)].item.id)
 				return
 			candidate+=next.y
 	elif next.x!=0:
@@ -1089,6 +1251,16 @@ func navigate(next: Vector2i) -> void:
 				candidate+=next.x
 		elif mode in ["browser","games","recent","favourites"]: jump_entries(next.x*10)
 		else: adjust(next.x)
+
+## The key a row of deck keys is entered at: the one marked "lead", else the first.
+func lead_key(index: int) -> String:
+	var first := index
+	while first>0 and rows[first-1].item.get("layout","")=="transport": first-=1
+	var last := index
+	while last<rows.size()-1 and rows[last+1].item.get("layout","")=="transport": last+=1
+	for i in range(first,last+1):
+		if rows[i].item.get("lead",false) and not rows[i].disabled: return str(rows[i].item.id)
+	return str(rows[first].item.id)
 
 func jump_entries(amount: int) -> void:
 	if mode=="games":
@@ -1123,7 +1295,7 @@ func adjust(delta: int) -> void:
 	if row!=null and row.item.kind=="seek":
 		row.item.setter.call(float(row.item.getter.call())+10*delta); row.refresh(); return
 	if row==null or row.disabled: return
-	if mode!="settings" and not (mode=="pause" and (str(row.item.id).begins_with("video.") or row.item.id=="pause.room")): return
+	if mode!="settings" and not (mode=="pause" and (str(row.item.id).begins_with("video.") or row.item.get("quick",false))): return
 	var item: Dictionary = row.item
 	match item.kind:
 		"number": item.setter.call(clampf(snappedf(float(item.getter.call())+delta*float(item.step),float(item.step)),item.min,item.max))
@@ -1134,6 +1306,11 @@ func adjust(delta: int) -> void:
 func activate() -> void:
 	var row=selected_row()
 	if row==null or row.disabled: return
+	if row.item.get("quick",false):
+		play_menu_sound(true)
+		if editing_id==str(row.item.id): finish_editing()
+		else: start_editing(row)
+		return
 	if row.item.kind=="action":
 		play_menu_sound(true)
 		host.menu_vibrate(1.0, 0.07)

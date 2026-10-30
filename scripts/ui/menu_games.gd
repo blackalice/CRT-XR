@@ -32,7 +32,7 @@ func open_library_tools() -> void:
 func library_items() -> Array:
 	var h=host
 	if menu.rom_index.total()==0:
-		var setup: Array = [menu.card(menu.catalog.action("library.setup","Set up your ROM library" if h.default_rom_dir.is_empty() else "Choose a ROM folder",open_library_tools,"Choose your main ROM folder or SD card. Supported games appear here automatically; your files stay where they are."),"CHOOSE A FOLDER TO GET STARTED","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP")]
+		var setup: Array = [menu.card(menu.catalog.action("library.setup","Set up your ROM library" if h.default_rom_dir.is_empty() else "Choose a ROM folder",open_library_tools,"Choose your ROM folder or SD card. Supported games are found automatically."),"CHOOSE A FOLDER TO GET STARTED","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP")]
 		if menu.videos.videos_shown(): setup.append(menu.videos.videos_card("LIBRARY SETUP"))
 		var resumable: Array=host.video_library.continue_watching(5) if menu.videos.videos_shown() else []
 		if not resumable.is_empty(): setup.append(menu.videos.continue_card(resumable.size(),"LIBRARY SETUP"))
@@ -50,12 +50,12 @@ func library_items() -> Array:
 		var id: String=system
 		var count: int=menu.rom_index.games.get(id,[]).size()
 		if count==0: continue
-		result.append(menu.card(menu.catalog.action("library.system."+id,menu.library.Registry.SYSTEMS[id].get("short",menu.library.Registry.SYSTEMS[id].name),func(): open_system(id),"Open all %s cartridges in your library. Folders for other consoles stay out of this view." % menu.library.Registry.SYSTEMS[id].name,false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
+		result.append(menu.card(menu.catalog.action("library.system."+id,menu.library.Registry.SYSTEMS[id].get("short",menu.library.Registry.SYSTEMS[id].name),func(): open_system(id),"",false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
 	if menu.videos.videos_shown(): result.append(menu.videos.videos_card("YOUR CONSOLES"))
 	if h.default_rom_dir.is_empty():
 		result.push_front(menu.card(menu.catalog.action("library.setup","Set up your ROM library",open_library_tools,"Choose the folder containing snes, nes, megadrive and your other systems. Subfolders are included automatically."),"START HERE","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP"))
 	var detail := "Choose your main ROM folder" if h.default_rom_dir.is_empty() else "Folders · SD cards · Refresh"
-	result.append(menu.card(menu.catalog.action("library.locations","Library locations",open_library_tools,"Set the main roms folder once. CRT XR finds supported consoles and leaves the files where they are.",false,detail),"MAKE YOURSELF AT HOME","locations",Color("aeb6bf"),"YOUR CONSOLES" if menu.rom_index.total()>0 else "LIBRARY"))
+	result.append(menu.card(menu.catalog.action("library.locations","Library locations",open_library_tools,"Choose your main ROM folder.",false,detail),"MAKE YOURSELF AT HOME","locations",Color("aeb6bf"),"YOUR CONSOLES" if menu.rom_index.total()>0 else "LIBRARY"))
 	return result
 
 func library_tool_items() -> Array:
@@ -73,7 +73,7 @@ func library_tool_items() -> Array:
 	if not VideoSession.available(): result.append_array(menu.videos.video_setup_items(videos))
 	else:
 		if h.video_dir.is_empty():
-			result.append(menu.entry(menu.catalog.action("library.video_folder","Choose a video folder",menu.videos.open_video_folder_picker,"Optional. Pick a folder of MP4 or MKV files to watch on the TV; they appear after your consoles.",false,"›"),videos,"video","","MP4 and MKV files, shown after your consoles"))
+			result.append(menu.entry(menu.catalog.action("library.video_folder","Choose a video folder",menu.videos.open_video_folder_picker,"Choose a folder containing MP4 or MKV files.",false,"›"),videos,"video","","MP4 and MKV files, shown after your consoles"))
 		else:
 			var count: int=h.video_library.count(h.video_dir)
 			result.append(menu.entry(menu.catalog.action("library.video_folder","Change video folder",menu.videos.open_video_folder_picker,"Pick a different video folder. Your files stay where they are.",false,"›"),videos,"video","",menu.short_path(h.video_dir)+" · "+menu.count_caption(count,"video")))
@@ -239,7 +239,9 @@ func open_history(which: String) -> void:
 	menu.remember(); menu.clear_input(); menu.search_query=""; menu.search_field.text=""; menu.mode=which; menu.render()
 
 func game_item(path: String, label: String) -> Dictionary:
-	var item: Dictionary = menu.catalog.action("game:"+path,label,func(): select_file(path),"Open this cartridge or mark it as a favourite.",false,"★" if path in host.play_history.favourites else "›")
+	var favourite: bool = path in host.play_history.favourites
+	var item: Dictionary = menu.catalog.action("game:"+path,label,func(): select_file(path),"Open this cartridge or mark it as a favourite.",false,"" if favourite else "›")
+	if favourite: item["value_icon"]="heart"
 	item["rom_path"]=path
 	item["layout"]="game"
 	var folder := path.get_base_dir().get_file()
@@ -321,7 +323,7 @@ func launch_items() -> Array:
 	var path := launch_path
 	return [menu.catalog.action("launch.continue","Continue",func(): launch_game(path,true),path.get_file().get_basename()+" · resume point saved "+menu.ago(host.emulator.state_stamp(host.emulator.auto_path_for(path)))),
 		menu.catalog.action("launch.fresh","Start fresh",func(): launch_game(path,false),"Start from the title screen. Cartridge battery saves and manual states are kept."),
-		menu.catalog.action("launch.cancel","Back",menu.back,"Return without starting this game.")]
+		menu.catalog.action("launch.cancel","Back",menu.back,"")]
 
 ## Recently played or favourites, with Jump to letter on long lists.
 func history_items() -> Array:

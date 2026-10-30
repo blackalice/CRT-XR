@@ -27,9 +27,10 @@ func run():
 	check(m.items.size()==1 and m.items[0].id=="library.setup","Empty library offers a single setup action")
 	await capture("empty-library")
 	page(7); await settle()
-	check(m.sidebar.get_child(1)==m.sidebar_buttons[7],"Quick settings is first in the sidebar")
-	m.switch_category(1); check(m.category==0,"Next category from Quick settings follows sidebar order")
-	m.switch_category(-1); check(m.category==7,"Previous category from View returns to Quick settings")
+	check(not m.sidebar_buttons[7].visible,"Quick settings is not a category: its everyday controls sit on the pause menu")
+	m.switch_category(1); check(m.category==0,"Next category from the everyday page follows sidebar order")
+	m.switch_category(-1); check(m.category==6,"Previous category from View wraps to About & Help")
+	page(7); await settle()
 	check(m.items.map(func(i):return i.id)==["quick.view.distance","quick.view.height_offset","quick.view.recenter","quick.preset","quick.room","quick.game_volume","quick.music_volume"],"Quick settings exposes all seven everyday controls")
 	m.select("quick.view.distance",false); await settle()
 	var distance=m.selected_row(); var track_width: float=distance.track.size.x

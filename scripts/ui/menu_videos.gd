@@ -149,6 +149,16 @@ func play_video(path: String, from_seconds: float) -> void:
 	host.was_paused_before_menu=false
 	host.close_settings()
 
+## The deck's LCD: paused or playing, and the elapsed time.
+func deck_state() -> Dictionary:
+	return {"state":"pause" if host.video.paused else "play","track":-1,"seconds":int(host.video.clock)}
+
+## The deck's two lines: the video, then its format and length.
+func deck_text() -> PackedStringArray:
+	var video=host.video
+	return PackedStringArray([video.path.get_file().get_basename(),
+		"%s · %s" % [str(video.info.get("codec","")).to_upper(),VideoLibrary.clock(float(video.info.get("duration",0.0)))]])
+
 func video_pause_items() -> Array:
 	var h=host
 	var video=h.video
@@ -158,17 +168,22 @@ func video_pause_items() -> Array:
 		"getter":func(): return video.style,"setter":func(value):
 			video.style=int(value); video.decoder.set_style(video.style); h.remember_video_position(),
 		"help":"How a widescreen video fills the 4:3 tube. Y changes it while watching; each video remembers its own."}
-	var resume: Dictionary=menu.catalog.action("resume","Resume",h.close_settings,"Carry on watching from the timeline position. A also pauses and plays while watching. %s · decoding: %s" % [str(video.info.get("codec","")).to_upper(),video.decoding()],false,"▶")
-	resume["layout"]="video_resume"
+	var resume: Dictionary=menu.catalog.action("resume","Resume",h.close_settings,"A pauses and plays while watching. %s · decoding: %s" % [str(video.info.get("codec","")).to_upper(),video.decoding()],false,"▶")
+	resume.merge({"layout":"transport","icon":"play","caption":"Resume","lead":true})
 	var timeline := {"id":"video.seek","label":"Position","kind":"seek","layout":"video_seek","getter":func(): return video.clock,"setter":func(value): video.seek_to(float(value)),
 		"duration":func(): return length,"progress":func(): return VideoLibrary.clock(video.clock)+" / "+VideoLibrary.clock(length),
 		"help":"Left/right moves 10 seconds and repeats while held; drag or click the timeline to jump. The TV follows as you scrub."}
 	var tape_row := {"id":"video.tape","label":"Tape look","kind":"choice","choices":VideoSession.TAPES,"default":0,
 		"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); video.set_tape(h.video_tape); h.save_library(),
 		"help":"Plays videos as if from a VHS tape, with noise bars when you fast-forward or rewind. Applies to every video; also in Videos → VCR."}
-	var items: Array=[resume,timeline,
+	# The deck: the timeline, then Resume, Start over and Stop as its keys.
+	var restart: Dictionary = menu.catalog.action("video.restart","Start over",func(): video.seek_to(0.0); h.was_paused_before_menu=false; h.close_settings(),"")
+	restart.merge({"layout":"transport","icon":"refresh","caption":"Start over"})
+	var stop: Dictionary = menu.catalog.action("video.stop","Stop video",func(): h.stop_video(); menu.open_pause(),"Saves your place and returns the TV to its test signal.")
+	stop.merge({"layout":"transport","icon":"stop","caption":"Stop"})
+	for control in [timeline, resume, restart, stop]: control["skin"]="music"
+	var items: Array=[timeline,resume,restart,stop,
 		style_row,tape_row,menu.room_choice("pause.room")]
-	var restart: Dictionary = menu.tile(menu.catalog.action("video.restart","Start over",func(): video.seek_to(0.0); h.was_paused_before_menu=false; h.close_settings(),"Plays this video again from the start."),"refresh")
 	var subtitles: PackedStringArray=video.subtitle_names()
 	if not subtitles.is_empty():
 		items.append({"id":"video.subtitles","label":"Subtitles","kind":"choice","choices":["Off"]+Array(subtitles),"default":0,
@@ -178,12 +193,11 @@ func video_pause_items() -> Array:
 		items.append({"id":"video.audio","label":"Audio track","kind":"choice","choices":Array(tracks),"default":0,
 			"getter":func(): return int(video.info.get("audio_track",0)),"setter":func(value): video.select_audio_track(int(value)),
 			"help":"Language or commentary track. X changes it while watching."})
-	items.append_array([restart,menu.tile(menu.catalog.action("video.choose","Choose video",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else ""),"Pick another video from your video folder."),"video"),
-		menu.tile(menu.catalog.action("video.stop","Stop video",func(): h.stop_video(); menu.open_pause(),"Saves your place and returns the TV to its test signal."),"stop"),
-		menu.tile(menu.catalog.action("games","Game library",menu.games.open_library,"Recent, Favourites, consoles and videos."),"cartridge"),
-		menu.tile(menu.catalog.action("quick","Quick settings",func(): menu.category=7; menu.subsection=0; menu.open_settings(),"Everyday picture, placement and volume controls."),"sliders"),
-		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear"),
-		menu.tile(menu.catalog.action("exit","Exit CRT XR",func(): menu.ask("Exit CRT XR?","Your place in this video and your settings will be saved.",h.request_exit),"Close the application."),"exit","danger")])
+	items.append_array([menu.tile(menu.catalog.action("video.choose","Choose video",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else ""),"Pick another video from your video folder."),"video"),
+		menu.tile(menu.catalog.action("games","Game library",menu.games.open_library,"Recent, Favourites, consoles and videos."),"gamepad"),
+		menu.tile(menu.catalog.action("quick","Quick settings",func(): menu.category=7; menu.subsection=0; menu.open_settings(),"Everyday picture, placement and volume controls."),"sliders","","actions",3),
+		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear","","actions",3),
+		menu.tile(menu.catalog.action("exit","Exit CRT XR",func(): menu.ask("Exit CRT XR?","Your place in this video and your settings will be saved.",h.request_exit),"Close the application."),"exit","danger","actions",3)])
 	return items
 
 ## Folder picker for the video folder: folders only, with the videos inside shown as a count.

@@ -1,8 +1,14 @@
 extends Control
-## Small vector icons that say what a row is (a folder, a game, a place, an
-## action) before its text is read. Drawn locally like the console glyphs.
+## Small icons that say what a row is (a folder, a game, a place, an action)
+## before its text is read. Each is a 15×15 pixel sprite in assets/icons/menu
+## (white, tinted here), drawn at twice its size on the menus' 2×2-pixel grid;
+## a kind without a sprite, and the battery, are drawn as vectors below.
+const SPRITES := "res://assets/icons/menu/%s.png"
+const CELL := 2.0
+static var sprites := {}
 var kind := "folder"
 var colour := Color("b2b4b7")
+var shadow := true
 ## For the battery icon: charge left (0..1) and whether it is charging.
 var level := 1.0
 var charging := false
@@ -13,6 +19,47 @@ func _init(icon_kind := "folder", tint := Color("b2b4b7")) -> void:
 	custom_minimum_size = Vector2(30, 30)
 	size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# The sprite snaps to the grid by where it sits, so moving redraws it.
+	set_notify_transform(true)
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSFORM_CHANGED: queue_redraw()
+
+static func sprite(name: String) -> Texture2D:
+	return cached(SPRITES % name)
+
+## A sprite by path, or null without one. Kept here: a texture loaded only for
+## one _draw is freed before the frame renders, and draws as a white square.
+static func cached(path: String) -> Texture2D:
+	if not sprites.has(path): sprites[path] = load(path) if ResourceLoader.exists(path) else null
+	return sprites[path]
+
+## A sprite at twice its size as its own texture, for places that draw an
+## icon themselves (the sidebar's buttons); null without one.
+static func doubled(name: String) -> Texture2D:
+	var key := "doubled:" + name
+	if not sprites.has(key):
+		var picture := sprite(name)
+		var image: Image = picture.get_image() if picture != null else null
+		if image != null:
+			image.resize(image.get_width() * 2, image.get_height() * 2, Image.INTERPOLATE_NEAREST)
+			var shadowed := Image.create_empty(image.get_width(), image.get_height(), false, Image.FORMAT_RGBA8)
+			for y in range(image.get_height() - 2):
+				for x in range(image.get_width() - 2):
+					var alpha := image.get_pixel(x, y).a
+					if alpha > 0: shadowed.set_pixel(x + 2, y + 2, Color(0, 0, 0, alpha))
+			shadowed.blend_rect(image, Rect2i(Vector2i.ZERO, image.get_size()), Vector2i.ZERO)
+			image = shadowed
+		sprites[key] = ImageTexture.create_from_image(image) if image != null else null
+	return sprites[key]
+
+## Draws `texture` at twice its size, centred and on the menus' pixel grid.
+static func draw_on_grid(item: Control, texture: Texture2D, tint: Color, offset := Vector2.ZERO) -> void:
+	var drawn := texture.get_size() * CELL
+	var origin := item.get_global_transform().origin
+	var at := (((origin + (item.size - drawn) * 0.5) / CELL).round() * CELL) - origin
+	item.draw_texture_rect(texture, Rect2(at + offset, drawn), false, tint)
 
 func block(rect: Rect2, tint: Color, radius := 2) -> void:
 	var style := StyleBoxFlat.new()
@@ -21,6 +68,20 @@ func block(rect: Rect2, tint: Color, radius := 2) -> void:
 	draw_style_box(style, rect)
 
 func _draw() -> void:
+	if shadow:
+		var original := colour
+		colour = Color("000418")
+		draw_set_transform(Vector2(CELL, CELL))
+		draw_icon()
+		draw_set_transform(Vector2.ZERO)
+		colour = original
+	draw_icon()
+
+func draw_icon() -> void:
+	var picture := sprite(kind) if kind != "battery" else null
+	if picture != null:
+		draw_on_grid(self, picture, colour)
+		return
 	var c := colour
 	var ink := Color("1d2026")
 	match kind:

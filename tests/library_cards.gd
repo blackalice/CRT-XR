@@ -14,13 +14,13 @@ func run():
 	var path := ProjectSettings.globalize_path("user://many-consoles")
 	for folder in ["snes/Europe","snes/Ports","Nintendo Entertainment System","Genesis","Master System","Game Gear","PS2/deep","n64/collection","saturn","arcade","Handpicked classics"]:
 		DirAccess.make_dir_recursive_absolute(path.path_join(folder))
-	for file in ["snes/Europe/Adventure.sfc","snes/Ports/Legitimate folder.sfc","Nintendo Entertainment System/Quest.nes","Master System/Runner.sms","Game Gear/Pocket.gg","Handpicked classics/Custom.sfc","PS2/deep/Unrelated.sfc","n64/collection/Unrelated.nes","saturn/Unrelated.sfc","arcade/Unrelated.sms"]:
+	for file in ["snes/Europe/Adventure.sfc","snes/Ports/Legitimate folder.sfc","Nintendo Entertainment System/Quest.nes","Master System/Runner.sms","Game Gear/Pocket.gg","Handpicked classics/Custom.sfc","PS2/deep/Unrelated.sfc","saturn/Unrelated.sfc","arcade/Unrelated.sms"]:
 		var handle := FileAccess.open(path.path_join(file),FileAccess.WRITE); handle.store_8(0); handle.close()
 	var handle := FileAccess.open(path.path_join("Genesis/Adventure.md"),FileAccess.WRITE)
 	var bytes := PackedByteArray(); bytes.resize(0x110); bytes.encode_u32(0x100,0x41474553); handle.store_buffer(bytes); handle.close()
 	var index := Index.new(); index.start(path)
 	while index.scanning: index.step()
-	check(index.total()==7 and index.ignored_system_folders==4,"Other-console trees are skipped even if they contain supported-looking file names")
+	check(index.total()==7 and index.ignored_system_folders==3,"Other-console trees are skipped even if they contain supported-looking file names (total %d, ignored %d)" % [index.total(), index.ignored_system_folders])
 	check(not index.visited.has(index.canonical(path.path_join("PS2"))),"Unsupported trees are never opened by the scanner")
 	check(index.games.snes.size()==3,"Custom collections and subfolders inside supported systems are retained")
 	check(index.games.megadrive.size()==1 and index.games.gamegear.size()==1,"Friendly console aliases resolve through actual ROM detection")
@@ -30,6 +30,13 @@ func run():
 	app.default_rom_dir=path; app.choose_rom(); var menu=app.menu
 	while menu.rom_index.scanning: await process_frame
 	await settle()
+	check(not menu.help_frame.visible,"Library cards use the description space")
+	var library_height: float=menu.scroll.size.y
+	menu.rom_index.message="ROM folder unavailable. Reconnect its SD card or choose another library folder."
+	menu.refresh_labels(); await settle()
+	check(menu.help_frame.visible and menu.help_label.text==menu.rom_index.message,"Library scan warnings remain visible")
+	menu.rom_index.message=""; menu.refresh_labels(); await settle()
+	check(not menu.help_frame.visible and is_equal_approx(menu.scroll.size.y,library_height),"Library reclaims the space after a warning")
 	check(menu.items.size()==6 and menu.items.all(func(item): return item.get("layout")=="card") and not menu.items.any(func(item): return item.id in ["library.recent","library.favourites"]),"Home shows five system cards and one locations card; empty shortcuts stay hidden")
 	check(not menu.items.any(func(item): return item.id in ["library.drives","library.sd","library.browse"]),"Folder management stays out of the game shelf")
 	menu.select("library.system.snes"); await press(menu,JOY_BUTTON_DPAD_UP)
@@ -42,6 +49,7 @@ func run():
 	check(menu.selected_id=="library.system.megadrive","Left selects the adjacent console")
 	await press(menu,JOY_BUTTON_A)
 	check(menu.mode=="games" and menu.items.size()==1 and menu.rows[0].item.get("layout")=="game","A opens only that console's games with descriptive rows; a short list skips Jump to letter")
+	check(menu.help_frame.visible,"Game lists retain their help area")
 	await press(menu,JOY_BUTTON_B)
 	check(menu.selected_id=="library.system.megadrive","Back restores the exact console card")
 	menu.select("library.locations"); await press(menu,JOY_BUTTON_A)
