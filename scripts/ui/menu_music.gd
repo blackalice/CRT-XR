@@ -5,7 +5,7 @@ var menu: Control
 var music_dir := ""
 var music_page := 0
 var music_origin: Dictionary = {}
-var panel_hidden := false
+var panel_hidden := true
 
 func open_music_browser(path := "") -> void:
 	if OS.get_name()=="Windows" and not path.is_empty(): path=menu.library.Locations.normalize_windows_path(path)
@@ -81,7 +81,7 @@ func music_actions() -> Array:
 	var music=host.music
 	var active: bool = not music.kind.is_empty() and (music.player.stream != null or music.http != null)
 	if active and panel_hidden:
-		var show: Dictionary = menu.catalog.action("transport.show", "Show music panel", show_panel, "Show the music controls without changing playback.")
+		var show: Dictionary = menu.catalog.action("transport.show", "Music", show_panel, "Show the music controls without changing playback.")
 		show["row_icon"]="music"
 		return [show]
 	if active:

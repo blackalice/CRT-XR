@@ -7,7 +7,7 @@ Fifteen row icons, the D-pad glyph and the pointer are tiles from Kenney's **1-B
 Kenney (www.kenney.nl), under Creative Commons Zero (CC0 1.0; licence text in
 `Kenney-1-Bit-Pack-License.txt`). Credit is not required; it is given here.
 They are taken from `Tilesheet/monochrome-transparent_packed.png` (16×16
-tiles, row,column) and recoloured to white for tinting, otherwise unchanged:
+tiles, row,column) and recoloured to white for tinting, otherwise unchanged except where noted:
 
 | Icon | Tile |
 |---|---|
@@ -17,7 +17,7 @@ tiles, row,column) and recoloured to white for tinting, otherwise unchanged:
 | `menu/gear.png` | 16,45 |
 | `menu/up.png` | 13,24 |
 | `menu/clear.png` | 13,40 |
-| `menu/video.png` | 10,17 |
+| `menu/video.png` | 10,17; top border added |
 | `glyphs/dpad.png` | 10,43 |
 | `menu/gamepad.png` | 15,31 |
 | `menu/help.png` | 13,38 |

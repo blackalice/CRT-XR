@@ -118,8 +118,8 @@ func home_items() -> Array:
 	var home: Array = []
 	var recenter: Dictionary = menu.tile(menu.catalog.action("home.recenter","Recenter view",h.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)
 	var settings: Dictionary = menu.catalog.action("home.settings","Settings",menu.open_settings,"Adjust the view, picture, audio and room.")
-	var exit: Dictionary = menu.tile(menu.catalog.action("home.exit","Exit",func(): menu.ask("Exit CRT XR?","Your settings will be saved.",h.request_exit),"Close CRT XR."),"exit","danger","actions",3)
-	var library_row: Dictionary = menu.catalog.action("home.library","Set up library" if h.default_rom_dir.is_empty() else "Game library",menu.games.open_library,"Choose your main ROM folder or SD card. Your supported games appear automatically." if h.default_rom_dir.is_empty() else "Recent, Favourites and supported consoles.",false,"›")
+	var library_row: Dictionary = menu.catalog.action("home.library","Game Library",menu.games.open_library,"Choose your main ROM folder or SD card. Your supported games appear automatically." if h.default_rom_dir.is_empty() else "Recent, Favourites and supported consoles.",false,"›")
+	var video_row: Dictionary = menu.catalog.action("home.videos","Video Library",menu.videos.open_videos,"Browse your videos or set up video playback.",false,"›")
 	var main: Array = []
 	var tiles: Array = []
 	if not h.last_game_path.is_empty() and FileAccess.file_exists(h.last_game_path):
@@ -130,14 +130,16 @@ func home_items() -> Array:
 		var played: int = h.play_history.last_played(h.last_game_path)
 		if played > 0: parts.append("played " + menu.ago(played))
 		home.append(menu.games.with_box_art(menu.entry(menu.catalog.action("home.continue",h.last_game_path.get_file().get_basename(),func(): menu.games.select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",false,"›"),"","play","primary"," · ".join(parts)),h.last_game_path))
-		# The library and settings side by side under it, easy to find.
-		main = [menu.tile(library_row,"gamepad","","main",2), menu.tile(settings,"gear","","main",2)]
+		# The two libraries sit side by side.
+		main = [menu.tile(library_row,"gamepad","","main",2), menu.tile(video_row,"video","","main",2)]
 		for item in main: item.compact=false
-		tiles = [recenter, menu.tile(menu.catalog.action("home.glasses","Using glasses",func(): menu.open_help("Using glasses",glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),"glasses","","actions",3), exit]
+		tiles = [recenter, menu.tile(settings,"gear","","actions",3), menu.tile(menu.catalog.action("home.glasses","Using glasses",func(): menu.open_help("Using glasses",glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),"glasses","","actions",3)]
 	else:
 		home.append(menu.entry(library_row,"","folder" if h.default_rom_dir.is_empty() else "gamepad","primary" if h.default_rom_dir.is_empty() else ""))
+		home.append(menu.entry(video_row,"","video"))
 		# First run swaps Recenter for the glasses guide.
-		tiles = [menu.tile(menu.catalog.action("home.glasses","Using glasses",func(): menu.open_help("Using glasses",glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),"glasses","","actions",3) if h.default_rom_dir.is_empty() else recenter, menu.tile(settings,"gear","","actions",3), exit]
+		tiles = [menu.tile(menu.catalog.action("home.glasses","Using glasses",func(): menu.open_help("Using glasses",glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),"glasses","","actions",3) if h.default_rom_dir.is_empty() else recenter, menu.tile(settings,"gear","","actions",3)]
+	tiles[0]["section"]="ACTIONS"
 	return home+main+menu.music.music_actions()+menu.quick_controls()+tiles
 
 ## The pause menu while a game is loaded: Resume leads, actions sit in tiles.
@@ -153,16 +155,18 @@ func pause_items() -> Array:
 		menu.tile(menu.catalog.action("reset_game","Reset game",reset_game,"Presses the console's reset button. Battery saves and save states are kept.",not h.emulator.loaded),"refresh","","game",3)])
 	# Then where you go most, side by side and easy to find.
 	var main: Array = [
-		menu.tile(menu.catalog.action("games","Choose game",menu.games.open_library,"Open your library, recent games and favourites."),"gamepad","","main",2),
-		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear","","main",2)]
+		menu.tile(menu.catalog.action("games","Game Library",menu.games.open_library,"Open your library, recent games and favourites."),"gamepad","","main",2),
+		menu.tile(menu.catalog.action("home.videos","Video Library",menu.videos.open_videos,"Browse your videos or set up video playback."),"video","","main",2)]
 	for item in main: item.compact=false
 	result.append_array(main)
 	result.append_array(menu.music.music_actions())
 	result.append_array(menu.quick_controls())
-	result.append_array([
+	var actions: Array = [
+		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear","","actions",3),
 		menu.tile(menu.catalog.action("screenshot","Screenshot",h.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),"camera","","actions",3),
-		menu.tile(menu.catalog.action("recenter","Recenter view",h.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3),
-		menu.tile(menu.catalog.action("exit","Exit CRT XR",func(): menu.ask("Exit CRT XR?","An automatic resume point, settings and cartridge SRAM will be saved.",h.request_exit),"Close the application."),"exit","danger","actions",3)])
+		menu.tile(menu.catalog.action("recenter","Recenter view",h.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)]
+	actions[0]["section"]="ACTIONS"
+	result.append_array(actions)
 	# Beside Reset game, for games on several discs.
 	var discs: Dictionary = h.emulator.disc_info()
 	if int(discs.get("count", 0)) > 1:

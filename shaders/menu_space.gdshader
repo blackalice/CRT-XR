@@ -7,7 +7,7 @@ render_mode unshaded;
 // glasses see through it.
 uniform vec2 panel_size = vec2(888.0, 664.0);
 uniform vec2 moon_at = vec2(0.47, 0.075);
-// 0 holds the stars still (Reduce animation).
+// 0 holds the stars and planet still (Reduce animation).
 uniform float motion = 1.0;
 uniform vec4 frame_colour : source_color = vec4(0.22, 0.35, 0.63, 1.0);
 
@@ -85,7 +85,11 @@ void fragment() {
 			float z = sqrt(1.0 - r2);
 			float light = max(0.0, lit_side + 0.37 * z) * 0.62;
 			float f = light * 4.2;
-			float n = clouds(vec2(p.x / (z + 0.5) * 4.0 + 7.0, p.y / (z + 0.5) * 6.0 + 3.0));
+			// Turn the surface around the vertical axis, keeping the light and limb
+			// in place. A ten-minute revolution makes the movement barely perceptible.
+			float angle = TIME * motion * 0.0104719755;
+			float surface_x = p.x * cos(angle) + z * sin(angle);
+			float n = clouds(vec2(surface_x / (z + 0.5) * 4.0 + 7.0, p.y / (z + 0.5) * 6.0 + 3.0));
 			if (n > 0.56 && light > 0.04) f += (n - 0.56) * 18.0 * min(1.0, light * 3.0);
 			colour = (r2 > 0.985 && light > 0.12) ? vec3(0.282, 0.565, 0.753) : sea(step_of(f, 7.0, cell));
 		} else if (r2 < 1.05 && lit_side > 0.1 && threshold(cell) < (1.05 - r2) * 14.0) {

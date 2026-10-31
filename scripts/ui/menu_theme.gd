@@ -16,10 +16,10 @@ const SEMIBOLD := 600
 const BOLD := 700
 ## Panel kinds: [top, bottom, bevel light, bevel dark, recessed, marquee].
 const PANELS := {
-	"row": ["102860", "081440", "3858a0", "000418", false, false],
-	"selected": ["2c58c8", "143090", "88a8e8", "000418", false, true],
+	"row": ["152763", "091437", "526fd0", "000418", false, false],
+	"selected": ["405de4", "202f98", "88a8e8", "000418", false, true],
 	# A quick tile being adjusted: the marquee runs in amber.
-	"editing": ["2c58c8", "143090", "88a8e8", "000418", false, true, ["fff0b0", "f8c048", "c07818"]],
+	"editing": ["405de4", "202f98", "88a8e8", "000418", false, true, ["fff0b0", "f8c048", "c07818"]],
 	"chosen": ["3868d0", "1838a0", "b0c8f8", "000418", false, false],
 	"well": ["081440", "000c30", "3858a0", "000418", true, false],
 	"exit_row": ["b83838", "701c28", "e87870", "300810", false, false],
@@ -101,7 +101,7 @@ static func space_backdrop() -> ColorRect:
 	materials["space"] = material
 	return backdrop
 
-## Reduce animation holds the marquee and the stars still.
+## Reduce animation holds the marquee, stars and planet still.
 static func set_motion(moving: bool) -> void:
 	for kind in ["selected", "editing", "music_selected", "exit_selected"]: panel_material(kind).set_shader_parameter("marquee_speed", 8.0 if moving else 0.0)
 	if materials.has("space"): materials.space.set_shader_parameter("motion", 1.0 if moving else 0.0)

@@ -36,6 +36,9 @@ func run():
  music.stop();music.toggle_playback();check(music.player.playing and music.track_index==0,"Play after Stop restarts the selected track")
  app.menu.open_pause(); app.menu.render()
  for i in range(4): await process_frame
+ check(not is_instance_valid(app.menu.music_heading) and app.menu.items.any(func(i):return i.id=="transport.show" and i.label=="Music"),"Music panel starts closed and its entry is Music")
+ app.menu.select("transport.show"); app.menu.activate()
+ for i in range(4): await process_frame
  check(app.menu.items.any(func(i):return i.id=="transport.play") and is_instance_valid(app.menu.music_heading),"Main menu exposes transport controls and now-playing metadata")
  app.menu.select("transport.play"); app.menu.activate()
  for i in range(4): await process_frame

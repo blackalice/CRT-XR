@@ -13,14 +13,8 @@ var video_view_dir := ""
 var video_page := 0
 var video_launch_path := ""
 var video_folder_dir := ""
-
-## Library locations rows for the optional video folder; nothing when FFmpeg is missing.
-func video_location_items() -> Array:
-	if not VideoSession.available(): return []
-	var h=host
-	return [menu.catalog.action("library.video_folder","Choose video folder" if h.video_dir.is_empty() else "Change video folder",open_video_folder_picker,
-			h.video_dir if not h.video_dir.is_empty() else "Optional. Pick a folder of MP4 or MKV files to watch on the TV; they appear after your consoles."),
-		menu.catalog.unavailable(menu.catalog.action("library.video_clear","Remove video folder",func(): set_video_folder(""),"Hides Videos from the library. Your files are not changed.",h.video_dir.is_empty()),"No video folder is set.")]
+var video_origin := {}
+var folder_origin := {}
 
 ## Windows has no system FFmpeg: offer to fetch just the libraries video needs.
 ## Elsewhere, say what to install.
@@ -42,19 +36,19 @@ func start_ffmpeg_install() -> void:
 	if not installer.progress.is_connected(show_install_progress): installer.progress.connect(show_install_progress)
 	if not installer.finished.is_connected(install_finished): installer.finished.connect(install_finished)
 	install_progress = "Starting…"
-	menu.mode = "library_tools"
+	menu.mode = "videos"
 	installer.install()
 	menu.render()
 
 func show_install_progress(done: int, total: int, label: String) -> void:
 	install_progress = ("%.1f of %.1f MB · %s" % [done / 1048576.0, total / 1048576.0, label]) if total > 0 else label
 	# A few redraws a second are plenty for a progress line.
-	if menu.mode == "library_tools" and menu.visible and Time.get_ticks_msec() - install_rendered > 250:
+	if menu.mode == "videos" and menu.visible and Time.get_ticks_msec() - install_rendered > 250:
 		install_rendered = Time.get_ticks_msec()
 		menu.remember(); menu.render()
 
 func install_finished(ok: bool, message: String) -> void:
-	if menu.mode == "library_tools" and menu.visible: menu.remember(); menu.render()
+	if menu.mode == "videos" and menu.visible: menu.remember(); menu.render()
 	if ok: menu.notify(message + ". Choose a video folder to start.")
 	else: menu.show_error(message)
 
@@ -77,6 +71,9 @@ func video_place(path: String) -> String:
 	return "" if folder==host.video_dir else folder.trim_prefix(host.video_dir+"/")
 
 func video_items() -> Array:
+	if not VideoSession.available(): return video_setup_items("VIDEO SETUP")
+	if host.video_dir.is_empty():
+		return [menu.entry(menu.catalog.action("library.video_folder","Choose a video folder",open_video_folder_picker,"Choose a folder containing your videos.",false,"›"),"VIDEO SETUP","video","primary")]
 	if not host.video_library.thumbnail_ready.is_connected(menu.thumbnail_arrived): host.video_library.thumbnail_ready.connect(menu.thumbnail_arrived)
 	var result: Array=[]
 	if not menu.search_query.is_empty():
@@ -105,7 +102,13 @@ func video_items() -> Array:
 		if item.folder: result.append(menu.entry(menu.catalog.action("videos.folder:"+path,item.label,func(): open_videos(path),"Open this folder."),menu.SECTION_INSIDE,"folder"))
 		else: result.append(video_row(path,item.label,menu.SECTION_INSIDE))
 	if (video_page+1)*VIDEOS_PER_PAGE<entries.size(): result.append(menu.entry(menu.catalog.action("videos.next","Next page",func(): video_page+=1; menu.clear_input(); menu.render(),"",false,""),menu.SECTION_INSIDE,"page"))
-	if entries.is_empty(): result.append(menu.entry(menu.catalog.unavailable(menu.catalog.action("videos.empty","No MP4 or MKV videos here",func(): pass,"Add videos to this folder, or choose another folder in Library locations.",true),"Add MP4 or MKV files to this folder."),menu.SECTION_INSIDE))
+	if entries.is_empty(): result.append(menu.entry(menu.catalog.unavailable(menu.catalog.action("videos.empty","No MP4 or MKV videos here",func(): pass,"Add videos to this folder, or choose another video folder.",true),"Add MP4 or MKV files to this folder."),menu.SECTION_INSIDE))
+	if video_view_dir==host.video_dir:
+		result.append(menu.entry(menu.catalog.action("library.video_folder","Change video folder",open_video_folder_picker,"Choose another video folder.",false,"›"),"VIDEO FOLDER","folder"))
+		result.append(menu.entry(menu.catalog.action("library.video_clear","Remove video folder",func(): set_video_folder(""),"Forget the folder without changing your files.",false,""),"VIDEO FOLDER","clear","danger"))
+		if FfmpegInstaller.installed():
+			result.append(menu.entry(menu.catalog.action("library.ffmpeg_remove","Remove downloaded video libraries",func(): menu.ask("Remove the video libraries?","Videos stop playing until set up again. The files go when CRT XR next starts.",func(): FfmpegInstaller.remove(); menu.notify("Video libraries will be removed when CRT XR restarts.")),"Your videos are not touched.",false,""),"VIDEO FOLDER","clear","danger"))
+
 	return result
 
 ## Search with the on-screen keys (controller) or a keyboard.
@@ -121,19 +124,15 @@ func run_video_search() -> void:
 func videos_shown() -> bool:
 	return not host.video_dir.is_empty() and VideoSession.available()
 
-func videos_card(group: String) -> Dictionary:
-	var count: int = host.video_library.count(host.video_dir)
-	var label := ("%d+ videos" % count) if count>=VideoLibrary.COUNT_LIMIT else "%d video%s" % [count,"" if count==1 else "s"]
-	return menu.card(menu.catalog.action("library.videos","Videos",func(): open_videos(),"Your MP4 and MKV files from "+host.video_dir+", shown on the TV.",false,label),"YOUR VIDEOS","videos",Color("d6a35c"),group)
-
-func continue_card(count: int, group: String) -> Dictionary:
-	return menu.card(menu.catalog.action("library.continue","Continue watching",func(): open_videos(),"Pick up a video where you left off.",false,menu.count_caption(count,"video")),"PICK UP & WATCH","videos",Color("d6a35c"),group)
-
 func open_videos(path := "") -> void:
+	if menu.mode not in ["videos", "video_search", "video_launch", "video_folder"]: video_origin=menu.snapshot()
 	if path.is_empty(): path=host.video_dir
+	if path.is_empty() or not VideoSession.available():
+		menu.remember(); menu.clear_input(); video_view_dir=path; menu.mode="videos"; menu.render(); return
 	menu.search_query=""; menu.search_field.text=""
 	if DirAccess.open(path)==null:
-		menu.show_error("Video folder unavailable. Reconnect its drive or SD card, or choose another folder in Library locations."); return
+		menu.remember(); menu.clear_input(); video_view_dir=path; menu.mode="videos"; menu.render()
+		menu.show_error("Video folder unavailable. Reconnect its drive or SD card, or choose another video folder."); return
 	menu.remember(); menu.clear_input(); menu.error_label.hide()
 	if path!=video_view_dir: video_page=0
 	video_view_dir=path; menu.mode="videos"; menu.render()
@@ -193,15 +192,17 @@ func video_pause_items() -> Array:
 		items.append({"id":"video.audio","label":"Audio track","kind":"choice","choices":Array(tracks),"default":0,
 			"getter":func(): return int(video.info.get("audio_track",0)),"setter":func(value): video.select_audio_track(int(value)),
 			"help":"Language or commentary track. X changes it while watching."})
-	items.append_array([menu.tile(menu.catalog.action("video.choose","Choose video",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else ""),"Pick another video from your video folder."),"video"),
-		menu.tile(menu.catalog.action("games","Game library",menu.games.open_library,"Recent, Favourites, consoles and videos."),"gamepad"),
+	items.append_array([menu.tile(menu.catalog.action("video.choose","Video Library",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else ""),"Pick another video from your video folder."),"video"),
+		menu.tile(menu.catalog.action("games","Game Library",menu.games.open_library,"Recent, Favourites and consoles."),"gamepad"),
 		menu.tile(menu.catalog.action("quick","Quick settings",func(): menu.category=7; menu.subsection=0; menu.open_settings(),"Everyday picture, placement and volume controls."),"sliders","","actions",3),
-		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear","","actions",3),
-		menu.tile(menu.catalog.action("exit","Exit CRT XR",func(): menu.ask("Exit CRT XR?","Your place in this video and your settings will be saved.",h.request_exit),"Close the application."),"exit","danger","actions",3)])
+		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear","","actions",3)])
 	return items
 
 ## Folder picker for the video folder: folders only, with the videos inside shown as a count.
 func open_video_folder_picker(path := "") -> void:
+	if menu.mode != "video_folder":
+		folder_origin=menu.snapshot()
+		if menu.mode != "videos": video_origin=folder_origin
 	if path.is_empty():
 		for candidate in [host.video_dir,OS.get_system_dir(OS.SYSTEM_DIR_MOVIES),menu.library.home_folder()]:
 			if not str(candidate).is_empty() and DirAccess.open(candidate)!=null: path=candidate; break
@@ -213,7 +214,7 @@ func video_folder_items() -> Array:
 	var here: Array=host.video_library.list(video_folder_dir)
 	var videos := here.filter(func(item): return not item.folder).size()
 	var result: Array=[menu.entry(menu.catalog.action("video_folder.use","Use this folder for videos",func(): set_video_folder(video_folder_dir),
-		"Videos in this folder and its subfolders appear after your consoles.",false,""),menu.SECTION_HERE,"check","primary",
+		"Videos in this folder and its subfolders appear in Videos.",false,""),menu.SECTION_HERE,"check","primary",
 		menu.count_caption(videos,"video")+" here · subfolders included")]
 	result.append_array(menu.up_entry("video_folder.up",video_folder_dir,open_video_folder_picker))
 	for item in here:
@@ -229,8 +230,8 @@ func set_video_folder(path: String) -> void:
 		host.video_dir=previous
 		menu.show_error("The video folder could not be saved. Check that user storage is writable."); return
 	host.video_library.refresh()
-	if path.is_empty(): menu.mode="library_tools"; menu.render(); menu.notify("Video folder removed. Your videos are unchanged."); return
-	menu.mode="library"; menu.render(); menu.notify("Videos now appear after your consoles.")
+	video_view_dir=path; video_page=0; menu.mode="videos"; menu.render()
+	menu.notify("Video folder removed. Your videos are unchanged." if path.is_empty() else "Video folder ready.")
 
 ## Continue a part-watched video, or start it again.
 func launch_items() -> Array:

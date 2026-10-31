@@ -83,7 +83,7 @@ Connect the glasses in **mono**, then launch CRT XR. Put them on and press their
 
 The tested VITURE profile uses an explicit **3840 × 1080** Steam game resolution; **Native alone did not work on our test Deck**. Setup prepares that profile. If the view stays black, X retries; return the glasses to mono before using B / Escape to leave.
 
-Open **Game library → Library locations** to choose your ROM folder or SD card. You can explore the built-in test signal before loading a game.
+Open **Game Library → Library locations** to choose your ROM folder or SD card. You can explore the built-in test signal before loading a game.
 
 ## Install on Windows
 
@@ -98,7 +98,7 @@ Only **VITURE Pro 2** has been tested for Windows tracking. **Other glasses** ca
 
 ## ROM folders
 
-In **Game library → Library locations**, select your **main ROM folder**—the folder containing the console folders. An existing EmuDeck-style layout can stay where it is, including on an SD card:
+In **Game Library → Library locations**, select your **main ROM folder**—the folder containing the console folders. An existing EmuDeck-style layout can stay where it is, including on an SD card:
 
 ```text
 roms/
@@ -149,10 +149,10 @@ PC Engine, Atari 2600, Lynx and Vectrex still need real-game testing beyond diag
 
 ## Videos
 
-In **Game library → Library locations**, select **Choose a video folder** and pick the folder holding your videos; subfolders are included. A **Videos** card then appears after your consoles. MP4, M4V and MKV files are listed, with any `.srt` subtitles beside them.
+In **Video Library**, select **Choose a video folder** and pick the folder holding your videos; subfolders are included. Your videos then appear in **Video Library**. MP4, M4V and MKV files are listed, with any `.srt` subtitles beside them.
 
 - **Steam Deck:** nothing to install; SteamOS's FFmpeg is used and decoding runs on the GPU.
-- **Windows:** choose **Set up video playback** in Library locations. CRT XR downloads FFmpeg's five LGPL video libraries (about 55 MB) from the public [BtbN builds](https://github.com/BtbN/FFmpeg-Builds), checks them and keeps them in its own user-data folder.
+- **Windows:** choose **Set up video playback** in **Video Library**. CRT XR downloads FFmpeg's five LGPL video libraries (about 55 MB) from the public [BtbN builds](https://github.com/BtbN/FFmpeg-Builds), checks them and keeps them in its own user-data folder.
 - **Other Linux systems:** install FFmpeg 7.1 or 8 with your package manager.
 
 While watching, **A** pauses, **D-pad left/right** skips 10 seconds (hold to scrub), **up/down** skips a minute, **Y** changes the picture shape and **X** the audio track; the menu has a scrubbable timeline. Settings are in the **Videos** category: **Picture** (the video picture, shape, lines, interlacing), **VCR** (tape look, on-screen text, sounds) and **Playback** (subtitles, hardware decoding, folder). See [Videos](docs/emulation.md#videos) for details.

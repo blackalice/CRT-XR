@@ -33,9 +33,6 @@ func library_items() -> Array:
 	var h=host
 	if menu.rom_index.total()==0:
 		var setup: Array = [menu.card(menu.catalog.action("library.setup","Set up your ROM library" if h.default_rom_dir.is_empty() else "Choose a ROM folder",open_library_tools,"Choose your ROM folder or SD card. Supported games are found automatically."),"CHOOSE A FOLDER TO GET STARTED","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP")]
-		if menu.videos.videos_shown(): setup.append(menu.videos.videos_card("LIBRARY SETUP"))
-		var resumable: Array=host.video_library.continue_watching(5) if menu.videos.videos_shown() else []
-		if not resumable.is_empty(): setup.append(menu.videos.continue_card(resumable.size(),"LIBRARY SETUP"))
 		return setup
 	var result: Array = []
 	# Quick-access shelves appear once they hold something.
@@ -43,15 +40,12 @@ func library_items() -> Array:
 		menu.card(menu.catalog.action("library.recent","Recently played",func(): open_history("recent"),"Return to your latest games. Unplugged-card entries are kept.",h.play_history.recent.is_empty(),"%d game%s" % [h.play_history.recent.size(),"" if h.play_history.recent.size()==1 else "s"]),"PICK UP & PLAY","recent",menu.MenuSkin.AMBER,"QUICK ACCESS"))
 	if not h.play_history.favourites.is_empty(): result.append(
 		menu.card(menu.catalog.action("library.favourites","Favourites",func(): open_history("favourites"),"Your favourites across every supported console. Press {X} on a game to add it.",h.play_history.favourites.is_empty(),"%d game%s" % [h.play_history.favourites.size(),"" if h.play_history.favourites.size()==1 else "s"]),"YOUR PERSONAL SHELF","favourites",Color("dfb984"),"QUICK ACCESS"))
-	var watching: Array=host.video_library.continue_watching(5) if menu.videos.videos_shown() else []
-	if not watching.is_empty(): result.append(menu.videos.continue_card(watching.size(),"QUICK ACCESS"))
 	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"],"psx":["SONY · 32-BIT CD","a9b6cf"],"n64":["NINTENDO · 64-BIT","8fcf9a"]}
 	for system in menu.library.Registry.SYSTEMS:
 		var id: String=system
 		var count: int=menu.rom_index.games.get(id,[]).size()
 		if count==0: continue
 		result.append(menu.card(menu.catalog.action("library.system."+id,menu.library.Registry.SYSTEMS[id].get("short",menu.library.Registry.SYSTEMS[id].name),func(): open_system(id),"",false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
-	if menu.videos.videos_shown(): result.append(menu.videos.videos_card("YOUR CONSOLES"))
 	if h.default_rom_dir.is_empty():
 		result.push_front(menu.card(menu.catalog.action("library.setup","Set up your ROM library",open_library_tools,"Choose the folder containing snes, nes, megadrive and your other systems. Subfolders are included automatically."),"START HERE","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP"))
 	var detail := "Choose your main ROM folder" if h.default_rom_dir.is_empty() else "Folders · SD cards · Refresh"
@@ -69,19 +63,6 @@ func library_tool_items() -> Array:
 		result.append(menu.entry(menu.catalog.action("library.default","Change ROM folder",browse_folders,"Pick a different main ROM folder. Your files stay where they are.",false,"›"),rom,"folder","",menu.short_path(h.default_rom_dir)+(" · "+menu.count_caption(games,"game") if games>0 else "")))
 		result.append(menu.entry(menu.catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the ROM folder for added or removed games.",false,""),rom,"refresh"))
 		result.append(menu.entry(menu.catalog.action("library.clear","Forget ROM folder",func(): set_default(""),"Forget the folder without changing any files.",false,""),rom,"clear","danger"))
-	var videos := "VIDEOS · OPTIONAL"
-	if not VideoSession.available(): result.append_array(menu.videos.video_setup_items(videos))
-	else:
-		if h.video_dir.is_empty():
-			result.append(menu.entry(menu.catalog.action("library.video_folder","Choose a video folder",menu.videos.open_video_folder_picker,"Choose a folder containing MP4 or MKV files.",false,"›"),videos,"video","","MP4 and MKV files, shown after your consoles"))
-		else:
-			var count: int=h.video_library.count(h.video_dir)
-			result.append(menu.entry(menu.catalog.action("library.video_folder","Change video folder",menu.videos.open_video_folder_picker,"Pick a different video folder. Your files stay where they are.",false,"›"),videos,"video","",menu.short_path(h.video_dir)+" · "+menu.count_caption(count,"video")))
-			result.append(menu.entry(menu.catalog.action("library.video_clear","Remove video folder",func(): menu.videos.set_video_folder(""),"Hides Videos from the library. Your files are not changed.",false,""),videos,"clear","danger"))
-		if FfmpegInstaller.installed():
-			result.append(menu.entry(menu.catalog.action("library.ffmpeg_remove","Remove downloaded video libraries",func():
-				menu.ask("Remove the video libraries?","Videos stop playing until you set them up again. The files go when CRT XR next starts.",func(): FfmpegInstaller.remove(); menu.notify("Video libraries will be removed when CRT XR restarts.")),
-				"Frees the FFmpeg libraries CRT XR downloaded. Your videos are not touched.",false,""),videos,"clear","danger","",true))
 	var find := "FIND A FOLDER"
 	for candidate in menu.library.Locations.library_candidates(menu.library.home_folder(),menu.library.Locations.sd_cards()):
 		var path: String=candidate

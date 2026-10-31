@@ -103,24 +103,21 @@ func run() -> void:
 	if not app.settings_panel.visible: app.toggle_settings()
 
 	menu.games.open_library()
-	check(not "library.videos" in ids(), "No Videos card until a folder is chosen")
-	menu.games.open_library_tools()
-	check("library.video_folder" in ids() and not "library.video_clear" in ids() and item("library.video_folder").section == "VIDEOS · OPTIONAL", "Library locations offers an optional video folder in its own section")
+	check(not "library.videos" in ids(), "Game library contains no video card")
+	menu.videos.open_videos()
+	check("library.video_folder" in ids(), "Videos offers folder setup")
+	menu.back()
+	check(menu.mode == "library", "Back returns to the opening screen")
+	menu.videos.open_videos()
 	menu.videos.open_video_folder_picker(folder)
-	check(ids()[0] == "video_folder.use" and item("video_folder.use").emphasis == "primary" and ("video_folder.open:" + season) in ids() and str(item("video_folder.use").detail).begins_with("3 videos here"),
-		"The folder picker leads with its action, counts the videos here and lists subfolders")
-	check(menu.location_bar.visible and not menu.subtitle.visible and item("video_folder.open:" + season).section == menu.SECTION_INSIDE and item("video_folder.open:" + season).row_icon == "folder",
-		"The path shows in the location bar and folders sit under Contents with a folder icon")
+	menu.back()
+	check(menu.mode == "videos", "Folder picker returns to Videos")
+	menu.videos.open_video_folder_picker(folder)
+	check(ids()[0] == "video_folder.use" and ("video_folder.open:" + season) in ids(), "Folder picker offers the folder and its subfolders")
 	activate("video_folder.use")
-	check(app.video_dir == folder and menu.mode == "library", "Choosing the folder saves it and returns to the library")
-	check(ids() == ["library.setup", "library.videos"], "With no ROMs yet, Videos sits beside the setup card: %s" % [ids()])
-	# With games, Videos follows the last console and precedes Library locations.
-	menu.rom_index.games["snes"] = [{"path": "C:/roms/snes/Test.sfc", "label": "Test"}]
-	menu.render()
-	var cards := ids()
-	var at := cards.find("library.videos")
-	check(at > 0 and str(cards[at - 1]).begins_with("library.system.") and cards[at + 1] == "library.locations", "Videos follows the consoles: %s" % [cards])
-	check(item("library.videos").value == "4 videos" and item("library.videos").glyph == "videos", "The card counts the videos")
+	check(app.video_dir == folder and menu.mode == "videos", "Choosing a folder opens Videos")
+	menu.games.open_library()
+	check(not "library.videos" in ids(), "Videos stays separate from game library")
 	# Videos has its own category, after Room: Picture, VCR and Playback tabs.
 	check(not menu.catalog.pages(1).any(func(page): return page.title == "Video"), "Picture no longer carries the video settings")
 	var tabs: Dictionary = {}
@@ -141,7 +138,7 @@ func run() -> void:
 		check(setup.size() == 1 and setup[0].id == "library.ffmpeg_setup" and setup[0].emphasis == "primary" and str(setup[0].detail).contains("MB"),
 			"Without FFmpeg, Windows offers to set up video playback and says how big it is")
 
-	activate("library.videos")
+	menu.videos.open_videos()
 	var labels: Array = menu.items.filter(func(entry): return entry.get("section", "") == menu.SECTION_INSIDE).map(func(entry): return entry.label)
 	check(menu.mode == "videos" and labels == ["Season 1", "Episode 2", "Episode 10", "long_43_25"] and ("videos.search" in ids()) == (menu.input_kind != "keyboard"), "The video list, with one search: a row for a controller, the field for a keyboard: %s" % [labels])
 	var thumbnail_row = null
@@ -171,7 +168,7 @@ func run() -> void:
 	check(menu.mode == "library", "Back again returns to the library")
 
 	var global_mode: int = app.world.picture.mode
-	activate("library.videos")
+	menu.videos.open_videos()
 	activate("video:" + long)
 	check(app.video.loaded and not app.settings_panel.visible and app.video.path == long, "Choosing a video plays it with the menu closed (loaded %s, menu %s, mode %s, path %s, error %s)" % [app.video.loaded, app.settings_panel.visible, menu.mode, app.video.path, menu.error_label.text])
 	check(app.world.picture.mode == 3 and app.active_game_key == app.VIDEO_PROFILE, "Videos start with the auto composite picture")
@@ -258,7 +255,7 @@ func run() -> void:
 	check(item("video:" + long).detail == "1:00 · Resume at 0:25", "The list shows where you stopped")
 	check(ids()[0] == "video.continue:" + long and item("video.continue:" + long).section == "CONTINUE WATCHING", "Continue watching leads the list")
 	menu.games.open_library()
-	check("library.continue" in ids(), "The library offers Continue watching")
+	check(not "library.continue" in ids(), "Game library does not contain Continue watching")
 	menu.videos.open_videos()
 	activate("video:" + long)
 	check(menu.mode == "video_launch" and ids() == ["video_launch.continue", "video_launch.fresh", "video_launch.cancel"], "A saved place offers Continue or Start from the beginning")
@@ -298,7 +295,7 @@ func run() -> void:
 	app.stop_video()
 
 	app.toggle_settings()
-	menu.games.open_library_tools()
+	menu.videos.open_videos()
 	activate("library.video_clear")
 	check(app.video_dir.is_empty(), "Removing the video folder forgets it")
 	menu.games.open_library()

@@ -72,9 +72,12 @@ var preview_glyph: Control
 var preview_button: Button
 var section_hint: Label
 var heading: Label
+var heading_symbol: TextureRect
 var subtitle: Label
 var help_label: Control
 var hints: HFlowContainer
+var exit_footer: Button
+var exit_selected := false
 var error_label: Control
 var body: HBoxContainer
 var sidebar: VBoxContainer
@@ -155,6 +158,17 @@ func _ready() -> void:
 	frame.add_child(layout)
 	var top := HBoxContainer.new()
 	layout.add_child(top)
+	heading_symbol = TextureRect.new()
+	heading_symbol.texture = preload("res://assets/branding/menu-symbol.png")
+	heading_symbol.custom_minimum_size = Vector2(64, 32)
+	heading_symbol.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	heading_symbol.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	heading_symbol.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	# The top inset shifts the centred mark down one pixel-grid cell.
+	var symbol_inset := MarginContainer.new()
+	symbol_inset.add_theme_constant_override("margin_top", 4)
+	symbol_inset.add_child(heading_symbol)
+	top.add_child(symbol_inset)
 	heading = Label.new(); heading.text = "CRT XR"
 	heading.add_theme_font_size_override("font_size",32)
 	MenuSkin.weigh(heading,MenuSkin.BOLD)
@@ -313,11 +327,11 @@ func _ready() -> void:
 	compact.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	compact.add_theme_color_override("font_color",MenuSkin.AMBER)
 	layout.add_child(compact); compact.hide()
-	help_label = GlyphText.new("", 20, MenuSkin.TEXT)
+	help_label = GlyphText.new("", 20, Color("09132b"))
 	help_label.custom_minimum_size.y = 64
 	# Help sits in a framed message window, as console menus put their text.
 	help_frame = PanelContainer.new()
-	var window := MenuSkin.box(Color("000c30"),Color("3858a0"),2,0)
+	var window := MenuSkin.box(Color("c5d7ff"),Color("3858a0"),2,0)
 	window.content_margin_left=14; window.content_margin_right=14; window.content_margin_top=6; window.content_margin_bottom=6
 	help_frame.add_theme_stylebox_override("panel",window)
 	help_frame.add_child(help_label)
@@ -327,7 +341,22 @@ func _ready() -> void:
 	hints.add_theme_font_size_override("font_size",18)
 	hints.add_theme_color_override("font_color",MenuSkin.MUTED)
 	hints.custom_minimum_size.y=42
-	layout.add_child(hints)
+	var footer := HBoxContainer.new()
+	footer.add_theme_constant_override("separation", 12)
+	hints.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	footer.add_child(hints)
+	exit_footer=Button.new()
+	exit_footer.icon=RowIcon.doubled("exit")
+	exit_footer.add_theme_constant_override("icon_max_width",24)
+	exit_footer.focus_mode=Control.FOCUS_NONE
+	exit_footer.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	exit_footer.add_theme_font_size_override("font_size",18)
+	exit_footer.add_theme_color_override("font_color",MenuSkin.TEXT)
+	exit_footer.add_theme_stylebox_override("normal",MenuSkin.box(Color("701c28"),Color("e87870"),2,6))
+	exit_footer.add_theme_stylebox_override("hover",MenuSkin.box(Color("982830"),Color("ffc0a8"),2,6))
+	exit_footer.pressed.connect(request_exit)
+	footer.add_child(exit_footer)
+	layout.add_child(footer)
 	preview_button=Button.new(); preview_button.text="Adjust with preview"
 	preview_button.focus_mode=Control.FOCUS_NONE
 	preview_button.pressed.connect(toggle_preview)
@@ -449,10 +478,10 @@ func back() -> void:
 		"videos":
 			# Subfolders step back up towards the video folder before leaving it.
 			if videos.video_view_dir!=host.video_dir and videos.video_view_dir.begins_with(host.video_dir): videos.open_videos(videos.video_view_dir.get_base_dir())
-			else: mode="library"; render()
+			else: restore(videos.video_origin if not videos.video_origin.is_empty() else {"mode":"pause","category":category,"subsection":subsection})
 		"video_launch": mode="videos"; render()
 		"video_search": mode="videos"; render()
-		"video_folder": mode="library_tools"; render()
+		"video_folder": restore(videos.folder_origin if not videos.folder_origin.is_empty() else {"mode":"videos","category":category,"subsection":subsection})
 		"radio_url": mode="settings"; render()
 		"help": restore(help_origin)
 		"confirm": restore(return_state)
@@ -707,6 +736,7 @@ func get_items() -> Array:
 
 func render() -> void:
 	if not is_instance_valid(column) or not visible: return
+	exit_selected=false
 	rendering = true
 	layout_revision+=1
 	items = get_items()
@@ -860,7 +890,7 @@ func render() -> void:
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Your game library","library_tools":"Library locations","videos":"Videos","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm": confirm_panel.describe("",confirmation.detail,confirmation.get("preview",""))
 	rename_field.visible = mode in ["rename","radio_url","folder_path","video_search"]
@@ -871,7 +901,7 @@ func render() -> void:
 	if mode=="rename" and rename_preset>=0: heading.text="Name your preset"
 	if mode=="rename" and rename_room>=0: heading.text="Name your room"
 	if mode=="my_preset": heading.text=pictures.my_preset_name(pictures.my_preset)
-	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites","videos"] and not preview
+	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites","videos"] and (mode!="videos" or videos.videos_shown()) and not preview
 	search_field.placeholder_text="Search videos…  (Ctrl+F)" if mode=="videos" else "Search games…  (Ctrl+F)"
 	if not search_field.visible and search_field.has_focus(): search_field.release_focus()
 	body.visible = not preview
@@ -882,7 +912,7 @@ func render() -> void:
 	subtitle.visible = not preview and not location_bar.visible
 	position = Vector2(36,522) if preview else Vector2(36,28)
 	size = Vector2(888,170) if preview else Vector2(888,664)
-	help_label.visible = not preview and not mode in ["help","library"] # These pages use the room for content.
+	help_label.visible = not preview and not mode in ["help","library","games"] # These pages use the room for content.
 	help_frame.visible = help_label.visible
 	if preview: heading.add_theme_font_size_override("font_size",22)
 	else: heading.add_theme_font_size_override("font_size",32)
@@ -958,6 +988,7 @@ func depth_layout() -> Dictionary:
 	return layout
 
 func selected_row():
+	if exit_selected: return null
 	for row in rows:
 		if row.item.id==selected_id: return row
 	return null
@@ -996,6 +1027,7 @@ func finish_editing() -> void:
 
 func select(id: String, user_action := true) -> void:
 	if rendering or selecting: return
+	exit_selected=false
 	if user_action:
 		scan_preferred_id=""; notification_time=0
 	var candidate = null
@@ -1067,7 +1099,7 @@ func refresh_labels() -> void:
 		elif host.emulator.loaded: subtitle.text = library.Registry.SYSTEMS.get(host.emulator.system_id, {}).get("name", "Game") + " · paused"
 		else: subtitle.text = status_title
 		subtitle.tooltip_text=GlyphText.plain(status_detail)
-	elif mode=="help": subtitle.text="Game library" if help_title=="Full game title" else "CRT XR · Help"
+	elif mode=="help": subtitle.text="Game Library" if help_title=="Full game title" else "CRT XR · Help"
 	elif mode=="music_browser": subtitle.text=music.music_dir+" · Page %d" % [music.music_page+1]
 	elif mode=="videos": subtitle.text=videos.video_view_dir+(" · Page %d" % [videos.video_page+1] if videos.video_page>0 else "")
 	elif mode=="video_folder": subtitle.text=videos.video_folder_dir
@@ -1082,7 +1114,7 @@ func refresh_labels() -> void:
 	elif mode in ["recent","favourites"]:
 		subtitle.text = count_caption(games.history_paths().size(),"game")
 	elif mode=="launch": subtitle.text = games.launch_path.get_file().get_basename()
-	elif mode=="library_tools": subtitle.text = "Where CRT XR finds your games and videos · Your files stay where they are"
+	elif mode=="library_tools": subtitle.text = "Where CRT XR finds your games · Your files stay where they are"
 	elif mode=="settings":
 		if category==1: subtitle.text=context+" · "+pictures.preset_caption()
 		elif category==2 and subsection==2: subtitle.text=host.music.status
@@ -1105,10 +1137,15 @@ func refresh_labels() -> void:
 	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in any console list and press {X}."
 	elif mode=="library" and not rom_index.message.is_empty(): help_label.text=rom_index.message
 	elif mode=="library": help_label.text=""
+	elif exit_selected: help_label.text = "Exit CRT XR. Your settings will be saved."
 	elif row!=null: help_label.text = str(row.item.get("help",""))
 	else: help_label.text = library.message if mode=="browser" else "Nothing here yet. {B} goes back."
 	if mode=="library":
 		help_frame.visible = not preview and not help_label.text.is_empty()
+		help_label.visible = help_frame.visible
+	elif mode=="games":
+		# Keep the list expanded, but show temporary action confirmations.
+		help_frame.visible = not preview and notification_time>0 and notification_context==state_key()
 		help_label.visible = help_frame.visible
 	help_frame.modulate.a = 0.0 if help_label.text.is_empty() else 1.0
 	if preview and row!=null: compact.text = "▸  %s    ‹  %s  ›" % [row.item.label,row.formatted_value()]
@@ -1127,9 +1164,17 @@ func playing_title() -> String:
 	if host.emulator.loaded: return host.emulator.rom_path.get_file().get_basename()
 	return "Welcome to CRT XR"
 
+func request_exit() -> void:
+	if mode!="pause": return
+	var detail := "Your place in this video and your settings will be saved." if host.video.loaded else ("An automatic resume point, settings and cartridge SRAM will be saved." if host.emulator.loaded else "Your settings will be saved.")
+	ask("Exit CRT XR?",detail,host.request_exit)
+
 func refresh_hints(row) -> void:
 	var pad := input_kind=="controller"
 	hints.controller=pad
+	exit_footer.visible=mode=="pause" and not preview
+	exit_footer.text="Exit"
+	exit_footer.add_theme_stylebox_override("normal",MenuSkin.box(Color("982830") if exit_selected else Color("701c28"),Color("ffc0a8") if exit_selected else Color("e87870"),2,6))
 	var back_caption := ("Return to game" if host.emulator.loaded else "Close menu") if mode=="pause" else "Back"
 	back_button.text=back_caption+("" if pad else "  [Backspace]")
 	# One place for prompts: the footer. The header keeps the title and clock.
@@ -1212,6 +1257,9 @@ func navigate_library(next: Vector2i) -> void:
 			target+=next.y
 
 func navigate(next: Vector2i) -> void:
+	if exit_selected:
+		if next.y<0: select(selected_id)
+		return
 	if mode=="help": scroll.scroll_vertical+=next.y*80; return
 	if mode in ["library","alphabet"]: navigate_library(next); return
 	if mode in ["rename","folder_path","radio_url","video_search"] and input_kind=="controller":
@@ -1259,6 +1307,10 @@ func navigate(next: Vector2i) -> void:
 				else: select(rows[aligned(candidate, from_row)].item.id)
 				return
 			candidate+=next.y
+		if mode=="pause" and next.y>0 and exit_footer.visible:
+			finish_editing(); exit_selected=true
+			for row in rows: row.set_selected(false)
+			play_menu_sound(); refresh_labels()
 	elif next.x!=0:
 		if mode=="pause" and rows[index].item.get("layout","")=="transport":
 			var candidate := index+next.x
@@ -1320,6 +1372,7 @@ func adjust(delta: int) -> void:
 	row.refresh(); notify("Changed · Saved when you close the menu")
 
 func activate() -> void:
+	if exit_selected: request_exit(); return
 	var row=selected_row()
 	if row==null or row.disabled: return
 	if row.item.get("quick",false):
@@ -1514,7 +1567,7 @@ func set_input_kind(kind: String) -> void:
 	if kind==input_kind: return
 	input_kind=kind
 	help_label.controller=kind=="controller"; error_label.controller=kind=="controller"
-	search_field.visible=kind=="keyboard" and mode in ["games","recent","favourites","videos"]
+	search_field.visible=kind=="keyboard" and mode in ["games","recent","favourites","videos"] and (mode!="videos" or videos.videos_shown())
 	if kind=="controller" and search_field.has_focus():
 		search_field.release_focus(); select(selected_id,false)
 	refresh_labels()

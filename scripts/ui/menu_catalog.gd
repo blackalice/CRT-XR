@@ -353,7 +353,7 @@ func pages(category: int) -> Array:
 				unavailable(number("access.haptic_strength","Vibration strength",h,"haptic_strength",0.1,1.0,0.1,0.8,"percent","How strong the ticks feel. The Steam Deck passes on only part of it, so it may need to be higher there.",func(): h.menu_vibrate(1.0, 0.07),false).merged({"disabled":not h.menu_haptics},true),"Turn on Controller vibration first.")])]
 		8:
 			if not menu.videos.videos_shown():
-				return [page("Videos",[action("videos.setup","Set up videos",menu.games.open_library_tools,"Choose a video folder in Library locations. Its videos appear after your consoles, and their settings appear here.",false,"›")])]
+				return [page("Videos",[action("videos.setup","Set up videos",menu.videos.open_videos,"Set up video playback and choose your video folder.",false,"›")])]
 			return [page("Picture",video_picture_rows()),page("VCR",vcr_rows()),page("Playback",playback_rows())]
 		7:
 			var quick: Array = []
