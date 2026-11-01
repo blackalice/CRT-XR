@@ -61,7 +61,8 @@ var selected_id := ""
 var items: Array = []
 var rows: Array = []
 var preview := false
-var input_kind := "keyboard"
+var input_kind := initial_input_kind()
+var deck_controls := is_steam_deck()
 var search_query := ""
 var search_field: LineEdit
 var back_button: Button
@@ -138,6 +139,16 @@ var entry_initialized := false
 var sound_player: AudioStreamPlayer
 var focus_tween: Tween
 var boot: Control
+
+static func is_steam_deck() -> bool:
+	if OS.get_name()!="Linux": return false
+	if OS.get_environment("SteamDeck")=="1": return true
+	# Works in Desktop Mode too, where Steam's environment flag may be absent.
+	var product := FileAccess.get_file_as_string("/sys/devices/virtual/dmi/id/product_name").strip_edges() if FileAccess.file_exists("/sys/devices/virtual/dmi/id/product_name") else ""
+	return product in ["Jupiter", "Galileo", "Steam Deck"]
+
+static func initial_input_kind() -> String:
+	return "controller" if is_steam_deck() else "keyboard"
 
 static func boot_cancel_pressed(event: InputEvent) -> bool:
 	return preload("res://scripts/ui/menu_boot.gd").cancel_pressed(event)
@@ -218,6 +229,7 @@ func _ready() -> void:
 	location_bar=LocationBar.new(); location_bar.hide(); layout.add_child(location_bar)
 	# Messages name controls in braces ("press {R1}"): drawn as the same glyphs as the hints.
 	error_label = GlyphText.new("", 20, Color("ffb59c"))
+	error_label.controller=input_kind=="controller"
 	error_label.lead_icon = "warn"
 	layout.add_child(error_label); error_label.hide()
 	confirm_panel = Confirmation.new()
@@ -341,6 +353,7 @@ func _ready() -> void:
 	compact.add_theme_color_override("font_color",MenuSkin.AMBER)
 	layout.add_child(compact); compact.hide()
 	help_label = GlyphText.new("", 20, Color("09132b"))
+	help_label.controller=input_kind=="controller"
 	help_label.custom_minimum_size.y = 64
 	# Help sits in a framed message window, as console menus put their text.
 	help_frame = PanelContainer.new()
@@ -1531,13 +1544,20 @@ func release_input(event: InputEvent) -> void:
 		if event.axis==JOY_AXIS_LEFT_X: stick.x=event.axis_value
 		if event.axis==JOY_AXIS_LEFT_Y: stick.y=event.axis_value
 
-func handle(event: InputEvent) -> bool:
-	# A console button waiting for its new control takes the next press.
-	if controls.handle(event): return true
+func note_input(event: InputEvent) -> void:
 	if (event is InputEventJoypadButton and event.pressed) or (event is InputEventJoypadMotion and absf(event.axis_value)>.55):
 		set_input_kind("controller")
-	if event is InputEventMouse:
-		set_input_kind("keyboard"); return false
+	elif event is InputEventKey and event.pressed:
+		set_input_kind("keyboard")
+	elif event is InputEventMouse:
+		# The Deck's trackpad can emit mouse events while using its controls.
+		if not deck_controls: set_input_kind("keyboard")
+
+func handle(event: InputEvent) -> bool:
+	note_input(event)
+	# A console button waiting for its new control takes the next press.
+	if controls.handle(event): return true
+	if event is InputEventMouse: return false
 	if event is InputEventJoypadButton or event is InputEventJoypadMotion:
 		if device!=event.device:
 			clear_input(); held.clear(); blocked.clear(); stick=Vector2.ZERO; stick_blocked=false; triggers.clear()
@@ -1592,7 +1612,6 @@ func handle(event: InputEvent) -> bool:
 			update_direction()
 		return true
 	if event is InputEventKey:
-		set_input_kind("keyboard")
 		if mode in ["games","recent","favourites","videos"]:
 			if event.pressed and not event.echo and event.ctrl_pressed and event.physical_keycode==KEY_F:
 				clear_input(); search_field.grab_focus(); return true

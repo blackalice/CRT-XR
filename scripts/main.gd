@@ -785,6 +785,7 @@ func _input(event: InputEvent) -> void:
 	if startup_loading: return
 	if is_instance_valid(menu): menu.release_input(event)
 	if is_instance_valid(sbs_prompt): return
+	if is_instance_valid(menu): menu.note_input(event)
 	if is_instance_valid(menu) and menu.boot_cancel_pressed(event):
 		menu_boot_pending = false
 		stop_boot_sound()

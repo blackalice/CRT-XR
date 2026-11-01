@@ -86,6 +86,10 @@ Screen height defaults to 0 m. A changed-value dot sits in the row's corner,
 outside the title layout, so changing height cannot rewrap or enlarge its tile.
 Existing saved placements are retained; Y resets height to the new default.
 
+Steam Deck starts with controller glyphs in both Gaming and Desktop Mode.
+Its trackpad leaves those prompts in place. Pressing a keyboard key switches to
+keyboard prompts; controller input switches them back.
+
 The Preview button, X, or A on a visual value opens a bottom strip.
 Moving between settings does not automatically hide the full panel. Left/right adjusts,
 up/down selects adjacent visual settings in that subsection, Y resets and X/B
