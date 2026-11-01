@@ -18,10 +18,12 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 | Audio | TV sound; Balance; Music; Music space; TV effects |
 | Room | Presets; Lighting; Materials; Props; Sound; Placement |
 | Controls | Game controls; Controller |
-| Emulation | Performance; Info (current game and BIOS status) |
+| Emulation | Consoles; This game; Performance; Info |
 | Saved setups | Setup slots; Per-game picture |
 | Menu | Accessibility; Layout & placement; Feedback |
 | About & Help | About, controls, device status, troubleshooting, credits and diagnostics; Settings management |
+
+Core settings offer console-wide defaults under Consoles and per-game overrides under This game. The playing console moves to the top, is marked Playing, and expands when the game changes. Console options sit inside the expanded group; selecting the header hides them. Other consoles remain accessible. This game identifies the loaded game and shows effective inherited values with From console or Game override beneath each setting. Y returns an option to its console setting. Changes apply when the game next loads. Sega consoles have separate preferences even where they share a core.
 
 Up/down selects, left/right adjusts immediately, A toggles switches or opens actions,
 and Y resets only the selected option. There is no edit lock. L1/R1 changes category;
@@ -66,7 +68,7 @@ selects Cancel first. Older saves remain readable and can lack thumbnails. Conti
 shows the automatic resume preview. Preview capture reuses the presented CPU frame.
 
 About & Help includes scrollable controls, troubleshooting, device status, full credits
-and diagnostics. Device status stays separate from the selected action’s help. Menu → Accessibility provides larger text, stronger contrast and reduced animation. Menu layout and placement, sounds and vibration have their own sections.
+and diagnostics. Device status stays separate from the selected action’s help. Menu → Accessibility provides larger text, stronger contrast, reduced animation and Clean menu feed. The menu on the CRT uses the current picture settings by default, including colour, CRT effects, fitting and composite decoding. Clean menu feed restores the separate RGB reading picture without changing game settings. Auto composite keeps the current programme’s PAL/NTSC rate while the menu is shown. Menu layout and placement, sounds and vibration have their own sections.
 Focus transitions only change colour; the UI remains a sharp shared 2D texture.
 Controller shortcuts use drawn button icons and follow the last input method.
 
@@ -171,7 +173,7 @@ separate follow-up checks.
 
 Clean exits and game changes save a separate automatic resume point (`<ROM hash>.auto.rst`) alongside each game's states. Manual slot 0 and cartridge SRAM retain their existing locations and formats. Automatic resume requires a core that supports save states. A failed automatic save keeps the app open (or cancels the game change) so storage can be fixed and the action retried. Force-closing or losing power does not create a resume point.
 
-Choosing a game with an automatic save offers **Continue**, **Start fresh**, and **Back**. Continue checks the ROM and core identity before restoring. Unreadable or incompatible saves stay on disk and offer Start fresh as recovery. Starting fresh keeps manual states and cartridge battery saves; the automatic point updates after gameplay on the next clean exit or game change. The `--last-game` launcher uses the same chooser; explicit `--rom` remains a fresh launch for tooling.
+Choosing a game with an automatic save offers **Continue**, **Start from a fresh boot**, and a named return destination (**Go to Home** at startup). The screen names the game and console and groups the saved screenshot and timestamp into an inset panel. Saves without screenshots show a placeholder. Continue is initially selected and checks the ROM and core identity before restoring. Unreadable or incompatible saves stay on disk and offer Start from a fresh boot as recovery. Starting fresh keeps manual states and cartridge battery saves; the automatic point updates after gameplay on the next clean exit or game change. The `--last-game` launcher uses the same chooser; explicit `--rom` remains a fresh launch for tooling.
 
 Choose game begins with **Recently played** (up to 20 games) and **Favourites**. In either list or a system game list, press **X** to add/remove a favourite; a star marks favourites. Entries remain when removable storage is disconnected. Reconnect the card and choose the entry again. History and favourites live in `user://play-history.cfg`; the previous last-game entry migrates automatically.
 

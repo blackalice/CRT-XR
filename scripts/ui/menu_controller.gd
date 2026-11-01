@@ -10,6 +10,7 @@ const ActionRow = preload("res://scripts/ui/action_row.gd")
 const Catalog = preload("res://scripts/ui/menu_catalog.gd")
 const Library = preload("res://scripts/ui/rom_library.gd")
 const RomIndex = preload("res://scripts/content/rom_index.gd")
+const ResumePreview = preload("res://scripts/ui/resume_preview.gd")
 const Confirmation = preload("res://scripts/ui/confirmation_panel.gd")
 const LocationBar = preload("res://scripts/ui/location_bar.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
@@ -748,6 +749,9 @@ func render() -> void:
 	var section := ""
 	var grid: GridContainer
 	music_heading=null; deck_detail=null
+	var accordion_group := ""
+	var accordion_layout: VBoxContainer
+	var accordion_body: VBoxContainer
 	var music_layout: VBoxContainer
 	var transport_grid: HBoxContainer
 	var group_row := -1
@@ -835,7 +839,39 @@ func render() -> void:
 				var gap := Control.new(); gap.custom_minimum_size.y=6; column.add_child(gap)
 			section=item.section
 			var header := Label.new(); header.text=section; header.add_theme_font_size_override("font_size",16); MenuSkin.weigh(header,MenuSkin.BOLD); header.add_theme_color_override("font_color",MenuSkin.MUTED)
+			header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 			column.add_child(header)
+		if item.has("section_detail"):
+			var detail := Label.new()
+			detail.text = item.section_detail
+			detail.add_theme_font_size_override("font_size",16)
+			detail.add_theme_color_override("font_color",MenuSkin.MUTED)
+			detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			column.add_child(detail)
+		if item.has("accordion_group"):
+			if accordion_group != item.accordion_group:
+				accordion_group = item.accordion_group
+				accordion_body = null
+				var group_panel := PanelContainer.new()
+				group_panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
+				group_panel.add_child(MenuSkin.pixel_panel("well"))
+				accordion_layout = VBoxContainer.new()
+				accordion_layout.add_theme_constant_override("separation",2)
+				group_panel.add_child(accordion_layout)
+				column.add_child(group_panel)
+			parent = accordion_layout
+			if item.get("accordion_child",false):
+				if accordion_body == null:
+					var inset := MarginContainer.new()
+					inset.add_theme_constant_override("margin_left",10)
+					inset.add_theme_constant_override("margin_right",10)
+					inset.add_theme_constant_override("margin_top",6)
+					inset.add_theme_constant_override("margin_bottom",10)
+					accordion_layout.add_child(inset)
+					accordion_body = VBoxContainer.new()
+					accordion_body.add_theme_constant_override("separation",2)
+					inset.add_child(accordion_body)
+				parent = accordion_body
 		if item.id in ["exit","home.exit"] and item.get("layout","")!="tile":
 			var divider := HSeparator.new()
 			column.add_child(divider)
@@ -890,7 +926,7 @@ func render() -> void:
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"help":help_title,"launch":"Continue or start fresh?","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm": confirm_panel.describe("",confirmation.detail,confirmation.get("preview",""))
 	rename_field.visible = mode in ["rename","radio_url","folder_path","video_search"]
@@ -912,7 +948,7 @@ func render() -> void:
 	subtitle.visible = not preview and not location_bar.visible
 	position = Vector2(36,522) if preview else Vector2(36,28)
 	size = Vector2(888,170) if preview else Vector2(888,664)
-	help_label.visible = not preview and not mode in ["help","library","games"] # These pages use the room for content.
+	help_label.visible = not preview and not mode in ["help","library","games","launch"] # These pages use the room for content.
 	help_frame.visible = help_label.visible
 	if preview: heading.add_theme_font_size_override("font_size",22)
 	else: heading.add_theme_font_size_override("font_size",32)
@@ -934,14 +970,26 @@ func render() -> void:
 	select(selected_id,false)
 	style_rows()
 	if mode=="launch":
-		var hero := HBoxContainer.new(); hero.add_theme_constant_override("separation",16)
+		var title := Label.new()
+		title.text = games.launch_path.get_file().get_basename()
+		title.add_theme_font_size_override("font_size",28)
+		MenuSkin.weigh(title,MenuSkin.BOLD)
+		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		column.add_child(title)
+		var console := Label.new()
+		var system: String = library.Registry.identify(games.launch_path)
+		console.text = library.Registry.SYSTEMS.get(system, {}).get("name", "Game")
+		console.add_theme_font_size_override("font_size",16)
+		console.add_theme_color_override("font_color",MenuSkin.MUTED)
+		column.add_child(console)
+		var gap := Control.new(); gap.custom_minimum_size.y=8; column.add_child(gap)
+		var hero := HBoxContainer.new(); hero.add_theme_constant_override("separation",24)
 		column.add_child(hero)
-		var preview_panel := Confirmation.new(); preview_panel.custom_minimum_size.x=400; hero.add_child(preview_panel)
+		var preview_panel := ResumePreview.new(); hero.add_child(preview_panel)
 		var auto: String=host.emulator.auto_path_for(games.launch_path)
-		preview_panel.describe("Where you left off","Saved "+ago(host.emulator.state_stamp(auto)),auto)
-		preview_panel.thumbnail.custom_minimum_size=Vector2(368,276)
+		preview_panel.describe(auto,"Saved " + ago(host.emulator.state_stamp(auto)))
 		var actions := VBoxContainer.new(); actions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; actions.alignment=BoxContainer.ALIGNMENT_CENTER
-		actions.add_theme_constant_override("separation",8); hero.add_child(actions)
+		actions.add_theme_constant_override("separation",12); hero.add_child(actions)
 		for row in rows: column.remove_child(row); actions.add_child(row)
 		select(selected_id,false)
 	if mode=="help":
@@ -1113,7 +1161,7 @@ func refresh_labels() -> void:
 		if count>games.GAMES_PER_PAGE: subtitle.text += " · Page %d of %d" % [games.game_page+1,ceili(float(count)/games.GAMES_PER_PAGE)]
 	elif mode in ["recent","favourites"]:
 		subtitle.text = count_caption(games.history_paths().size(),"game")
-	elif mode=="launch": subtitle.text = games.launch_path.get_file().get_basename()
+	elif mode=="launch": subtitle.text = ""
 	elif mode=="library_tools": subtitle.text = "Where CRT XR finds your games · Your files stay where they are"
 	elif mode=="settings":
 		if category==1: subtitle.text=context+" · "+pictures.preset_caption()
@@ -1218,6 +1266,8 @@ func refresh_hints(row) -> void:
 			elif row!=null and row.item.kind in ["choice","number"]: parts.append("←→ Adjust")
 			else: parts.append(open)
 			parts.append(("B " if pad else "Backspace ")+back_caption)
+	elif mode=="launch":
+		parts.append_array(["A Select" if pad else "Enter Select", ("B " if pad else "Backspace ") + games.launch_return_label()])
 	elif mode=="confirm": parts.append_array(["A Choose" if pad else "Enter Choose","B Cancel" if pad else "Backspace Cancel"])
 	elif mode in ["folder_path","rename","radio_url"]: parts=["D-pad Keys","A Type",go_back] if pad else ["Type or click keys","Enter Submit",go_back]
 	else: parts.append_array([open,go_back])

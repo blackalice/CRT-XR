@@ -21,9 +21,9 @@ func run():
  check(game.contains("test.sfc") and game.contains("SNES") and game.contains("Test core 1") and game.contains("50.00 fps"), "Reports loaded game details")
  for system in ["psx", "n64"]:
   app.emulator.system_id = system
-  var row: Dictionary = catalog.pages(10)[0].rows[0]
+  var row: Dictionary = catalog.pages(10)[2].rows[0]
   check(row.disabled and row.disabled_reason.contains("unavailable"), "Input preview explains unsupported " + system)
  app.emulator.loaded = false
- app.menu.open_settings(); app.menu.category = 10; app.menu.subsection = 1; app.menu.render()
+ app.menu.open_settings(); app.menu.category = 10; app.menu.subsection = 3; app.menu.render()
  check(app.menu.items.any(func(item): return item.id == "emulation.bios_info") and app.menu.items.any(func(item): return item.id == "emulation.game_info"), "Information actions are reachable under Emulation")
  app.queue_free(); quit(1 if failures else 0)

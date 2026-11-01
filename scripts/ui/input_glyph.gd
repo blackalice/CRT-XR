@@ -136,7 +136,8 @@ func _draw() -> void:
 		var text: String = BADGES.get(input, input)
 		var from := on_grid(Vector2(1, 6) * scale_factor)
 		var to := on_grid(size - Vector2(1, 6) * scale_factor)
-		draw_rect(Rect2(from, to - from), WELL)
+		# Dark glyphs sit on light surfaces; keep their badge interior clear.
+		if colour.get_luminance() > 0.5: draw_rect(Rect2(from, to - from), WELL)
 		draw_rect(Rect2(from, Vector2(to.x - from.x, CELL)), colour); draw_rect(Rect2(Vector2(from.x, to.y - CELL), Vector2(to.x - from.x, CELL)), colour)
 		draw_rect(Rect2(from, Vector2(CELL, to.y - from.y)), colour); draw_rect(Rect2(Vector2(to.x - CELL, from.y), Vector2(CELL, to.y - from.y)), colour)
 		var font := MenuSkin.font(MenuSkin.BOLD)

@@ -13,6 +13,7 @@ const VALUE := Color("f8d040")
 ## something; "compact" draws a smaller row for secondary places.
 const DANGER := Color("f87860")
 var item: Dictionary
+var setting_detail_label: Label
 var title_label: Label
 var unavailable_label: Label
 var value_label: Label
@@ -45,7 +46,7 @@ func configure(definition: Dictionary) -> void:
 	focus_mode=Control.FOCUS_ALL
 	content_margin=MarginContainer.new()
 	content_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["left","right"]: content_margin.add_theme_constant_override("margin_"+side,16)
+	for side in ["left","right"]: content_margin.add_theme_constant_override("margin_"+side,16 + (int(item.get("indent", 0)) if side == "left" else 0))
 	for side in ["top","bottom"]: content_margin.add_theme_constant_override("margin_"+side,6 if item.get("compact",false) else 10)
 	content_margin.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	add_child(content_margin)
@@ -56,6 +57,14 @@ func configure(definition: Dictionary) -> void:
 	line.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(line)
 	# The outline carries focus; do not reserve a competing arrow column.
 	marker=Label.new(); marker.hide(); add_child(marker)
+	if item.has("disclosure"):
+		var disclosure := Label.new()
+		disclosure.text = item.disclosure
+		disclosure.custom_minimum_size.x = 20
+		disclosure.add_theme_font_size_override("font_size",20)
+		disclosure.add_theme_color_override("font_color",MenuSkin.AMBER)
+		disclosure.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line.add_child(disclosure)
 	var emphasis := str(item.get("emphasis",""))
 	var is_exit := str(item.get("id", "")) in ["exit", "home.exit"]
 	var tint := MenuSkin.TEXT if is_exit else (MenuSkin.AMBER if emphasis=="primary" else (DANGER if emphasis=="danger" else MenuSkin.MUTED))
@@ -75,12 +84,18 @@ func configure(definition: Dictionary) -> void:
 	words.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	words.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(words)
 	title_label=Label.new(); title_label.text=item.label
-	title_label.add_theme_font_size_override("font_size",24); MenuSkin.weigh(title_label,MenuSkin.SEMIBOLD)
+	title_label.add_theme_font_size_override("font_size",22 if item.has("disclosure") else 24); MenuSkin.weigh(title_label,MenuSkin.SEMIBOLD)
 	title_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	title_label.max_lines_visible=3
 	title_label.mouse_filter=Control.MOUSE_FILTER_IGNORE; words.add_child(title_label)
 	MenuSkin.shadow(title_label)
 	if emphasis in ["primary","danger"]: title_label.add_theme_color_override("font_color",tint)
+	if item.has("detail_getter"):
+		setting_detail_label = Label.new()
+		setting_detail_label.add_theme_font_size_override("font_size",16)
+		setting_detail_label.add_theme_color_override("font_color",MenuSkin.MUTED)
+		setting_detail_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		words.add_child(setting_detail_label)
 	value_group=HBoxContainer.new(); value_group.add_theme_constant_override("separation",8)
 	value_group.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	value_group.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(value_group)
@@ -173,6 +188,7 @@ static var FILL_IDLE := MenuSkin.box(Color("92969c"),Color.TRANSPARENT,0,0)
 func refresh() -> void:
 	disabled=item.get("disabled",false)
 	value_label.text=formatted_value()
+	if setting_detail_label != null: setting_detail_label.text = item.detail_getter.call()
 	if item.kind in ["number", "choice"] and not item.get("stacked",false):
 		# Keep both arrows close to the actual value, while allowing long choices to wrap.
 		var font := value_label.get_theme_font("font")
@@ -236,6 +252,8 @@ func update_selection_style() -> void:
 	var kind := ("editing" if editing else "selected") if selected_now else "row"
 	if item.get("skin", "") == "music": kind = "music_selected" if selected_now else "music_row"
 	if str(item.get("id", "")) in ["exit", "home.exit"]: kind = "exit_selected" if selected_now else "exit_row"
+	if item.get("skin", "") == "inset" and not selected_now: kind = "well"
+	if item.get("expanded", false) and not selected_now: kind = "chosen"
 	panel.material=MenuSkin.panel_material(kind)
 
 func changed_from_default() -> bool:

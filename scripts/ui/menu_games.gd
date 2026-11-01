@@ -173,7 +173,7 @@ func select_file(path: String) -> void:
 	var automatic: String = host.emulator.auto_path_for(path)
 	if FileAccess.file_exists(automatic):
 		menu.remember(); launch_origin=menu.snapshot(); launch_path=path
-		menu.clear_input(); menu.mode="launch"; menu.render()
+		menu.clear_input(); menu.mode="launch"; menu.memory["launch"]={"id":"launch.continue","scroll":0}; menu.render()
 	else: launch_game(path,false)
 
 func launch_game(path: String, continuing: bool) -> void:
@@ -183,7 +183,7 @@ func launch_game(path: String, continuing: bool) -> void:
 	if not host.load_game(path): menu.show_error(host.startup_message); return
 	if continuing and not host.emulator.load_auto():
 		if not menu.visible: host.toggle_settings() # after an unpack the menu is closed
-		menu.show_error(host.emulator.status+" Select Start fresh to play without this save.")
+		menu.show_error(host.emulator.status+" Choose Start from a fresh boot to play without this resume point.")
 		return
 	var feedback: String = host.emulator.status
 	host.was_paused_before_menu=false
@@ -299,12 +299,25 @@ func game_title_action() -> void:
 	if row!=null and row.item.has("rom_path"):
 		menu.open_help("Full game title",str(row.item.label))
 
-## Continue from the automatic save, or start the game fresh.
+## Name the actual return destination: startup has no preceding page to go back to.
+func launch_return_label() -> String:
+	match launch_origin.get("mode", "pause"):
+		"pause": return "Go to Home" if not host.emulator.loaded and not host.video.loaded else "Back to menu"
+		"recent": return "Back to Recently played"
+		"favourites": return "Back to Favourites"
+		"browser": return "Back to folders"
+		"games", "library": return "Back to library"
+	return "Back"
+
 func launch_items() -> Array:
 	var path := launch_path
-	return [menu.catalog.action("launch.continue","Continue",func(): launch_game(path,true),path.get_file().get_basename()+" · resume point saved "+menu.ago(host.emulator.state_stamp(host.emulator.auto_path_for(path)))),
-		menu.catalog.action("launch.fresh","Start fresh",func(): launch_game(path,false),"Start from the title screen. Cartridge battery saves and manual states are kept."),
-		menu.catalog.action("launch.cancel","Back",menu.back,"")]
+	var continuing: Dictionary = menu.catalog.action("launch.continue","Continue",func(): launch_game(path,true),"",false,"")
+	continuing["emphasis"] = "primary"
+	continuing["row_icon"] = "play"
+	continuing["min_height"] = 84
+	var fresh: Dictionary = menu.catalog.action("launch.fresh","Start from a fresh boot",func(): launch_game(path,false),"In-game saves are kept.",false,"")
+	fresh["detail_getter"] = func(): return "In-game saves are kept."
+	return [continuing, fresh, menu.catalog.action("launch.cancel",launch_return_label(),menu.back,"",false,"")]
 
 ## Recently played or favourites, with Jump to letter on long lists.
 func history_items() -> Array:

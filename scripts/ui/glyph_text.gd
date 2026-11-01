@@ -92,7 +92,10 @@ func control(flow: HFlowContainer, name: String, trailing := "") -> void:
 	group.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var height := font_size * 1.5
 	for part in name.replace("+", " + ").replace("/", " / ").split(" ", false):
-		if InputGlyph.knows(part): group.add_child(InputGlyph.new(part, height))
+		if InputGlyph.knows(part):
+			var glyph := InputGlyph.new(part, height)
+			glyph.colour = colour
+			group.add_child(glyph)
 		else:
 			var joining := word_label(part)
 			joining.add_theme_color_override("font_color", Color(colour, 0.7))

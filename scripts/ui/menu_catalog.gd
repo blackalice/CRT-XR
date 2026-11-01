@@ -75,6 +75,73 @@ func page(title: String, rows: Array) -> Dictionary:
 		if row is Dictionary and ROW_ICONS.has(row.get("id","")) and not row.has("row_icon"): row["row_icon"]=ROW_ICONS[row.id]
 	return {"title":title,"rows":rows}
 
+const CoreOptions = preload("res://scripts/emulation/core_options.gd")
+
+func core_option_row(system: String, game: String, definition: Array) -> Dictionary:
+	var key: String = definition[0]
+	var labels: Array = definition[2].duplicate()
+	var values: Array = definition[3]
+	var per_game := not game.is_empty()
+	if per_game: labels[0] = CoreOptions.console_label(system, definition)
+	var item := {"id":"core.%s.%s.%s" % [system, game, key], "label":definition[1], "kind":"choice", "choices":labels, "default":0, "visual":false,
+		"getter":func(): return CoreOptions.choice_index(system, game, definition),
+		"setter":func(value):
+			var error := CoreOptions.write_value(system, game, key, values[value])
+			if error != OK: host.show_notice("Could not save core settings: " + error_string(error)),
+		"help":definition[4] + (" Y returns to the console setting." if per_game else "") + " Applies next time you load the game."}
+	if per_game:
+		item["detail_getter"] = func(): return "From console" if CoreOptions.choice_index(system, game, definition) == 0 else "Game override"
+	return item
+
+const CORE_SYSTEMS := ["snes", "nes", "megadrive", "mastersystem", "gamegear", "segacd", "gameboy", "gba", "ngpc", "psx", "n64"]
+var expanded_core_console := ""
+var core_game_context := ""
+
+func toggle_core_console(system: String) -> void:
+	expanded_core_console = "" if expanded_core_console == system else system
+	menu.refresh()
+
+func core_option_pages() -> Array:
+	var emulator = host.emulator
+	var playing: String = emulator.system_id if emulator.loaded and emulator.system_id in CORE_SYSTEMS else ""
+	var context: String = playing + ":" + emulator.rom_hash if not playing.is_empty() else ""
+	if context != core_game_context:
+		core_game_context = context
+		expanded_core_console = playing
+		menu.memory["settings:10:0"] = {"id":"core.console." + (playing if not playing.is_empty() else "snes"), "scroll":0}
+	var systems: Array = CORE_SYSTEMS.duplicate()
+	if not playing.is_empty():
+		systems.erase(playing)
+		systems.push_front(playing)
+	var rows: Array = []
+	for system in systems:
+		var is_open: bool = expanded_core_console == system
+		var header := action("core.console." + system, emulator.Registry.SYSTEMS[system].name,
+			toggle_core_console.bind(system), "Defaults for all %s games. Select to %s settings." % [emulator.Registry.SYSTEMS[system].name, "hide" if is_open else "show"], false, "Playing" if system == playing else "")
+		header["accordion_group"] = system
+		header["disclosure"] = "▾" if is_open else "▸"
+		header["expanded"] = is_open
+		header["compact"] = true
+		rows.append(header)
+		if is_open:
+			for definition in CoreOptions.definitions(system):
+				var child := core_option_row(system, "", definition)
+				child["accordion_group"] = system
+				child["accordion_child"] = true
+				child["skin"] = "inset"
+				rows.append(child)
+	if not rows.is_empty():
+		rows[0]["section"] = "Console defaults"
+		rows[0]["section_detail"] = "Applies next time you load a game."
+	var game_rows: Array = []
+	if not playing.is_empty():
+		for definition in CoreOptions.definitions(playing): game_rows.append(core_option_row(playing, emulator.rom_hash, definition))
+		game_rows[0]["section"] = emulator.rom_path.get_file().get_basename() + " · " + emulator.Registry.SYSTEMS[playing].name
+		game_rows[0]["section_detail"] = "Changes apply next load. Y restores the console setting."
+	else:
+		game_rows.append(unavailable(action("core.no_game", "Game settings", func(): pass, "", true, ""), "Start a game to adjust its settings. Each option follows its console unless you give this game an override."))
+	return [page("Consoles", rows), page("This game", game_rows)]
+
 func property_row(key: String, caption: String, low: float, high: float, step: float, unit: String, help: String, visual := true) -> Dictionary:
 	return number("view."+key,caption.replace(" (m)","").replace(" (seconds)",""),host,key,low,high,step,float(host.SettingsDefaults.slider_default(caption,host)),unit,help,func():
 		host.fade_material.set_shader_parameter("fade_width",host.edge_fade),visual)
@@ -309,7 +376,7 @@ func pages(category: int) -> Array:
 				elif h.emulator.separate_preview: input_delay.disabled_reason="The separate preview core could not start for %s." % console
 				else: input_delay.disabled_reason="%s needs Separate preview core: its sound buzzes with a same-core preview." % console
 			var separate_preview := toggle("controls.separate_preview","Separate preview core",h.emulator,"separate_preview",true,"Runs preview in a second core to keep audio clean. Uses more memory. PS1/N64: unavailable; off: SNES only.",func(): h.emulator.set_separate_preview(h.emulator.separate_preview); menu.refresh(),false)
-			return [page("Performance",[input_delay,separate_preview]),page("Info",[
+			return core_option_pages() + [page("Performance",[input_delay,separate_preview]),page("Info",[
 				action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate."),
 				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")])]
 
@@ -341,6 +408,7 @@ func pages(category: int) -> Array:
 				toggle("access.large","Larger menu text",h,"menu_large_text",false,"Larger text and taller rows; lists scroll to keep focus visible.",menu.apply_accessibility,false),
 				toggle("access.contrast","Stronger menu contrast",h,"menu_high_contrast",false,"Brighter text and clearer borders on a dark background.",menu.apply_accessibility,false),
 				toggle("access.motion","Reduced animation",h,"menu_reduced_motion",false,"Instant focus changes and no TV warm-up animation.",menu.apply_accessibility,false),
+				toggle("access.clean_feed","Clean menu feed",h,"menu_clean_feed",false,"Uses a clearer picture while the menu is on the TV. Off uses your current picture settings, including CRT and composite effects.",unchanged,false),
 				]),page("Layout & placement",[
 				{"id":"access.game_columns","label":"Game list columns","kind":"choice","choices":["1 column", "2 columns", "3 columns"],"default":0,"visual":false,
 					"getter":func(): return h.game_list_columns - 1,"setter":func(value): h.game_list_columns=int(value)+1,

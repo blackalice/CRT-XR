@@ -1,5 +1,5 @@
 extends SceneTree
-## The menu on the TV: the tube shows the menu with a reading picture, the TV
+## The menu on the TV: shared picture settings, an optional clean feed, the TV
 ## leans in, the preview strip floats, and closing puts everything back unsaved.
 const UI = preload("res://tests/menu_test_helpers.gd")
 var failures := 0
@@ -17,6 +17,8 @@ func run() -> void:
 	var app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
 	await settle()
+	app.apply_settings(ConfigFile.new())
+	await settle()
 	app.use_tracking(false)
 	# Startup with no game opens the menu: it must come up on a switched-on TV.
 	check(app.settings_panel.visible and app.tv_menu.active and app.power_on.started, "At startup the TV switches on with the menu on it")
@@ -26,6 +28,9 @@ func run() -> void:
 	var programme: Texture2D = app.world.picture.source_texture
 	var scanlines := float(app.world.screen_material.get_shader_parameter("scanlines"))
 	var place: Vector3 = app.world.television.position
+	app.world.picture.mode = 3
+	app.world.picture.source_rate = 50.0
+	app.world.picture.refresh()
 	var mode: int = app.world.picture.mode
 	var distance: float = app.distance
 	check(app.menu_on_tv, "The menu shows on the TV by default")
@@ -35,7 +40,23 @@ func run() -> void:
 	await settle()
 	check(app.tv_menu.active and app.world.picture.source_texture == app.menu_view.get_texture(), "Opening the menu switches the tube to the menu")
 	check(not app.menu_overlays[0].visible and not app.menu_depth_view.dim_nodes[0].visible, "Nothing floats over the room and the room stays undimmed")
-	check(app.world.picture.effective_mode() == 0 and float(app.world.screen_material.get_shader_parameter("scanlines")) < scanlines, "The tube switches to a clean RGB picture with light scanlines")
+	check(not app.menu_clean_feed and app.world.picture.override.is_empty(), "The menu shares the current picture by default")
+	check(app.world.picture.effective_mode() == 2 and is_equal_approx(float(app.world.screen_material.get_shader_parameter("scanlines")),scanlines), "Auto composite stays PAL and scanlines keep the programme setting")
+	check(app.world.picture.shown_values() == app.world.picture.values, "Menu uses the current colour, fitting and beam settings")
+	var mesh = app.world.television.get_node("PhosphorSurface").mesh
+	await settle()
+	check(app.world.television.get_node("PhosphorSurface").mesh == mesh, "Unchanged menu curvature does not rebuild the mesh")
+	var settings_before: ConfigFile = app.capture_settings()
+	var clean_row: Dictionary = app.menu.catalog.pages(9)[0].rows.filter(func(row): return row.id == "access.clean_feed")[0]
+	clean_row.setter.call(true)
+	await settle()
+	check(app.tv_menu.active and app.world.picture.effective_mode() == 0 and is_equal_approx(float(app.world.screen_material.get_shader_parameter("scanlines")),0.18), "Accessibility switches the open menu to the previous clean picture")
+	check(app.world.picture.mode == mode and app.world.picture.values.brightness == settings_before.get_value("picture","brightness"), "Clean feed leaves programme preferences intact")
+	var clean_settings: ConfigFile = app.capture_settings()
+	check(clean_settings.get_value("accessibility","menu_clean_feed") == true, "Clean feed preference is saved")
+	clean_row.setter.call(false)
+	await settle()
+	check(app.world.picture.override.is_empty() and app.world.picture.effective_mode() == 2 and is_equal_approx(float(app.world.screen_material.get_shader_parameter("scanlines")),scanlines), "Disabling clean feed immediately restores the programme picture")
 	check(app.world.picture.mode == mode, "The menus still read your own connection, not the menu's picture")
 	check(app.world.television.position.z > place.z and is_equal_approx(app.world.television.position.x, 0.0), "The TV leans in towards you, centred (%.2f m from %.2f m)" % [-app.world.television.position.z, -place.z])
 	check(not app.world.picture.paused, "The tube keeps updating while it shows the menu")
@@ -93,6 +114,11 @@ func run() -> void:
 	app.toggle_settings(); await settle()
 	check(not app.tv_menu.active and app.menu_overlays[0].visible, "Off floats the menu in front of the TV as before")
 	app.close_settings()
+	app.apply_settings(clean_settings)
+	check(app.menu_clean_feed, "Clean feed survives settings restore")
+	app.toggle_settings()
+	app.reset_all_options()
+	check(not app.menu_clean_feed, "Reset all settings restores the shared menu picture")
 	app.free()
 	print("MENU ON TV CHECKS: ", "PASS" if failures == 0 else "%d FAILED" % failures)
 	quit(1 if failures else 0)

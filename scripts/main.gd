@@ -63,6 +63,8 @@ var menu_depth := true
 var menu_curve := false
 ## The menu on the TV itself (menu_on_tv.gd), or floating in front of it.
 var menu_on_tv := true
+## Accessibility: use the separate reading picture instead of the current CRT settings.
+var menu_clean_feed := false
 var tv_menu: Node
 var menu_was_open := false
 ## A light controller tick as the menu selection moves, and on confirm.
@@ -527,7 +529,7 @@ func apply_settings(config: ConfigFile) -> void:
 	picture_preset_signature=str(config.get_value("menu","picture_preset_signature",""))
 	room_preset_id=str(config.get_value("menu","room_preset_id",""))
 	room_preset_signature=str(config.get_value("menu","room_preset_signature",""))
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,bool(config.get_value("accessibility",key,false)))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve","menu_clean_feed"]: set(key,bool(config.get_value("accessibility",key,false)))
 	game_list_columns = clampi(int(config.get_value("accessibility", "game_list_columns", 1)), 1, 3)
 	menu_depth = bool(config.get_value("accessibility","menu_depth",true))
 	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
@@ -1311,7 +1313,7 @@ func reset_all_options() -> void:
 	for index in range(5): SettingsDefaults.apply(self,index)
 	emulator.tv_audio.reset_defaults()
 	music.reset_defaults()
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,false)
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve","menu_clean_feed"]: set(key,false)
 	game_list_columns = 1
 	menu_depth = true
 	menu_on_tv = true
@@ -1446,7 +1448,7 @@ func capture_settings() -> ConfigFile:
 	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_depth","menu_on_tv","menu_curve","haptic_strength","game_list_columns"]: config.set_value("accessibility",key,get(key))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns"]: config.set_value("accessibility",key,get(key))
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
 	config.set_value("emulation", "separate_preview", emulator.separate_preview)
 	config.set_value("view", "right_stick_distance", right_stick_distance)

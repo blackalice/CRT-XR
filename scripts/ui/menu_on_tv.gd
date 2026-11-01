@@ -1,11 +1,7 @@
 extends Node
-## Shows the menu on the TV itself, as consoles did: the tube switches to the
-## menu like changing to another input, with a picture made for reading (RGB,
-## a sharp beam, light scanlines and mask, little glass or curve), and the TV
-## eases in until the tube nearly fills the view. The menu's picture is drawn
-## over your picture settings, not into them, so the menus read and change your
-## own; closing the menu puts the programme, your picture and the view back. The preview strip, used to judge the picture against a
-## game, keeps the floating menu.
+## Shows the menu on the TV using the current picture settings. Accessibility
+## can select a separate reading picture without changing the programme settings.
+## The TV eases closer; adjustment preview keeps the floating menu.
 const LEAN_SECONDS := 0.35
 ## The menu's tube: lighter than any picture preset, so small text stays clear.
 const TUBE := {"scanlines": 0.18, "mask": 0.08, "glow": 0.08, "glass": 0.06, "curvature": 0.25}
@@ -19,6 +15,7 @@ const FILL := 0.8
 const LIGHT_DELAY := 4
 var host: Node
 var active := false
+var clean_feed := false
 ## 0 at the TV's own place, 1 leaned in for the menu.
 var lean := 0.0
 var saved := {}
@@ -35,6 +32,9 @@ func update(delta: float) -> void:
 	if want and not active: enter()
 	elif active and not want: leave()
 	elif active and host.world.picture.source_texture != menu_texture(): adopt()
+	if active:
+		if clean_feed != host.menu_clean_feed: apply_picture()
+		apply_tube()
 	# At startup the menu can open before the TV's warm-up, which waits for the
 	# menu to close: on the TV the menu then sat on a dark tube. Switch the TV on
 	# once nothing else is showing: checked every frame, because with glasses
@@ -58,15 +58,26 @@ func lean_position(base: Vector3) -> Vector3:
 
 func enter() -> void:
 	active = true
-	var picture: Node = host.world.picture
 	saved = {"light": host.world.screen_light.source}
 	light_countdown = LIGHT_DELAY
 	remember_programme()
-	var drawn := BEAM.duplicate()
-	drawn.merge({"width": 1.0, "height": 1.0, "shift_x": 0.0, "shift_y": 0.0})
-	picture.override = {"mode": 0, "keep_aspect": true, "values": drawn}
+	apply_picture()
 	show_menu()
-	tube(TUBE.scanlines, TUBE.mask, TUBE.glow, TUBE.glass, minf(float(host.screen_curvature), TUBE.curvature))
+	apply_tube()
+
+func apply_picture() -> void:
+	clean_feed = host.menu_clean_feed
+	var picture: Node = host.world.picture
+	if clean_feed:
+		var drawn := BEAM.duplicate()
+		drawn.merge({"width": 1.0, "height": 1.0, "shift_x": 0.0, "shift_y": 0.0})
+		picture.override = {"mode": 0, "keep_aspect": true, "values": drawn}
+	else: picture.override = {}
+
+func apply_tube() -> void:
+	if clean_feed:
+		tube(TUBE.scanlines, TUBE.mask, TUBE.glow, TUBE.glass, minf(float(host.screen_curvature), TUBE.curvature))
+	else: tube(host.scanlines, host.phosphor_mask, host.phosphor_glow, host.glass_reflections, host.screen_curvature)
 
 ## A game or video started while the menu was up: return to that instead.
 func adopt() -> void:
@@ -82,7 +93,8 @@ func remember_programme() -> void:
 
 func show_menu() -> void:
 	var picture: Node = host.world.picture
-	picture.source_rate = 60.0
+	# Auto composite keeps the programme's PAL/NTSC standard while the menu is shown.
+	picture.source_rate = saved.rate
 	picture.source_aspect = 4.0 / 3.0
 	picture.set_source(menu_texture())
 
@@ -118,8 +130,10 @@ func lights_room() -> bool:
 
 func tube(scanlines: float, mask: float, glow: float, glass: float, curvature: float) -> void:
 	var world: Node = host.world
-	world.screen_material.set_shader_parameter("scanlines", scanlines)
-	world.screen_material.set_shader_parameter("mask_strength", mask)
-	world.screen_material.set_shader_parameter("glow_strength", glow)
-	world.glass_material.set_shader_parameter("reflection_strength", glass)
-	world.set_curvature(curvature)
+	for entry in [["scanlines",scanlines],["mask_strength",mask],["glow_strength",glow]]:
+		if not is_equal_approx(float(world.screen_material.get_shader_parameter(entry[0])),float(entry[1])):
+			world.screen_material.set_shader_parameter(entry[0],entry[1])
+	if not is_equal_approx(float(world.glass_material.get_shader_parameter("reflection_strength")),glass):
+		world.glass_material.set_shader_parameter("reflection_strength",glass)
+	# set_curvature rebuilds the screen mesh, so only do it when it changes.
+	if not is_equal_approx(float(world.curvature),clampf(curvature,0.0,1.0)*0.12): world.set_curvature(curvature)
