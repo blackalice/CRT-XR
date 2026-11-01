@@ -90,6 +90,7 @@ func remember_programme() -> void:
 	saved.driven = picture.frame_driven
 	saved.rate = picture.source_rate
 	saved.aspect = picture.source_aspect
+	saved.raster = picture.raster_size
 
 func show_menu() -> void:
 	var picture: Node = host.world.picture
@@ -109,7 +110,7 @@ func leave() -> void:
 	if picture.source_texture == menu_texture():
 		picture.source_rate = saved.rate
 		picture.source_aspect = saved.aspect
-		picture.set_source(saved.texture, saved.driven)
+		picture.set_source(saved.texture, saved.driven, saved.raster)
 		host.world.screen_light.set_image(saved.light)
 	else: picture.refresh()
 	tube(host.scanlines, host.phosphor_mask, host.phosphor_glow, host.glass_reflections, host.screen_curvature)

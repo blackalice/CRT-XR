@@ -26,6 +26,7 @@ func run() -> void:
 	if app.settings_panel.visible: app.close_settings()
 	await settle()
 	var programme: Texture2D = app.world.picture.source_texture
+	var programme_raster: Vector2 = app.world.picture.raster_size
 	var scanlines := float(app.world.screen_material.get_shader_parameter("scanlines"))
 	var place: Vector3 = app.world.television.position
 	app.world.picture.mode = 3
@@ -76,6 +77,7 @@ func run() -> void:
 	UI.select(app, "crt.scanlines"); await settle()
 	app.menu.toggle_preview(); await settle()
 	check(app.menu.preview and not app.tv_menu.active and app.menu_overlays[0].visible and app.world.picture.source_texture == programme, "Adjust with preview floats the menu over the programme")
+	check(app.world.picture.raster_size==programme_raster,"Preview restores the programme's CRT raster after showing the high-resolution menu")
 	app.menu.toggle_preview(); await settle()
 	check(app.tv_menu.active, "Leaving the preview puts the menu back on the TV")
 	# A picture change made on the TV menu (the Quick settings Picture tile) is kept.

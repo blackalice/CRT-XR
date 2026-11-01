@@ -373,6 +373,7 @@ func start_application() -> void:
 			world = CRTWorld.new()
 			view.add_child(world)
 			world.build(card_view.get_texture())
+			world.picture.set_source(card_view.get_texture(), false, Vector2(Pattern.SIZE))
 		else:
 			view.world_3d = views[0].world_3d
 		var camera := Camera3D.new()
@@ -1023,7 +1024,7 @@ func show_programme(active: bool, rate: float, aspect: float) -> void:
 		world.picture.source_aspect = 4.0 / 3.0
 		world.screen_light.set_image(null)
 		# A disc's card has its own picture (card_view); the test signal is underneath it.
-		world.picture.set_source(card_view.get_texture())
+		world.picture.set_source(card_view.get_texture(), false, Vector2(Pattern.SIZE))
 
 ## Puts the loading card for a disc game on the TV, with progress 0..1 while it
 ## unpacks or negative while it boots (which restarts the black-screen timeout).
@@ -1045,7 +1046,7 @@ func show_loading(path: String, progress := -1.0) -> void:
 	world.screen_light.set_image(null)
 	world.picture.source_rate = 60.0
 	world.picture.source_aspect = 4.0 / 3.0
-	world.picture.set_source(card_view.get_texture())
+	world.picture.set_source(card_view.get_texture(), false, Vector2(Pattern.SIZE))
 	if starting and power_on.progress >= 1.0: tv_effects.play("channel")
 
 func update_loading(path: String, progress: float) -> void:

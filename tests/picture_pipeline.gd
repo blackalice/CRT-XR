@@ -90,4 +90,21 @@ func run():
 	picture.refresh()
 	await settle()
 	check(picture.decode.size==Vector2i(1024,478),"Analog pass follows high-resolution source height")
+	# Native cards have crisp 720-line overlays, but should look like a 240-line TV.
+	picture.mode=0; picture.paused=false
+	picture.set_value("width",1.0); picture.set_value("height",1.0)
+	picture.set_value("shift_x",0.0); picture.set_value("shift_y",0.0)
+	material.set_shader_parameter("scanlines",1.0)
+	var card := image_texture(Vector2i(768,720),Color(.5,.5,.5))
+	picture.set_source(card,false,Vector2(256,240))
+	await settle()
+	var raster_image: Image = view.get_texture().get_image()
+	var darkest := 1.0; var brightest := 0.0
+	for y in range(140,340):
+		var luminance := raster_image.get_pixel(320,y).get_luminance()
+		darkest=minf(darkest,luminance); brightest=maxf(brightest,luminance)
+	check(brightest-darkest>.035,"240-line CRT scanlines remain visible on a native 720-line card")
+	check(picture.source_size==Vector2(768,720) and picture.raster_size==Vector2(256,240),"Sharp card texture is preserved independently of its tube raster")
+	picture.set_source(card)
+	check(picture.raster_size==picture.source_size,"Changing back to a game/menu source restores its own raster")
 	quit(1 if failures else 0)

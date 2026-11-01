@@ -40,6 +40,8 @@ var safe_rect := Rect2(0.03, 0.03, 0.94, 0.94)
 var tube_aspect := 4.0 / 3.0
 var source_aspect := 4.0 / 3.0
 var source_size := Vector2(256, 240)
+## Native cards retain sharp text while the phosphor/scanline raster is 240 lines.
+var raster_size := Vector2(256, 240)
 var source_texture: Texture2D
 var screen: ShaderMaterial
 var decode := SubViewport.new()
@@ -89,11 +91,12 @@ func configure(material: ShaderMaterial, texture: Texture2D, aperture: Rect2, as
 	screen.set_shader_parameter("beam_texture",beam.get_texture())
 	set_source(texture)
 
-func set_source(texture: Texture2D, driven_by_frames := false) -> void:
+func set_source(texture: Texture2D, driven_by_frames := false, raster := Vector2.ZERO) -> void:
 	frame_driven = driven_by_frames
 	frame_pending = true
 	source_texture = texture
 	source_size = Vector2(texture.get_width(), texture.get_height())
+	raster_size = raster if raster.x>0.0 and raster.y>0.0 else source_size
 	decode.size = Vector2i(1024, int(source_size.y))
 	beam.size = Vector2i(clampi(int(source_size.x)*4,1024,2048),int(source_size.y)*2)
 	decoder.set_shader_parameter("source_texture", texture)
@@ -138,6 +141,7 @@ func refresh() -> void:
 	var area := picture_rect()
 	screen.set_shader_parameter("picture_rect", Vector4(area.position.x, area.position.y, area.size.x, area.size.y))
 	screen.set_shader_parameter("signal_size", source_size)
+	screen.set_shader_parameter("raster_size", raster_size)
 	screen.set_shader_parameter("fitting_guides", guides)
 	for key in ["gamma", "brightness", "contrast", "saturation", "beam_softness", "vignette"]:
 		screen.set_shader_parameter(key, shown[key])
