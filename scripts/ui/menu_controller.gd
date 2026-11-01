@@ -1030,7 +1030,7 @@ func depth_layout() -> Dictionary:
 		if row != null and row.is_visible_in_tree():
 			layout.lift = row.get_global_rect().intersection(clip)
 		# The About page's logo floats in front of its page, as a selected row does.
-		var logo := column.find_child("Logo3D", true, false) as Control if mode == "help" else null
+		var logo := column.find_child("BrandLogo", true, false) as Control if mode == "help" else null
 		if logo != null and logo.is_visible_in_tree():
 			layout.lift = logo.get_global_rect().intersection(clip)
 	return layout

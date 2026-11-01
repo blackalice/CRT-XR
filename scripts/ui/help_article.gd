@@ -8,7 +8,7 @@ extends RefCounted
 ##   !! Title                a card; the paragraph after it is its body
 ##   > Text                  a tip, set apart
 ##   Label := Value          a fact: a quiet label beside its value
-##   @@ logo                 the animated 3D logo (scripts/ui/logo_3d.gd)
+##   @@ logo                 the current three-diamond brand mark
 ##   anything else           a paragraph; consecutive lines join, as in Markdown
 ## Markdown files (THIRD_PARTY.md) read as the same: their `# Title` is
 ## dropped (the page has one), code ticks and link targets are removed, and
@@ -122,8 +122,8 @@ static func build(copy: String, large: bool) -> Control:
 				panel.add_child(column)
 				article.add_child(panel)
 			"logo":
-				var logo := preload("res://scripts/ui/logo_3d.gd").new()
-				logo.name = "Logo3D"
+				var logo := preload("res://scripts/ui/startup_brand.gd").logo()
+				logo.name = "BrandLogo"
 				logo.custom_minimum_size = Vector2(0, 300)
 				logo.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 				article.add_child(logo)
