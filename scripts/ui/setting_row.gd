@@ -56,7 +56,13 @@ func configure(definition: Dictionary) -> void:
 	var line := HBoxContainer.new(); line.add_theme_constant_override("separation",16)
 	line.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(line)
 	# The outline carries focus; do not reserve a competing arrow column.
-	marker=Label.new(); marker.hide(); add_child(marker)
+	# Keep the changed-value dot outside the title's wrapping/layout bounds.
+	marker=Label.new(); marker.text="•"; marker.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	marker.add_theme_font_size_override("font_size",14)
+	marker.add_theme_color_override("font_color",VALUE)
+	add_child(marker)
+	marker.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	marker.position=Vector2(-14,2)
 	if item.has("disclosure"):
 		var disclosure := Label.new()
 		disclosure.text = item.disclosure
@@ -194,7 +200,7 @@ func refresh() -> void:
 		var font := value_label.get_theme_font("font")
 		var text_width := font.get_string_size(value_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, value_label.get_theme_font_size("font_size")).x
 		value_label.custom_minimum_size.x = minf(180.0, ceilf(text_width) + 4.0)
-	title_label.text=str(item.label)+(" •" if changed_from_default() else "")
+	title_label.text=str(item.label)
 	for button in adjust_buttons:
 		button.visible=true; button.disabled=disabled
 		# A quick tile shows its arrows only while it is being adjusted.
@@ -218,7 +224,7 @@ func refresh() -> void:
 	tooltip_text=GlyphText.plain(str(item.get("disabled_reason",item.get("help",""))))
 	title_label.modulate=Color("85878b") if disabled else Color.WHITE
 	value_label.modulate=title_label.modulate
-	if marker!=null: marker.text=""
+	if marker!=null: marker.self_modulate.a=1.0 if changed_from_default() else 0.0
 	sync_content_height()
 
 func formatted_value() -> String:

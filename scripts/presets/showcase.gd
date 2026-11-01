@@ -6,7 +6,7 @@ const VIEW := {
 	"right_stick_distance": true,
 	"distance_speed": 1.0,
 	"distance": 3.284008,
-	"height_offset": -0.15,
+	"height_offset": 0.0,
 	"ipd": 0.064,
 	"convergence": 3.5,
 	"edge_fade": 0.03,

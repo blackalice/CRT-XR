@@ -132,7 +132,7 @@ func home_items() -> Array:
 		home.append(menu.games.with_box_art(menu.entry(menu.catalog.action("home.continue",h.last_game_path.get_file().get_basename(),func(): menu.games.select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",false,"›"),"","play","primary"," · ".join(parts)),h.last_game_path))
 		# The two libraries sit side by side.
 		main = [menu.tile(library_row,"gamepad","","main",2), menu.tile(video_row,"video","","main",2)]
-		for item in main: item.compact=false
+		for item in main: item.compact=true
 		tiles = [recenter, menu.tile(settings,"gear","","actions",3), menu.tile(menu.catalog.action("home.glasses","Using glasses",func(): menu.open_help("Using glasses",glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),"glasses","","actions",3)]
 	else:
 		home.append(menu.entry(library_row,"","folder" if h.default_rom_dir.is_empty() else "gamepad","primary" if h.default_rom_dir.is_empty() else ""))
@@ -147,6 +147,7 @@ func pause_items() -> Array:
 	var h=host
 	var resume: Dictionary = menu.entry(menu.catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded,""),"","play")
 	resume["hero"] = true
+	resume["min_height"] = 56
 	var result: Array = [resume]
 	# The game's own actions sit right under Resume.
 	result.append_array([
@@ -157,7 +158,7 @@ func pause_items() -> Array:
 	var main: Array = [
 		menu.tile(menu.catalog.action("games","Game Library",menu.games.open_library,"Open your library, recent games and favourites."),"gamepad","","main",2),
 		menu.tile(menu.catalog.action("home.videos","Video Library",menu.videos.open_videos,"Browse your videos or set up video playback."),"video","","main",2)]
-	for item in main: item.compact=false
+	for item in main: item.compact=true
 	result.append_array(main)
 	result.append_array(menu.music.music_actions())
 	result.append_array(menu.quick_controls())

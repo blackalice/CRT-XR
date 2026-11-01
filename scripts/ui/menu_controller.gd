@@ -532,7 +532,21 @@ func quick_controls() -> Array:
 	for source in catalog.pages(EVERYDAY)[0].rows:
 		if source.id in ["quick.preset","quick.game_volume"]: result.append(source.duplicate())
 	result[1].id="pause.preset"; result[1].label="Picture"; result[1]["row_icon"]="tv"
-	result[2].id="pause.game_volume"; result[2].label="Volume"; result[2]["row_icon"]="audio"
+	result[2].id="pause.game_volume"; result[2].label="Game volume"; result[2]["row_icon"]="audio"
+	result[0].help = "Switch room presets. Custom keeps your own room."
+	result[1].help = "Change the picture preset. Custom restores your tuned picture."
+	result[2].help = "Adjust game audio independently of music."
+	for source in catalog.pages(EVERYDAY)[0].rows:
+		if source.id in ["quick.view.distance", "quick.view.height_offset", "quick.music_volume"]:
+			var control: Dictionary = source.duplicate()
+			control.id = str(source.id).replace("quick.", "pause.")
+			control["row_icon"] = "view" if source.id == "quick.view.distance" else ("up" if source.id == "quick.view.height_offset" else "music")
+			if source.id != "quick.music_volume":
+				control["quick_preview"] = true
+				control["title_size"] = 18
+				control.help = "Open preview to move the TV nearer or farther." if source.id == "quick.view.distance" else "Open preview to move the screen, stand and room vertically."
+			else: control.help = "Adjust album and radio volume. Menu music has its own level."
+			result.append(control)
 	for row in result:
 		row.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"stacked":true,"compact":true,"meter":false}, true)
 	return result
@@ -759,7 +773,11 @@ func render() -> void:
 	layout_revision+=1
 	items = get_items()
 	if preview:
-		items = items.filter(func(item): return item.get("visual",false))
+		items = items.filter(func(item): return item.get("quick_preview",false) if mode == "pause" else item.get("visual",false))
+		if mode == "pause":
+			for item in items: item.erase("layout")
+	column.add_theme_constant_override("separation", 4 if mode == "pause" else 6)
+	help_label.custom_minimum_size.y = 32 if mode == "pause" else 64
 	for child in column.get_children(): column.remove_child(child); child.queue_free()
 	rows.clear()
 	var group := ""
@@ -1217,6 +1235,7 @@ func refresh_labels() -> void:
 	refresh_hints(row)
 
 func preview_available() -> bool:
+	if mode=="pause": return items.any(func(item): return item.get("quick_preview",false))
 	if mode!="settings": return false
 	return items.any(func(item): return item.get("visual",false) and not item.get("disabled",false) and item.kind!="action")
 
@@ -1255,7 +1274,9 @@ func refresh_hints(row) -> void:
 	var parts: Array=["D-pad Select" if mode in ["games","recent","favourites"] and host.game_list_columns>1 else "↑↓ Select"]
 	var open := "A Open" if pad else "Enter Open"
 	var go_back := "B Back" if pad else "Backspace Back"
-	if mode=="settings":
+	if mode=="pause" and preview:
+		parts = ["↑↓ Setting", "←→ Adjust", "Y Reset", "B Quick settings" if pad else "Backspace Quick settings"]
+	elif mode=="settings":
 		# Up and down need no saying here; the footer keeps room for what changes.
 		parts=[]
 		if row!=null:
@@ -1279,7 +1300,8 @@ func refresh_hints(row) -> void:
 		# While a quick tile is being adjusted, A and B both finish adjusting.
 		if row!=null and editing_id==str(row.item.id): parts=["←→ Change", "A Done" if pad else "Enter Done", "B Done" if pad else "Backspace Done"]
 		else:
-			if row!=null and row.item.get("quick",false): parts.append("A Adjust" if pad else "Enter Adjust")
+			if row!=null and row.item.get("quick_preview",false): parts.append("A Preview" if pad else "Enter Preview")
+			elif row!=null and row.item.get("quick",false): parts.append("A Adjust" if pad else "Enter Adjust")
 			elif row!=null and row.item.kind in ["choice","number"]: parts.append("←→ Adjust")
 			else: parts.append(open)
 			parts.append(("B " if pad else "Backspace ")+back_caption)
@@ -1427,6 +1449,9 @@ func jump_entries(amount: int) -> void:
 
 func adjust(delta: int) -> void:
 	var row = selected_row()
+	if row != null and row.item.get("quick_preview",false) and mode == "pause" and not preview:
+		toggle_preview()
+		return
 	if row!=null and row.item.kind=="seek":
 		row.item.setter.call(float(row.item.getter.call())+10*delta); row.refresh(); return
 	if row==null or row.disabled: return
@@ -1444,6 +1469,10 @@ func activate() -> void:
 	if row==null or row.disabled: return
 	if row.item.get("quick",false):
 		play_menu_sound(true)
+		if row.item.get("quick_preview",false):
+			if preview: adjust(1)
+			else: toggle_preview()
+			return
 		if editing_id==str(row.item.id): finish_editing()
 		else: start_editing(row)
 		return
@@ -1464,16 +1493,16 @@ func reset_option() -> void:
 	row.refresh(); notify("Selected option restored to its default")
 
 func toggle_preview() -> void:
-	if mode!="settings": return
+	if mode not in ["settings", "pause"]: return
 	if preview:
 		remember(); preview=false; clear_input(); render(); return
 	if not preview_available(): return
 	var row=selected_row()
-	if row==null or row.disabled or not row.item.get("visual",false):
+	if row==null or row.disabled or not row.item.get("quick_preview" if mode == "pause" else "visual",false):
 		for candidate in rows:
-			if not candidate.disabled and candidate.item.get("visual",false):
+			if not candidate.disabled and candidate.item.get("quick_preview" if mode == "pause" else "visual",false):
 				select(candidate.item.id,false); break
-	remember(); preview=true; clear_input(); render()
+	finish_editing(); remember(); preview=true; clear_input(); render()
 
 func notify(message: String) -> void:
 	notification = message; notification_time=4.0; notification_context=state_key()

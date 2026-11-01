@@ -72,6 +72,20 @@ Controller shortcuts use drawn button icons and follow the last input method. Wi
 
 ## Compact adjustment preview
 
+Home and the paused-game menu carry six Quick settings in a three-column,
+two-row grid: Room, Picture, Game volume, TV distance, Screen height offset and
+Music volume (the album/radio player, independent of the menu background loop).
+TV distance and height open the floating bottom preview strip with A / Enter or
+a pointer click. Left/right adjusts, up/down switches between those two controls,
+Y resets, and B returns to the same quick tile while gameplay stays paused.
+The default Home (including Continue) and game-pause layouts fit without a
+scrollbar: compact library/music actions, closer row spacing and concise quick
+help make room for the second row. Full settings keep their longer explanations;
+larger text and expanded music panels can still scroll when needed.
+Screen height defaults to 0 m. A changed-value dot sits in the row's corner,
+outside the title layout, so changing height cannot rewrap or enlarge its tile.
+Existing saved placements are retained; Y resets height to the new default.
+
 The Preview button, X, or A on a visual value opens a bottom strip.
 Moving between settings does not automatically hide the full panel. Left/right adjusts,
 up/down selects adjacent visual settings in that subsection, Y resets and X/B
@@ -230,7 +244,7 @@ The default setup was captured from the user's saved Steam Deck preferences on 1
 - PAL connection; scanlines 70%, phosphor mask 50%, glow 40%, glass reflections 40%, tube curvature 70%.
 - Chroma phase noise 38% and moving signal artifacts 95%.
 - Dark room: ambient 0.05, warm lamp 0.30, front fill 0.10, screen spill 40%, 90s confetti floor; room fade 3.5–7 m.
-- Distance approximately 3.284 m, height −0.15 m, convergence 3.5 m and soft view edges 3%.
+- Distance approximately 3.284 m, height 0 m, convergence 3.5 m and soft view edges 3%.
 - TV-in-room audio: room amount 18%, speaker character 15%, directional strength 80%.
 - Metrics overlay off. Per-game picture off by default, matching the captured configuration.
 

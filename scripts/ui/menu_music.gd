@@ -107,6 +107,9 @@ func music_actions() -> Array:
 		result.append(resume_music)
 	var browse: Dictionary = menu.catalog.action("transport.choose","Music · Browse albums",open_music_browser,"Choose an album or MP3 from local storage or SD card.")
 	browse["row_icon"]="music"
+	browse["compact"]=true
+	# Match the one-line action tiles (Save state, Load state, Reset game).
+	browse["min_height"]=45
 	# Playing, Browse albums is the deck's last key, beside the transport.
 	if not result.is_empty() and result[0].get("layout", "") in ["transport", "music_seek"]:
 		browse.layout="transport"; browse.icon="music"; browse.caption="Browse albums"; browse["skin"]="music"

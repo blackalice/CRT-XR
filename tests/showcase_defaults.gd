@@ -14,13 +14,14 @@ func run():
 	var mismatch: Array[String]=[]
 	for section in original.get_sections():
 		for key in original.get_section_keys(section):
-			if section=="tracking" or (section=="view" and key in ["vertical_fov","motion_predict"]): continue
+			if section=="tracking" or (section=="view" and key in ["vertical_fov","motion_predict","height_offset"]): continue
 			var expected=original.get_value(section,key)
 			var found=actual.get_value(section,key)
 			var equal: bool=absf(float(found)-float(expected))<.000001 if expected is float or expected is int else found==expected
 			if not equal: mismatch.append(section+"/"+key)
 	check(mismatch.is_empty(),"Fresh application reproduces the Deck picture/room setup: "+str(mismatch))
 	check(app.motion_predict==0.0,"Raw driver timing is the default; historical 30 ms preview lead is excluded")
+	check(app.height_offset==0.0,"Screen height defaults to zero")
 	var explicit_prediction: ConfigFile=app.capture_settings()
 	explicit_prediction.set_value("view","motion_predict",0.015)
 	app.apply_settings(explicit_prediction)
@@ -54,7 +55,7 @@ func run():
 	app.menu.open_settings(); app.menu.category=5; app.menu.subsection=0; app.menu.render()
 	check(app.menu.items.size()==4 and app.menu.items[0].id=="slot.showcase","Built-in setup leaves all three writable slots available")
 	app.metrics_visible=true; app.reset_all_options()
-	check(not app.metrics_visible and is_equal_approx(app.height_offset,-.15) and app.world.picture.mode==2 and is_equal_approx(app.world.picture.values.phase_noise,.38),"Reset all uses the same Showcase defaults and clean HUD")
+	check(not app.metrics_visible and is_equal_approx(app.height_offset,0.0) and app.world.picture.mode==2 and is_equal_approx(app.world.picture.values.phase_noise,.38),"Reset all uses the same Showcase defaults and clean HUD")
 	app.free()
 	for i in range(3): await process_frame
 	print("SHOWCASE DEFAULT CHECKS COMPLETE: ",failures," failures")
