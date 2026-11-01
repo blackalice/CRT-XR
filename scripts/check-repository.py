@@ -20,7 +20,7 @@ for name in files:
         problem('Local-only path in publication inputs: ' + name)
     if path.stat().st_size > 50 * 1024 * 1024:
         problem('File exceeds repository size budget: ' + name)
-    if path.suffix.lower() in {'.sfc', '.smc', '.swc', '.fig', '.nes', '.unf', '.unif', '.gen', '.smd', '.sms', '.gg', '.srm', '.sav', '.pem', '.key', '.mp3', '.flac', '.m4a', '.bin'}:
+    if path.suffix.lower() in {'.sfc', '.smc', '.swc', '.fig', '.nes', '.unf', '.unif', '.gen', '.smd', '.sms', '.gg', '.srm', '.sav', '.pem', '.key', '.mp3', '.flac', '.m4a', '.bin'} and name != 'assets/audio/menu-click.mp3':
         problem('Private cartridge/save/key file in publication inputs: ' + name)
     if path.suffix.lower() in {'.png', '.jpg', '.wav', '.res', '.scn'}:
         continue

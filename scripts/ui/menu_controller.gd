@@ -961,7 +961,7 @@ func render() -> void:
 			var tab := Button.new()
 			tab.text = str(pages[i].title)
 			tab.focus_mode=Control.FOCUS_NONE
-			tab.add_theme_font_size_override("font_size",20 if host.menu_large_text else 18)
+			tab.add_theme_font_size_override("font_size",18 if pages.size() >= 6 else (20 if host.menu_large_text else 18))
 			MenuSkin.weigh(tab,MenuSkin.SEMIBOLD if i==subsection else MenuSkin.REGULAR)
 			var tab_style := MenuSkin.box(Color.TRANSPARENT,MenuSkin.AMBER,0,6)
 			tab_style.set_corner_radius_all(0)

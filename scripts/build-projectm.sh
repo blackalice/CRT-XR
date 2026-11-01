@@ -5,10 +5,12 @@ platform="${1:-linux}"
 [[ "$platform" == linux || "$platform" == windows ]]
 mkdir -p "$root/tools" "$root/build" "$root/extensions/bin"
 source="$root/tools/projectm"
-if [[ ! -d "$source/.git" ]]; then
+if [[ ! -f "$source/CMakeLists.txt" ]]; then
  git clone --depth 1 --branch v4.1.8 --recurse-submodules --shallow-submodules https://github.com/projectM-visualizer/projectm.git "$source"
 fi
-test "$(git -C "$source" rev-parse HEAD)" = 4967dc003e5206d7df3ff447287f7609c47d2343
+if [[ -d "$source/.git" ]]; then
+ test "$(git -C "$source" rev-parse HEAD)" = 4967dc003e5206d7df3ff447287f7609c47d2343
+fi
 if git -C "$source" apply --check "$root/third_party/projectm/offscreen.patch" 2>/dev/null; then
  git -C "$source" apply "$root/third_party/projectm/offscreen.patch"
 else

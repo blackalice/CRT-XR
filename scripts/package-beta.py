@@ -68,13 +68,14 @@ own licences. See CORE-DISTRIBUTION.md and THIRD_PARTY.md in this folder.
 """,encoding="utf-8")
 required=["licenses/LICENSE","licenses/LICENSING.md","licenses/CORE-DISTRIBUTION.md","licenses/SOURCE-ACCESS.md","licenses/THIRD_PARTY.md","licenses/godot/LICENSE.txt","licenses/fonts/OpenSans-OFL.txt","assets/optimised/cabinet.scn","assets/wood-table/table.scn","assets/room-bake/table_contact_albedo.res"]+["docs/"+name for name in GUIDES]
 required += ["CRT-XR.exe","CRT-XR.pck","tracking/crt-xr-windows-tracking.exe","crt_xr_libretro.windows.x86_64.dll"] if platform=="windows" else ["crt-xr.x86_64","crt-xr-engine.x86_64","crt-xr.pck","crt-xr-tracking-bridge","crt-xr-ipc-inventory","crt_xr_libretro.linux.x86_64.so","Install-CRT-XR.sh","installer/install.py","installer/steam_config.py","tracking-session.py"]+["artwork/"+name+".png" for name in ["Portrait","Landscape","Hero","Logo","Icon"]]
+required += ["projectM-4.dll" if platform=="windows" else "libprojectM-4.so", "licenses/projectm/LICENSE.txt", "licenses/projectm/GLEW-LICENSE.txt", "licenses/projectm/sources/projectm-4.1.8-patched.tar.gz", "licenses/projectm/sources/glew-2.2.0.tar.gz", "licenses/projectm/sources/build-projectm.sh", "licenses/projectm/sources/offscreen.patch"]
 for name in required:assert (app/name).is_file(),f"Missing packaged asset: {name}"
 if desktop:
  for name in ["launch-linux.sh","linux-session.py","installer/runtime_check.py","Install-CRT-XR-Linux.sh"]:
   assert (app/name).is_file(),f"Missing desktop installer asset: {name}"
 for core in ["snes9x","nestopia","genesis_plus_gx","gambatte","mgba","mednafen_pce_fast","mednafen_lynx","mednafen_ngp","stella","vecx","pcsx_rearmed","mupen64plus_next"]:assert (app/"cores"/(core+"_libretro."+("dll" if platform=="windows" else "so"))).is_file(),f"Missing packaged core: {core}"
 top=sorted(p.name for p in folder.iterdir())
-expected={"linux":sorted(["Install CRT XR.desktop","HOW TO INSTALL.txt",PAYLOAD]),"windows":sorted(["CRT-XR.exe","CRT-XR.pck","crt_xr_libretro.windows.x86_64.dll","HOW TO START.txt","cores","assets","tracking","docs","licenses"])}[platform]
+expected={"linux":sorted(["Install CRT XR.desktop","HOW TO INSTALL.txt",PAYLOAD]),"windows":sorted(["CRT-XR.exe","CRT-XR.pck","crt_xr_libretro.windows.x86_64.dll","projectM-4.dll","HOW TO START.txt","cores","assets","tracking","docs","licenses"])}[platform]
 assert top==expected,f"Unexpected top-level download contents: {top}"
 subprocess.run([sys.executable,str(Path(__file__).with_name('check-core-sources.py')),str(app)],check=True)
 checksums=app/"docs" if platform=="windows" else app

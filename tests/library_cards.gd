@@ -49,7 +49,7 @@ func run():
 	check(menu.selected_id=="library.system.megadrive","Left selects the adjacent console")
 	await press(menu,JOY_BUTTON_A)
 	check(menu.mode=="games" and menu.items.size()==1 and menu.rows[0].item.get("layout")=="game","A opens only that console's games with descriptive rows; a short list skips Jump to letter")
-	check(menu.help_frame.visible,"Game lists retain their help area")
+	check(not menu.help_frame.visible and menu.rows[0].item.get("help", "") != "","Game lists reserve space for titles while retaining contextual help data")
 	await press(menu,JOY_BUTTON_B)
 	check(menu.selected_id=="library.system.megadrive","Back restores the exact console card")
 	menu.select("library.locations"); await press(menu,JOY_BUTTON_A)

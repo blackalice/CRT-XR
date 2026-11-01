@@ -12,10 +12,12 @@ for p in (ROOT/'cores/sources').glob('*.tar.gz'):files['cores/sources/'+p.name]=
 for p in (ROOT/'cores/sources').glob('*.patch'):files['cores/sources/'+p.name]=p
 files['cores/core-builds.json']=ROOT/'cores/core-builds.json'
 for p in (ROOT/'build/core-build-logs').glob('*.log'):files['build-materials/'+p.name]=p
+for p in (ROOT/'build/projectm-sources').glob('*'):
+ if p.is_file():files['third_party/projectm/sources/'+p.name]=p
 assert len([p for p in files if p.startswith('cores/sources/')])>=5,'Missing core/binding/engine input archives'
 for name in files:
  assert name.split('/')[0] not in ['sdk','tools','archive','dist','roms','saves','userdata'],name
- assert Path(name).suffix not in ['.dll','.so','.sfc','.nes','.sms','.gg','.srm','.mp3','.pem','.key'],name
+ assert Path(name).suffix not in ['.dll','.so','.sfc','.nes','.sms','.gg','.srm','.mp3','.pem','.key'] or name=='assets/audio/menu-click.mp3',name
 recipe='''# Rebuilding the supplied source
 
 Original CRT XR code is MIT; preserve all upstream notices. See docs/CORE-DISTRIBUTION.md for the in-process GPL core treatment and separate restricted cores.
@@ -33,11 +35,15 @@ cmake -S native/emulation -B build/host-windows -DCMAKE_BUILD_TYPE=Release -DCMA
 cmake --build build/host-windows --parallel 6
 cp tools/godot-cpp/LICENSE.md extensions/bin/godot-cpp-LICENSE.md
 python3 scripts/build-release-cores.py all
+bash scripts/build-projectm.sh linux
+bash scripts/build-projectm.sh windows
 bash scripts/build-linux.sh
 python3 scripts/check-core-sources.py
 ```
 
 The core builder uses SHA-verified supplied source archives when Git metadata is absent; no mutable nightly download is needed. It then applies the recorded patches under scripts/core-patches; copies and hashes of those patches are also supplied under cores/sources and in core-builds.json. Hashes identify exact inputs and outputs; future compilers are not promised bit-for-bit identical results. The recorded successful core build used Ubuntu 24.04/GCC 13 and MinGW GCC 13. Binary package notices and source access must accompany redistribution.
+
+The visualiser's patched projectM and GLEW source archives are under third_party/projectm/sources, with the patch and build script. Extract those archives into tools/ before building without Git metadata. The shared library remains replaceable beside the application; preserve its LGPL notices and source materials.
 
 For Windows VITURE tracking, compile native/windows_tracking/bridge.cpp with MinGW POSIX and -std=c++17 -O2 -static -municode, linking ws2_32, setupapi and hid, as recorded in scripts/build-windows-tracking.ps1. No vendor headers or proprietary runtime are required to compile this bridge. Runtime VITURE SDK files are separately obtained by the user and are not in this source archive or binary packages. Windows exports require Python on Windows to apply the per-monitor DPI manifest with scripts/set-windows-dpi.py; retain the separate PCK.
 

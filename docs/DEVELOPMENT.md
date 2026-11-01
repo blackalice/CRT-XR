@@ -58,6 +58,12 @@ A local recovery bundle can be created with `scripts/archive-model-assets.py` wh
 
 ## Validation and export
 
+The music visualiser also needs projectM built for both desktop platforms:
+run `bash scripts/build-projectm.sh linux` and `bash scripts/build-projectm.sh windows`
+in the Linux build environment, then rebuild the native extensions. The export
+scripts require these replaceable shared libraries and their corresponding source
+materials. See [music visualiser](music-visualiser.md).
+
 ```powershell
 python scripts/check-repository.py
 python scripts/test-beta.py
