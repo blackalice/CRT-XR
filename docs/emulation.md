@@ -105,7 +105,7 @@ with the GPU: its core runs on a thread of its own with a hidden OpenGL 3.3
 context (WGL on Windows, surfaceless EGL on Linux) at the console's own
 320x240, and each frame is read back to the TV like any other console's. The
 first game on a new machine can take a while to start while GLideN64 builds its
-shader cache. **Game controls** (Settings → Controls & XR) changes which control presses
+shader cache. **Game controls** (Settings → Controls) changes which control presses
 each console button. Choose a layout, then press A on a button and press the
 control you want (or push a stick that way); wait five seconds to cancel.
 Layouts are kept per console, and **Layout for → This game only** gives one
@@ -115,7 +115,7 @@ aim with the right); PlayStation *D-pad on left stick* for games without
 analog support. On consoles with sticks each stick can be analog or work as
 four buttons. R3 (recentre) and the L1 + R1 + Start menu chord cannot be
 reassigned. All systems keep
-the same menu chord and recenter shortcut. Settings → Controls & XR →
+the same menu chord and recenter shortcut. Settings → Controls →
 Controller shows the current system's layout. Keyboard Z/X/A/S/Q/W retain
 the corresponding bottom/right/left/top/L1/R1 positions.
 
@@ -207,15 +207,13 @@ signal** unloads the cartridge and restores the animated test pattern.
 CRT XR can also play your own videos on the TV, through the same picture, glass,
 screen light and TV sound as games. It is off until you choose a folder.
 
-**Turning it on.** Open **Game library → Library locations** and choose
-**Choose a video folder** under *Videos · optional*. Pick the folder that holds
-your MP4, M4V or MKV files; subfolders are included. A **Videos** card then appears
-after your consoles. **Remove video folder** hides it again; your files are never
+**Turning it on.** Open **Video Library** and choose **Choose a video folder**. Pick the folder that holds
+your MP4, M4V or MKV files; subfolders are included. Your videos then appear in **Video Library**. **Remove video folder** hides it again; your files are never
 changed.
 
 **What it needs.** Videos are decoded by FFmpeg, which CRT XR does not ship.
 - *Steam Deck (SteamOS)* already includes it; nothing to install.
-- *Windows* has no built-in FFmpeg. Library locations offers **Set up video
+- *Windows* has no built-in FFmpeg. Video Library offers **Set up video
   playback**, which downloads only FFmpeg's five video libraries (LGPL, about
   55 MB) from [BtbN's FFmpeg builds](https://github.com/BtbN/FFmpeg-Builds), checks
   each one and keeps them in CRT XR's own data folder. **Remove downloaded video
@@ -282,8 +280,8 @@ them off with *Videos → VCR → Mechanism sounds*.
 
 **Finding your place.** Each video remembers where you stopped (not in the first
 10 seconds or the last 30) and offers **Continue** or **Start from the beginning**.
-The newest part-watched videos appear under **Continue watching**, both at the top
-of the video list and as a card in the library. **Search videos…** finds a video
+The newest part-watched videos appear under **Continue watching**, at the top
+of the video list. **Search videos…** finds a video
 anywhere in your folder by part of its name (with a keyboard, Ctrl+F searches as
 you type). Video rows show a small picture from about a tenth of the way in, made
 in the background the first time the list is shown.

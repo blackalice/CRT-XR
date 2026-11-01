@@ -102,4 +102,4 @@ Use **General → Copy diagnostics**. Include your device, Desktop/Gaming Mode, 
 
 Leave XR Gaming’s virtual display off for CRT XR. With connected glasses, the Steam launcher temporarily enables driver tracking in external-only/none mode and disables the Gamescope XR effect. Previous driver settings restore on normal exit. A recovery record restores owned settings on the next CRT XR launch after an interrupted session; changes made through XR Gaming while the app runs are preserved. No plugin or driver binary is replaced.
 
-Motion prediction now defaults to 0 ms. Existing preferences are retained: if head movement feels ahead of you, set Controls & XR → Advanced calibration → Motion prediction to 0 ms before changing FOV.
+Motion prediction now defaults to 0 ms. Existing preferences are retained: if head movement feels ahead of you, set View → Advanced calibration → Motion prediction to 0 ms before changing FOV.

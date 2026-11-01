@@ -32,6 +32,10 @@ func run() -> void:
 		for i in range(4): await process_frame
 		assert(app.windows_fixed_start and not app.stereo and is_instance_valid(app.world))
 		assert(not app.provider is LinuxTracking)
+		if "--boot-preview" in OS.get_cmdline_user_args():
+			assert(is_instance_valid(app.menu.boot) and app.menu.boot.active)
+			assert(app.menu_boot_pending and app.menu.boot.elapsed == 0.0)
+			app.menu.boot.finish()
 		app.queue_free()
 		await process_frame
 	print("PASS: Windows setup SBS modes, input guard, focus boundaries, desktop fallback and single transition")

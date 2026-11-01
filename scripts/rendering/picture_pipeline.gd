@@ -24,6 +24,13 @@ const BEAM_FIELDS := [
 const MODES := ["RGB / component", "NTSC composite", "PAL composite", "Auto composite (game rate)"]
 var values: Dictionary = {}
 var keep_aspect := true
+## Drawn instead of the settings while set: {"mode", "keep_aspect", "values"}
+## (the menu on the TV). The settings stay as they are, for the menus to read
+## and change, and show again when it clears.
+var override := {}:
+	set(value):
+		override = value
+		refresh()
 var guides := false
 var mode := Showcase.CONNECTION
 var source_rate := 60.0
@@ -33,6 +40,8 @@ var safe_rect := Rect2(0.03, 0.03, 0.94, 0.94)
 var tube_aspect := 4.0 / 3.0
 var source_aspect := 4.0 / 3.0
 var source_size := Vector2(256, 240)
+## Native cards retain sharp text while the phosphor/scanline raster is 240 lines.
+var raster_size := Vector2(256, 240)
 var source_texture: Texture2D
 var screen: ShaderMaterial
 var decode := SubViewport.new()
@@ -82,11 +91,12 @@ func configure(material: ShaderMaterial, texture: Texture2D, aperture: Rect2, as
 	screen.set_shader_parameter("beam_texture",beam.get_texture())
 	set_source(texture)
 
-func set_source(texture: Texture2D, driven_by_frames := false) -> void:
+func set_source(texture: Texture2D, driven_by_frames := false, raster := Vector2.ZERO) -> void:
 	frame_driven = driven_by_frames
 	frame_pending = true
 	source_texture = texture
 	source_size = Vector2(texture.get_width(), texture.get_height())
+	raster_size = raster if raster.x>0.0 and raster.y>0.0 else source_size
 	decode.size = Vector2i(1024, int(source_size.y))
 	beam.size = Vector2i(clampi(int(source_size.x)*4,1024,2048),int(source_size.y)*2)
 	decoder.set_shader_parameter("source_texture", texture)
@@ -101,46 +111,58 @@ func set_value(key: String, value: float) -> void:
 			return
 
 func effective_mode() -> int:
-	return (2 if source_rate < 55.0 else 1) if mode == 3 else mode
+	var shown_mode: int = override.get("mode", mode)
+	return (2 if source_rate < 55.0 else 1) if shown_mode == 3 else shown_mode
+
+## The values drawn: the settings, with any override over them.
+func shown_values() -> Dictionary:
+	if override.is_empty(): return values
+	var result := values.duplicate()
+	result.merge(override.get("values", {}), true)
+	return result
 
 func picture_rect() -> Rect2:
-	var border := Vector2.ONE * float(values.safe_border)
+	var shown := shown_values()
+	var fit_aspect: bool = override.get("keep_aspect", keep_aspect)
+	var border := Vector2.ONE * float(shown.safe_border)
 	var area := Rect2(safe_rect.position + border, safe_rect.size - 2.0 * border)
-	var size := area.size * Vector2(values.width, values.height)
-	if keep_aspect:
+	var size := area.size * Vector2(shown.width, shown.height)
+	if fit_aspect:
 		var available_aspect := tube_aspect * size.x / size.y
 		if available_aspect > source_aspect: size.x *= source_aspect/available_aspect
 		else: size.y *= available_aspect/source_aspect
 	var slack := area.size - size
-	var offset := Vector2(values.shift_x, values.shift_y).clamp(Vector2(-1,-1), Vector2.ONE)
+	var offset := Vector2(shown.shift_x, shown.shift_y).clamp(Vector2(-1,-1), Vector2.ONE)
 	return Rect2(area.position + slack * (Vector2.ONE + offset) * 0.5, size)
 
 func refresh() -> void:
 	if screen == null: return
+	var shown := shown_values()
 	var area := picture_rect()
 	screen.set_shader_parameter("picture_rect", Vector4(area.position.x, area.position.y, area.size.x, area.size.y))
 	screen.set_shader_parameter("signal_size", source_size)
+	screen.set_shader_parameter("raster_size", raster_size)
 	screen.set_shader_parameter("fitting_guides", guides)
 	for key in ["gamma", "brightness", "contrast", "saturation", "beam_softness", "vignette"]:
-		screen.set_shader_parameter(key, values[key])
-	var angle := deg_to_rad(float(values.hue))
+		screen.set_shader_parameter(key, shown[key])
+	var angle := deg_to_rad(float(shown.hue))
 	screen.set_shader_parameter("hue_rotation", Vector2(cos(angle), sin(angle)))
-	screen.set_shader_parameter("white_balance", Vector3(1.0 + values.temperature*0.08, 1.0, 1.0-values.temperature*0.10))
-	var basis := colour_basis_for(values)
+	screen.set_shader_parameter("white_balance", Vector3(1.0 + shown.temperature*0.08, 1.0, 1.0-shown.temperature*0.10))
+	var basis := colour_basis_for(shown)
 	screen.set_shader_parameter("colour_matrix",basis)
 	for key in ["composite_strength", "artifact_strength", "phase_noise", "signal_motion"]:
-		decoder.set_shader_parameter(key, values[key])
+		decoder.set_shader_parameter(key, shown[key])
 	decoder.set_shader_parameter("signal_standard", effective_mode())
-	var active := effective_mode() != 0 and float(values.composite_strength) > 0.0
+	var active := effective_mode() != 0 and float(shown.composite_strength) > 0.0
 	decode_active = active
 	screen.set_shader_parameter("signal_texture", decode.get_texture() if active else source_texture)
 	decode.render_target_update_mode = pass_mode(active)
 	beam_filter.set_shader_parameter("signal_texture",decode.get_texture() if active else source_texture)
 	beam_filter.set_shader_parameter("signal_size",source_size)
 	for key in ["gamma","brightness","contrast","saturation","beam_softness"]:
-		beam_filter.set_shader_parameter(key,values[key])
+		beam_filter.set_shader_parameter(key,shown[key])
 	beam_filter.set_shader_parameter("hue_rotation",Vector2(cos(angle),sin(angle)))
-	beam_filter.set_shader_parameter("white_balance",Vector3(1.0+values.temperature*.08,1.0,1.0-values.temperature*.10))
+	beam_filter.set_shader_parameter("white_balance",Vector3(1.0+shown.temperature*.08,1.0,1.0-shown.temperature*.10))
 	beam_filter.set_shader_parameter("colour_matrix",basis)
 	update_beam_state(true)
 

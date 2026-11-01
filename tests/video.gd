@@ -199,6 +199,9 @@ func run() -> void:
 	var app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
 	for i in range(4): await process_frame
+	# The boot menu shows on the TV; playing a video closes it, as here.
+	if app.settings_panel.visible: app.close_settings()
+	for i in range(4): await process_frame
 	check(app.video.open(FIXTURES + "classic_43_30.mp4"), "The scene opens a video")
 	await play_for(app.video, 0.3)
 	check(app.world.picture.source_texture == app.video.output and app.video.output != null and not app.pattern.visible, "The CRT picture shows the video, not the test signal")
@@ -219,7 +222,7 @@ func run() -> void:
 	check(app.world.picture.source_texture == app.video.output and app.video.texture != null and not app.pattern.visible,
 		"The TV shows the second video, not the test signal")
 	app.video.stop()
-	check(app.pattern.visible and app.world.picture.source_texture == app.signal_view.get_texture(), "Stopping returns the TV to the test signal")
+	check(app.pattern.visible and app.world.picture.source_texture == app.card_view.get_texture() and app.pattern_words.visible, "Stopping returns the TV to the test signal")
 	app._process(0.0)
 	app.world._update_prop_clocks(1.0)
 	var now := Time.get_time_dict_from_system()

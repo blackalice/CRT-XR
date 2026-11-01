@@ -1,11 +1,27 @@
 extends Control
-## Original small vector illustrations, drawn locally; no box-art downloads.
+## Original small illustrations of each console and library place, drawn
+## locally; no box-art downloads. Each is a 30×30 pixel sprite in
+## assets/icons/consoles, drawn at twice its size on the menus' pixel grid;
+## a kind without a sprite is drawn as vectors below.
+const RowIcon = preload("res://scripts/ui/row_icon.gd")
+const SPRITES := "res://assets/icons/consoles/%s.png"
 var kind := "snes"
 var accent := Color("ba9fdb")
 func block(rect: Rect2, colour: Color, radius := 5) -> void:
 	var style := StyleBoxFlat.new(); style.bg_color=colour; style.set_corner_radius_all(radius)
 	draw_style_box(style,rect)
+func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	set_notify_transform(true)
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_TRANSFORM_CHANGED: queue_redraw()
+
 func _draw() -> void:
+	var picture := RowIcon.cached(SPRITES % kind)
+	if picture != null:
+		RowIcon.draw_on_grid(self, picture, Color.WHITE)
+		return
 	var ink := Color("15181d")
 	if kind=="recent":
 		draw_arc(Vector2(30,30),23,0,TAU,40,accent,2.5,true)

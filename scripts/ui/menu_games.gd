@@ -32,10 +32,7 @@ func open_library_tools() -> void:
 func library_items() -> Array:
 	var h=host
 	if menu.rom_index.total()==0:
-		var setup: Array = [menu.card(menu.catalog.action("library.setup","Set up your ROM library" if h.default_rom_dir.is_empty() else "Choose a ROM folder",open_library_tools,"Choose your main ROM folder or SD card. Supported games appear here automatically; your files stay where they are."),"CHOOSE A FOLDER TO GET STARTED","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP")]
-		if menu.videos.videos_shown(): setup.append(menu.videos.videos_card("LIBRARY SETUP"))
-		var resumable: Array=host.video_library.continue_watching(5) if menu.videos.videos_shown() else []
-		if not resumable.is_empty(): setup.append(menu.videos.continue_card(resumable.size(),"LIBRARY SETUP"))
+		var setup: Array = [menu.card(menu.catalog.action("library.setup","Set up your ROM library" if h.default_rom_dir.is_empty() else "Choose a ROM folder",open_library_tools,"Choose your ROM folder or SD card. Supported games are found automatically."),"CHOOSE A FOLDER TO GET STARTED","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP")]
 		return setup
 	var result: Array = []
 	# Quick-access shelves appear once they hold something.
@@ -43,19 +40,16 @@ func library_items() -> Array:
 		menu.card(menu.catalog.action("library.recent","Recently played",func(): open_history("recent"),"Return to your latest games. Unplugged-card entries are kept.",h.play_history.recent.is_empty(),"%d game%s" % [h.play_history.recent.size(),"" if h.play_history.recent.size()==1 else "s"]),"PICK UP & PLAY","recent",menu.MenuSkin.AMBER,"QUICK ACCESS"))
 	if not h.play_history.favourites.is_empty(): result.append(
 		menu.card(menu.catalog.action("library.favourites","Favourites",func(): open_history("favourites"),"Your favourites across every supported console. Press {X} on a game to add it.",h.play_history.favourites.is_empty(),"%d game%s" % [h.play_history.favourites.size(),"" if h.play_history.favourites.size()==1 else "s"]),"YOUR PERSONAL SHELF","favourites",Color("dfb984"),"QUICK ACCESS"))
-	var watching: Array=host.video_library.continue_watching(5) if menu.videos.videos_shown() else []
-	if not watching.is_empty(): result.append(menu.videos.continue_card(watching.size(),"QUICK ACCESS"))
 	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"],"psx":["SONY · 32-BIT CD","a9b6cf"],"n64":["NINTENDO · 64-BIT","8fcf9a"]}
 	for system in menu.library.Registry.SYSTEMS:
 		var id: String=system
 		var count: int=menu.rom_index.games.get(id,[]).size()
 		if count==0: continue
-		result.append(menu.card(menu.catalog.action("library.system."+id,menu.library.Registry.SYSTEMS[id].get("short",menu.library.Registry.SYSTEMS[id].name),func(): open_system(id),"Open all %s cartridges in your library. Folders for other consoles stay out of this view." % menu.library.Registry.SYSTEMS[id].name,false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
-	if menu.videos.videos_shown(): result.append(menu.videos.videos_card("YOUR CONSOLES"))
+		result.append(menu.card(menu.catalog.action("library.system."+id,menu.library.Registry.SYSTEMS[id].get("short",menu.library.Registry.SYSTEMS[id].name),func(): open_system(id),"",false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
 	if h.default_rom_dir.is_empty():
 		result.push_front(menu.card(menu.catalog.action("library.setup","Set up your ROM library",open_library_tools,"Choose the folder containing snes, nes, megadrive and your other systems. Subfolders are included automatically."),"START HERE","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP"))
 	var detail := "Choose your main ROM folder" if h.default_rom_dir.is_empty() else "Folders · SD cards · Refresh"
-	result.append(menu.card(menu.catalog.action("library.locations","Library locations",open_library_tools,"Set the main roms folder once. CRT XR finds supported consoles and leaves the files where they are.",false,detail),"MAKE YOURSELF AT HOME","locations",Color("aeb6bf"),"YOUR CONSOLES" if menu.rom_index.total()>0 else "LIBRARY"))
+	result.append(menu.card(menu.catalog.action("library.locations","Library locations",open_library_tools,"Choose your main ROM folder.",false,detail),"MAKE YOURSELF AT HOME","locations",Color("aeb6bf"),"YOUR CONSOLES" if menu.rom_index.total()>0 else "LIBRARY"))
 	return result
 
 func library_tool_items() -> Array:
@@ -69,19 +63,6 @@ func library_tool_items() -> Array:
 		result.append(menu.entry(menu.catalog.action("library.default","Change ROM folder",browse_folders,"Pick a different main ROM folder. Your files stay where they are.",false,"›"),rom,"folder","",menu.short_path(h.default_rom_dir)+(" · "+menu.count_caption(games,"game") if games>0 else "")))
 		result.append(menu.entry(menu.catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the ROM folder for added or removed games.",false,""),rom,"refresh"))
 		result.append(menu.entry(menu.catalog.action("library.clear","Forget ROM folder",func(): set_default(""),"Forget the folder without changing any files.",false,""),rom,"clear","danger"))
-	var videos := "VIDEOS · OPTIONAL"
-	if not VideoSession.available(): result.append_array(menu.videos.video_setup_items(videos))
-	else:
-		if h.video_dir.is_empty():
-			result.append(menu.entry(menu.catalog.action("library.video_folder","Choose a video folder",menu.videos.open_video_folder_picker,"Optional. Pick a folder of MP4 or MKV files to watch on the TV; they appear after your consoles.",false,"›"),videos,"video","","MP4 and MKV files, shown after your consoles"))
-		else:
-			var count: int=h.video_library.count(h.video_dir)
-			result.append(menu.entry(menu.catalog.action("library.video_folder","Change video folder",menu.videos.open_video_folder_picker,"Pick a different video folder. Your files stay where they are.",false,"›"),videos,"video","",menu.short_path(h.video_dir)+" · "+menu.count_caption(count,"video")))
-			result.append(menu.entry(menu.catalog.action("library.video_clear","Remove video folder",func(): menu.videos.set_video_folder(""),"Hides Videos from the library. Your files are not changed.",false,""),videos,"clear","danger"))
-		if FfmpegInstaller.installed():
-			result.append(menu.entry(menu.catalog.action("library.ffmpeg_remove","Remove downloaded video libraries",func():
-				menu.ask("Remove the video libraries?","Videos stop playing until you set them up again. The files go when CRT XR next starts.",func(): FfmpegInstaller.remove(); menu.notify("Video libraries will be removed when CRT XR restarts.")),
-				"Frees the FFmpeg libraries CRT XR downloaded. Your videos are not touched.",false,""),videos,"clear","danger","",true))
 	var find := "FIND A FOLDER"
 	for candidate in menu.library.Locations.library_candidates(menu.library.home_folder(),menu.library.Locations.sd_cards()):
 		var path: String=candidate
@@ -129,6 +110,7 @@ func change_game_page(delta: int) -> void:
 	if next==game_page: return
 	menu.remember(); menu.clear_input(); game_page=next; system_pages[library_system]=game_page
 	menu.render()
+	menu.play_navigation_click()
 
 func open_folder(path: String) -> void:
 	menu.remember(); menu.clear_input()
@@ -174,25 +156,26 @@ func open_cards() -> void:
 	elif paths.size()==1: open_folder(paths[0])
 	else: menu.remember(); menu.clear_input(); menu.mode="volumes"; menu.render()
 
-func set_default(path: String) -> void:
+func set_default(path: String) -> bool:
 	if not path.is_empty() and DirAccess.open(path)==null:
-		menu.show_error("Open an available folder before setting a default."); return
+		menu.show_error("Open an available folder before setting a default."); return false
 	var previous: String = host.default_rom_dir
 	host.default_rom_dir = path
 	if host.save_library()!=OK:
 		host.default_rom_dir = previous
 		menu.show_error("Default folder could not be saved. Check that user storage is writable.")
-		return
+		return false
 	menu.library.default_dir = path
 	menu.rom_index.start(path)
 	menu.notify("ROM library folder saved. Choose game shows systems after scanning." if not path.is_empty() else "Default folder cleared; your ROMs are unchanged")
+	return true
 
 func select_file(path: String) -> void:
 	if not FileAccess.file_exists(path): menu.show_error("Game unavailable. Reconnect its SD card and try again."); return
 	var automatic: String = host.emulator.auto_path_for(path)
 	if FileAccess.file_exists(automatic):
 		menu.remember(); launch_origin=menu.snapshot(); launch_path=path
-		menu.clear_input(); menu.mode="launch"; menu.render()
+		menu.clear_input(); menu.mode="launch"; menu.memory["launch"]={"id":"launch.continue","scroll":0}; menu.render()
 	else: launch_game(path,false)
 
 func launch_game(path: String, continuing: bool) -> void:
@@ -202,7 +185,7 @@ func launch_game(path: String, continuing: bool) -> void:
 	if not host.load_game(path): menu.show_error(host.startup_message); return
 	if continuing and not host.emulator.load_auto():
 		if not menu.visible: host.toggle_settings() # after an unpack the menu is closed
-		menu.show_error(host.emulator.status+" Select Start fresh to play without this save.")
+		menu.show_error(host.emulator.status+" Choose Start from a fresh boot to play without this resume point.")
 		return
 	var feedback: String = host.emulator.status
 	host.was_paused_before_menu=false
@@ -239,7 +222,9 @@ func open_history(which: String) -> void:
 	menu.remember(); menu.clear_input(); menu.search_query=""; menu.search_field.text=""; menu.mode=which; menu.render()
 
 func game_item(path: String, label: String) -> Dictionary:
-	var item: Dictionary = menu.catalog.action("game:"+path,label,func(): select_file(path),"Open this cartridge or mark it as a favourite.",false,"★" if path in host.play_history.favourites else "›")
+	var favourite: bool = path in host.play_history.favourites
+	var item: Dictionary = menu.catalog.action("game:"+path,label,func(): select_file(path),"Open this cartridge or mark it as a favourite.",false,"" if favourite else "›")
+	if favourite: item["value_icon"]="heart"
 	item["rom_path"]=path
 	item["layout"]="game"
 	var folder := path.get_base_dir().get_file()
@@ -316,12 +301,25 @@ func game_title_action() -> void:
 	if row!=null and row.item.has("rom_path"):
 		menu.open_help("Full game title",str(row.item.label))
 
-## Continue from the automatic save, or start the game fresh.
+## Name the actual return destination: startup has no preceding page to go back to.
+func launch_return_label() -> String:
+	match launch_origin.get("mode", "pause"):
+		"pause": return "Go to Home" if not host.emulator.loaded and not host.video.loaded else "Back to menu"
+		"recent": return "Back to Recently played"
+		"favourites": return "Back to Favourites"
+		"browser": return "Back to folders"
+		"games", "library": return "Back to library"
+	return "Back"
+
 func launch_items() -> Array:
 	var path := launch_path
-	return [menu.catalog.action("launch.continue","Continue",func(): launch_game(path,true),path.get_file().get_basename()+" · resume point saved "+menu.ago(host.emulator.state_stamp(host.emulator.auto_path_for(path)))),
-		menu.catalog.action("launch.fresh","Start fresh",func(): launch_game(path,false),"Start from the title screen. Cartridge battery saves and manual states are kept."),
-		menu.catalog.action("launch.cancel","Back",menu.back,"Return without starting this game.")]
+	var continuing: Dictionary = menu.catalog.action("launch.continue","Continue",func(): launch_game(path,true),"",false,"")
+	continuing["emphasis"] = "primary"
+	continuing["row_icon"] = "play"
+	continuing["min_height"] = 84
+	var fresh: Dictionary = menu.catalog.action("launch.fresh","Start from a fresh boot",func(): launch_game(path,false),"In-game saves are kept.",false,"")
+	fresh["detail_getter"] = func(): return "In-game saves are kept."
+	return [continuing, fresh, menu.catalog.action("launch.cancel",launch_return_label(),menu.back,"",false,"")]
 
 ## Recently played or favourites, with Jump to letter on long lists.
 func history_items() -> Array:

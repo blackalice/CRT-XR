@@ -12,7 +12,7 @@ static func describe(game_loaded: bool, default_folder: String, last_game: Strin
 		detail += "\nYour default ROM folder is unavailable. Reconnect the card or choose another folder."
 	if xr_requested and not tracking_valid and not sbs:
 		title = "Fixed view"
-		detail = "No glasses tracking right now, so the view stays still. With glasses connected, use Controls & XR → Connect glasses.\n" + tracking_status
+		detail = "No glasses tracking right now, so the view stays still. With glasses connected, use View → Tracking → Connect glasses.\n" + tracking_status
 	elif xr_requested and not tracking_valid:
 		title = "Tracking unavailable"
 		detail = "The view is held steady. Check the glasses' USB connection, then use Retry glasses tracking. You can also use Fixed view.\n" + tracking_status

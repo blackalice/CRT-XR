@@ -50,6 +50,7 @@ var tip_label: Label
 var stereo_note: Control
 var begin_button: Button
 var prompt_canvas: Control
+var backdrop: ColorRect
 var wide := false
 
 func _ready() -> void:
@@ -64,6 +65,10 @@ func _ready() -> void:
 	background.color = Color.BLACK
 	background.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(background)
+	# The menus' space backdrop: near-black, so glasses still in 2D see through it.
+	backdrop = MenuSkin.space_backdrop()
+	backdrop.show_behind_parent = false # above the black fill, not behind this screen
+	add_child(backdrop)
 	prompt_canvas = Control.new()
 	add_child(prompt_canvas)
 	var center := CenterContainer.new()
@@ -78,8 +83,7 @@ func _ready() -> void:
 func build_panel() -> void:
 	for child in content.get_children(): child.free()
 	var panel := PanelContainer.new()
-	var style := MenuSkin.box(Color("1d2025"), Color("c7934c"), 2, 0)
-	style.set_corner_radius_all(18)
+	var style := MenuSkin.box(Color("000c30"), Color("3858a0"), 2, 0)
 	style.content_margin_left = 64; style.content_margin_right = 64
 	style.content_margin_top = 44; style.content_margin_bottom = 40
 	panel.add_theme_stylebox_override("panel", style)
@@ -97,6 +101,13 @@ func build_panel() -> void:
 	heading = HelpArticle.label("", 62, MenuSkin.BOLD, MenuSkin.TEXT)
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.autowrap_mode = TextServer.AUTOWRAP_OFF
+	# Chrome lettering with a dark outline, as the menus' titles.
+	heading.add_theme_color_override("font_color", Color.WHITE)
+	heading.add_theme_color_override("font_outline_color", Color("000418"))
+	heading.add_theme_constant_override("outline_size", 10)
+	var chrome := ShaderMaterial.new(); chrome.shader = preload("res://shaders/menu_chrome.gdshader")
+	heading.material = chrome
+	heading.resized.connect(func(): chrome.set_shader_parameter("height", heading.size.y))
 	title.add_child(heading)
 	status = HelpArticle.label("", 32, MenuSkin.SEMIBOLD, MenuSkin.AMBER)
 	status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -117,12 +128,10 @@ func build_panel() -> void:
 		var row := HelpArticle.marked(HelpArticle.badge(str(i + 1), 48), lines[i], 42)
 		var badge: Control = row.get_child(0)
 		badge.custom_minimum_size = Vector2(56, 56)
-		(badge.get_theme_stylebox("panel") as StyleBoxFlat).set_corner_radius_all(28)
 		steps.add_child(row)
 		if i == 1: instructions = row.get_child(1)
 	tip = PanelContainer.new()
-	var tip_style := MenuSkin.box(Color("2a2620"), Color.TRANSPARENT, 0, 16)
-	tip_style.border_color = MenuSkin.AMBER
+	var tip_style := MenuSkin.box(Color("000c30"), MenuSkin.AMBER, 0, 16)
 	tip_style.border_width_left = 4
 	tip.add_theme_stylebox_override("panel", tip_style)
 	tip_label = HelpArticle.label("", 30, MenuSkin.REGULAR, MenuSkin.TEXT)
@@ -183,7 +192,7 @@ func build_stereo_note() -> Control:
 		var eye := CenterContainer.new()
 		eye.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		var panel := PanelContainer.new()
-		panel.add_theme_stylebox_override("panel", MenuSkin.box(Color("1d2025"), Color("c7934c"), 2, 28))
+		panel.add_theme_stylebox_override("panel", MenuSkin.box(Color("000c30"), Color("3858a0"), 2, 28))
 		var column := VBoxContainer.new()
 		column.add_theme_constant_override("separation", 12)
 		column.add_child(HelpArticle.label("Almost there", 36, MenuSkin.BOLD, MenuSkin.TEXT))
@@ -240,6 +249,7 @@ func darken() -> void:
 	if not darkened: dark_since = waiting_time
 	darkened = true
 	if is_instance_valid(content): content.hide()
+	if is_instance_valid(backdrop): backdrop.hide()
 
 func continue_session() -> void:
 	if proceeding: return

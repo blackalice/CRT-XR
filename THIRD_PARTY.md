@@ -187,9 +187,15 @@ On Windows, which has no system FFmpeg, the user can choose **Set up video playb
 
 Only FFmpeg's public headers are vendored, for compiling the loader: 7.1.1 in `native/emulation/third_party/ffmpeg-61/` and 8.1.3 in `native/emulation/third_party/ffmpeg-62/`, under the GNU LGPL 2.1 or later (`COPYING.LGPLv2.1` in each; source tarballs and SHA-256 in each `README.md`).
 
+## Menu icons
+
+Fifteen menu icons in `assets/icons/menu/`, and the D-pad and pointer in `assets/icons/glyphs/`, are tiles from Kenney's 1-Bit Pack (www.kenney.nl), under CC0 1.0; credit is not required but is given here. The tiles used, the pack version and its download hash are in `third_party/icons/README.md`, with Kenney's licence text. Fourteen console icons in `assets/icons/consoles/` are by Tatohead, from Console-Iconset (https://github.com/Tatohead/Console-Iconset), used with credit as its README asks; the permission text, commit and file list are in `third_party/icons/README.md`. The other menu and console icons are original to CRT XR.
+
 ## Fonts
 
 Open Sans, Copyright 2020 The Open Sans Project Authors, under the SIL Open Font License 1.1. The unmodified variable font is `assets/fonts/OpenSans.ttf`; its licence, pinned source and SHA-256 are in `third_party/fonts/` and included with exported builds under `licenses/fonts/`.
+
+DotGothic16, Copyright 2020 The DotGothic16 Project Authors, under the SIL Open Font License 1.1. The unmodified font is `assets/fonts/DotGothic16.ttf`, used for the menus; its licence, pinned source and SHA-256 are in `third_party/fonts/` and included with exported builds under `licenses/fonts/`.
 
 VCR OSD Mono, by Riciery Leal, is used unmodified (`assets/fonts/VCR_OSD_MONO.ttf`) for the green VCR on-screen text on videos. dafont lists it as "100% Free", and a comment on its dafont page states it is fully free to use; the download itself carries no licence text. Source, retrieval date and SHA-256 are in `third_party/fonts/README.md`.
 
@@ -202,3 +208,7 @@ Modified for CRT XR: controller/buttons and hidden underside fittings removed, r
 ## Godot engine
 
 Godot Engine 4.5.1, MIT licence, Godot Engine contributors. Official engine licence and third-party copyright notices accompany builds under `licenses/godot/`, copied from `third_party/godot/` (upstream tag 4.5.1-stable). Engine source: https://github.com/godotengine/godot/tree/4.5.1-stable .
+
+## Music visualiser
+
+projectM v4.1.8 (LGPL-2.1-or-later), dynamically loaded with an offscreen rendering patch. See third_party/projectm for full notices, modifications and reproducible builds. Windows also uses GLEW 2.2.0; its full notices are retained there. The three bundled MilkDrop presets are original CRT XR work under MIT.

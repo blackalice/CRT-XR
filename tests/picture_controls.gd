@@ -14,6 +14,7 @@ func settle():
 func run():
 	app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	app.menu_on_tv = false # the bezel checks look past a floating menu at the picture
 	# Geometry readback must not race the separately tested tube power-on reveal.
 	app.power_on.enabled=false
 	app.power_on.apply()
@@ -99,6 +100,7 @@ func run():
 	app.free()
 	app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	app.menu_on_tv = false # the bezel checks look past a floating menu at the picture
 	app.close_settings()
 	await settle()
 	check(is_equal_approx(app.world.picture.values.shift_x,.65) and not app.world.picture.keep_aspect and app.world.picture.mode==2 and is_equal_approx(app.world.picture.values.saturation,.8),"New instance restores fitting, connection and colour controls")

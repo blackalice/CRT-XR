@@ -5,11 +5,15 @@ const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
+const SegmentBar = preload("res://scripts/ui/segment_bar.gd")
+## Values read in the yellow the console menus used for numbers.
+const VALUE := MenuSkin.VALUE
 ## Optional item keys: "row_icon" (see row_icon.gd) leads the row; "emphasis" is
 ## "primary" for a screen's main action or "danger" for one that forgets
 ## something; "compact" draws a smaller row for secondary places.
-const DANGER := Color("e0907f")
+const DANGER := Color("f87860")
 var item: Dictionary
+var setting_detail_label: Label
 var title_label: Label
 var unavailable_label: Label
 var value_label: Label
@@ -28,6 +32,11 @@ var descriptive_value := false
 ## Video rows lead with a small picture; it arrives later, so the video icon
 ## holds its place until set_thumbnail() is called.
 var thumbnail: TextureRect
+## The row's pixel panel, drawn behind everything; the marquee when selected.
+var panel: ColorRect
+var segments: Control
+## A quick tile being adjusted: its arrows show and its marquee turns amber.
+var editing := false
 
 func configure(definition: Dictionary) -> void:
 	item=definition
@@ -37,7 +46,7 @@ func configure(definition: Dictionary) -> void:
 	focus_mode=Control.FOCUS_ALL
 	content_margin=MarginContainer.new()
 	content_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["left","right"]: content_margin.add_theme_constant_override("margin_"+side,16)
+	for side in ["left","right"]: content_margin.add_theme_constant_override("margin_"+side,16 + (int(item.get("indent", 0)) if side == "left" else 0))
 	for side in ["top","bottom"]: content_margin.add_theme_constant_override("margin_"+side,6 if item.get("compact",false) else 10)
 	content_margin.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	add_child(content_margin)
@@ -47,9 +56,24 @@ func configure(definition: Dictionary) -> void:
 	var line := HBoxContainer.new(); line.add_theme_constant_override("separation",16)
 	line.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(line)
 	# The outline carries focus; do not reserve a competing arrow column.
-	marker=Label.new(); marker.hide(); add_child(marker)
+	# Keep the changed-value dot outside the title's wrapping/layout bounds.
+	marker=Label.new(); marker.text="•"; marker.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	marker.add_theme_font_size_override("font_size",14)
+	marker.add_theme_color_override("font_color",VALUE)
+	add_child(marker)
+	marker.set_anchors_and_offsets_preset(Control.PRESET_TOP_RIGHT)
+	marker.position=Vector2(-14,2)
+	if item.has("disclosure"):
+		var disclosure := Label.new()
+		disclosure.text = item.disclosure
+		disclosure.custom_minimum_size.x = 20
+		disclosure.add_theme_font_size_override("font_size",20)
+		disclosure.add_theme_color_override("font_color",MenuSkin.AMBER)
+		disclosure.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		line.add_child(disclosure)
 	var emphasis := str(item.get("emphasis",""))
-	var tint := MenuSkin.AMBER if emphasis=="primary" else (DANGER if emphasis=="danger" else MenuSkin.MUTED)
+	var is_exit := str(item.get("id", "")) in ["exit", "home.exit"]
+	var tint := MenuSkin.TEXT if is_exit else (MenuSkin.AMBER if emphasis=="primary" else (DANGER if emphasis=="danger" else MenuSkin.MUTED))
 	if item.has("thumbnail_path"):
 		# Video frames fill a 4:3 slot; box art and saves fit theirs whole.
 		var slot_size: Vector2 = item.get("thumbnail_size",Vector2(64,48))
@@ -66,15 +90,24 @@ func configure(definition: Dictionary) -> void:
 	words.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	words.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(words)
 	title_label=Label.new(); title_label.text=item.label
-	title_label.add_theme_font_size_override("font_size",24); MenuSkin.weigh(title_label,MenuSkin.SEMIBOLD)
+	title_label.add_theme_font_size_override("font_size",22 if item.has("disclosure") else 24); MenuSkin.weigh(title_label,MenuSkin.SEMIBOLD)
 	title_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	title_label.max_lines_visible=3
 	title_label.mouse_filter=Control.MOUSE_FILTER_IGNORE; words.add_child(title_label)
+	MenuSkin.shadow(title_label)
 	if emphasis in ["primary","danger"]: title_label.add_theme_color_override("font_color",tint)
+	if item.has("detail_getter"):
+		setting_detail_label = Label.new()
+		setting_detail_label.add_theme_font_size_override("font_size",16)
+		setting_detail_label.add_theme_color_override("font_color",MenuSkin.MUTED)
+		setting_detail_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		words.add_child(setting_detail_label)
 	value_group=HBoxContainer.new(); value_group.add_theme_constant_override("separation",8)
 	value_group.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	value_group.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(value_group)
 	value_label=Label.new(); value_label.add_theme_font_size_override("font_size",22)
+	value_label.add_theme_color_override("font_color",VALUE)
+	MenuSkin.shadow(value_label)
 	value_label.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
 	value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT
 	value_label.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -85,19 +118,33 @@ func configure(definition: Dictionary) -> void:
 		value_label.add_theme_color_override("font_color",MenuSkin.MUTED)
 		words.add_child(value_label)
 	else: value_group.add_child(value_label)
+	# A stacked tile puts its value under its name: ‹ value › across the tile.
+	if item.get("stacked",false):
+		line.remove_child(value_group); content.add_child(value_group)
+		value_group.alignment=BoxContainer.ALIGNMENT_CENTER
+		value_group.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		content.add_theme_constant_override("separation",2)
 	for input in item.get("value_inputs", []): value_group.add_child(InputGlyph.new(input))
-	if item.kind=="number":
-		value_label.custom_minimum_size.x=106
+	# A small mark in place of a value, such as the heart on a favourite game.
+	if item.has("value_icon"): value_group.add_child(RowIcon.new(str(item.value_icon), VALUE))
+	if item.kind in ["number", "choice"]:
 		value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	if item.kind=="choice":
 		value_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-		value_label.custom_minimum_size.x=180
+	# Under a stacked tile's name, the value keeps to one line across the tile.
+	if item.get("stacked",false):
+		value_label.custom_minimum_size.x=0
+		value_label.autowrap_mode=TextServer.AUTOWRAP_OFF
+		value_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+		value_label.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	if item.kind in ["number","choice"]:
 		# ‹ value › reads as a selector and fills the row's edge like toggle values.
 		for direction in [-1,1]:
 			var arrow := Button.new(); arrow.text="‹" if direction<0 else "›"
 			arrow.custom_minimum_size=Vector2(30,30)
+			# The dot font's taller lines would push a 22 px arrow past the row's bounds.
+			arrow.add_theme_font_size_override("font_size",18)
 			arrow.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 			arrow.focus_mode=Control.FOCUS_NONE
 			for style in ["normal","hover","pressed","disabled"]:
@@ -114,12 +161,15 @@ func configure(definition: Dictionary) -> void:
 		label.add_theme_color_override("font_color",MenuSkin.MUTED)
 		label.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	meter.add_child(range_min_label)
-	track=ProgressBar.new(); track.custom_minimum_size.y=4; track.max_value=1
+	track=ProgressBar.new(); track.custom_minimum_size.y=16; track.max_value=1
 	track.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	track.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	track.show_percentage=false; track.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	track.add_theme_stylebox_override("background",MenuSkin.box(Color("42464c"),Color.TRANSPARENT,0,0))
 	track.add_theme_stylebox_override("fill",MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0))
+	# The bar is drawn as segments; the ProgressBar keeps the value and the fill style.
+	track.self_modulate.a=0.0
+	segments=SegmentBar.new(); track.add_child(segments)
 	meter.add_child(track); meter.add_child(range_max_label)
 	unavailable_label=Label.new(); unavailable_label.add_theme_font_size_override("font_size",16)
 	unavailable_label.add_theme_color_override("font_color",MenuSkin.MUTED)
@@ -135,7 +185,7 @@ func sync_content_height() -> void:
 	# Read the containers' natural minimum, never their allocated height.
 	# This lets wrapped titles and descriptions grow the row without a size loop.
 	# A hero row (Resume) stands taller than the rows around it.
-	custom_minimum_size.y=maxf(44 if item.get("compact",false) else (72 if item.get("hero",false) else 56),content_margin.get_combined_minimum_size().y)
+	custom_minimum_size.y=maxf(float(item.get("min_height", 44 if item.get("compact",false) else (72 if item.get("hero",false) else 56))),content_margin.get_combined_minimum_size().y)
 
 # Shared: refresh() runs ten times a second per row while the menu is open.
 static var FILL_SELECTED := MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0)
@@ -144,15 +194,25 @@ static var FILL_IDLE := MenuSkin.box(Color("92969c"),Color.TRANSPARENT,0,0)
 func refresh() -> void:
 	disabled=item.get("disabled",false)
 	value_label.text=formatted_value()
-	title_label.text=str(item.label)+(" •" if changed_from_default() else "")
+	if setting_detail_label != null: setting_detail_label.text = item.detail_getter.call()
+	if item.kind in ["number", "choice"] and not item.get("stacked",false):
+		# Keep both arrows close to the actual value, while allowing long choices to wrap.
+		var font := value_label.get_theme_font("font")
+		var text_width := font.get_string_size(value_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, value_label.get_theme_font_size("font_size")).x
+		value_label.custom_minimum_size.x = minf(180.0, ceilf(text_width) + 4.0)
+	title_label.text=str(item.label)
 	for button in adjust_buttons:
 		button.visible=true; button.disabled=disabled
-		button.modulate.a=1.0 if selected_now else 0.35
+		# A quick tile shows its arrows only while it is being adjusted.
+		var lit := (editing and selected_now) if item.get("quick",false) else selected_now
+		button.modulate.a=1.0 if lit else (0.0 if item.get("quick",false) else 0.35)
 		button.mouse_filter=Control.MOUSE_FILTER_STOP if selected_now else Control.MOUSE_FILTER_IGNORE
-	track.visible=item.kind=="number"
+	# A compact control on the pause menu shows its value without the bar.
+	track.visible=item.kind=="number" and item.get("meter",true)
 	if meter!=null: meter.visible=track.visible
 	if track.visible:
 		track.add_theme_stylebox_override("fill",FILL_SELECTED if selected_now else FILL_IDLE)
+		segments.bright=selected_now
 		track.value=inverse_lerp(float(item.min),float(item.max),float(item.getter.call()))
 		if range_min_label!=null:
 			range_min_label.text=format_limit(float(item.min))
@@ -164,7 +224,7 @@ func refresh() -> void:
 	tooltip_text=GlyphText.plain(str(item.get("disabled_reason",item.get("help",""))))
 	title_label.modulate=Color("85878b") if disabled else Color.WHITE
 	value_label.modulate=title_label.modulate
-	if marker!=null: marker.text=""
+	if marker!=null: marker.self_modulate.a=1.0 if changed_from_default() else 0.0
 	sync_content_height()
 
 func formatted_value() -> String:
@@ -188,11 +248,19 @@ func set_selected(value: bool) -> void:
 	selected_now=value
 	refresh(); update_selection_style()
 
+func _ready() -> void:
+	update_selection_style()
+
 func update_selection_style() -> void:
-	var selected_style := MenuSkin.box(Color("3b3022"),MenuSkin.AMBER,2)
-	add_theme_stylebox_override("normal",selected_style if selected_now else MenuSkin.box(Color("23272d")))
-	add_theme_stylebox_override("hover",selected_style if selected_now else MenuSkin.box(Color("2d323a"),Color("65666a"),1))
-	add_theme_stylebox_override("focus",StyleBoxEmpty.new())
+	if panel==null:
+		panel=MenuSkin.pixel_panel("row"); add_child(panel); move_child(panel,0)
+		for style in ["normal","hover","pressed","disabled","focus"]: add_theme_stylebox_override(style,StyleBoxEmpty.new())
+	var kind := ("editing" if editing else "selected") if selected_now else "row"
+	if item.get("skin", "") == "music": kind = "music_selected" if selected_now else "music_row"
+	if str(item.get("id", "")) in ["exit", "home.exit"]: kind = "exit_selected" if selected_now else "exit_row"
+	if item.get("skin", "") == "inset" and not selected_now: kind = "well"
+	if item.get("expanded", false) and not selected_now: kind = "chosen"
+	panel.material=MenuSkin.panel_material(kind)
 
 func changed_from_default() -> bool:
 	if not item.has("default") or not item.has("getter"): return false

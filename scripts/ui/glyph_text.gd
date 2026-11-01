@@ -6,6 +6,7 @@ extends VBoxContainer
 ## button's name. Lines break at "\n" and words wrap like a label's. `text`
 ## keeps the string as written, so it reads back like a Label's.
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
+const RowIcon = preload("res://scripts/ui/row_icon.gd")
 ## Keyboard keys for the controller buttons the menus describe.
 const KEYBOARD := {"A": "Enter", "B": "Backspace", "R3": "R", "L1+R1+Start": "Escape"}
 var font_size := 20:
@@ -22,6 +23,9 @@ var text := "":
 	set(value):
 		if text == value: return
 		text = value; rebuild()
+## An icon (row_icon.gd kind) before the first line, such as a warning sign.
+var lead_icon := "":
+	set(value): lead_icon = value; rebuild()
 
 func _init(copy := "", size := 20, tint := Color("e6e6e6")) -> void:
 	add_theme_constant_override("separation", 2)
@@ -40,11 +44,15 @@ func rebuild() -> void:
 		child.queue_free()
 	for line in text.split("\n"):
 		var flow := HFlowContainer.new()
-		flow.add_theme_constant_override("h_separation", int(font_size * 0.28))
+		flow.add_theme_constant_override("h_separation", int(font_size * 0.4))
 		flow.add_theme_constant_override("v_separation", 0)
 		flow.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		if centred: flow.alignment = FlowContainer.ALIGNMENT_CENTER
 		add_child(flow)
+		if flow.get_index() == 0 and not lead_icon.is_empty() and not text.is_empty():
+			var mark := RowIcon.new(lead_icon, colour)
+			mark.custom_minimum_size = Vector2(32, 32)
+			flow.add_child(mark)
 		var at := 0
 		while at < line.length():
 			var open := line.find("{", at)
@@ -84,7 +92,10 @@ func control(flow: HFlowContainer, name: String, trailing := "") -> void:
 	group.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	var height := font_size * 1.5
 	for part in name.replace("+", " + ").replace("/", " / ").split(" ", false):
-		if InputGlyph.knows(part): group.add_child(InputGlyph.new(part, height))
+		if InputGlyph.knows(part):
+			var glyph := InputGlyph.new(part, height)
+			glyph.colour = colour
+			group.add_child(glyph)
 		else:
 			var joining := word_label(part)
 			joining.add_theme_color_override("font_color", Color(colour, 0.7))

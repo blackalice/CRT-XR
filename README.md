@@ -83,7 +83,7 @@ Connect the glasses in **mono**, then launch CRT XR. Put them on and press their
 
 The tested VITURE profile uses an explicit **3840 × 1080** Steam game resolution; **Native alone did not work on our test Deck**. Setup prepares that profile. If the view stays black, X retries; return the glasses to mono before using B / Escape to leave.
 
-Open **Game library → Library locations** to choose your ROM folder or SD card. You can explore the built-in test signal before loading a game.
+Open **Game Library → Library locations** to choose your ROM folder or SD card. You can explore the built-in test signal before loading a game.
 
 ## Install on Windows
 
@@ -94,11 +94,11 @@ Open **Game library → Library locations** to choose your ROM folder or SD card
 
 Windows uses native Xbox-compatible controller support. **LB + RB + Start** opens the menu (L1 + R1 + Start on the Deck); **R3** recentres. Both platforms use the same TV-distance range; desktop and XR field-of-view calibration are stored separately. Mixed Windows display scaling is handled by the exported app's per-monitor DPI manifest.
 
-Only **VITURE Pro 2** has been tested for Windows tracking. **Other glasses** can track through **OpenTrack**: run a tool that sends OpenTrack UDP to `127.0.0.1` port `4242` (for example [opentrack](https://github.com/opentrack/opentrack), [PhoenixHeadTracker](https://github.com/iVideoGameBoss/PhoenixHeadTracker) for XREAL Air, or VertoXR for Rokid and RayNeo), then choose **Controls & XR → Tracking → Tracking source → OpenTrack**. This path is untested with real non-VITURE glasses; if a direction is reversed, invert that axis on the same page. SBS works with any glasses that offer a full side-by-side mode. Public-package setup with a different Windows user and extended reconnect/suspend testing remain beta feedback areas.
+Only **VITURE Pro 2** has been tested for Windows tracking. **Other glasses** can track through **OpenTrack**: run a tool that sends OpenTrack UDP to `127.0.0.1` port `4242` (for example [opentrack](https://github.com/opentrack/opentrack), [PhoenixHeadTracker](https://github.com/iVideoGameBoss/PhoenixHeadTracker) for XREAL Air, or VertoXR for Rokid and RayNeo), then choose **View → Tracking → Tracking source → OpenTrack**. This path is untested with real non-VITURE glasses; if a direction is reversed, invert that axis on the same page. SBS works with any glasses that offer a full side-by-side mode. Public-package setup with a different Windows user and extended reconnect/suspend testing remain beta feedback areas.
 
 ## ROM folders
 
-In **Game library → Library locations**, select your **main ROM folder**—the folder containing the console folders. An existing EmuDeck-style layout can stay where it is, including on an SD card:
+In **Game Library → Library locations**, select your **main ROM folder**—the folder containing the console folders. An existing EmuDeck-style layout can stay where it is, including on an SD card:
 
 ```text
 roms/
@@ -149,10 +149,10 @@ PC Engine, Atari 2600, Lynx and Vectrex still need real-game testing beyond diag
 
 ## Videos
 
-In **Game library → Library locations**, select **Choose a video folder** and pick the folder holding your videos; subfolders are included. A **Videos** card then appears after your consoles. MP4, M4V and MKV files are listed, with any `.srt` subtitles beside them.
+In **Video Library**, select **Choose a video folder** and pick the folder holding your videos; subfolders are included. Your videos then appear in **Video Library**. MP4, M4V and MKV files are listed, with any `.srt` subtitles beside them.
 
 - **Steam Deck:** nothing to install; SteamOS's FFmpeg is used and decoding runs on the GPU.
-- **Windows:** choose **Set up video playback** in Library locations. CRT XR downloads FFmpeg's five LGPL video libraries (about 55 MB) from the public [BtbN builds](https://github.com/BtbN/FFmpeg-Builds), checks them and keeps them in its own user-data folder.
+- **Windows:** choose **Set up video playback** in **Video Library**. CRT XR downloads FFmpeg's five LGPL video libraries (about 55 MB) from the public [BtbN builds](https://github.com/BtbN/FFmpeg-Builds), checks them and keeps them in its own user-data folder.
 - **Other Linux systems:** install FFmpeg 7.1 or 8 with your package manager.
 
 While watching, **A** pauses, **D-pad left/right** skips 10 seconds (hold to scrub), **up/down** skips a minute, **Y** changes the picture shape and **X** the audio track; the menu has a scrubbable timeline. Settings are in the **Videos** category: **Picture** (the video picture, shape, lines, interlacing), **VCR** (tape look, on-screen text, sounds) and **Playback** (subtitles, hardware decoding, folder). See [Videos](docs/emulation.md#videos) for details.
@@ -173,7 +173,7 @@ On Steam Deck, use Steam's **Gamepad With Joystick Trackpad** layout. On Windows
 | Move TV closer / farther | Right stick, when enabled | Page Up / Page Down |
 | Screenshot | Pause menu | F6 |
 
-Continue or library setup leads the home screen. Quick settings opens TV placement, recenter, picture presets and both volume controls. In game lists, left/right jumps ten games and scrolls the selection into view. **Reset game** is in the pause menu. **Controls & XR → Separate preview core** controls the separate emulator copy used by **Reduce input delay**. Save picture presets under **Picture → Presets**; accessibility options are under **About & Help → Accessibility**. In side-by-side 3D the menu floats in front of the TV, the selected item lifts towards you and the room dims behind it (never in the compact preview); **Menu depth** turns this off, **Curved menu** bends it gently towards you, and **Controller vibration** adds a light tick as you move. Music uses a compact strip when idle or paused and expands its transport and timeline during playback. Left/right selects playback controls or seeks; up/down moves between music and game actions. Game controls follow each supported console's layout.
+Continue or library setup leads the home screen. Quick settings opens TV placement, recenter, picture presets and both volume controls. In game lists, left/right jumps ten games and scrolls the selection into view. **Reset game** is in the pause menu. **Emulation → Separate preview core** controls the separate emulator copy used by **Reduce input delay**. Save picture presets under **Picture → Presets**; accessibility options are under **Menu → Accessibility**. When the menu is set to float, **Menu → Layout & placement → Menu depth** places it in front of the TV and dims the room in side-by-side 3D; the compact preview does not dim the room. **Menu → Feedback → Controller vibration** adds a light tick as you move. Music uses a compact strip when idle or paused and expands its transport and timeline during playback. Left/right selects playback controls or seeks; up/down moves between music and game actions. Game controls follow each supported console's layout.
 
 ## Updates, help and feedback
 

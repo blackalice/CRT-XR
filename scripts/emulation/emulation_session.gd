@@ -1,6 +1,7 @@
 extends Node
 const Registry = preload("res://scripts/emulation/core_registry.gd")
 const Layouts = preload("res://scripts/emulation/controller_layouts.gd")
+const CoreOptions = preload("res://scripts/emulation/core_options.gd")
 ## Godot owns presentation; the native Libretro host owns frame execution/callbacks.
 signal content_changed(texture: Texture2D)
 signal frame_presented(image: Image)
@@ -121,6 +122,8 @@ func load_rom(path: String) -> bool:
 	var spec: Dictionary = Registry.SYSTEMS[system_id]
 	if spec.has("controller"): core.set_controller(spec.controller)
 	for key in spec.get("options", {}): core.set_option(key, spec.options[key])
+	var selected_options := CoreOptions.overrides(system_id, Registry.content_hash(path))
+	for key in selected_options: core.set_option(key, selected_options[key])
 	var content := Registry.content_file(path)
 	if content.is_empty():
 		report("Could not unpack the game from " + path.get_file() + ". Its ZIP may be damaged or use a compression method other than Deflate.", true)

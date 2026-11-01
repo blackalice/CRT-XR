@@ -49,10 +49,10 @@ func glasses_guide() -> String:
 			"2. On your normal monitor, choose the glasses' display and select Open glasses view.",
 			"## Head tracking",
 			"- VITURE: put the VITURE Windows SDK in a folder named sdk beside CRT-XR.exe.",
-			"- Other glasses: use a tool that sends OpenTrack, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo), then choose Controls & XR → Tracking source → OpenTrack.",
+			"- Other glasses: use a tool that sends OpenTrack, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo), then choose View → Tracking → Tracking source → OpenTrack.",
 			"## While playing",
 			"R3 | R :: Recentre the view",
-			"> Turning the wrong way? Invert that axis in Controls & XR.",
+			"> Turning the wrong way? Invert that axis in View → Tracking.",
 			"!! Fixed view",
 			"There's no tracking yet, so the TV stays still. It's also how CRT XR plays on a normal screen."])
 	return "\n".join([
@@ -68,11 +68,11 @@ func glasses_guide() -> String:
 		"2. Press the glasses' SBS button to go back to 2D. CRT XR closes when they do.",
 		"## While playing",
 		"R3 :: Recentre the view",
-		"> Turning the wrong way? Invert that axis in Controls & XR.",
+		"> Turning the wrong way? Invert that axis in View → Tracking.",
 		"## Your glasses",
 		"CRT XR recognises VITURE, XREAL, Rokid and RayNeo displays. Only the VITURE Pro 2 has been tested.",
 		"!! Fixed view",
-		"There's no tracking yet, so the TV stays still. Check XR Gaming sees the glasses, then use Controls & XR → Connect glasses."])
+		"There's no tracking yet, so the TV stays still. Check XR Gaming sees the glasses, then use View → Tracking → Connect glasses."])
 
 func state_action(saving: bool) -> void:
 	if not saving:
@@ -95,10 +95,10 @@ func disc_tile(discs: Dictionary) -> Dictionary:
 	var count: int = discs.count
 	var next: int = (int(discs.index) + 1) % count
 	return menu.tile(menu.catalog.action("change_disc","Change disc",func(): change_disc(next, count),
-		"Disc %d of %d is in. Opens the tray and puts in disc %d, when the game asks for it." % [int(discs.index) + 1, count, next + 1]),"disc")
+		"Disc %d of %d is in. Opens the tray and puts in disc %d, when the game asks for it." % [int(discs.index) + 1, count, next + 1]),"disc","","game",3)
 
-func change_disc(index: int, count: int) -> void:
-	menu.ask("Insert disc %d?" % (index + 1),"Changes to disc %d of %d. Do this when the game asks for the next disc; it is like opening the console's lid." % [index + 1, count],func():
+func change_disc(index: int, _count: int) -> void:
+	menu.ask("Insert disc %d?" % (index + 1),"Insert when the game asks for disc %d." % (index + 1),func():
 		if host.emulator.change_disc(index): host.close_settings(); host.show_notice(host.emulator.status)
 		else: menu.show_error(host.emulator.status))
 
@@ -116,11 +116,12 @@ func perform_state_action(saving: bool, slot := 0) -> void:
 func home_items() -> Array:
 	var h=host
 	var home: Array = []
-	var tiles: Array = [
-		menu.tile(menu.catalog.action("home.quick","Quick settings",func(): menu.category=7; menu.subsection=0; menu.open_settings(),"TV position, recenter, picture preset and volumes."),"sliders"),
-		menu.tile(menu.catalog.action("home.settings","Settings",menu.open_settings,"Adjust the view, picture, audio and room."),"gear"),
-		menu.tile(menu.catalog.action("home.exit","Exit",func(): menu.ask("Exit CRT XR?","Your settings will be saved.",h.request_exit),"Close CRT XR."),"exit","danger")]
-	var library_row: Dictionary = menu.catalog.action("home.library","Set up library" if h.default_rom_dir.is_empty() else "Game library",menu.games.open_library,"Choose your main ROM folder or SD card. Your supported games appear automatically." if h.default_rom_dir.is_empty() else "Recent, Favourites and supported consoles.",false,"›")
+	var recenter: Dictionary = menu.tile(menu.catalog.action("home.recenter","Recenter view",h.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)
+	var settings: Dictionary = menu.catalog.action("home.settings","Settings",menu.open_settings,"Adjust the view, picture, audio and room.")
+	var library_row: Dictionary = menu.catalog.action("home.library","Game Library",menu.games.open_library,"Choose your main ROM folder or SD card. Your supported games appear automatically." if h.default_rom_dir.is_empty() else "Recent, Favourites and supported consoles.",false,"›")
+	var video_row: Dictionary = menu.catalog.action("home.videos","Video Library",menu.videos.open_videos,"Browse your videos or set up video playback.",false,"›")
+	var main: Array = []
+	var tiles: Array = []
 	if not h.last_game_path.is_empty() and FileAccess.file_exists(h.last_game_path):
 		# The last game leads, with what it is and when it was played.
 		var parts: Array[String] = ["Continue"]
@@ -129,33 +130,56 @@ func home_items() -> Array:
 		var played: int = h.play_history.last_played(h.last_game_path)
 		if played > 0: parts.append("played " + menu.ago(played))
 		home.append(menu.games.with_box_art(menu.entry(menu.catalog.action("home.continue",h.last_game_path.get_file().get_basename(),func(): menu.games.select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",false,"›"),"","play","primary"," · ".join(parts)),h.last_game_path))
-		tiles.insert(0,menu.tile(library_row,"cartridge"))
+		# The two libraries sit side by side.
+		main = [menu.tile(library_row,"gamepad","","main",2), menu.tile(video_row,"video","","main",2)]
+		for item in main: item.compact=true
+		tiles = [recenter, menu.tile(settings,"gear","","actions",3), menu.tile(menu.catalog.action("home.glasses","Using glasses",func(): menu.open_help("Using glasses",glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),"glasses","","actions",3)]
 	else:
-		home.append(menu.entry(library_row,"","folder" if h.default_rom_dir.is_empty() else "cartridge","primary" if h.default_rom_dir.is_empty() else ""))
-		if h.default_rom_dir.is_empty(): tiles.insert(0,menu.tile(menu.catalog.action("home.glasses","Using glasses",func(): menu.open_help("Using glasses",glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),"glasses"))
-	return home+menu.music.music_actions()+[menu.room_choice("pause.room")]+tiles
+		home.append(menu.entry(library_row,"","folder" if h.default_rom_dir.is_empty() else "gamepad","primary" if h.default_rom_dir.is_empty() else ""))
+		home.append(menu.entry(video_row,"","video"))
+		# First run swaps Recenter for the glasses guide.
+		tiles = [menu.tile(menu.catalog.action("home.glasses","Using glasses",func(): menu.open_help("Using glasses",glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),"glasses","","actions",3) if h.default_rom_dir.is_empty() else recenter, menu.tile(settings,"gear","","actions",3)]
+	tiles[0]["section"]="ACTIONS"
+	return home+main+menu.music.music_actions()+menu.quick_controls()+tiles
 
 ## The pause menu while a game is loaded: Resume leads, actions sit in tiles.
 func pause_items() -> Array:
 	var h=host
 	var resume: Dictionary = menu.entry(menu.catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded,""),"","play")
 	resume["hero"] = true
+	resume["min_height"] = 56
 	var result: Array = [resume]
-	result.append_array(menu.music.music_actions())
-	result.append(menu.room_choice("pause.room"))
+	# The game's own actions sit right under Resume.
 	result.append_array([
-		menu.tile(menu.catalog.unavailable(menu.catalog.action("save_state","Save state",func(): open_states(true),"Choose one of %d slots for this game." % STATE_SLOTS,not h.emulator.loaded),"Start a game first."),"save"),
-		menu.tile(menu.catalog.unavailable(menu.catalog.action("load_state","Load state",func(): open_states(false),"Return to one of this game's saves.",not h.emulator.loaded or range(STATE_SLOTS).all(func(slot): return not FileAccess.file_exists(h.emulator.state_path(slot)))),"No saved state yet."),"load"),
-		menu.tile(menu.catalog.action("reset_game","Reset game",reset_game,"Presses the console's reset button. Battery saves and save states are kept.",not h.emulator.loaded),"refresh"),
-		menu.tile(menu.catalog.action("screenshot","Screenshot",h.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),"camera"),
-		menu.tile(menu.catalog.action("games","Choose game",menu.games.open_library,"Open your recent game, default ROM folder or SD card."),"cartridge"),
-		menu.tile(menu.catalog.action("quick","Quick settings",func(): menu.category=7; menu.subsection=0; menu.open_settings(),"Everyday picture, placement and volume controls."),"sliders"),
-		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear"),
-		menu.tile(menu.catalog.action("exit","Exit CRT XR",func(): menu.ask("Exit CRT XR?","An automatic resume point, settings and cartridge SRAM will be saved.",h.request_exit),"Close the application."),"exit","danger")])
+		menu.tile(menu.catalog.unavailable(menu.catalog.action("save_state","Save state",func(): open_states(true),"Choose one of %d slots for this game." % STATE_SLOTS,not h.emulator.loaded),"Start a game first."),"save","","game",3),
+		menu.tile(menu.catalog.unavailable(menu.catalog.action("load_state","Load state",func(): open_states(false),"Return to one of this game's saves.",not h.emulator.loaded or range(STATE_SLOTS).all(func(slot): return not FileAccess.file_exists(h.emulator.state_path(slot)))),"No saved state yet."),"load","","game",3),
+		menu.tile(menu.catalog.action("reset_game","Reset game",reset_game,"Presses the console's reset button. Battery saves and save states are kept.",not h.emulator.loaded),"refresh","","game",3)])
+	# Then where you go most, side by side and easy to find.
+	result.append_array(library_tiles())
+	result.append_array(menu.music.music_actions())
+	result.append_array(menu.quick_controls())
+	result.append_array(action_tiles())
 	# Beside Reset game, for games on several discs.
 	var discs: Dictionary = h.emulator.disc_info()
 	if int(discs.get("count", 0)) > 1:
 		for index in range(result.size()):
 			if result[index].get("id", "") == "reset_game":
 				result.insert(index + 1, disc_tile(discs)); break
+	return result
+
+## Shared navigation and Actions rows for game and video playback.
+func library_tiles(video_id := "home.videos", video_action := Callable()) -> Array:
+	if not video_action.is_valid():video_action=menu.videos.open_videos
+	var result: Array = [
+		menu.tile(menu.catalog.action("games","Game Library",menu.games.open_library,"Open your library, recent games and favourites."),"gamepad","","main",2),
+		menu.tile(menu.catalog.action(video_id,"Video Library",video_action,"Browse your videos or set up video playback."),"video","","main",2)]
+	for item in result:item.compact=true
+	return result
+
+func action_tiles() -> Array:
+	var result: Array = [
+		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear","","actions",3),
+		menu.tile(menu.catalog.action("screenshot","Screenshot",host.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),"camera","","actions",3),
+		menu.tile(menu.catalog.action("recenter","Recenter view",host.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)]
+	result[0]["section"]="ACTIONS"
 	return result

@@ -37,13 +37,16 @@ func run() -> void:
 	app.use_tracking(false)
 	await process_frame
 	await process_frame
+	app.menu_on_tv = false # the card and game take the tube; the menu floats over them
 	if not app.menu.visible: app.toggle_settings()
 	var progress := []
 	app.emulator.unpack_progress.connect(func(_path, done, total): progress.append(float(done) / total))
 	app.menu.games.launch_game(zipped, false)
 	check(not app.menu.visible, "Choosing a zipped disc goes back to the room")
 	check(app.loading_path == zipped and app.loading_screen.visible and not app.pattern.visible, "The TV shows the loading card, not the test signal")
-	check(app.world.picture.source_texture == app.signal_view.get_texture(), "The card is the picture on the tube")
+	check(app.world.picture.source_texture == app.card_view.get_texture(), "The card is the picture on the tube")
+	check(app.world.picture.raster_size == Vector2(256,240) and app.world.picture.source_size == Vector2(768,720), "Disc card keeps a 240-line CRT raster with sharp native text")
+	check(app.card_words.visible and not app.pattern_words.visible, "Loading shows only the loading text")
 	for i in range(600):
 		if app.emulator.loaded or app.loading_path.is_empty(): break
 		await process_frame
@@ -59,17 +62,20 @@ func run() -> void:
 	check(started and app.loading_path == zipped and app.loading_screen.progress < 0.0, "A game starts behind the card")
 	var black := Image.create(256, 224, false, Image.FORMAT_RGBA8)
 	app.emulator.frame_presented.emit(black)
-	check(app.loading_screen.visible and app.world.picture.source_texture == app.signal_view.get_texture(), "Black boot frames keep the card up")
+	check(app.loading_screen.visible and app.world.picture.source_texture == app.card_view.get_texture(), "Black boot frames keep the card up")
 	await create_timer(0.5).timeout
-	check(app.world.picture.source_texture == app.signal_view.get_texture() or app.loading_path.is_empty(), "The card stays the picture until the game shows something")
+	check(app.world.picture.source_texture == app.card_view.get_texture() or app.loading_path.is_empty(), "The card stays the picture until the game shows something")
 	var lit := Image.create(256, 224, false, Image.FORMAT_RGBA8)
 	lit.fill(Color("4060c0"))
 	app.emulator.frame_presented.emit(lit)
 	check(app.loading_path.is_empty() and not app.loading_screen.visible, "A frame with picture takes the card down")
 	check(app.world.picture.source_texture == app.emulator.texture, "The game's picture replaces the card")
+	check(app.world.picture.raster_size == app.world.picture.source_size, "Game handover restores the console's own raster")
 	app.show_loading(zipped)
 	app.emulator.stop()
 	check(app.loading_path.is_empty() and app.pattern.visible, "Stopping the game takes the card down for the test signal")
+	check(app.pattern_words.visible and not app.card_words.visible and app.card_view.render_target_update_mode == SubViewport.UPDATE_ALWAYS and app.world.picture.source_texture == app.card_view.get_texture(), "Idle signal uses the sharp text overlay and keeps updating")
+	check(app.world.picture.raster_size == Vector2(256,240), "Idle test screen also uses a 240-line CRT raster")
 	app.show_loading(zipped)
 	app.loading_started -= app.LOADING_TIMEOUT_MSEC + 1
 	check(app.picture_started(black), "A game still black after the timeout is shown anyway")

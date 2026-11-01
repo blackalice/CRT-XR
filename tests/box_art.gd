@@ -54,7 +54,7 @@ func run() -> void:
 	# The header: time, and the battery where there is one.
 	var status = menu.status_line
 	check(status.label.text.contains(":"), "The menu header shows the time: %s" % status.label.text)
-	check(status.icon.visible == not status.battery_folder.is_empty(), "The battery shows only where the system has one")
+	check((status.level >= 0) == not status.battery_folder.is_empty(), "The battery shows only where the system has one")
 
 	# Glasses help.
 	var about: Array = menu.catalog.pages(6)[0].rows.map(func(item): return item.id)

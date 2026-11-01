@@ -5,6 +5,7 @@ render_mode unshaded, cull_disabled;
 // Curvature is geometry only; fitting never discards source pixels.
 uniform sampler2D signal_texture : source_color, filter_linear, repeat_disable;
 uniform vec2 signal_size = vec2(256.0,240.0);
+uniform vec2 raster_size = vec2(0.0);
 uniform vec4 picture_rect = vec4(.045,.045,.91,.91);
 uniform float scanlines = .22;
 uniform float mask_strength = .10;
@@ -69,7 +70,8 @@ void fragment() {
   uv.x += sin(uv.y*17.0+TIME*31.0)*.010*degauss;
   uv.y += sin(uv.x*11.0+TIME*23.0)*.006*degauss;
  }
- vec2 pixel = uv*signal_size;
+ vec2 raster = raster_size.x>0.0 ? raster_size : signal_size;
+ vec2 pixel = uv*raster;
  vec2 footprint = fwidth(pixel);
  vec3 color = vec3(0);
  if(all(greaterThanEqual(uv,vec2(0))) && all(lessThanEqual(uv,vec2(1)))) {
@@ -79,7 +81,10 @@ void fragment() {
    float dst = .5-fract(pixel.y);
    float wa = gauss(dst-1.0,6.0), wb = gauss(dst,6.0), wc = gauss(dst+1.0,6.0);
    vec3 beam;
-   if(use_shared_beam) beam = cached_row(uv,-1.0,0.0)*wa + cached_row(uv,0.0,1.0)*wb + cached_row(uv,1.0,0.0)*wc;
+   // Native 720-line text overlays share the card's 240-line tube raster.
+   // Modulate their full-resolution colour rather than discarding fine text.
+   if(abs(raster.y-signal_size.y)>.5) beam = color*(wa+wb+wc);
+   else if(use_shared_beam) beam = cached_row(uv,-1.0,0.0)*wa + cached_row(uv,0.0,1.0)*wb + cached_row(uv,1.0,0.0)*wc;
    else beam = horz(uv,-1.0,false)*wa + horz(uv,0.0,true)*wb + horz(uv,1.0,false)*wc;
    // Integral of the Gaussian keeps average energy stable, not each scan row.
    beam /= sqrt(3.14159265/(6.0*log(2.0)));

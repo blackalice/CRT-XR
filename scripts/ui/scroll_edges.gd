@@ -18,8 +18,11 @@ func _draw() -> void:
 	var width := maxf(0,size.x-(bar.size.x if bar.visible else 0))
 	var above := bar.value>bar.min_value
 	var below := bar.value+bar.page<bar.max_value-1
+	# Fade to the panel's own colour, or to the space backdrop's near-black.
+	var style := panel.get_theme_stylebox("panel")
+	var base: Color = style.bg_color if style is StyleBoxFlat else Color("000410")
 	for pixel in range(18):
-		var colour: Color = panel.get_theme_stylebox("panel").bg_color
+		var colour := base
 		colour.a=1.0-float(pixel)/18.0
 		if above: draw_rect(Rect2(0,pixel,width,1),colour)
 		if below: draw_rect(Rect2(0,size.y-pixel-1,width,1),colour)

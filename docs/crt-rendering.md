@@ -16,6 +16,12 @@ and bezel allowance, with safe size/position controls and calibration guides.
 Picture → Signal offers presets and gamma, colour and composite adjustments.
 See [Picture controls](picture-controls.md) for usage and limitations.
 
+The idle test signal and disc-loading card use the same CRT material, current
+picture preferences, glass and curvature as games. Their 768×720 textures keep
+native text sharp, while a separate 256×240 phosphor/scanline raster makes the
+tube effects visible at the content's intended resolution. Opening the menu
+uses its own high-resolution raster; closing it restores the programme's raster.
+
 Local GPU checks cover gamma/neutral colours, PAL/NTSC mode selection, source
 sizes through 512x478, all source-edge markers through the imported bezel in
 both eyes at flat/default/maximum curvature, and fitting the tube into the
