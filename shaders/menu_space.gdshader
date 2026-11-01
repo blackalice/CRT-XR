@@ -9,6 +9,8 @@ uniform vec2 panel_size = vec2(888.0, 664.0);
 uniform vec2 moon_at = vec2(0.47, 0.075);
 // 0 holds the stars and planet still (Reduce animation).
 uniform float motion = 1.0;
+// Boot camera settles at 1; the same live surface continues into the menu.
+uniform float boot_settle : hint_range(0.0, 1.0) = 1.0;
 uniform vec4 frame_colour : source_color = vec4(0.22, 0.35, 0.63, 1.0);
 
 const float CELL = 2.0;
@@ -75,8 +77,8 @@ void fragment() {
 		vec3 colour = sky(step_of((1.0 - length(d) * 1.5) * 3.0, 4.0, cell));
 		bool hidden = false;
 		// The planet: a great disc whose upper-left limb catches the light.
-		vec2 centre = vec2(grid.x * 0.9, grid.y * 1.36);
-		float radius = grid.y * 0.74;
+		vec2 centre = mix(grid * vec2(0.5, 0.5), grid * vec2(0.9, 1.36), boot_settle);
+		float radius = grid.y * mix(0.56, 0.74, boot_settle);
 		vec2 p = (cell - centre) / radius;
 		float r2 = dot(p, p);
 		float lit_side = -0.55 * p.x - 0.75 * p.y;
@@ -98,7 +100,8 @@ void fragment() {
 		}
 		// The moon, lit from the right, with a few craters.
 		float moon_r = 11.0;
-		vec2 m = (cell - moon_at * grid) / moon_r;
+		vec2 moon_position = moon_at * grid + (1.0 - boot_settle) * grid * vec2(-0.12, 0.16);
+		vec2 m = (cell - moon_position) / moon_r;
 		float m2 = dot(m, m);
 		if (m2 < 1.0) {
 			hidden = true;
@@ -112,7 +115,9 @@ void fragment() {
 		if (!hidden) {
 			for (int layer = 0; layer < 2; layer++) {
 				float speed = layer == 0 ? 2.0 : 5.0;
-				vec2 star = vec2(mod(cell.x + floor(TIME * motion * speed), grid.x), cell.y);
+				// Near stars travel farther: camera parallax, still snapped to cells.
+				vec2 travel = floor((1.0 - boot_settle) * vec2(18.0, 32.0) * (layer == 0 ? 0.35 : 1.0));
+				vec2 star = mod(cell + travel + vec2(floor(TIME * motion * speed), 0.0), grid);
 				float h = hash(star + float(layer) * 97.0);
 				if (h > (layer == 0 ? 0.9975 : 0.9988)) {
 					float twinkle = step(0.5, fract(TIME * motion * 0.7 + h * 13.0));

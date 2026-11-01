@@ -3,14 +3,14 @@ from pathlib import Path
 import concurrent.futures, json, os, re, subprocess, tempfile, time, sys
 ROOT=Path(__file__).resolve().parents[1]
 GODOT=os.environ.get("GODOT_BIN") or str(ROOT/"tools/godot/Godot_v4.5.1-stable_win64_console.exe")
-TESTS="smoke emulation multicore gamepad controller_menu menu_navigation menu_improvements menu_layout stereo_menu picture_controls picture_pipeline preferences_startup rom_locations rom_index library_cards play_qol share_and_defaults showcase_defaults music_albums music_resume tv_audio tv_power_on console_prop room_contacts user_data_migration pose_prediction display_probe startup_brand windows_setup video video_menu ffmpeg_installer opentrack_tracking menu_depth room_presets box_art archives tv_atmosphere sbs_auto_switch help_article menu_on_tv menu_scroll".split()
+TESTS="smoke emulation multicore gamepad controller_menu menu_navigation menu_improvements menu_layout stereo_menu picture_controls picture_pipeline preferences_startup rom_locations rom_index library_cards play_qol share_and_defaults showcase_defaults music_albums music_resume tv_audio tv_power_on console_prop room_contacts user_data_migration pose_prediction display_probe startup_brand boot_warmup menu_boot menu_boot_sound menu_ambience menu_navigation_sound resume_page windows_setup video video_menu ffmpeg_installer opentrack_tracking menu_depth room_presets box_art archives tv_atmosphere sbs_auto_switch help_article menu_on_tv menu_scroll".split()
 OUT=ROOT/"build/beta-review";OUT.mkdir(parents=True,exist_ok=True)
 def run(name):
     isolated=tempfile.mkdtemp(prefix=name+"-",dir=OUT)
     env=dict(os.environ,APPDATA=isolated,XDG_DATA_HOME=isolated)
     try:
         flags=["--audio-driver","Dummy","--minimized"] if name in ["picture_controls","picture_pipeline","share_and_defaults"] else ["--headless"]
-        extra=["--","--windows-xr"] if name=="windows_setup" else []
+        extra=["--","--windows-xr","--boot-preview"] if name=="windows_setup" else []
         result=subprocess.run([str(GODOT),*flags,"--path",str(ROOT),"--script",f"tests/{name}.gd",*extra],cwd=ROOT,env=env,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,text=True,encoding="utf-8",errors="replace",timeout=90)
         log=result.stdout
         ok=result.returncode==0 and not re.search(r"^FAIL:|SCRIPT ERROR",log,re.M)

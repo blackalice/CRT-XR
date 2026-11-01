@@ -110,6 +110,7 @@ func change_game_page(delta: int) -> void:
 	if next==game_page: return
 	menu.remember(); menu.clear_input(); game_page=next; system_pages[library_system]=game_page
 	menu.render()
+	menu.play_navigation_click()
 
 func open_folder(path: String) -> void:
 	menu.remember(); menu.clear_input()
@@ -155,18 +156,19 @@ func open_cards() -> void:
 	elif paths.size()==1: open_folder(paths[0])
 	else: menu.remember(); menu.clear_input(); menu.mode="volumes"; menu.render()
 
-func set_default(path: String) -> void:
+func set_default(path: String) -> bool:
 	if not path.is_empty() and DirAccess.open(path)==null:
-		menu.show_error("Open an available folder before setting a default."); return
+		menu.show_error("Open an available folder before setting a default."); return false
 	var previous: String = host.default_rom_dir
 	host.default_rom_dir = path
 	if host.save_library()!=OK:
 		host.default_rom_dir = previous
 		menu.show_error("Default folder could not be saved. Check that user storage is writable.")
-		return
+		return false
 	menu.library.default_dir = path
 	menu.rom_index.start(path)
 	menu.notify("ROM library folder saved. Choose game shows systems after scanning." if not path.is_empty() else "Default folder cleared; your ROMs are unchanged")
+	return true
 
 func select_file(path: String) -> void:
 	if not FileAccess.file_exists(path): menu.show_error("Game unavailable. Reconnect its SD card and try again."); return

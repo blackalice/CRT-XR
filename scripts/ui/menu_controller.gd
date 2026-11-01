@@ -1,5 +1,6 @@
 extends PanelContainer
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
+const NAV_CLICK = preload("res://assets/audio/menu-click.mp3")
 const Row = preload("res://scripts/ui/setting_row.gd")
 const LibraryCard = preload("res://scripts/ui/library_card.gd")
 const GameRow = preload("res://scripts/ui/library_game_row.gd")
@@ -136,6 +137,17 @@ var help_origin: Dictionary = {}
 var entry_initialized := false
 var sound_player: AudioStreamPlayer
 var focus_tween: Tween
+var boot: Control
+
+static func boot_cancel_pressed(event: InputEvent) -> bool:
+	return preload("res://scripts/ui/menu_boot.gd").cancel_pressed(event)
+
+func begin_boot() -> void:
+	if is_instance_valid(boot): return
+	if host.menu_reduced_motion or host.menu_high_contrast: return
+	boot = preload("res://scripts/ui/menu_boot.gd").new()
+	boot.menu = self
+	add_child(boot)
 
 
 func _ready() -> void:
@@ -434,6 +446,7 @@ func open_settings() -> void:
 
 func switch_category(delta: int) -> void:
 	if mode!="settings" or preview: return
+	var previous := category
 	remember(); clear_input()
 	sections[category] = subsection
 	# Step through the sidebar as it reads, not through the category ids.
@@ -442,13 +455,17 @@ func switch_category(delta: int) -> void:
 	category = sidebar_buttons.find(order[posmod(order.find(sidebar_buttons[category])+delta,order.size())])
 	subsection = int(sections.get(category,0))
 	render()
+	if category != previous: play_navigation_click()
 
 func switch_section(delta: int) -> void:
 	if mode!="settings" or preview: return
+	var next := posmod(subsection+delta,catalog.pages(category).size())
+	if next == subsection: return
 	remember(); clear_input()
-	subsection = posmod(subsection+delta,catalog.pages(category).size())
+	subsection = next
 	sections[category] = subsection
 	render()
+	play_navigation_click()
 
 func snapshot() -> Dictionary:
 	return {"mode":mode,"category":category,"subsection":subsection}
@@ -1501,7 +1518,8 @@ func handle(event: InputEvent) -> bool:
 		if not event.pressed:
 			blocked.erase(event.button_index)
 			if mode=="browser" and event.button_index==JOY_BUTTON_RIGHT_SHOULDER:
-				if default_armed: games.set_default(library.current_dir)
+				if default_armed:
+					if games.set_default(library.current_dir): play_navigation_click()
 				default_armed=false
 		elif blocked.has(event.button_index): return true
 		if event.button_index in [JOY_BUTTON_DPAD_UP,JOY_BUTTON_DPAD_DOWN,JOY_BUTTON_DPAD_LEFT,JOY_BUTTON_DPAD_RIGHT]:
@@ -1520,13 +1538,16 @@ func handle(event: InputEvent) -> bool:
 				else: toggle_preview()
 			JOY_BUTTON_RIGHT_STICK: host.recenter()
 			JOY_BUTTON_LEFT_SHOULDER:
-				if mode=="browser": default_armed=false; games.open_folder(library.current_dir.get_base_dir())
+				if mode=="browser":
+					var before: String = library.current_dir
+					default_armed=false; games.open_folder(library.current_dir.get_base_dir())
+					if library.current_dir != before: play_navigation_click()
 				elif mode=="games": games.change_game_page(-1)
 				else: switch_category(-1)
 			JOY_BUTTON_RIGHT_SHOULDER:
 				if mode=="browser": default_armed=not held.get(JOY_BUTTON_LEFT_SHOULDER,false)
 				elif mode=="games": games.change_game_page(1)
-				elif mode=="library": games.refresh_library()
+				elif mode=="library": games.refresh_library(); play_navigation_click()
 				else: switch_category(1)
 		return true
 	if event is InputEventJoypadMotion:
@@ -1596,6 +1617,7 @@ func update_direction() -> void:
 		if next!=Vector2i.ZERO: navigate(next)
 
 func _process(delta: float) -> void:
+	if is_instance_valid(boot) and boot.active: return
 	scan_refresh_elapsed+=delta
 	if mode=="library" and rom_index.scanning and scan_refresh_elapsed>.25 and scan_revision!=rom_index.revision:
 		scan_refresh_elapsed=0; scan_revision=rom_index.revision; remember(); render()
@@ -1669,6 +1691,7 @@ func style_rows() -> void:
 		var compact: bool = row.item.get("compact",false)
 		var hero: bool=row.item.get("hero",false)
 		row.title_label.add_theme_font_size_override("font_size",(23 if host.menu_large_text else 20) if compact else ((32 if host.menu_large_text else 29) if hero else (27 if host.menu_large_text else 24)))
+		if row.item.has("title_size"): row.title_label.add_theme_font_size_override("font_size", int(row.item.title_size) + (3 if host.menu_large_text else 0))
 		row.value_label.add_theme_font_size_override("font_size",(21 if host.menu_large_text else 18) if compact else (25 if host.menu_large_text else 22))
 		row.sync_content_height()
 		if host.menu_high_contrast:
@@ -1684,6 +1707,11 @@ func style_rows() -> void:
 
 
 
+
+func play_navigation_click() -> void:
+	if not host.menu_sounds or sound_player == null: return
+	sound_player.stream = NAV_CLICK
+	sound_player.play()
 
 func play_menu_sound(confirm := false) -> void:
 	if not host.menu_sounds or sound_player==null: return

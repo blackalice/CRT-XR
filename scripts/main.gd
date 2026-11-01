@@ -57,6 +57,35 @@ var game_list_columns := 1
 var menu_high_contrast := false
 var menu_reduced_motion := false
 var menu_sounds := false
+var menu_boot_sound := true
+var boot_audio: AudioStreamPlayer
+var menu_music_enabled := true
+var menu_music_volume := 0.10
+var menu_ambience: AudioStreamPlayer
+
+func apply_menu_music() -> void:
+	menu_music_volume = clampf(menu_music_volume, 0.0, 1.0) if is_finite(menu_music_volume) else 0.10
+	if not is_instance_valid(menu_ambience): return
+	menu_ambience.enabled = menu_music_enabled
+	menu_ambience.level = menu_music_volume
+	menu_ambience.apply()
+
+func play_boot_sound() -> void:
+	if not menu_boot_sound: return
+	if is_instance_valid(music) and music.player.playing and not music.player.stream_paused: return
+	if not is_instance_valid(boot_audio):
+		boot_audio = AudioStreamPlayer.new()
+		boot_audio.name = "BootSound"
+		boot_audio.stream = preload("res://assets/audio/boot.wav")
+		add_child(boot_audio)
+	boot_audio.play()
+
+func stop_boot_sound() -> void:
+	if is_instance_valid(boot_audio): boot_audio.stop()
+
+func apply_boot_sound() -> void:
+	if not menu_boot_sound: stop_boot_sound()
+
 ## The menu floats in front of the TV with lifted selections and a dimmed room.
 var menu_depth := true
 ## With menu depth on, the menu bends gently towards you at its sides.
@@ -198,6 +227,7 @@ var sbs_prompt: Control
 var sbs_startup := false
 var sbs_starting := false
 var startup_loading := false
+var menu_boot_pending := false
 var windows_sbs_size := Vector2i.ZERO
 var windows_fixed_start := false
 
@@ -379,6 +409,9 @@ func start_application() -> void:
 	emulator = Emulation.new()
 	add_child(emulator)
 	music=preload("res://scripts/audio/music_player.gd").new()
+	menu_ambience = preload("res://scripts/audio/menu_ambience.gd").new()
+	menu_ambience.name = "MenuAmbience"
+	add_child(menu_ambience)
 	add_child(music)
 	music.game_player=emulator.player
 	power_on=preload("res://scripts/rendering/tv_power_on.gd").new()
@@ -406,6 +439,7 @@ func start_application() -> void:
 		if tv_menu == null or tv_menu.lights_room(): world.screen_light.set_image(image)
 		world.picture.frame_presented(image))
 	emulator.game_changed.connect(func(active):
+		if active: stop_boot_sound()
 		# A game stopped from the menu takes its loading card with it.
 		if not active and not loading_game: end_loading()
 		show_game_cover(emulator.rom_path if active else "")
@@ -434,6 +468,7 @@ func start_application() -> void:
 	video.frame_presented.connect(world.picture.frame_presented)
 	# The decoder always delivers a 4:3 frame; display styles are applied inside it.
 	video.active_changed.connect(func(active):
+		if active: stop_boot_sound()
 		change_game_preferences(active, VIDEO_PROFILE)
 		show_programme(active, video.field_rate(), 4.0 / 3.0))
 	video.finished.connect(func():
@@ -521,6 +556,11 @@ func start_application() -> void:
 	if "--capture" in arguments:
 		power_on.started=true; power_on.set_progress(1.0)
 	elif not settings_panel.visible and not is_instance_valid(sbs_prompt): power_on.begin()
+	# Wait for display setup/loading curtains to hand over before starting the clock.
+	menu_boot_pending = settings_panel.visible and not "--capture" in arguments and (not "--script" in OS.get_cmdline_args() or "--boot-preview" in arguments)
+	if menu_boot_pending:
+		menu.begin_boot()
+		if is_instance_valid(menu.boot): menu.boot.set_process(false)
 
 func apply_settings(config: ConfigFile) -> void:
 	SettingsStore.migrate_view_fov(config)
@@ -530,6 +570,12 @@ func apply_settings(config: ConfigFile) -> void:
 	room_preset_id=str(config.get_value("menu","room_preset_id",""))
 	room_preset_signature=str(config.get_value("menu","room_preset_signature",""))
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve","menu_clean_feed"]: set(key,bool(config.get_value("accessibility",key,false)))
+	menu_boot_sound = bool(config.get_value("accessibility","menu_boot_sound",true))
+	apply_boot_sound()
+	menu_music_enabled = bool(config.get_value("accessibility","menu_music_enabled",true))
+	var menu_level = config.get_value("accessibility","menu_music_volume",0.10)
+	menu_music_volume = float(menu_level) if typeof(menu_level) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(menu_level)) else 0.10
+	apply_menu_music()
 	game_list_columns = clampi(int(config.get_value("accessibility", "game_list_columns", 1)), 1, 3)
 	menu_depth = bool(config.get_value("accessibility","menu_depth",true))
 	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
@@ -618,7 +664,20 @@ func _process(delta: float) -> void:
 		bar.track(video.path.get_file().get_basename(), video.clock, float(video.info.get("duration", 0.0)), video.paused, delta, bar_allowed)
 	for notice in notices: notice.visible = notice_time > 0.0
 	var menu_open := settings_panel.visible
+	# Warm up the physical tube first. The live space shader keeps moving while
+	# the logo timeline and its audio remain held at their first frame.
 	tv_menu.update(delta)
+	var boot_ready := not startup_loading and not is_instance_valid(sbs_prompt)
+	if menu_boot_pending and boot_ready and not power_on.started: power_on.begin()
+	if menu_boot_pending and boot_ready and power_on.progress >= 1.0:
+		menu_boot_pending = false
+		if menu_open: play_boot_sound()
+		if is_instance_valid(menu.boot): menu.boot.set_process(true)
+	elif menu_boot_pending and is_instance_valid(menu.boot):
+		menu.boot.set_process(false)
+	var own_music: bool = music.player.playing and not music.player.stream_paused and music.volume > 0.0001
+	if music.player.playing and not music.player.stream_paused: stop_boot_sound()
+	menu_ambience.update(delta, menu_open and not exiting, own_music, boot_audio, menu_boot_pending or startup_loading or is_instance_valid(sbs_prompt) or capture_requested)
 	recovery_elapsed += delta
 	if recovery_elapsed >= 1.0:
 		recovery_elapsed = 0.0
@@ -725,6 +784,13 @@ func _input(event: InputEvent) -> void:
 	if startup_loading: return
 	if is_instance_valid(menu): menu.release_input(event)
 	if is_instance_valid(sbs_prompt): return
+	if is_instance_valid(menu) and menu.boot_cancel_pressed(event):
+		menu_boot_pending = false
+		stop_boot_sound()
+	if is_instance_valid(menu) and is_instance_valid(menu.boot) and menu.boot.active:
+		menu.boot.handle(event)
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_F6:
 		take_screenshot()
 		get_viewport().set_input_as_handled()
@@ -898,6 +964,8 @@ func toggle_settings() -> void:
 
 func close_settings() -> void:
 	if not is_instance_valid(settings_panel) or not settings_panel.visible: return
+	stop_boot_sound()
+	if is_instance_valid(menu.boot): menu.boot.finish()
 	if not save_settings():
 		menu.show_error("Settings could not be saved. Check free space and user-folder permissions. Your changes are still here.")
 		return
@@ -906,6 +974,7 @@ func close_settings() -> void:
 	settings_on_open = ""
 	clear_menu_gamepad()
 	settings_panel.hide()
+	menu_ambience.silence()
 	emulator.gamepad.set_menu_active(false)
 	if emulator.loaded: emulator.set_paused(was_paused_before_menu)
 	if video.loaded and not video.ended: video.set_paused(was_paused_before_menu, true)
@@ -1314,6 +1383,10 @@ func reset_all_options() -> void:
 	emulator.tv_audio.reset_defaults()
 	music.reset_defaults()
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve","menu_clean_feed"]: set(key,false)
+	menu_boot_sound = true
+	menu_music_enabled = true
+	menu_music_volume = 0.10
+	apply_menu_music()
 	game_list_columns = 1
 	menu_depth = true
 	menu_on_tv = true
@@ -1448,7 +1521,9 @@ func capture_settings() -> ConfigFile:
 	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns"]: config.set_value("accessibility",key,get(key))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns"]: config.set_value("accessibility",key,get(key))
+	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
+	config.set_value("accessibility","menu_music_volume",menu_music_volume)
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
 	config.set_value("emulation", "separate_preview", emulator.separate_preview)
 	config.set_value("view", "right_stick_distance", right_stick_distance)

@@ -1,7 +1,5 @@
 # Settings, saved setups and startup
 
-This update is local only. The installed Steam Deck build has not changed.
-
 ## Pause menu and settings
 
 L1 + R1 + Start (LB + RB + Start on an Xbox pad) or Escape opens the menu. Without a game, Home shows Continue last game,
@@ -20,7 +18,7 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 | Controls | Game controls; Controller |
 | Emulation | Consoles; This game; Performance; Info |
 | Saved setups | Setup slots; Per-game picture |
-| Menu | Accessibility; Layout & placement; Feedback |
+| Menu | Accessibility; Layout & placement; Audio & vibration |
 | About & Help | About, controls, device status, troubleshooting, credits and diagnostics; Settings management |
 
 Core settings offer console-wide defaults under Consoles and per-game overrides under This game. The playing console moves to the top, is marked Playing, and expands when the game changes. Console options sit inside the expanded group; selecting the header hides them. Other consoles remain accessible. This game identifies the loaded game and shows effective inherited values with From console or Game override beneath each setting. Y returns an option to its console setting. Changes apply when the game next loads. Sega consoles have separate preferences even where they share a core.
@@ -70,7 +68,7 @@ shows the automatic resume preview. Preview capture reuses the presented CPU fra
 About & Help includes scrollable controls, troubleshooting, device status, full credits
 and diagnostics. Device status stays separate from the selected action’s help. Menu → Accessibility provides larger text, stronger contrast, reduced animation and Clean menu feed. The menu on the CRT uses the current picture settings by default, including colour, CRT effects, fitting and composite decoding. Clean menu feed restores the separate RGB reading picture without changing game settings. Auto composite keeps the current programme’s PAL/NTSC rate while the menu is shown. Menu layout and placement, sounds and vibration have their own sections.
 Focus transitions only change colour; the UI remains a sharp shared 2D texture.
-Controller shortcuts use drawn button icons and follow the last input method.
+Controller shortcuts use drawn button icons and follow the last input method. With Menu sounds enabled, valid L1/R1 category or game-page changes and L2/R2 subsection changes play the supplied click. Held controls, ignored shortcuts and page boundaries stay silent.
 
 ## Compact adjustment preview
 
@@ -133,6 +131,40 @@ non-finite values fall back safely; malformed files try the backup. Existing
 settings are read without requiring a migration. No ROMs or saves are deleted.
 
 ## Startup and recovery
+
+On a normal launch into Home, the shared menu display plays a native
+boot sequence after display setup has handed over and the CRT power-on reveal
+has fully finished. During tube warm-up, the planet and stars keep moving while
+the logo and diamonds hold their first frame. The logo timeline and boot cue
+start together once the tube reaches full power. The updated vector logo has
+three diamonds and no drop shadow; its sequential diamond pulses, X-axis flip
+and edge-on disappearance use samples from After Effects Comp 7. The planet moves
+down and right with moon/star parallax. The menu then builds in fast, 55 ms visual-row
+steps (tiles on a row appear together), followed by help and the footer. The
+sequence finishes in 3.8 seconds; the menu reveal takes under a second. The
+resume-game page includes its saved-frame preview and preserves Continue selection.
+The existing planet rotation and pixel-snapped star drift continue into the menu.
+Both eyes and the TV use the same menu texture. The supplied startup sound begins
+after display setup hands over and plays its full fading tail after the UI appears.
+**Menu / Audio & vibration / Boot sound** turns it off independently of menu ticks and reduced
+animation; the choice is saved between launches. Revealing the menu with directions,
+A, another key or a click keeps the sound playing. B (Backspace/Escape), leaving
+the menu, or starting a game, video, album or radio stops the boot sound.
+The menu background loop (`bgm2.wav`) starts fading in four
+seconds into the boot cue, as its tail begins, and reaches the chosen volume over
+1.5 seconds. **Menu / Audio & vibration / Menu music** enables it; **Menu music volume**
+sets its independent level (10% by default). Both preferences persist. With boot
+sound disabled or cancelled, the music fades in immediately. It stops outside menus
+and yields to an audible album or radio stream, returning when that is paused or
+stopped. Stereo uses one shared player. The original 16.615-second stereo WAV
+loops at its sample boundary. Press a key, controller button or click to skip; that press does
+not activate a menu action. Reopening Home does not replay the sequence.
+Reduce animation and stronger contrast bypass the visual sequence. Direct game/video
+launches and capture tooling keep their existing startup. Scripted checks bypass
+boot unless `--boot-preview` is supplied after `--`. `tests/menu_boot.gd` checks
+completion, skip, interruption and accessibility, and captures the 2D sequence when
+rendered. `tests/menu_boot_sound.gd` checks sound preference persistence, handover,
+skipping, the complete audio tail and independence from visual accessibility.
 
 Without a game to autostart, launch selects Continue when the last cartridge is available, otherwise library setup. A missing
 last-game path or SD folder keeps its saved location and explains how to reconnect

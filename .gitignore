@@ -75,6 +75,7 @@ Desktop.ini
 
 # Local music libraries and ambiguous cartridge images (Markdown remains tracked).
 *.mp3
+!/assets/audio/menu-click.mp3
 *.flac
 *.m4a
 *.bin

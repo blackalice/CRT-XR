@@ -12,7 +12,10 @@ func run():
  var rom := ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")
  check(app.emulator.load_rom(rom), "Diagnostic game loads")
  app.emulator.set_paused(true)
- app.emulator.save_auto()
+ app.emulator.core.run_frame(0)
+ app.emulator.update_texture(true)
+ app.emulator.auto_saved = false
+ check(app.emulator.save_auto(), "Diagnostic resume point is saved")
  app.emulator.stop()
  var m = app.menu
  m.open_pause()

@@ -415,7 +415,10 @@ func pages(category: int) -> Array:
 					"help":"Choose the layout for console, recent and favourite game lists. Left and right move between games in multi-column views."},
 				toggle("access.tv","Menu on the TV",h,"menu_on_tv",true,"Shows the menu on the TV. Adjust with preview keeps it floating over the game.",func(): menu.refresh(),false),
 				toggle("access.depth","Menu depth",h,"menu_depth",true,"When the menu floats, side-by-side 3D places it in front of the TV and dims the room. Off gives a flat menu. Has no effect while the menu is on the TV.",func(): menu.refresh(),false),
-				]),page("Feedback",[
+				]),page("Audio & vibration",[
+				toggle("access.menu_music","Menu music",h,"menu_music_enabled",true,"Quiet background music while menus are open. Waits for the boot sound to tail off and yields to your own music.",h.apply_menu_music,false),
+				number("access.menu_music_volume","Menu music volume",h,"menu_music_volume",0,1,.05,.10,"percent","Independent of game, album and radio volume. Zero mutes the menu music.",h.apply_menu_music,false),
+				toggle("access.boot_sound","Boot sound",h,"menu_boot_sound",true,"Play the startup sound when the boot screen appears. Turn off for a quiet launch.",h.apply_boot_sound,false),
 				toggle("access.sounds","Menu sounds",h,"menu_sounds",false,"Quiet feedback for focus and confirmation.",unchanged,false),
 				toggle("access.haptics","Controller vibration",h,"menu_haptics",false,"A light tick as the selection moves and a firmer one when you confirm.",func(): menu.refresh(),false),
 				unavailable(number("access.haptic_strength","Vibration strength",h,"haptic_strength",0.1,1.0,0.1,0.8,"percent","How strong the ticks feel. The Steam Deck passes on only part of it, so it may need to be higher there.",func(): h.menu_vibrate(1.0, 0.07),false).merged({"disabled":not h.menu_haptics},true),"Turn on Controller vibration first.")])]
