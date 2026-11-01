@@ -3,9 +3,10 @@ extends "res://scripts/ui/setting_row.gd"
 ## pixel key with its symbol drawn cell by cell. Keys with a "caption" (Browse
 ## albums, Resume) are wider and carry the word beside the symbol.
 const CELL := 2.0
-const SHADOW := Color("000418")
+const SHADOW := MenuSkin.SHADOW
 ## 9 cells tall, so the symbols sit on one line.
 const SYMBOLS := {
+	"visualiser": [".......", "...#...", "#..#...", "#.##.#.", "#.##.#.", "#.##.#.", "#.####.", "#######", "......."],
 	"play": ["#....", "##...", "###..", "####.", "#####", "####.", "###..", "##...", "#...."],
 	"pause": ["##.##", "##.##", "##.##", "##.##", "##.##", "##.##", "##.##", "##.##", "##.##"],
 	"stop": [".......", "#######", "#######", "#######", "#######", "#######", "#######", "#######", "......."],
@@ -47,10 +48,14 @@ func refresh() -> void:
 
 ## The symbol with a cell of shadow down and right, like the menus' text.
 func draw_symbol() -> void:
-	var rows: Array=SYMBOLS[item.get("icon","play")]
 	var colour := Color("74777d") if disabled else (MenuSkin.AMBER if item.get("icon","")=="pause" else MenuSkin.TEXT)
+	draw_on(face,item.get("icon","play"),Vector2.ZERO,colour)
+
+## Shared by menu keys and the playback overlays.
+static func draw_on(canvas: CanvasItem, symbol: String, origin: Vector2, colour: Color) -> void:
+	var rows: Array=SYMBOLS[symbol]
 	for pass_colour in [SHADOW, colour]:
 		var offset := CELL if pass_colour==SHADOW else 0.0
 		for j in range(rows.size()):
 			for i in range(rows[j].length()):
-				if rows[j][i]=="#": face.draw_rect(Rect2(Vector2(i,j)*CELL+Vector2(offset,offset),Vector2(CELL,CELL)),pass_colour)
+				if rows[j][i]=="#": canvas.draw_rect(Rect2(origin+Vector2(i,j)*CELL+Vector2(offset,offset),Vector2(CELL,CELL)),pass_colour)

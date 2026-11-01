@@ -76,6 +76,10 @@ func show_panel() -> void:
 	# control in the deck, rather than falling back to the top of the menu.
 	menu.memory[menu.state_key()]["id"]="transport.seek" if host.music.duration()>0 else "transport.play"
 
+func visualizer_action() -> Dictionary:
+	return menu.catalog.action("transport.visualiser","Visualiser",host.visualizer.enter,"Show or return to the music visualiser on the CRT.",false,"")
+
+
 func music_actions() -> Array:
 	var result: Array=[]
 	var music=host.music
@@ -117,9 +121,13 @@ func music_actions() -> Array:
 	elif result.size()==1 and result[0].id=="transport.play":
 		var resume: Dictionary=result[0]
 		browse.label="Browse albums"
-		var pair: Array = [menu.tile(resume,"play","","music",2), menu.tile(browse,"music","","music",2)]
+		var pair: Array = [menu.tile(resume,"play","","music",3), menu.tile(browse,"music","","music",3), menu.tile(visualizer_action(),"music","","music",3)]
 		# Full height, like Choose game and Settings.
 		for item in pair: item.compact=false
 		return pair
 	result.append(browse)
+	if browse.get("layout", "")=="transport":
+		var visual: Dictionary=visualizer_action()
+		visual.merge({"layout":"transport","skin":"music","icon":"visualiser","caption":"Visualiser"})
+		result.append(visual)
 	return result

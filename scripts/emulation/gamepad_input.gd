@@ -62,8 +62,8 @@ func set_menu_active(value: bool) -> void:
 		for button in state.buttons:
 			if state.buttons[button]: state.blocked[button] = true
 
-func view_distance_axis() -> float:
-	if menu_active or right_stick_game or not devices.has(active_device): return 0.0
+func view_distance_axis(non_game_picture := false) -> float:
+	if menu_active or (right_stick_game and not non_game_picture) or not devices.has(active_device): return 0.0
 	var state: Dictionary = devices[active_device]
 	if state.view_blocked: return 0.0
 	var value: float = state.view_axis

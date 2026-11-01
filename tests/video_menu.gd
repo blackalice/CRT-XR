@@ -213,8 +213,15 @@ func run() -> void:
 	app._process(1.0 / 60.0)
 	check(not app.video_bars[0].visible, "The bar gives way to the menu")
 	check(app.settings_panel.visible and menu.mode == "pause" and app.video.paused, "B opens the menu and pauses the video")
-	check(menu.selected_id == "resume" and ids().slice(0, 2) == ["video.seek", "resume"] and "video.style" in ids() and "video.stop" in ids(),
-		"The menu opens on Resume above a timeline, with picture shape and Stop: %s" % [ids()])
+	check(menu.selected_id == "resume" and ids()[0] == "resume" and item("resume").get("hero",false) and "video.style" in ids() and "video.stop" in ids(),
+		"The menu opens on a prominent Resume action, with the video deck and inline controls: %s" % [ids()])
+	check(item("games").get("group","")=="main" and item("video.choose").get("group","")=="main" and item("video.choose").get("columns",0)==2,"Video menu shares the paired library row")
+	check(item("pause.game_volume").label=="Video volume" and item("pause.room").get("quick",false) and item("video.style").get("group","")=="quick" and not "quick" in ids(),"Video settings use inline quick tiles with video volume")
+	check(["settings","screenshot","recenter"].all(func(id):return item(id).get("group","")=="actions" and item(id).get("columns",0)==3),"Video menu shares the three-column Actions row")
+	for i in range(8):await process_frame
+	if DisplayServer.get_name()!="headless":
+		RenderingServer.force_draw(false)
+		app.menu_view.get_texture().get_image().save_png("user://video-menu-layout.png")
 	check(str(item("video.seek").progress.call()) == "0:25 / 1:00", "The timeline shows where you are")
 	check(is_equal_approx(app.video_library.position(long), 25.0) and app.video_library.style(long) == 1, "Opening the menu saves the place and shape")
 	menu.select("video.seek", false)
@@ -285,7 +292,7 @@ func run() -> void:
 	for i in range(menu.rows.size()):
 		menu.navigate(Vector2i(0, -1)); await process_frame
 	await process_frame
-	check(menu.selected_id == "video.seek" and menu.scroll.scroll_vertical == 0, "Back at the top of the pause menu, the whole Now playing panel shows (scroll %d)" % menu.scroll.scroll_vertical)
+	check(menu.selected_id == "resume" and menu.scroll.scroll_vertical == 0, "Back at the top of the pause menu, the whole Now playing panel shows (scroll %d)" % menu.scroll.scroll_vertical)
 	menu.select("video.subtitles", false)
 	menu.adjust(1)
 	check(app.video.subtitle_choice == 0 and app.video_library.subtitle(episode) == "File · Episode 2.en.srt", "Choosing subtitles turns them on and remembers the choice")
@@ -311,6 +318,8 @@ func run() -> void:
 		restore.store_string(saved_profile[suffix])
 		restore.close()
 	remove_with_backup(RESUME_TEST)
+	for i in range(8):await process_frame
 	app.free()
+	for i in range(4):await process_frame
 	print("VIDEO MENU CHECKS COMPLETE: %d failures" % failures)
 	quit(1 if failures else 0)

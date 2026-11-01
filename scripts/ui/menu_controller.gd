@@ -540,7 +540,7 @@ func open_my_room(index: int) -> void:
 ## The everyday controls the pause and home menus carry under Room: the picture
 ## preset and game volume from the Everyday page, as compact rows you adjust
 ## with left and right.
-func quick_controls() -> Array:
+func quick_controls(video_view := false) -> Array:
 	var result: Array = [room_choice("pause.room")]
 	for source in catalog.pages(EVERYDAY)[0].rows:
 		if source.id in ["quick.preset","quick.game_volume"]: result.append(source.duplicate())
@@ -548,8 +548,10 @@ func quick_controls() -> Array:
 	result[2].id="pause.game_volume"; result[2].label="Game volume"; result[2]["row_icon"]="audio"
 	result[0].help = "Switch room presets. Custom keeps your own room."
 	result[1].help = "Change the picture preset. Custom restores your tuned picture."
-	result[2].help = "Adjust game audio independently of music."
+	result[2].help = "Adjust video audio." if video_view else "Adjust game audio independently of music."
+	if video_view:result[2].label="Video volume"
 	for source in catalog.pages(EVERYDAY)[0].rows:
+		if source.id=="quick.music_volume" and video_view:continue
 		if source.id in ["quick.view.distance", "quick.view.height_offset", "quick.music_volume"]:
 			var control: Dictionary = source.duplicate()
 			control.id = str(source.id).replace("quick.", "pause.")
@@ -1272,7 +1274,7 @@ func refresh_hints(row) -> void:
 	exit_footer.visible=mode=="pause" and not preview
 	exit_footer.text="Exit"
 	exit_footer.add_theme_stylebox_override("normal",MenuSkin.box(Color("982830") if exit_selected else Color("701c28"),Color("ffc0a8") if exit_selected else Color("e87870"),2,6))
-	var back_caption := ("Return to game" if host.emulator.loaded else "Close menu") if mode=="pause" else "Back"
+	var back_caption := ("Return to visualiser" if host.visualizer.active else ("Return to game" if host.emulator.loaded else "Close menu")) if mode=="pause" else "Back"
 	back_button.text=back_caption+("" if pad else "  [Backspace]")
 	# One place for prompts: the footer. The header keeps the title and clock.
 	back_button.visible=false

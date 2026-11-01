@@ -42,6 +42,7 @@ signal screenshot_saved(path: String)
 var taking_screenshot := false
 var last_screenshot_path := ""
 var notices: Array[Label] = []
+var visualizer_bars: Array = []
 var video_bars: Array = []
 var notice_time := 0.0
 var picture_preset_id := ""
@@ -105,6 +106,7 @@ var menu_depth_view: Node
 var settings_on_open := ""
 var emulator: Node
 var video: Node
+var visualizer: Node
 var music: Node
 var power_on: Node
 ## Channel changes, degauss and power-off (scripts/rendering/tv_effects.gd).
@@ -407,6 +409,10 @@ func start_application() -> void:
 		var bar := VideoBar.new()
 		panel.add_child(bar)
 		video_bars.append(bar)
+		var visual_bar := VideoBar.new()
+		visual_bar.use_visualizer()
+		panel.add_child(visual_bar)
+		visualizer_bars.append(visual_bar)
 	emulator = Emulation.new()
 	add_child(emulator)
 	music=preload("res://scripts/audio/music_player.gd").new()
@@ -431,8 +437,9 @@ func start_application() -> void:
 	for device in Input.get_connected_joypads():
 		print("Controller ", device, ": ", Input.get_joy_name(device))
 	emulator.content_changed.connect(func(texture):
-		if loading_path.is_empty(): world.picture.set_source(texture, true))
+		if loading_path.is_empty() and (not is_instance_valid(visualizer) or not visualizer.active): world.picture.set_source(texture, true))
 	emulator.frame_presented.connect(func(image: Image):
+		if is_instance_valid(visualizer) and visualizer.active: return
 		# The loading card stays up through a disc's black boot frames.
 		if not loading_path.is_empty():
 			if not picture_started(image): return
@@ -515,6 +522,9 @@ func start_application() -> void:
 	add_child(box_art)
 	box_art.cover_ready.connect(func(rom_path, texture):
 		if emulator.loaded and emulator.rom_path == rom_path: world.set_game_cover(texture))
+	visualizer=preload("res://scripts/audio/visualizer_session.gd").new()
+	visualizer.host=self
+	add_child(visualizer)
 	build_settings()
 	music.restore_resume()
 	for panel in panels:
@@ -684,9 +694,9 @@ func _process(delta: float) -> void:
 		recovery_elapsed = 0.0
 		refresh_startup_status()
 	# The menu on the TV is a live picture, so the tube keeps updating under it.
-	world.picture.paused = (menu_open and not tv_menu.active) or (emulator.paused if emulator.loaded else pattern.paused) and not tv_menu.active
+	world.picture.paused = false if visualizer.active else (menu_open and not tv_menu.active) or (emulator.paused if emulator.loaded else pattern.paused) and not tv_menu.active
 	if right_stick_distance and not menu_open:
-		adjust_distance(emulator.gamepad.view_distance_axis() * distance_speed * delta)
+		adjust_distance(emulator.gamepad.view_distance_axis(visualizer.active or video.loaded) * distance_speed * delta)
 	if distance_save_delay >= 0.0:
 		distance_save_delay -= delta
 		if distance_save_delay < 0.0: save_settings()
@@ -820,7 +830,10 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	provider.handle_input(event)
-	if video.loaded and video_input(event):
+	if visualizer.active and visualizer.handle(event):
+		get_viewport().set_input_as_handled()
+		return
+	if not visualizer.active and video.loaded and video_input(event):
 		get_viewport().set_input_as_handled()
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
@@ -978,8 +991,8 @@ func close_settings() -> void:
 	settings_panel.hide()
 	menu_ambience.silence()
 	emulator.gamepad.set_menu_active(false)
-	if emulator.loaded: emulator.set_paused(was_paused_before_menu)
-	if video.loaded and not video.ended: video.set_paused(was_paused_before_menu, true)
+	if emulator.loaded: emulator.set_paused(true if visualizer.active else was_paused_before_menu)
+	if video.loaded and not video.ended: video.set_paused(true if visualizer.active else was_paused_before_menu, true)
 	if not is_instance_valid(sbs_prompt): power_on.begin()
 
 ## Degauss: closes the menu so the wobble and colour swirl show on the picture.
@@ -1006,6 +1019,7 @@ func choose_rom() -> void:
 
 ## Switches the TV between the test signal and a programme (a game or a video).
 func show_programme(active: bool, rate: float, aspect: float) -> void:
+	if is_instance_valid(visualizer) and visualizer.active: visualizer.leave(false)
 	var loading := not loading_path.is_empty()
 	pattern.visible = not active and not loading
 	pattern.set_process(pattern.visible)
@@ -1090,6 +1104,7 @@ func stop_for_disc(path: String) -> bool:
 	return true
 
 func play_video(path: String, from_seconds := 0.0) -> bool:
+	if visualizer.active: visualizer.leave()
 	startup_message = ""
 	end_loading()
 	if emulator.loaded:
@@ -1181,6 +1196,7 @@ func video_input(event: InputEvent) -> bool:
 	return true
 
 func load_game(path: String) -> bool:
+	if visualizer.active: visualizer.leave()
 	startup_message = ""
 	var restore_paused := was_paused_before_menu
 	if video.loaded: stop_video()
@@ -1380,6 +1396,9 @@ func reset_selected_option() -> void:
 	menu.reset_option()
 
 func reset_all_options() -> void:
+	if visualizer.active: visualizer.leave()
+	visualizer.preset_index=0;visualizer.brightness=1.0;visualizer.automatic=true
+	visualizer.save_preferences()
 	if not settings_panel.visible: return
 	for index in range(5): SettingsDefaults.apply(self,index)
 	emulator.tv_audio.reset_defaults()

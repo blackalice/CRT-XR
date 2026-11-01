@@ -101,3 +101,11 @@ if (Test-Path -LiteralPath $trackingHelper) {
 Write-Host "Windows build: $out/CRT-XR.exe"
 
 Copy-Item -LiteralPath (Join-Path $root "docs/WINDOWS-SETUP.md") -Destination $out
+
+# projectM remains a replaceable shared library outside the PCK.
+$visualizerLibrary = Join-Path $root 'extensions/bin/projectM-4.dll'
+if (-not (Test-Path -LiteralPath $visualizerLibrary)) { throw 'Build projectM before exporting (scripts/build-projectm.sh).' }
+Copy-Item -LiteralPath $visualizerLibrary -Destination $out
+New-Item -ItemType Directory -Force (Join-Path $out 'licenses/projectm') | Out-Null
+Copy-Item -Path (Join-Path $root 'third_party/projectm/*') -Destination (Join-Path $out 'licenses/projectm')
+Copy-Item -LiteralPath (Join-Path $root 'build/projectm-sources') -Destination (Join-Path $out 'licenses/projectm/sources') -Recurse -Force

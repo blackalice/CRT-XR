@@ -4,6 +4,8 @@ extends RefCounted
 ## bevels and a dot font. Text stays sharp at full resolution, as the consoles'
 ## hi-res text modes did; only the graphics are chunky.
 const INK := Color("000818")
+const SHADOW := Color("000418")
+const VALUE := Color("f8d040")
 const TEXT := Color("e8ecf8")
 const MUTED := Color("98a8d0")
 const AMBER := Color("f8c848")
@@ -46,7 +48,7 @@ static func weigh(control: Control, weight: int) -> void:
 
 ## A one-cell dark drop shadow, so text reads on any panel, lit or not.
 static func shadow(label: Label) -> void:
-	label.add_theme_color_override("font_shadow_color", Color("000418"))
+	label.add_theme_color_override("font_shadow_color", SHADOW)
 	label.add_theme_constant_override("shadow_offset_x", 2)
 	label.add_theme_constant_override("shadow_offset_y", 2)
 

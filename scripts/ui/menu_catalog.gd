@@ -481,5 +481,10 @@ func pages(category: int) -> Array:
 				toggle("music.loop","Repeat album",music,"loop",true,"Repeat the folder after its last track. Off stops at the album end.",music.apply,false)]),page("Music space",[
 				number("music.reverb","Music room reverb",music,"reverb",0,.3,.01,.12,"percent","Short, subtle reflections from the room; zero disables the effect.",music.apply,false),
 				number("music.directional","Music direction",music,"directional",0,1,.05,.8,"percent","Sound stays beside the TV as you turn your head. Zero keeps normal stereo.",music.apply,false),
-				number("music.side","Radio position",music,"side",-2,2,.1,-1.1,"m","Position left or right of the TV, independent of the game speakers.",music.apply,false)]),page("TV effects",effect_rows)]
+				number("music.side","Radio position",music,"side",-2,2,.1,-1.1,"m","Position left or right of the TV, independent of the game speakers.",music.apply,false)]),page("TV effects",effect_rows),page("Visualiser",[
+				action("visualiser.show","Return to visualiser" if h.visualizer.active else "Start visualiser",h.visualizer.enter,"Show music visuals on the CRT. B returns to the menu without stopping the visualiser."),
+				{"id":"visualiser.preset","label":"Preset","kind":"choice","choices":h.visualizer.PRESETS,"default":0,"getter":func(): return h.visualizer.preset_index,"setter":h.visualizer.select_preset,"help":"Choose a bundled visualiser preset.","visual":false},
+				toggle("visualiser.automatic","Automatic presets",h.visualizer,"automatic",true,"Change preset every 30 seconds. Reduced motion keeps the current preset.",h.visualizer.save_preferences,false),
+				number("visualiser.brightness","Visualiser brightness",h.visualizer,"brightness",0.3,1.5,0.1,1.0,"percent","Independent brightness for music visuals.",h.visualizer.save_preferences,false),
+				action("visualiser.stop","Stop visualiser",func(): h.visualizer.leave();menu.refresh(),"Restore the game or test picture. Music keeps playing.",not h.visualizer.active,"")])]
 	return []

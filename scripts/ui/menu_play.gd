@@ -155,23 +155,31 @@ func pause_items() -> Array:
 		menu.tile(menu.catalog.unavailable(menu.catalog.action("load_state","Load state",func(): open_states(false),"Return to one of this game's saves.",not h.emulator.loaded or range(STATE_SLOTS).all(func(slot): return not FileAccess.file_exists(h.emulator.state_path(slot)))),"No saved state yet."),"load","","game",3),
 		menu.tile(menu.catalog.action("reset_game","Reset game",reset_game,"Presses the console's reset button. Battery saves and save states are kept.",not h.emulator.loaded),"refresh","","game",3)])
 	# Then where you go most, side by side and easy to find.
-	var main: Array = [
-		menu.tile(menu.catalog.action("games","Game Library",menu.games.open_library,"Open your library, recent games and favourites."),"gamepad","","main",2),
-		menu.tile(menu.catalog.action("home.videos","Video Library",menu.videos.open_videos,"Browse your videos or set up video playback."),"video","","main",2)]
-	for item in main: item.compact=true
-	result.append_array(main)
+	result.append_array(library_tiles())
 	result.append_array(menu.music.music_actions())
 	result.append_array(menu.quick_controls())
-	var actions: Array = [
-		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear","","actions",3),
-		menu.tile(menu.catalog.action("screenshot","Screenshot",h.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),"camera","","actions",3),
-		menu.tile(menu.catalog.action("recenter","Recenter view",h.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)]
-	actions[0]["section"]="ACTIONS"
-	result.append_array(actions)
+	result.append_array(action_tiles())
 	# Beside Reset game, for games on several discs.
 	var discs: Dictionary = h.emulator.disc_info()
 	if int(discs.get("count", 0)) > 1:
 		for index in range(result.size()):
 			if result[index].get("id", "") == "reset_game":
 				result.insert(index + 1, disc_tile(discs)); break
+	return result
+
+## Shared navigation and Actions rows for game and video playback.
+func library_tiles(video_id := "home.videos", video_action := Callable()) -> Array:
+	if not video_action.is_valid():video_action=menu.videos.open_videos
+	var result: Array = [
+		menu.tile(menu.catalog.action("games","Game Library",menu.games.open_library,"Open your library, recent games and favourites."),"gamepad","","main",2),
+		menu.tile(menu.catalog.action(video_id,"Video Library",video_action,"Browse your videos or set up video playback."),"video","","main",2)]
+	for item in result:item.compact=true
+	return result
+
+func action_tiles() -> Array:
+	var result: Array = [
+		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear","","actions",3),
+		menu.tile(menu.catalog.action("screenshot","Screenshot",host.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),"camera","","actions",3),
+		menu.tile(menu.catalog.action("recenter","Recenter view",host.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)]
+	result[0]["section"]="ACTIONS"
 	return result

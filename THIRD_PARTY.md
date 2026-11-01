@@ -208,3 +208,7 @@ Modified for CRT XR: controller/buttons and hidden underside fittings removed, r
 ## Godot engine
 
 Godot Engine 4.5.1, MIT licence, Godot Engine contributors. Official engine licence and third-party copyright notices accompany builds under `licenses/godot/`, copied from `third_party/godot/` (upstream tag 4.5.1-stable). Engine source: https://github.com/godotengine/godot/tree/4.5.1-stable .
+
+## Music visualiser
+
+projectM v4.1.8 (LGPL-2.1-or-later), dynamically loaded with an offscreen rendering patch. See third_party/projectm for full notices, modifications and reproducible builds. Windows also uses GLEW 2.2.0; its full notices are retained there. The three bundled MilkDrop presets are original CRT XR work under MIT.

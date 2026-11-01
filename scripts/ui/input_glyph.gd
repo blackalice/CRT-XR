@@ -24,6 +24,7 @@ const ALIASES := {"A": "south", "B": "east", "X": "west", "Y": "north", "L1": "l
 ## Drawn at this height and scaled to the one asked for.
 const DESIGN := 40.0
 var input := "south"
+var drop_shadow := false
 var colour := Color("e6e6e6")
 var scale_factor := 1.0
 
@@ -93,6 +94,16 @@ func in_cross(x: int, y: int) -> bool:
 	return x >= 0 and y >= 0 and x < GRID and y < GRID and ((x >= 5 and x <= 9) or (y >= 5 and y <= 9))
 
 func _draw() -> void:
+	var ink := colour
+	if drop_shadow:
+		colour=MenuSkin.SHADOW
+		draw_set_transform(Vector2(2,2))
+		paint()
+		colour=ink
+		draw_set_transform(Vector2.ZERO)
+	paint()
+
+func paint() -> void:
 	var dim := Color(colour, 0.45)
 	if FACE.has(input) or DIRECTIONS.has(input) or DPADS.has(input) or input.begins_with("ls_") or input.begins_with("rs_"):
 		cell_size = CELL * maxi(1, floori(minf(size.x, size.y) / (GRID * CELL)))

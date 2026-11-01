@@ -168,7 +168,7 @@ after display setup hands over and plays its full fading tail after the UI appea
 animation; the choice is saved between launches. Revealing the menu with directions,
 A, another key or a click keeps the sound playing. B (Backspace/Escape), leaving
 the menu, or starting a game, video, album or radio stops the boot sound.
-The menu background loop (`bgm2.wav`) starts fading in four
+The menu background loop (`assets/audio/menu-bgm.wav`, from `assets/audio/source/bgm2.wav`) starts fading in four
 seconds into the boot cue, as its tail begins, and reaches the chosen volume over
 1.5 seconds. **Menu / Audio & vibration / Menu music** enables it; **Menu music volume**
 sets its independent level (10% by default). Both preferences persist. With boot

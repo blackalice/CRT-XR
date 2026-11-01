@@ -167,35 +167,39 @@ func video_pause_items() -> Array:
 		"getter":func(): return video.style,"setter":func(value):
 			video.style=int(value); video.decoder.set_style(video.style); h.remember_video_position(),
 		"help":"How a widescreen video fills the 4:3 tube. Y changes it while watching; each video remembers its own."}
-	var resume: Dictionary=menu.catalog.action("resume","Resume",h.close_settings,"A pauses and plays while watching. %s · decoding: %s" % [str(video.info.get("codec","")).to_upper(),video.decoding()],false,"▶")
-	resume.merge({"layout":"transport","icon":"play","caption":"Resume","lead":true})
+	var resume: Dictionary=menu.catalog.action("resume","Resume",h.close_settings,"Return to the video with your settings saved.",false,"▶")
+	resume=menu.entry(resume,"","play")
+	resume.merge({"hero":true,"min_height":56,"value":""})
 	var timeline := {"id":"video.seek","label":"Position","kind":"seek","layout":"video_seek","getter":func(): return video.clock,"setter":func(value): video.seek_to(float(value)),
 		"duration":func(): return length,"progress":func(): return VideoLibrary.clock(video.clock)+" / "+VideoLibrary.clock(length),
 		"help":"Left/right moves 10 seconds and repeats while held; drag or click the timeline to jump. The TV follows as you scrub."}
 	var tape_row := {"id":"video.tape","label":"Tape look","kind":"choice","choices":VideoSession.TAPES,"default":0,
 		"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); video.set_tape(h.video_tape); h.save_library(),
 		"help":"Plays videos as if from a VHS tape, with noise bars when you fast-forward or rewind. Applies to every video; also in Videos → VCR."}
-	# The deck: the timeline, then Resume, Start over and Stop as its keys.
+	# Resume leads as it does for games; playback controls stay in the deck.
 	var restart: Dictionary = menu.catalog.action("video.restart","Start over",func(): video.seek_to(0.0); h.was_paused_before_menu=false; h.close_settings(),"")
 	restart.merge({"layout":"transport","icon":"refresh","caption":"Start over"})
 	var stop: Dictionary = menu.catalog.action("video.stop","Stop video",func(): h.stop_video(); menu.open_pause(),"Saves your place and returns the TV to its test signal.")
 	stop.merge({"layout":"transport","icon":"stop","caption":"Stop"})
-	for control in [timeline, resume, restart, stop]: control["skin"]="music"
-	var items: Array=[timeline,resume,restart,stop,
-		style_row,tape_row,menu.room_choice("pause.room")]
+	for control in [timeline, restart, stop]: control["skin"]="music"
+	var items: Array=[resume]
+	items.append_array(menu.play.library_tiles("video.choose",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else "")))
+	items.append_array([timeline,restart,stop])
+	var controls: Array=menu.quick_controls(true)
+	controls.append_array([style_row,tape_row])
 	var subtitles: PackedStringArray=video.subtitle_names()
 	if not subtitles.is_empty():
-		items.append({"id":"video.subtitles","label":"Subtitles","kind":"choice","choices":["Off"]+Array(subtitles),"default":0,
+		controls.append({"id":"video.subtitles","label":"Subtitles","kind":"choice","choices":["Off"]+Array(subtitles),"default":0,
 			"getter":func(): return video.subtitle_choice+1,"setter":func(value): h.choose_subtitles(int(value)-1),
 			"help":"Shown on the TV like broadcast subtitles. S changes them while watching; each video remembers its choice."})
 	if tracks.size()>1:
-		items.append({"id":"video.audio","label":"Audio track","kind":"choice","choices":Array(tracks),"default":0,
+		controls.append({"id":"video.audio","label":"Audio track","kind":"choice","choices":Array(tracks),"default":0,
 			"getter":func(): return int(video.info.get("audio_track",0)),"setter":func(value): video.select_audio_track(int(value)),
 			"help":"Language or commentary track. X changes it while watching."})
-	items.append_array([menu.tile(menu.catalog.action("video.choose","Video Library",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else ""),"Pick another video from your video folder."),"video"),
-		menu.tile(menu.catalog.action("games","Game Library",menu.games.open_library,"Recent, Favourites and consoles."),"gamepad"),
-		menu.tile(menu.catalog.action("quick","Quick settings",func(): menu.category=7; menu.subsection=0; menu.open_settings(),"Everyday picture, placement and volume controls."),"sliders","","actions",3),
-		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear","","actions",3)])
+	for control in controls:
+		control.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"stacked":true,"compact":true,"meter":false},true)
+	items.append_array(controls)
+	items.append_array(menu.play.action_tiles())
 	return items
 
 ## Folder picker for the video folder: folders only, with the videos inside shown as a count.

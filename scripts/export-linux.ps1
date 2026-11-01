@@ -152,3 +152,11 @@ Write-Host "Linux package: $out"
 
 $text = [IO.File]::ReadAllText((Join-Path $root 'scripts/installer/Install CRT XR.desktop')).Replace("`r`n", "`n")
 [IO.File]::WriteAllText((Join-Path $out 'Install CRT XR.desktop'), $text, [Text.UTF8Encoding]::new($false))
+
+# projectM remains a replaceable shared library outside the PCK.
+$visualizerLibrary = Join-Path $root 'extensions/bin/libprojectM-4.so'
+if (-not (Test-Path -LiteralPath $visualizerLibrary)) { throw 'Build projectM before exporting (scripts/build-projectm.sh).' }
+Copy-Item -LiteralPath $visualizerLibrary -Destination $out
+New-Item -ItemType Directory -Force (Join-Path $out 'licenses/projectm') | Out-Null
+Copy-Item -Path (Join-Path $root 'third_party/projectm/*') -Destination (Join-Path $out 'licenses/projectm')
+Copy-Item -LiteralPath (Join-Path $root 'build/projectm-sources') -Destination (Join-Path $out 'licenses/projectm/sources') -Recurse -Force

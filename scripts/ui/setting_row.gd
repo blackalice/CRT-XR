@@ -7,7 +7,7 @@ const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
 const SegmentBar = preload("res://scripts/ui/segment_bar.gd")
 ## Values read in the yellow the console menus used for numbers.
-const VALUE := Color("f8d040")
+const VALUE := MenuSkin.VALUE
 ## Optional item keys: "row_icon" (see row_icon.gd) leads the row; "emphasis" is
 ## "primary" for a screen's main action or "danger" for one that forgets
 ## something; "compact" draws a smaller row for secondary places.
