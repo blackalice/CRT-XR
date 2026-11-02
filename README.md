@@ -20,9 +20,9 @@
 > [!NOTE]
 > CRT XR is an **early public beta**. VITURE Pro 2 has been tested on Steam Deck and Windows with an Xbox controller. Feedback and compatibility reports are welcome; see the [known limitations and remaining checks](docs/PRE-LAUNCH-CHECKLIST.md).
 
-![CRT XR's 90s television showing its built-in test signal on a wooden table in a dim, lamp-lit room, beside a clock radio and a stack of game boxes](docs/images/crt-xr-preview.png)
+![Four Steam Deck screenshots of CRT XR: the home menu, Crash Bandicoot on the CRT, picture settings and the game library](docs/images/crt-xr-preview.png)
 
-*An in-app capture of the room in the Dim XR mood, showing the built-in test signal. No game is included.*
+*Captured on Steam Deck: the home menu, a game on the tube, picture controls and the console library. Bring your own games; no games are included.*
 
 ## Features
 
