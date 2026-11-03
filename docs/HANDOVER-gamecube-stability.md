@@ -1,5 +1,41 @@
 # GameCube stability: core-fix continuation, 3 November 2026
 
+## Menu responsiveness follow-up
+
+Loading fixes are committed as `d8a9a4d` and were activated on the Deck as
+`async-boot-ready-20261103`. Four explicitly identified superseded development
+builds were removed, freeing about 2 GB. Music-fix and core-fix rollbacks and
+published beta releases were retained.
+
+Pause-menu profiling found about 23 ms in row construction out of 31-37 ms total.
+The menu now retains a single pause layout, updates its data/actions/disabled
+states, and parks it under a hidden nonprocessing owner when visiting other pages.
+Structural, accessibility and input-mode changes invalidate it. Tile navigation
+metadata is retained. Rows build detached from the live layout, and nonnumeric
+rows no longer construct unused slider subtrees (the public hidden track remains).
+
+After a background game launch, the first pause layout is prepared while hidden
+in approximately 3 ms construction slices. It waits for Continue/core operations,
+and yields to scene updates between slices. Visible navigation supersedes hidden
+preparation. A genuinely new layout requested before preparation finishes still
+falls back to synchronous construction; no partial menu is presented.
+
+Deck synthetic-game profile: 12 openings, about 7-9 ms including the first prepared
+opening, versus 31-37 ms before reuse. The maximum room-frame gap during preparation
+and openings was 22.53 ms. The roughly 82 ms incremental construction trace is wall
+time spanning several frames, not a single blocking operation. Navigation, full
+layout, depth, album/music and cache/cancellation tests pass with isolated settings.
+Evidence: `build/menu-profile-verified.log`; raw Deck log at
+`/tmp/crt-xr-menu-profile-FaZ2h5/test.log`. Physical headset tracking was disconnected.
+
+The final pack also passed six fresh/resumed GameCube/Dreamcast launches with
+preparation enabled: worst launch gap 24.00 ms, menu-phase gap 29.17 ms, gameplay
+gap 17.32 ms; none above 50 ms, no repeated static cues or script errors. Evidence
+is in `build/menu-final-evidence/`. The first run exhausted the temporary test
+save filesystem; seven old isolated profile directories, already retained locally,
+were removed and the successful run used fresh isolated data. Real saves are intact.
+
+
 ## Loading-transition follow-up after `2706709`
 
 Fixed the double channel cue: `stop_for_disc` now retains `loading_game` across

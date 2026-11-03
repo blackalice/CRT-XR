@@ -1293,6 +1293,7 @@ func _load_game(path: String, background: bool) -> bool:
 		was_paused_before_menu = false
 		menu.refresh()
 	refresh_startup_status()
+	if opened and background and not settings_panel.visible: menu.prepare_pause.call_deferred()
 	return opened
 
 func save_library() -> Error:

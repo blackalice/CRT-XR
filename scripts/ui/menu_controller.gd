@@ -18,6 +18,63 @@ const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
 ## Page builders and actions, one helper per area; each reaches the menu and host.
+var preparing_pause := false
+var pause_cache := {}
+var pause_cache_owner: Control
+
+func prepare_pause() -> void:
+	if visible or preparing_pause: return
+	preparing_pause = true
+	while host.loading_game or host.emulator.transition_busy:
+		await get_tree().process_frame
+		if visible:
+			preparing_pause = false
+			return
+	var previous_mode := mode
+	var previous_preview := preview
+	var previous_selection := selected_id
+	var previous_revision := layout_revision
+	mode = "pause"
+	preview = false
+	await _render(true)
+	if not visible and layout_revision == previous_revision + 1:
+		mode = previous_mode
+		preview = previous_preview
+		selected_id = previous_selection
+	preparing_pause = false
+
+func pause_row_shape(definition: Dictionary) -> Dictionary:
+	var shape := {}
+	for key in definition:
+		if key in ["label", "disabled", "disabled_reason", "value", "help", "nav_row", "nav_col", "tile_index", "tile_count", "tile_columns"] or typeof(definition[key]) == TYPE_CALLABLE: continue
+		shape[key] = definition[key]
+	if definition.get("layout", "") == "transport" and definition.get("icon", "") in ["play", "pause"]: shape["icon"] = "play_pause"
+	return shape
+
+func pause_style() -> Array:
+	return [host.menu_large_text, host.menu_high_contrast, input_kind]
+
+func pause_shape(definitions: Array) -> String:
+	return JSON.stringify([definitions.map(pause_row_shape), pause_style()])
+
+func park_layout() -> void:
+	if not is_instance_valid(pause_cache_owner):
+		pause_cache_owner = Control.new()
+		pause_cache_owner.hide()
+		pause_cache_owner.process_mode = Node.PROCESS_MODE_DISABLED
+		add_child(pause_cache_owner)
+	for child in column.get_children():
+		column.remove_child(child)
+		if child in pause_cache.get("children", []): pause_cache_owner.add_child(child)
+		else: child.queue_free()
+
+func discard_pause_cache() -> void:
+	for child in pause_cache.get("children", []):
+		if is_instance_valid(child):
+			child.get_parent().remove_child(child)
+			child.queue_free()
+	pause_cache = {}
+
 var backdrop: ColorRect
 var help_frame: PanelContainer
 var subtitle_row: HBoxContainer
@@ -787,163 +844,206 @@ func get_items() -> Array:
 	return []
 
 func render() -> void:
-	if not is_instance_valid(column) or not visible: return
+	# Normal page changes keep the existing synchronous API. Background
+	# preparation is the only branch that yields between construction batches.
+	call("_render", false)
+
+func _render(incremental: bool) -> void:
+	if not is_instance_valid(column) or (not visible and not incremental): return
+	var profile_start := Time.get_ticks_usec()
+	var profile_stages := {}
 	exit_selected=false
 	rendering = true
 	layout_revision+=1
+	var build_revision := layout_revision
 	items = get_items()
+	profile_stages["items_us"] = Time.get_ticks_usec() - profile_start
+	var profile_stage := Time.get_ticks_usec()
 	if preview:
 		items = items.filter(func(item): return item.get("quick_preview",false) if mode == "pause" else item.get("visual",false))
 		if mode == "pause":
 			for item in items: item.erase("layout")
 	column.add_theme_constant_override("separation", 4 if mode == "pause" else 6)
 	help_label.custom_minimum_size.y = 32 if mode == "pause" else 64
-	for child in column.get_children(): column.remove_child(child); child.queue_free()
-	rows.clear()
-	var group := ""
-	var section := ""
-	var grid: GridContainer
-	music_heading=null; deck_detail=null
-	var accordion_group := ""
-	var accordion_layout: VBoxContainer
-	var accordion_body: VBoxContainer
-	var music_layout: VBoxContainer
-	var transport_grid: HBoxContainer
-	var group_row := -1
-	var group_index := 0
-	var tiles: GridContainer
-	var tile_group := ""
-	var tile_counts := {}
-	var tile_numbers := {}
-	var game_grid: GridContainer
-	var game_grid_count := items.filter(func(entry): return entry.get("layout", "")=="game" and entry.has("rom_path")).size()
-	var game_grid_index := 0
-	for entry in items:
-		if entry.get("layout","")=="tile":
-			var named := str(entry.get("group","tiles")); tile_counts[named]=int(tile_counts.get(named,0))+1
-	for item in items:
-		var parent: Container=column
-		if item.get("layout","") in ["transport","music_seek","music_link","video_resume","video_seek"]:
-			if music_layout==null:
-				var watching: bool = items.any(func(entry): return str(entry.get("layout","")).begins_with("video_"))
-				var helper = videos if watching else music
-				# The Now playing deck, after the Mega-CD control panel: the LCD
-				# and the title, the timeline, then one row of keys.
-				# The well fills the panel; the deck sits inside it, inset.
-				var panel := PanelContainer.new(); panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
-				panel.add_child(MenuSkin.pixel_panel("music_well"))
-				var inset := MarginContainer.new()
-				for side in ["left","top","right","bottom"]: inset.add_theme_constant_override("margin_"+side,8)
-				panel.add_child(inset); column.add_child(panel)
-				music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",6); inset.add_child(music_layout)
-				var display := HBoxContainer.new(); display.add_theme_constant_override("separation",12); music_layout.add_child(display)
-				var lcd := LcdReadout.new(); lcd.source=helper.deck_state; display.add_child(lcd)
-				var words := VBoxContainer.new(); words.add_theme_constant_override("separation",0)
-				words.size_flags_horizontal=Control.SIZE_EXPAND_FILL; words.alignment=BoxContainer.ALIGNMENT_CENTER; display.add_child(words)
-				music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
-				deck_detail=Label.new(); deck_detail.add_theme_font_size_override("font_size",16); deck_detail.add_theme_color_override("font_color",MenuSkin.MUTED)
-				for line in [music_heading,deck_detail]:
-					line.autowrap_mode=TextServer.AUTOWRAP_OFF; line.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-					MenuSkin.shadow(line); words.add_child(line)
-				deck_text=helper.deck_text
-			if item.layout=="transport":
-				if transport_grid==null:
-					transport_grid=HBoxContainer.new(); transport_grid.add_theme_constant_override("separation",6); music_layout.add_child(transport_grid)
-				parent=transport_grid
-			else: parent=music_layout
-		if item.get("layout","")=="card":
-			if item.group!=group:
-				if grid!=null: group_row+=ceili(float(group_index)/2.0)
-				else: group_row=0
-				group=item.group; group_index=0
-				var label := Label.new(); label.text=group; label.add_theme_font_size_override("font_size",16); MenuSkin.weigh(label,MenuSkin.BOLD); label.add_theme_color_override("font_color",MenuSkin.MUTED); column.add_child(label)
-				grid=GridContainer.new();grid.columns=2;grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);column.add_child(grid)
-			parent=grid
-			item["nav_row"]=group_row+group_index/2; item["nav_col"]=group_index%2; group_index+=1
-		if item.get("layout","")=="tile":
-			var named := str(item.get("group","tiles"))
-			if tiles==null or named!=tile_group:
-				tile_group=named
-				# A group can carry its own heading, above its grid.
-				if item.has("section") and item.section!=section:
-					section=item.section
-					var heading := Label.new(); heading.text=section; heading.add_theme_font_size_override("font_size",16); MenuSkin.weigh(heading,MenuSkin.BOLD); heading.add_theme_color_override("font_color",MenuSkin.MUTED)
-					column.add_child(heading)
-				tiles=GridContainer.new(); tiles.columns=int(item.get("columns",2)); tiles.add_theme_constant_override("h_separation",8); tiles.add_theme_constant_override("v_separation",6); column.add_child(tiles)
-			parent=tiles
-			item["tile_index"]=int(tile_numbers.get(named,0)); item["tile_count"]=int(tile_counts[named]); item["tile_columns"]=tiles.columns
-			tile_numbers[named]=int(item.tile_index)+1
-		if mode in ["games", "recent", "favourites"] and host.game_list_columns > 1 and item.get("layout", "") == "game" and item.has("rom_path"):
-			if game_grid == null:
-				game_grid = GridContainer.new(); game_grid.columns = host.game_list_columns
-				game_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				game_grid.add_theme_constant_override("h_separation", 8); game_grid.add_theme_constant_override("v_separation", 6)
-				column.add_child(game_grid)
-			parent = game_grid
-			item["game_grid"] = true; item["tile_index"] = game_grid_index
-			item["tile_count"] = game_grid_count; item["tile_columns"] = host.game_list_columns
-			item["min_height"] = 108 if host.game_list_columns == 2 else 124
-			game_grid_index += 1
-		if item.get("layout","") in ["letter","key"]:
-			if grid==null:
-				grid=GridContainer.new(); grid.columns=10 if item.get("layout","")=="key" else 6; grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); column.add_child(grid)
-			parent=grid
-			item["nav_row"]=group_index/grid.columns; item["nav_col"]=group_index%grid.columns; group_index+=1
-		if item.has("section") and item.section!=section and item.get("layout","")!="card":
-			if not section.is_empty():
-				var gap := Control.new(); gap.custom_minimum_size.y=6; column.add_child(gap)
-			section=item.section
-			var header := Label.new(); header.text=section; header.add_theme_font_size_override("font_size",16); MenuSkin.weigh(header,MenuSkin.BOLD); header.add_theme_color_override("font_color",MenuSkin.MUTED)
-			header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			column.add_child(header)
-		if item.has("section_detail"):
-			var detail := Label.new()
-			detail.text = item.section_detail
-			detail.add_theme_font_size_override("font_size",16)
-			detail.add_theme_color_override("font_color",MenuSkin.MUTED)
-			detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			column.add_child(detail)
-		if item.has("accordion_group"):
-			if accordion_group != item.accordion_group:
-				accordion_group = item.accordion_group
-				accordion_body = null
-				var group_panel := PanelContainer.new()
-				group_panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
-				group_panel.add_child(MenuSkin.pixel_panel("well"))
-				accordion_layout = VBoxContainer.new()
-				accordion_layout.add_theme_constant_override("separation",2)
-				group_panel.add_child(accordion_layout)
-				column.add_child(group_panel)
-			parent = accordion_layout
-			if item.get("accordion_child",false):
-				if accordion_body == null:
+	var pause_key := pause_shape(items) if mode == "pause" and not preview else ""
+	var reuse_pause: bool = not pause_key.is_empty() and pause_cache.get("key", "") == pause_key
+	if reuse_pause:
+		if column.get_children() != pause_cache.children:
+			park_layout()
+			for child in pause_cache.children:
+				child.get_parent().remove_child(child)
+				column.add_child(child)
+		rows = pause_cache.rows.duplicate()
+		music_heading = pause_cache.music_heading
+		deck_detail = pause_cache.deck_detail
+		deck_text = pause_cache.deck_text
+		for i in range(rows.size()):
+			for key in ["nav_row", "nav_col", "tile_index", "tile_count", "tile_columns"]:
+				if rows[i].item.has(key): items[i][key] = rows[i].item[key]
+			rows[i].item = items[i]
+			rows[i].refresh()
+	else:
+		if not pause_key.is_empty(): discard_pause_cache()
+		park_layout()
+		rows.clear()
+		profile_stages["clear_us"] = Time.get_ticks_usec() - profile_stage
+		profile_stage = Time.get_ticks_usec()
+		var group := ""
+		var section := ""
+		var grid: GridContainer
+		music_heading=null; deck_detail=null
+		var accordion_group := ""
+		var accordion_layout: VBoxContainer
+		var accordion_body: VBoxContainer
+		var music_layout: VBoxContainer
+		var transport_grid: HBoxContainer
+		var group_row := -1
+		var group_index := 0
+		var tiles: GridContainer
+		var tile_group := ""
+		var tile_counts := {}
+		var tile_numbers := {}
+		var game_grid: GridContainer
+		var game_grid_count := items.filter(func(entry): return entry.get("layout", "")=="game" and entry.has("rom_path")).size()
+		var game_grid_index := 0
+		for entry in items:
+			if entry.get("layout","")=="tile":
+				var named := str(entry.get("group","tiles")); tile_counts[named]=int(tile_counts.get(named,0))+1
+		var slice_started := Time.get_ticks_usec()
+		for item in items:
+			if incremental and Time.get_ticks_usec() - slice_started >= 3000:
+				await get_tree().process_frame
+				if layout_revision != build_revision: return
+				slice_started = Time.get_ticks_usec()
+			var parent: Container=column
+			if item.get("layout","") in ["transport","music_seek","music_link","video_resume","video_seek"]:
+				if music_layout==null:
+					var watching: bool = items.any(func(entry): return str(entry.get("layout","")).begins_with("video_"))
+					var helper = videos if watching else music
+					# The Now playing deck, after the Mega-CD control panel: the LCD
+					# and the title, the timeline, then one row of keys.
+					# The well fills the panel; the deck sits inside it, inset.
+					var panel := PanelContainer.new(); panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
+					panel.add_child(MenuSkin.pixel_panel("music_well"))
 					var inset := MarginContainer.new()
-					inset.add_theme_constant_override("margin_left",10)
-					inset.add_theme_constant_override("margin_right",10)
-					inset.add_theme_constant_override("margin_top",6)
-					inset.add_theme_constant_override("margin_bottom",10)
-					accordion_layout.add_child(inset)
-					accordion_body = VBoxContainer.new()
-					accordion_body.add_theme_constant_override("separation",2)
-					inset.add_child(accordion_body)
-				parent = accordion_body
-		if item.id in ["exit","home.exit"] and item.get("layout","")!="tile":
-			var divider := HSeparator.new()
-			column.add_child(divider)
-		var row = MusicIcon.new() if item.get("layout","")=="transport" else (MusicTimeline.new() if item.kind=="seek" else (LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))))
-		parent.add_child(row); row.configure(item)
-		if item.get("layout","")=="tile": row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-		row.selected.connect(select)
-		row.adjust_requested.connect(func(id,delta):
-			select(id,false)
-			if selected_id==id: adjust(delta))
-		row.pressed.connect(func(): select(item.id,false); activate())
-		if item.get("layout","") in ["letter","key"]:
-			row.custom_minimum_size=Vector2(58 if item.get("layout","")=="key" else 84,46); row.value_label.hide()
-			if item.get("layout","")=="key":
-				for child in row.get_children(): child.hide()
-				row.text=item.label; row.add_theme_font_size_override("font_size",18)
-		rows.append(row)
+					for side in ["left","top","right","bottom"]: inset.add_theme_constant_override("margin_"+side,8)
+					panel.add_child(inset); column.add_child(panel)
+					music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",6); inset.add_child(music_layout)
+					var display := HBoxContainer.new(); display.add_theme_constant_override("separation",12); music_layout.add_child(display)
+					var lcd := LcdReadout.new(); lcd.source=helper.deck_state; display.add_child(lcd)
+					var words := VBoxContainer.new(); words.add_theme_constant_override("separation",0)
+					words.size_flags_horizontal=Control.SIZE_EXPAND_FILL; words.alignment=BoxContainer.ALIGNMENT_CENTER; display.add_child(words)
+					music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
+					deck_detail=Label.new(); deck_detail.add_theme_font_size_override("font_size",16); deck_detail.add_theme_color_override("font_color",MenuSkin.MUTED)
+					for line in [music_heading,deck_detail]:
+						line.autowrap_mode=TextServer.AUTOWRAP_OFF; line.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+						MenuSkin.shadow(line); words.add_child(line)
+					deck_text=helper.deck_text
+				if item.layout=="transport":
+					if transport_grid==null:
+						transport_grid=HBoxContainer.new(); transport_grid.add_theme_constant_override("separation",6); music_layout.add_child(transport_grid)
+					parent=transport_grid
+				else: parent=music_layout
+			if item.get("layout","")=="card":
+				if item.group!=group:
+					if grid!=null: group_row+=ceili(float(group_index)/2.0)
+					else: group_row=0
+					group=item.group; group_index=0
+					var label := Label.new(); label.text=group; label.add_theme_font_size_override("font_size",16); MenuSkin.weigh(label,MenuSkin.BOLD); label.add_theme_color_override("font_color",MenuSkin.MUTED); column.add_child(label)
+					grid=GridContainer.new();grid.columns=2;grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);column.add_child(grid)
+				parent=grid
+				item["nav_row"]=group_row+group_index/2; item["nav_col"]=group_index%2; group_index+=1
+			if item.get("layout","")=="tile":
+				var named := str(item.get("group","tiles"))
+				if tiles==null or named!=tile_group:
+					tile_group=named
+					# A group can carry its own heading, above its grid.
+					if item.has("section") and item.section!=section:
+						section=item.section
+						var heading := Label.new(); heading.text=section; heading.add_theme_font_size_override("font_size",16); MenuSkin.weigh(heading,MenuSkin.BOLD); heading.add_theme_color_override("font_color",MenuSkin.MUTED)
+						column.add_child(heading)
+					tiles=GridContainer.new(); tiles.columns=int(item.get("columns",2)); tiles.add_theme_constant_override("h_separation",8); tiles.add_theme_constant_override("v_separation",6); column.add_child(tiles)
+				parent=tiles
+				item["tile_index"]=int(tile_numbers.get(named,0)); item["tile_count"]=int(tile_counts[named]); item["tile_columns"]=tiles.columns
+				tile_numbers[named]=int(item.tile_index)+1
+			if mode in ["games", "recent", "favourites"] and host.game_list_columns > 1 and item.get("layout", "") == "game" and item.has("rom_path"):
+				if game_grid == null:
+					game_grid = GridContainer.new(); game_grid.columns = host.game_list_columns
+					game_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					game_grid.add_theme_constant_override("h_separation", 8); game_grid.add_theme_constant_override("v_separation", 6)
+					column.add_child(game_grid)
+				parent = game_grid
+				item["game_grid"] = true; item["tile_index"] = game_grid_index
+				item["tile_count"] = game_grid_count; item["tile_columns"] = host.game_list_columns
+				item["min_height"] = 108 if host.game_list_columns == 2 else 124
+				game_grid_index += 1
+			if item.get("layout","") in ["letter","key"]:
+				if grid==null:
+					grid=GridContainer.new(); grid.columns=10 if item.get("layout","")=="key" else 6; grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); column.add_child(grid)
+				parent=grid
+				item["nav_row"]=group_index/grid.columns; item["nav_col"]=group_index%grid.columns; group_index+=1
+			if item.has("section") and item.section!=section and item.get("layout","")!="card":
+				if not section.is_empty():
+					var gap := Control.new(); gap.custom_minimum_size.y=6; column.add_child(gap)
+				section=item.section
+				var header := Label.new(); header.text=section; header.add_theme_font_size_override("font_size",16); MenuSkin.weigh(header,MenuSkin.BOLD); header.add_theme_color_override("font_color",MenuSkin.MUTED)
+				header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				column.add_child(header)
+			if item.has("section_detail"):
+				var detail := Label.new()
+				detail.text = item.section_detail
+				detail.add_theme_font_size_override("font_size",16)
+				detail.add_theme_color_override("font_color",MenuSkin.MUTED)
+				detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				column.add_child(detail)
+			if item.has("accordion_group"):
+				if accordion_group != item.accordion_group:
+					accordion_group = item.accordion_group
+					accordion_body = null
+					var group_panel := PanelContainer.new()
+					group_panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
+					group_panel.add_child(MenuSkin.pixel_panel("well"))
+					accordion_layout = VBoxContainer.new()
+					accordion_layout.add_theme_constant_override("separation",2)
+					group_panel.add_child(accordion_layout)
+					column.add_child(group_panel)
+				parent = accordion_layout
+				if item.get("accordion_child",false):
+					if accordion_body == null:
+						var inset := MarginContainer.new()
+						inset.add_theme_constant_override("margin_left",10)
+						inset.add_theme_constant_override("margin_right",10)
+						inset.add_theme_constant_override("margin_top",6)
+						inset.add_theme_constant_override("margin_bottom",10)
+						accordion_layout.add_child(inset)
+						accordion_body = VBoxContainer.new()
+						accordion_body.add_theme_constant_override("separation",2)
+						inset.add_child(accordion_body)
+					parent = accordion_body
+			if item.id in ["exit","home.exit"] and item.get("layout","")!="tile":
+				var divider := HSeparator.new()
+				column.add_child(divider)
+			var row = MusicIcon.new() if item.get("layout","")=="transport" else (MusicTimeline.new() if item.kind=="seek" else (LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))))
+			# Build the row while detached so each child/theme change does not
+			# repeatedly invalidate the live menu layout. Attach the finished row once.
+			row.configure(item)
+			parent.add_child(row)
+			if item.get("layout","")=="tile": row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+			row.selected.connect(select)
+			row.adjust_requested.connect(func(id,delta):
+				select(id,false)
+				if selected_id==id: adjust(delta))
+			row.pressed.connect(func(): select(item.id,false); activate())
+			if item.get("layout","") in ["letter","key"]:
+				row.custom_minimum_size=Vector2(58 if item.get("layout","")=="key" else 84,46); row.value_label.hide()
+				if item.get("layout","")=="key":
+					for child in row.get_children(): child.hide()
+					row.text=item.label; row.add_theme_font_size_override("font_size",18)
+			rows.append(row)
+		if not pause_key.is_empty():
+			pause_cache = {"key": pause_key, "children": column.get_children(), "rows": rows.duplicate(), "music_heading": music_heading, "deck_detail": deck_detail, "deck_text": deck_text}
+	profile_stages["rows_us"] = Time.get_ticks_usec() - profile_stage
+	profile_stage = Time.get_ticks_usec()
 	sidebar.visible = mode=="settings" and not preview
 	sidebar_panel.visible = sidebar.visible
 	section_bar.visible = mode=="settings" and not preview and catalog.pages(category).size() > 1
@@ -1007,6 +1107,8 @@ func render() -> void:
 	help_frame.visible = help_label.visible
 	if preview: heading.add_theme_font_size_override("font_size",22)
 	else: heading.add_theme_font_size_override("font_size",32)
+	profile_stages["chrome_us"] = Time.get_ticks_usec() - profile_stage
+	profile_stage = Time.get_ticks_usec()
 	var saved: Dictionary = memory.get(state_key(),{})
 	var preferred: String = selected_id if preview else str(saved.get("id",""))
 	if mode=="library" and not scan_preferred_id.is_empty(): preferred=scan_preferred_id
@@ -1055,6 +1157,11 @@ func render() -> void:
 	fit_panel.call_deferred()
 	refresh_labels()
 	hold_frames = SETTLE_FRAMES
+	if host.emulator.profile_frames:
+		profile_stages["incremental"] = incremental
+		profile_stages["finish_us"] = Time.get_ticks_usec() - profile_stage
+		profile_stages["total_us"] = Time.get_ticks_usec() - profile_start
+		print("PROFILE_MENU ", mode, " ", JSON.stringify(profile_stages))
 
 func fit_panel() -> void:
 	position = Vector2(36,522) if preview else Vector2(36,28)
