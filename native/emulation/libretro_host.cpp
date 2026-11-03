@@ -66,7 +66,6 @@ LibretroHost::~LibretroHost() {
 void LibretroHost::close_game() {
     on_core([&] {
         Use use(this);
-        if (loaded && hw_active && !ran_frame) fn_run();
         if (loaded) fn_unload_game();
         // The core lets go of its GL objects; the context stays for the next game.
         if (hw_active) {
@@ -197,7 +196,6 @@ bool LibretroHost::load_game(const std::string& path, const std::string& directo
             return false;
         }
         loaded = true;
-        ran_frame = false;
         fn_set_controller_port_device(0, port_device);
         for (unsigned port = 1; port < controller_ports; ++port) fn_set_controller_port_device(port, RETRO_DEVICE_NONE);
         retro_system_av_info av{};
@@ -242,7 +240,6 @@ bool LibretroHost::step(std::uint16_t mask) {
         readback_usec = 0;
         const auto started = std::chrono::steady_clock::now();
         fn_run();
-        ran_frame = true;
         {
             // Dolphin delivers audio on its CPU thread. Presentation only reads
             // pcm; callbacks queue the next batch under their own short lock.

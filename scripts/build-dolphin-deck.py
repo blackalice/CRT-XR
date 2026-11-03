@@ -19,6 +19,7 @@ MODULES=['Externals/'+p for p in [
  'SFML/SFML','curl/curl','hidapi/hidapi-src','watcher/watcher','cpp-ipc/cpp-ipc']]
 FLAGS=['-DCMAKE_BUILD_TYPE=Release','-DLIBRETRO=ON','-DENABLE_VULKAN=OFF',
  '-DUSE_MGBA=OFF','-DUSE_SYSTEM_LIBS=OFF','-DENABLE_X11=OFF','-DENABLE_EGL=ON','-DENABLE_HWDB=OFF']
+PATCHES=['dolphin-runtime.patch']
 
 def git(repo,*args):
  return subprocess.check_output(['git','-c','safe.directory=*','-c','core.autocrlf=true','-C',str(repo),*args],text=True).strip()
@@ -34,12 +35,17 @@ def digest(path):
 
 def main():
  assert git(SOURCE,'rev-parse','HEAD')==REVISION
- patch=ROOT/'scripts/core-patches/dolphin-no-gba-player.patch'
+ patches=[ROOT/'scripts/core-patches'/name for name in PATCHES]
  changes=git(SOURCE,'diff','--ignore-submodules=all',REVISION)
+ expected='\n'.join(patch.read_text().strip() for patch in patches)
+ legacy=ROOT/'scripts/core-patches/dolphin-no-gba-player.patch'
+ if changes==legacy.read_text().strip():
+  git(SOURCE,'apply','--reverse',str(legacy))
+  changes=''
+ assert not changes or changes==expected,'Unexpected Dolphin source changes'
  if not changes:
-  git(SOURCE,'apply',str(patch))
- else:
-  assert changes==patch.read_text().strip(),'Unexpected Dolphin source changes'
+  for patch in patches: git(SOURCE,'apply',str(patch))
+ assert git(SOURCE,'diff','--ignore-submodules=all',REVISION)==expected,'Dolphin patch mismatch'
  inputs=[('',REVISION,SOURCE)]
  for module in MODULES:
   commit=git(SOURCE,'ls-tree',REVISION,module).split()[2]
@@ -52,7 +58,7 @@ def main():
   subprocess.run(['cmake','--build',str(build),'--target','dolphin_libretro','--parallel',os.environ.get('BUILD_JOBS','8')],check=True)
  cores=ROOT/'cores'; (cores/'sources').mkdir(parents=True,exist_ok=True)
  archive=cores/'sources'/f'dolphin-{REVISION}.tar.gz'
- shutil.copy2(patch,cores/'sources'/patch.name)
+ for patch in patches: shutil.copy2(patch,cores/'sources'/patch.name)
  with tempfile.TemporaryDirectory() as temporary,tarfile.open(archive,'w:gz') as combined:
   for index,(prefix,commit,repo) in enumerate(inputs):
    part=Path(temporary)/(str(index)+'.tar')
@@ -71,7 +77,7 @@ def main():
  record={'core':'dolphin','platform':'linux','status':'Experimental Deck test build',
   'source_url':'https://github.com/libretro/dolphin','source_commit':REVISION,
   'source_archive':archive.relative_to(cores).as_posix(),'source_sha256':digest(archive),
-  'patches':[{'path':'sources/'+patch.name,'sha256':digest(patch)}],
+  'patches':[{'path':'sources/'+patch.name,'sha256':digest(patch)} for patch in patches],
   'binary_sha256':digest(binary),'compiler':build_tool('g++-12','--version').splitlines()[0],
   'cmake_flags':FLAGS,'submodules':{prefix.rstrip('/'):commit for prefix,commit,_ in inputs if prefix},
   'sys_files':{p.relative_to(data).as_posix():digest(p) for p in sorted(data.rglob('*')) if p.is_file()}}

@@ -36,34 +36,7 @@ def launch_command(here, env, glasses=False, manual=False, screen=None, app_args
     return command + ['--', *(['--sbs'] if glasses else ['--simulate']), *app_args]
 
 
-RESTART_EXIT_CODE = 86  # the app asks to be started again (see main.gd restart_into)
-
-
-def restart_arguments(path):
-    """Arguments the app left for its next start (one per line); the file is consumed."""
-    try:
-        lines = [line for line in Path(path).read_text().splitlines() if line]
-        Path(path).unlink(missing_ok=True)
-    except OSError:
-        return []
-    return lines
-
-
-def with_restart(app_args, extra):
-    """The launch arguments with any earlier game choice replaced by the new one."""
-    kept, skip = [], False
-    for argument in app_args:
-        if skip: skip = False; continue
-        if argument == '--rom': skip = True; continue
-        if argument in ('--last-game', '--rom-play', '--rom-continue'): continue
-        kept.append(argument)
-    return kept + list(extra)
-
-
-def run_child(command, here, env, rebuild=None):
-    state = Path(env.get('XDG_STATE_HOME', str(Path.home() / '.local/state'))) / 'crt_xr'
-    restart_file = state / ('restart-args-%d.txt' % os.getpid())
-    env = dict(env, CRT_XR_RESTART_FILE=str(restart_file))
+def run_child(command, here, env):
     child = None
     previous = {}
     def interrupted(number, _frame):
@@ -72,15 +45,7 @@ def run_child(command, here, env, rebuild=None):
         for number in (signal.SIGTERM, signal.SIGINT):
             previous[number] = signal.signal(number, interrupted)
         child = subprocess.Popen(command, cwd=here, env=env)
-        code = child.wait()
-        while code == RESTART_EXIT_CODE and rebuild is not None:
-            extra = restart_arguments(restart_file)
-            if not extra: break
-            command = rebuild(extra)
-            print('CRT XR: restarting for ' + extra[1], flush=True)
-            child = subprocess.Popen(command, cwd=here, env=env)
-            code = child.wait()
-        return code
+        return child.wait()
     finally:
         for number, handler in previous.items():
             signal.signal(number, handler)
@@ -112,13 +77,8 @@ def main(argv=None):
     module(here / 'installer/runtime_check.py', 'crt_xr_runtime_check').check_runtime(here)
     glasses = args.glasses or args.manual_sbs
     command = launch_command(here, env, glasses, args.manual_sbs, args.screen, app_args)
-    app_args = list(app_args)
-    def rebuild(extra):
-        nonlocal app_args
-        app_args = with_restart(app_args, extra)
-        return launch_command(here, env, glasses, args.manual_sbs, args.screen, app_args)
     if not glasses:
-        return run_child(command, here, env, rebuild)
+        return run_child(command, here, env)
     if args.manual_sbs or args.screen is not None or not managed_desktop(env):
         print('CRT XR: manual SBS — switch the glasses to SBS and select their display in your desktop settings. No display layout will be changed.', flush=True)
     config = Path(env.get('XDG_CONFIG_HOME', str(Path.home() / '.config'))) / 'xr_driver/config.ini'
@@ -126,7 +86,7 @@ def main(argv=None):
     # Includes both desktop paths; the lease restores driver settings even if
     # the game crashes or the launcher receives SIGINT/SIGTERM.
     with tracking.TrackingSession(config, state):
-        return run_child(command, here, env, rebuild)
+        return run_child(command, here, env)
 
 
 if __name__ == '__main__':

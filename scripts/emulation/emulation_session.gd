@@ -27,9 +27,6 @@ var content_path := ""
 var rom_hash := ""
 var core_identity := ""
 var system_id := "snes"
-## Cores opened in this process, even if their game never loaded. Dolphin cannot be
-## started a second time in one process (see main.gd needs_fresh_process).
-var cores_used := {}
 var save_directory := "user://saves"
 var display_aspect := 4.0 / 3.0
 var fps := 60.0
@@ -135,7 +132,6 @@ func load_rom(path: String) -> bool:
 	clear_game()
 	core = ClassDB.instantiate("RetroCore")
 	system_id = detected
-	cores_used[Registry.SYSTEMS[detected].core] = true
 	display_aspect = Registry.SYSTEMS[system_id].aspect
 	save_directory = new_save_directory
 	core.set_hardware_rendering(Registry.SYSTEMS[system_id].get("hardware", false))

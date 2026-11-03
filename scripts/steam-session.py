@@ -104,31 +104,6 @@ def tracking_session(state):
     return module.TrackingSession(config, state)
 
 
-
-RESTART_EXIT_CODE = 86  # the app asks to be started again (see main.gd restart_into)
-
-
-def restart_arguments(path):
-    """Arguments the app left for its next start (one per line); the file is consumed."""
-    try:
-        lines = [line for line in Path(path).read_text().splitlines() if line]
-        Path(path).unlink(missing_ok=True)
-    except OSError:
-        return []
-    return lines
-
-
-def with_restart(app_args, extra):
-    """The launch arguments with any earlier game choice replaced by the new one."""
-    kept, skip = [], False
-    for argument in app_args:
-        if skip: skip = False; continue
-        if argument == "--rom": skip = True; continue
-        if argument in ("--last-game", "--rom-play", "--rom-continue"): continue
-        kept.append(argument)
-    return kept + list(extra)
-
-
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     modes = parser.add_mutually_exclusive_group()
@@ -164,8 +139,7 @@ def main():
         return
     # Unique files prevent a previous launch from authorising this handoff.
     run = Path(tempfile.mkdtemp(prefix="display-probe-", dir=state))
-    env = dict(os.environ, CRT_XR_DISPLAY_PROBE=str(run / "display.json"), CRT_XR_SBS_SIZE=args.sbs_resolution,
-               CRT_XR_RESTART_FILE=str(run / "restart-args.txt"))
+    env = dict(os.environ, CRT_XR_DISPLAY_PROBE=str(run / "display.json"), CRT_XR_SBS_SIZE=args.sbs_resolution)
     auto = AutoSBS(driver, run / "auto-sbs.json") if driver is not None else None
     if auto is not None: env["CRT_XR_AUTO_SBS"] = str(auto.status)
     with tracking_session(state):
@@ -176,18 +150,7 @@ def main():
         try:
             if auto is not None: auto.start()  # while the setup screen shows
             child = subprocess.Popen(command, env=env)
-            code = child.wait()
-            # Dolphin cannot start twice in one process: the app exits with the restart
-            # code and is started again here, with the display and tracking untouched.
-            while code == RESTART_EXIT_CODE:
-                extra = restart_arguments(env["CRT_XR_RESTART_FILE"])
-                if not extra: break
-                app_args = with_restart(app_args, extra)
-                command = launch_command(here, os.environ, glasses, app_args, auto_sbs=driver is not None)
-                print("CRT XR: restarting for " + extra[1], flush=True)
-                child = subprocess.Popen(command, env=env)
-                code = child.wait()
-            return code
+            return child.wait()
         finally:
             signal.signal(signal.SIGTERM, old_handler)
             if child is not None and child.poll() is None:

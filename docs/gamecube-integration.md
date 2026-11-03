@@ -29,9 +29,12 @@ Ubuntu 22.04 baseline, adding GCC 12 and CMake 3.28.4 for this core only.
 source and required dependency gitlinks, preserves the licences and Sys data,
 and records binary/source/data hashes in `cores/dolphin-test-build.json`.
 Existing release cores keep their current toolchain and evidence.
-The recorded `dolphin-no-gba-player.patch` guards Game Boy Player configuration
-references when the unused mGBA integration is disabled. Its unpatched source
-archive and the applied patch are both included in the test package.
+The recorded `dolphin-runtime.patch` guards unused Game Boy Player configuration,
+locks the CPU/DSP/FIFO while saving or restoring state on the graphics thread,
+cancels a boot unloaded before its first frame, resets the per-game thread flag,
+and fixes OpenGL version detection when a reused context has a pending error.
+Libretro's GPU loop is prepared when it runs rather than when the context loads.
+The unpatched source archive and the applied patch accompany the test package.
 
 The native host assigns distinct callback functions to each loaded core, so
 callbacks from Dolphin's CPU thread reach the correct instance. Controller

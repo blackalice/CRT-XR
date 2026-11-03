@@ -1,0 +1,191 @@
+diff --git a/Source/Core/Common/GL/GLExtensions/GLExtensions.cpp b/Source/Core/Common/GL/GLExtensions/GLExtensions.cpp
+index f1453bc..d6213e4 100644
+--- a/Source/Core/Common/GL/GLExtensions/GLExtensions.cpp
++++ b/Source/Core/Common/GL/GLExtensions/GLExtensions.cpp
+@@ -2140,6 +2140,8 @@ bool InitFunctionPointers(GLContext* context);
+ static void InitExtensionList21()
+ {
+   const char* extensions = (const char*)glGetString(GL_EXTENSIONS);
++  if (!extensions)
++    return;
+   std::string tmp(extensions);
+   std::istringstream buffer(tmp);
+ 
+@@ -2414,7 +2416,12 @@ static void InitExtensionList(GLContext* context)
+ }
+ static void InitVersion()
+ {
+-  GLint major, minor;
++  // A frontend can reuse its context for another game. Errors left by the
++  // previous renderer are unrelated to these version queries: consuming one
++  // here incorrectly selects GL 2.1, whose GL_EXTENSIONS query is invalid in a
++  // core-profile context and returns nullptr.
++  while (glGetError() != GL_NO_ERROR) {}
++  GLint major = 0, minor = 0;
+   glGetIntegerv(GL_MAJOR_VERSION, &major);
+   glGetIntegerv(GL_MINOR_VERSION, &minor);
+   if (glGetError() == GL_NO_ERROR)
+diff --git a/Source/Core/Core/Core.cpp b/Source/Core/Core/Core.cpp
+index 4f70022..aa2832c 100644
+--- a/Source/Core/Core/Core.cpp
++++ b/Source/Core/Core/Core.cpp
+@@ -1040,6 +1040,23 @@ void Shutdown(Core::System& system)
+   if (s_emu_thread.joinable())
+     s_emu_thread.join();
+ #ifdef __LIBRETRO__
++  // Libretro defers EmuThread until the first retro_run. If the frontend unloads
++  // earlier, no thread/scope guard exists to release the pending boot or restore
++  // the per-game config and state. Cancel that boot explicitly.
++  if (g_boot_params)
++  {
++    g_boot_params.reset();
++    // The renderer registered CP/PE events before HW::Init. HW::Shutdown will
++    // never run for this cancelled boot, so release those event registrations.
++    system.GetCoreTiming().ClearPendingEvents();
++    system.GetCoreTiming().UnregisterAllEvents();
++    BootManager::RestoreConfig();
++    {
++      std::lock_guard lock(s_core_mutex);
++      s_state.store(State::Uninitialized);
++    }
++    NotifyStateChanged(State::Uninitialized);
++  }
+   for (auto& g : s_emu_thread_scope_guards)
+     g.Exit();
+   s_emu_thread_scope_guards.clear();
+diff --git a/Source/Core/DolphinLibretro/Boot.cpp b/Source/Core/DolphinLibretro/Boot.cpp
+index aaa4cbe..3ceb69c 100644
+--- a/Source/Core/DolphinLibretro/Boot.cpp
++++ b/Source/Core/DolphinLibretro/Boot.cpp
+@@ -282,6 +282,7 @@ bool retro_load_game(const struct retro_game_info* game)
+   UICommon::Init();
+   Libretro::Log::Init();
+ 
++#ifdef HAS_LIBMGBA
+   if (Libretro::GBPlayer_active)
+   {
+     Config::SetBase(Config::MAIN_GBA_ROM_PATHS[Config::GBPLAYER_GBA_INDEX], Libretro::GBPlayer_rom_path);
+@@ -297,6 +298,8 @@ bool retro_load_game(const struct retro_game_info* game)
+     Config::SetBase(Config::MAIN_GBA_ROM_PATHS[Config::GBPLAYER_GBA_INDEX], std::string{});
+   }
+ 
++#endif  // HAS_LIBMGBA
++
+   Discord::SetDiscordPresenceEnabled(false);
+   Common::SetEnableAlert(false);
+   Common::SetAbortOnPanicAlert(false);
+@@ -823,8 +826,9 @@ bool retro_load_game_special(unsigned game_type, const struct retro_game_info* i
+ void retro_unload_game(void)
+ {
+   auto& system = Core::System::GetInstance();
++  const bool emuthread_launched = Libretro::g_emuthread_launched;
+ 
+-  if (Core::IsRunning(system))
++  if (Core::IsRunningOrStarting(system))
+   {
+     Core::Stop(system);
+ #if defined(__LIBUSB__)
+@@ -834,6 +838,10 @@ void retro_unload_game(void)
+     Core::Shutdown(system);
+   }
+ 
++  // This is per game, not per loaded library. A subsequent retro_load_game must
++  // launch its own EmuThread even when the frontend keeps the library open.
++  Libretro::g_emuthread_launched = false;
++
+   if (!g_context_status.IsDestroyed() && g_video_backend)
+     g_video_backend->Shutdown();
+ 
+@@ -848,7 +856,7 @@ void retro_unload_game(void)
+   UICommon::ShutdownControllers();
+   UICommon::Shutdown();
+ 
+-  if (!system.IsDualCoreMode())
++  if (!system.IsDualCoreMode() && emuthread_launched)
+   {
+     Core::SingleCorePostRunShutdown();
+ 
+diff --git a/Source/Core/DolphinLibretro/Main.cpp b/Source/Core/DolphinLibretro/Main.cpp
+index 098f6c6..8ef02d3 100644
+--- a/Source/Core/DolphinLibretro/Main.cpp
++++ b/Source/Core/DolphinLibretro/Main.cpp
+@@ -565,6 +565,9 @@ size_t retro_serialize_size(void)
+   if (!Core::IsRunning(system))
+     return 0;
+ 
++  // State includes GPU resources, so keep this work on the frontend's GL
++  // thread, but acquire the real CPU/DSP/FIFO locks before touching it.
++  const Core::CPUThreadGuard cpu_guard{system};
+   AsyncRequests* ar = AsyncRequests::GetInstance();
+ 
+   if (system.IsDualCoreMode())
+@@ -587,23 +590,19 @@ bool retro_serialize(void* data, size_t size)
+   if (!Core::IsRunning(system))
+     return false;
+ 
++  const Core::CPUThreadGuard cpu_guard{system};
+   AsyncRequests* ar = AsyncRequests::GetInstance();
+ 
+   if (system.IsDualCoreMode())
+     ar->SetPassthrough(true);
+ 
+-  const bool was_cpu = Core::IsCPUThread();
+-  if (!was_cpu)
+-    Core::DeclareAsCPUThread();
+-
++  // CPUThreadGuard makes this thread a CPU-thread substitute only after the
++  // real CPU is idle. DeclareAsCPUThread alone would bypass synchronization.
+   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
+     PointerWrap p((u8**)&data, size, PointerWrap::Mode::Write);
+     State::DoState(Core::System::GetInstance(), p);
+   }, true);
+ 
+-  if (!was_cpu)
+-    Core::UndeclareAsCPUThread();
+-
+   if (system.IsDualCoreMode())
+     ar->SetPassthrough(false);
+ 
+@@ -616,23 +615,18 @@ bool retro_unserialize(const void* data, size_t size)
+   if (!Core::IsRunning(system))
+     return false;
+ 
++  const Core::CPUThreadGuard cpu_guard{system};
+   AsyncRequests* ar = AsyncRequests::GetInstance();
+ 
+   if (system.IsDualCoreMode())
+     ar->SetPassthrough(true);
+ 
+-  const bool was_cpu = Core::IsCPUThread();
+-  if (!was_cpu)
+-    Core::DeclareAsCPUThread();
+-
++  // The guard protects RAM and JIT invalidation while retaining our GL context.
+   Core::RunOnCPUThread(Core::System::GetInstance(), [&] {
+     PointerWrap p((u8**)&data, size, PointerWrap::Mode::Read);
+     State::DoState(Core::System::GetInstance(), p);
+   }, true);
+ 
+-  if (!was_cpu)
+-    Core::UndeclareAsCPUThread();
+-
+   if (system.IsDualCoreMode())
+     ar->SetPassthrough(false);
+ 
+diff --git a/Source/Core/VideoCommon/Fifo.cpp b/Source/Core/VideoCommon/Fifo.cpp
+index 42e3362..ae4beea 100644
+--- a/Source/Core/VideoCommon/Fifo.cpp
++++ b/Source/Core/VideoCommon/Fifo.cpp
+@@ -93,8 +93,12 @@ void FifoManager::Init()
+   // Padded so that SIMD overreads in the vertex loader are safe
+   m_video_buffer = static_cast<u8*>(Common::AllocateMemoryPages(FIFO_SIZE + 4));
+   ResetVideoBuffer();
++  // Libretro starts and stops RunGpuLoop per frame; Run() prepares it itself.
++  // Preparing here leaves a phantom running loop if unloaded before retro_run.
++#ifndef __LIBRETRO__
+   if (m_system.IsDualCoreMode())
+     m_gpu_mainloop.Prepare();
++#endif
+   m_sync_ticks.store(0);
+ }
+ 

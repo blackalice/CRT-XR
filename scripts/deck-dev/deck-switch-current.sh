@@ -1,5 +1,19 @@
+#!/usr/bin/env bash
+# Activate an already prepared release. Never copy a pack or erase test evidence.
 set -eu
+TAG=${1:?Pass an existing release tag}
+case "$TAG" in ''|*[!a-zA-Z0-9_-]*) echo 'Invalid release tag' >&2; exit 2;; esac
 C=/tmp/retrocrt-deck-01a139ee.sock
-O="-o BatchMode=yes -o HostKeyAlias=steamdeck"
-scp -o ControlPath=$C $O /mnt/d/git/XR-CRT/dist/deck-gamecube-20261103b/crt-xr.pck deck@192.168.1.6:/home/deck/Applications/CRT-XR/releases/$1/crt-xr.pck
-ssh -S $C $O deck@192.168.1.6 "pgrep -a crt-xr-engine | cut -c1-60 || true; cd ~/Applications/CRT-XR && cmp releases/$1/crt-xr.pck releases/$1/crt-xr.pck && ln -sfn releases/$1 current.new && mv -T current.new current && readlink current; rm -rf /tmp/xdg-gc-switch /tmp/xdg-cc /tmp/gc-reload-saves /tmp/gamecube_*.gd /tmp/close_cost.gd /tmp/gdb-last-fault.py /tmp/gc-switch.out"
+ssh -S "$C" -o BatchMode=yes -o HostKeyAlias=steamdeck deck@192.168.1.6 "TAG=$TAG bash -s" <<'REMOTE'
+set -eu
+if pgrep -x crt-xr-engine.x >/dev/null; then
+  echo 'Exit CRT XR before switching releases.' >&2
+  exit 1
+fi
+cd ~/Applications/CRT-XR
+test -f "releases/$TAG/crt-xr.pck"
+test -x "releases/$TAG/crt-xr-engine.x86_64"
+ln -sfn "releases/$TAG" current.new
+mv -Tf current.new current
+readlink current
+REMOTE

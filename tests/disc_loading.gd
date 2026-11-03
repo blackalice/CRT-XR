@@ -55,11 +55,18 @@ func run() -> void:
 	check(not app.emulator.loaded and app.loading_path.is_empty() and not app.loading_screen.visible, "A disc that fails to load takes the card down")
 	# Holding and handing over do not depend on the console: a cartridge stands in
 	# for a booting disc behind the card.
-	app.show_loading(zipped)
+	var probe := ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")
+	app.show_loading(probe)
 	app.loading_game = true
-	var started: bool = app.emulator.load_rom(ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc"))
+	var started: bool = app.emulator.load_rom(probe)
 	app.loading_game = false
-	check(started and app.loading_path == zipped and app.loading_screen.progress < 0.0, "A game starts behind the card")
+	check(started and app.loading_path == probe and app.loading_screen.progress < 0.0, "A game starts behind the card")
+	var old_picture := Image.create(256, 224, false, Image.FORMAT_RGBA8)
+	old_picture.fill(Color("4060c0"))
+	app.show_loading(zipped)
+	app.emulator.frame_presented.emit(old_picture)
+	check(app.loading_path == zipped, "The previous game's frame cannot dismiss the next game's card")
+	app.show_loading(probe)
 	var black := Image.create(256, 224, false, Image.FORMAT_RGBA8)
 	app.emulator.frame_presented.emit(black)
 	check(app.loading_screen.visible and app.world.picture.source_texture == app.card_view.get_texture(), "Black boot frames keep the card up")

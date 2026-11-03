@@ -1,4 +1,101 @@
-# Handover: GameCube / Dreamcast stability on the Steam Deck
+# GameCube stability: core-fix continuation, 3 November 2026
+
+The original handover below is historical. The owner clarified the symptoms:
+crashes, freezes, restarts and stutters while switching games in **Gaming Mode**,
+plus the loading screen naming the wrong game. They explicitly want the core
+defects fixed, rather than a process-restart workaround.
+
+## New findings
+
+- The journal records another SIGTRAP at **15:01:53**, in the first TimeSplitters
+  boot of a fresh process, PID 40323. The old "second boot only" diagnosis was
+  incomplete. Subsequent supervised switches at 15:02 really did restart.
+- **Save-state race reproduced:** `tests/gamecube_state_stress.gd` crashed the
+  original core on its first immediate restore. The debugger caught the CPU
+  executing an INT3 in invalidated JIT code while the frontend thread was inside
+  `retro_unserialize`. Dolphin marked the frontend as the CPU thread before
+  `RunOnCPUThread`, bypassing its synchronization. The fix uses
+  `CPUThreadGuard` for measure/save/load, retaining the frontend's GL context
+  while waiting for the real CPU, DSP and FIFO to stop. The corrected core passed
+  300 immediate state roundtrips. Raw evidence is retained locally in
+  `build/gamecube-state-crash-original.log` and `build/gamecube-state-pass-fixed.log`.
+- **No-frame unload:** Dolphin defers its emulation thread until `retro_run`,
+  but unload previously skipped `Starting`. Cancel its pending boot and restore
+  per-game configuration and renderer-created timing registrations explicitly,
+  reset `g_emuthread_launched` on unload, and prepare the libretro GPU loop only
+  when it actually runs. Skip single-core exception-handler teardown if no
+  emulation thread was launched. The host's forced first frame has been removed.
+- **Reused-context initialization:** a zero-frame swap exposed another abort in
+  `GLExtensions::Init`. Its version probe consumed an earlier GL error and
+  incorrectly fell back to GL 2.1; querying `GL_EXTENSIONS` in the actual core
+  context returned null and constructed an invalid string. Drain previous errors
+  before querying the version, and handle a missing extension string. A tentative
+  host context-rebinding change was disproven and removed.
+- **Delayed launch race reproduced and fixed:** two choices during the channel
+  animation could both continue and load. New choices now supersede older waits;
+  previous-game frames cannot dismiss the selected game's card, and its text is
+  redrawn immediately. `tests/game_launch_race.gd` failed before and passes after.
+- `deck-switch-current.sh` unexpectedly copied an older PCK over the target and
+  deleted test evidence. It now only switches to an existing release and refuses
+  while the app is running.
+
+## Implementation and verification
+
+Core changes are preserved in `scripts/core-patches/dolphin-runtime.patch` against
+the same pinned Dolphin revision. `build-dolphin-deck.py` accepts a clean checkout,
+the previous Game Boy Player patch, or the exact runtime patch, and rejects other
+source changes. It records the patch and binary hashes in the test manifest.
+The process-restart implementation and its obsolete tests/helpers are removed.
+
+All 56 native host checks, 29 session-wrapper checks, loading-card checks,
+delayed-launch checks and lifecycle checks passed locally. The Deck now uses
+`releases/gamecube-corefix-20261103`; `gamecube-restart-20261103` is preserved.
+`scripts/deck-dev/test-gamecube-corefix.sh` tests zero/one/30-frame unloads in both
+swap/reopen modes, 300 immediate save restores, then nine menu switches including
+Continue, in one process.
+
+Final Deck validation passed:
+
+- 36 reloads: swap/reopen, zero/one/30 frames, three games twice through, with
+  no internal assertion popups. Also eight cancelled zero-frame boots followed
+  by real boot and save/restore checks in both modes.
+- 300 immediate save/restore cycles on the final core.
+- 39 menu launches across the mono, stereo, shader-comparison, mixed-console
+  and full-resolution runs, including Continue. No crash, hang or process restart;
+  loading paths/titles and actual game paths were checked. GameCube coverage:
+  TimeSplitters, Gotcha Force, Mario Golf, Mario Party 4 and WarioWare.
+- GameCube → Dreamcast (Tech Romancer) → NES (Mega Man 2) → GameCube, in one
+  process. The first test assertion incorrectly demanded a loading card for NES;
+  the corrected cartridge-aware test passed all four transitions.
+- Continued a **copy** of the owner's existing pre-fix TimeSplitters automatic
+  save. Tests used isolated XDG folders; original saves and settings were untouched.
+- Six launches with two **1920×1080** eye renders. Five post-load 300-frame
+  samples stayed at 38 ms or less; Gotcha Force's cold sample had one 58 ms frame.
+  Gamescope clamps SSH test windows, so the test explicitly sizes the offscreen
+  eye viewports; this verifies GPU load, not the glasses' physical handoff.
+
+Raw final evidence is in `build/gc-final-evidence/`, including matching local/Deck
+build hashes. Core SHA-256 starts `733a1f905b57`; native host `d8c7368dff1e`;
+PCK `c0f9923f72a6`. The verified release was activated only after the app stopped.
+
+## Remaining performance work
+
+Crashes and restart behavior are distinct from occasional hitches. A later
+TimeSplitters resume in the mono stress run still reached 256 ms. Do not claim
+long gameplay or physical glasses/tracking acceptance from these boot tests.
+Async ubershaders were worse in this sample: TimeSplitters had 19 frames over
+50 ms on its cold run, with up to about 180 ms in GPU readback. Keep the existing
+synchronous default; do not blindly enable hybrid shaders as a stutter fix.
+The five-game synchronous stereo comparison had only one frame above 50 ms.
+
+Option values are now confirmed from the pinned `Common/Options.cpp`:
+`dolphin_shader_compilation_mode`: `0` synchronous, `1` synchronous ubershaders,
+`2` asynchronous ubershaders, `3` skip rendering; `dolphin_wait_for_shaders`:
+`enabled`/`disabled`. Frame pacing/audio and longer gameplay remain to profile.
+
+---
+
+# Historical handover: GameCube / Dreamcast stability on the Steam Deck
 
 Written 3 November 2026, branch `codex/gamecube-integration`. The owner's last
 word: the build is **"still very buggy"**. No specifics were given after the last

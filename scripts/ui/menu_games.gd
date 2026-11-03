@@ -11,6 +11,8 @@ const JUMP_MINIMUM := 20
 const GAMES_PER_PAGE := 50
 var launch_path := ""
 var launch_origin: Dictionary = {}
+## A newer choice supersedes any launch still waiting for the channel animation.
+var launch_generation := 0
 var library_system := "snes"
 var game_page := 0
 var system_pages: Dictionary = {}
@@ -179,6 +181,8 @@ func select_file(path: String) -> void:
 	else: launch_game(path,false)
 
 func launch_game(path: String, continuing: bool) -> void:
+	launch_generation += 1
+	var generation := launch_generation
 	# A zipped disc is hundreds of megabytes: unpack it in the background while
 	# the room keeps tracking, then start it.
 	if host.emulator.needs_unpacking(path): unpack_then_launch(path, continuing); return
@@ -197,11 +201,11 @@ func launch_game(path: String, continuing: bool) -> void:
 		# The channel-change static runs for under half a second; the boot below holds
 		# the main thread, so let the static finish first rather than freeze mid-effect.
 		await host.get_tree().create_timer(0.55).timeout
+		if generation != launch_generation or host.loading_path != path: return
 		if not host.stop_for_disc(path):
 			host.end_loading()
 			if not menu.visible: host.toggle_settings()
 			menu.show_error(host.emulator.status); return
-		if host.needs_fresh_process(path) and host.restart_into(path, continuing): return
 	if not host.load_game(path): menu.show_error(host.startup_message); return
 	if continuing and not host.emulator.load_auto():
 		host.end_loading()

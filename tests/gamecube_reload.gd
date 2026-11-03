@@ -27,6 +27,14 @@ func run():
 			if mode.contains("state"): print("saved state bytes ", core.save_state().size())
 			if mode.contains("ram"): core.save_ram()
 			core.close_game()
+	if OS.get_environment("CRT_XR_GC_FRAMES") == "0":
+		# Cancelling pending boots must also leave the next real boot usable.
+		if not core.load_game(games[0], saves) or not core.run_frame(0):
+			print("FAIL boot after zero-frame unload"); quit(1); return
+		var state: PackedByteArray = core.save_state()
+		if state.is_empty() or not core.load_state(state):
+			print("FAIL state after zero-frame unload"); quit(1); return
+		print("PASS boot and state restore after zero-frame unload")
 	core.close()
 	print("RELOAD COMPLETE ", mode)
 	quit()

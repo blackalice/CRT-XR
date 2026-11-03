@@ -5,14 +5,14 @@
   "source_url": "https://github.com/libretro/dolphin",
   "source_commit": "b93001ed50c8b34e6ead4eed713c2005a80386e4",
   "source_archive": "sources/dolphin-b93001ed50c8b34e6ead4eed713c2005a80386e4.tar.gz",
-  "source_sha256": "a4d62a2a1a4993887c7e32ae176427af2d8573cfde176967ebd1383484fea1d6",
+  "source_sha256": "b804194abb86a360398a053732a9e42b3a569631df9201c18030c0cc825694cf",
   "patches": [
     {
-      "path": "sources/dolphin-no-gba-player.patch",
-      "sha256": "cd514360ccebd7a0691c3a72d2d8dbf0ba36fc99039a555e832b6a9d6a5b085d"
+      "path": "sources/dolphin-runtime.patch",
+      "sha256": "5d7bb5840086172974653799e653c9c749438f01b8762d7949f4b2bf8e412abe"
     }
   ],
-  "binary_sha256": "e2e38b4c4ecd69adf424a2e25f10f2881e6ea9062df9d39e20bcee577bf3e635",
+  "binary_sha256": "733a1f905b5791b3967f397589fd80eecd9a95742707c8fc1d15d22a1ccf550b",
   "compiler": "g++-12 (Ubuntu 12.3.0-1ubuntu1~22.04.3) 12.3.0",
   "cmake_flags": [
     "-DCMAKE_BUILD_TYPE=Release",
