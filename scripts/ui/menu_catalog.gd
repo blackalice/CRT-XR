@@ -103,13 +103,14 @@ func toggle_core_console(system: String) -> void:
 
 func core_option_pages() -> Array:
 	var emulator = host.emulator
-	var playing: String = emulator.system_id if emulator.loaded and emulator.system_id in CORE_SYSTEMS else ""
+	var playing: String = emulator.system_id if emulator.loaded and emulator.Registry.SYSTEMS.has(emulator.system_id) and (emulator.system_id in CORE_SYSTEMS or emulator.system_id == "gamecube") else ""
 	var context: String = playing + ":" + emulator.rom_hash if not playing.is_empty() else ""
 	if context != core_game_context:
 		core_game_context = context
 		expanded_core_console = playing
 		menu.memory["settings:10:0"] = {"id":"core.console." + (playing if not playing.is_empty() else "snes"), "scroll":0}
 	var systems: Array = CORE_SYSTEMS.duplicate()
+	if emulator.Registry.SYSTEMS.has("gamecube"): systems.append("gamecube")
 	if not playing.is_empty():
 		systems.erase(playing)
 		systems.push_front(playing)

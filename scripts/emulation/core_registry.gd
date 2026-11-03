@@ -12,7 +12,11 @@ extends RefCounted
 ## context; "options" are core option values that replace the core's defaults.
 const Archive = preload("res://scripts/content/rom_archive.gd")
 const Folders = preload("res://scripts/content/console_folders.gd")
-const SYSTEMS := {
+const DEFINITIONS := {
+	"gamecube": {"name":"GameCube", "core":"dolphin", "extensions":[], "aspect":4.0/3.0,
+		"analog":true, "triggers":true, "preview":false, "hardware":true,
+		"options":{"dolphin_efb_scale":"1", "dolphin_cpu_core":"1", "dolphin_dsp_hle":"enabled",
+			"dolphin_main_cpu_thread":"enabled", "dolphin_aspect_ratio":"2"}},
 	"snes": {"name":"SNES", "core":"snes9x", "extensions":["sfc","smc","swc","fig"], "aspect":4.0/3.0},
 	"nes": {"name":"NES", "core":"nestopia", "extensions":["nes","unf","unif"], "aspect":4.0/3.0},
 	"megadrive": {"name":"Mega Drive", "core":"genesis_plus_gx", "extensions":["md","gen","smd"], "aspect":4.0/3.0},
@@ -50,8 +54,16 @@ const SYSTEMS := {
 			"mupen64plus-astick-deadzone":"0", "mupen64plus-cpucore":"dynamic_recompiler", "mupen64plus-alt-map":"True"}}
 }
 
+static var SYSTEMS: Dictionary = available_systems()
+
+static func available_systems() -> Dictionary:
+	var systems := DEFINITIONS.duplicate(true)
+	if not Folders.gamecube_enabled(): systems.erase("gamecube")
+	return systems
+
 static func identify(path: String) -> String:
 	var extension := path.get_extension().to_lower()
+	if SYSTEMS.has("gamecube") and extension in ["iso", "gcm", "rvz", "wia"] and gamecube_disc(path): return "gamecube"
 	if extension == "cue": return disc_identify(path)
 	if extension == "m3u": return playlist_identify(path)
 	if extension == "pbp": return "psx" if psx_eboot(path) else ""
@@ -157,7 +169,7 @@ static func content_hash(path: String) -> String:
 		return hashing.finish().hex_encode()
 	# PlayStation images run to hundreds of megabytes: their opening megabyte holds
 	# the volume and boot data that tell discs apart, and the size goes in too.
-	if extension in ["pbp", "iso", "cdi"] or (extension == "bin" and FileAccess.get_size(path) > LARGE_IMAGE and identify(path) == "psx"):
+	if extension in ["pbp", "iso", "cdi", "gcm", "rvz", "wia"] or (extension == "bin" and FileAccess.get_size(path) > LARGE_IMAGE and identify(path) == "psx"):
 		var image := FileAccess.open(path, FileAccess.READ)
 		if image == null: return ""
 		var sampled := HashingContext.new()
@@ -248,7 +260,7 @@ static func playlist_identify(m3u_path: String) -> String:
 	var system := identify(files[0])
 	for file in files:
 		if file.get_extension().to_lower() in ["m3u", "zip"] or identify(file) != system: return ""
-	return system if system in ["psx", "dreamcast"] else ""
+	return system if system in ["psx", "dreamcast", "gamecube"] else ""
 
 ## Files a cue sheet or playlist among paths already stands for, so a game appears
 ## once rather than as its cue, its tracks and each disc of its playlist.
@@ -281,6 +293,23 @@ static func playlist_members(paths: Array) -> Dictionary:
 ## Sector layouts of disc images: raw 2352-byte sectors (Mode 2, then Mode 1),
 ## then plain 2048-byte ISO sectors, each as [sector size, data offset].
 const DISC_LAYOUTS := [[2352, 24], [2352, 16], [2048, 0]]
+
+## ISO/GCM carry a big-endian GameCube magic at 0x1c. WIA/RVZ retain the disc
+## header uncompressed at 0x58 (Dolphin docs/WiaAndRvz.md). Wii uses the same
+## extensions; neither a folder name nor the extension establishes the console.
+static func gamecube_disc(path: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null: return false
+	var header := file.get_buffer(0xd8)
+	var offset := 0
+	if path.get_extension().to_lower() in ["rvz", "wia"]:
+		var expected := PackedByteArray([0x52, 0x56, 0x5a, 1]) if path.get_extension().to_lower() == "rvz" else PackedByteArray([0x57, 0x49, 0x41, 1])
+		if header.size() < 0xd8 or header.slice(0, 4) != expected: return false
+		# Both the declared disc type and the embedded disc magic must agree.
+		if header.slice(0x48, 0x4c) != PackedByteArray([0, 0, 0, 1]): return false
+		offset = 0x58
+	if header.size() < offset + 0x20: return false
+	return header.slice(offset + 0x1c, offset + 0x20) == PackedByteArray([0xc2, 0x33, 0x9f, 0x3d]) and header.slice(offset + 0x18, offset + 0x1c) != PackedByteArray([0x5d, 0x1c, 0x9e, 0xa3])
 
 static func disc_sector(file: FileAccess, layout: Array, sector: int) -> PackedByteArray:
 	var offset: int = sector * layout[0] + layout[1]

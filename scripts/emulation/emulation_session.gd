@@ -2,6 +2,7 @@ extends Node
 const Registry = preload("res://scripts/emulation/core_registry.gd")
 const Layouts = preload("res://scripts/emulation/controller_layouts.gd")
 const CoreOptions = preload("res://scripts/emulation/core_options.gd")
+const DolphinSupport = preload("res://scripts/emulation/dolphin_support.gd")
 ## Godot owns presentation; the native Libretro host owns frame execution/callbacks.
 signal content_changed(texture: Texture2D)
 signal frame_presented(image: Image)
@@ -90,7 +91,13 @@ func load_rom(path: String) -> bool:
 		return false
 	var selected_path := Registry.core_path(detected)
 	if not FileAccess.file_exists(selected_path):
+		if detected == "gamecube":
+			report("GameCube is experimental. Its Dolphin core is not included in this build.", true)
+			return false
 		report("%s core missing. Restore %s from the application package." % [Registry.SYSTEMS[detected].name, selected_path], true)
+		return false
+	if detected == "gamecube" and not DolphinSupport.available():
+		report("Dolphin system files are missing. Restore the core-data/dolphin-emu/Sys folder from the GameCube build.", true)
 		return false
 	if not Registry.bios_satisfied(detected):
 		report("%s needs its BIOS. Put one of %s in the bios folder next to your roms folder, or in %s, then reload the game." % [Registry.SYSTEMS[detected].name, ", ".join(PackedStringArray(Registry.SYSTEMS[detected].bios_any)), Registry.preferred_bios_folder()], true)
@@ -119,6 +126,11 @@ func load_rom(path: String) -> bool:
 		report("Cannot create save directory: " + error_string(error), true)
 		return false
 	Registry.stage_bios(system_id, saves)
+	if system_id == "gamecube":
+		var stage_error := DolphinSupport.stage(saves)
+		if stage_error != OK:
+			report("Could not prepare Dolphin system files: " + error_string(stage_error), true)
+			return false
 	var spec: Dictionary = Registry.SYSTEMS[system_id]
 	if spec.has("controller"): core.set_controller(spec.controller)
 	for key in spec.get("options", {}): core.set_option(key, spec.options[key])
