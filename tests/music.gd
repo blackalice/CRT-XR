@@ -16,7 +16,7 @@ func run():
 	check(not music.player.playing and music.http==null,"Music never autoplays on startup")
 	check(AudioServer.bus_count==base+2,"TV and music use separate shared mixer buses")
 	check(music.play_file(ProjectSettings.globalize_path("res://build/crt-power-original-preview.mp3")),"Local MP3 opens")
-	app.menu.open_settings(); app.menu.category=2; app.menu.subsection=1; app.menu.render()
+	app.menu.open_settings(); app.menu.category=2; app.menu.subsection=2; app.menu.render()
 	check(music.player.playing,"Music continues while the settings menu is open")
 	check(app.menu.CATEGORIES[2]=="Audio" and app.menu.items.any(func(i): return i.id=="music.file"),"Audio has its own category and music page")
 	music.volume=.3; music.game_volume=.2; music.apply()

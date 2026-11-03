@@ -20,11 +20,11 @@ func run():
  var queue: Array=music.album_tracks(ProjectSettings.globalize_path(folder))
  check(queue.map(func(t):return t.path.get_file())==["z.mp3","a.mp3","legacy.mp3","2.mp3","10.mp3","broken.mp3","b.mp3"],"Album order follows disc, track and natural filename fallback")
  check(music.play_album(ProjectSettings.globalize_path(folder)) and music.track_index==0 and music.metadata.title=="First café","Folder starts as an album with metadata")
- music.player.seek(maxf(0,music.player.stream.get_length()-.08))
+ music.seek(maxf(0,music.duration()-.08))
  await create_timer(.5).timeout
  check(music.track_index==1,"Real mixer finished signal advances to the next track")
  music.start_track(0)
- check(not music.player.stream.loop,"Individual tracks do not loop before advancing")
+ check(not music.local_audio.loop,"Individual tracks do not loop before advancing")
  music.toggle_playback();check(music.player.stream_paused and music.playback_caption()=="Play","Pause preserves the current local stream")
  music.toggle_playback();check(not music.player.stream_paused,"Play resumes the paused track")
  music.track_finished();check(music.metadata.title=="Second song" and music.track_index==1,"Track end advances to the next album song")

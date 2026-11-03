@@ -4,6 +4,7 @@
 #include <godot_cpp/variant/packed_vector2_array.hpp>
 #include <algorithm>
 #include <cstring>
+#include <chrono>
 #include <filesystem>
 #include <string>
 #ifdef _WIN32
@@ -35,6 +36,8 @@ void RetroCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("disc_info"), &RetroCore::disc_info);
     ClassDB::bind_method(D_METHOD("change_disc", "index"), &RetroCore::change_disc);
     ClassDB::bind_method(D_METHOD("run_frame", "buttons"), &RetroCore::run_frame);
+    ClassDB::bind_method(D_METHOD("begin_frame", "buttons", "frames"), &RetroCore::begin_frame, DEFVAL(1));
+    ClassDB::bind_method(D_METHOD("poll_frame"), &RetroCore::poll_frame);
     ClassDB::bind_method(D_METHOD("reset"), &RetroCore::reset);
     ClassDB::bind_method(D_METHOD("frame"), &RetroCore::frame);
     ClassDB::bind_method(D_METHOD("info"), &RetroCore::info);
@@ -52,21 +55,53 @@ void RetroCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("has_preview"), &RetroCore::has_preview);
     ClassDB::bind_method(D_METHOD("close_preview"), &RetroCore::close_preview);
 }
-bool RetroCore::load_core(const String& path) { return host.load_core(path.utf8().get_data()); }
-bool RetroCore::load_game(const String& path, const String& saves) { return host.load_game(path.utf8().get_data(), saves.utf8().get_data()); }
-void RetroCore::set_option(const String& key, const String& value) { host.set_option(key.utf8().get_data(), value.utf8().get_data()); }
-void RetroCore::set_controller(int device) { host.port_device = static_cast<unsigned>(device); }
+// The dispatch thread only calls the native host. Godot objects, audio and
+// textures stay on the caller. The host still owns its persistent GL thread.
+RetroCore::~RetroCore() { wait_frame(); close_preview(); }
+void RetroCore::wait_frame() const { if (frame_worker) frame_worker->wait(); }
+bool RetroCore::begin_frame(int buttons, int frames) {
+    if (frame_pending || !host.loaded) return false;
+    if (!frame_worker) frame_worker = std::make_unique<crt_xr::CoreThread>();
+    frame_pending = true;
+    frame_worker->post([this, buttons, frames] {
+        std::vector<std::int16_t> audio;
+        bool changed = false;
+        frame_timings.clear();
+        frame_ok = true;
+        for (int i = 0; i < std::clamp(frames, 1, 4); ++i) {
+            const auto start = std::chrono::steady_clock::now();
+            if (!host.step(static_cast<std::uint16_t>(buttons))) { frame_ok = false; break; }
+            const auto wall = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - start).count();
+            frame_timings.push_back({static_cast<std::uint64_t>(wall), host.step_usec, host.readback_usec, host.pcm.size() / 2, host.video_changed});
+            audio.insert(audio.end(), host.pcm.begin(), host.pcm.end());
+            changed = changed || host.video_changed;
+        }
+        host.pcm = std::move(audio);
+        host.video_changed = changed;
+    });
+    return true;
+}
+int RetroCore::poll_frame() {
+    if (!frame_pending) return -2;
+    if (!frame_worker->ready()) return 0;
+    frame_pending = false;
+    return frame_ok ? 1 : -1;
+}
+bool RetroCore::load_core(const String& path) { wait_frame(); frame_pending = false; return host.load_core(path.utf8().get_data()); }
+bool RetroCore::load_game(const String& path, const String& saves) { wait_frame(); frame_pending = false; return host.load_game(path.utf8().get_data(), saves.utf8().get_data()); }
+void RetroCore::set_option(const String& key, const String& value) { wait_frame(); host.set_option(key.utf8().get_data(), value.utf8().get_data()); }
+void RetroCore::set_controller(int device) { wait_frame(); host.port_device = static_cast<unsigned>(device); }
 // Before load_core: the core then runs on its own thread with a hidden OpenGL context.
-void RetroCore::set_hardware_rendering(bool enabled) { host.hardware_rendering = enabled; }
-void RetroCore::set_trigger_pressure(int left, int right) {
+void RetroCore::set_hardware_rendering(bool enabled) { wait_frame(); host.hardware_rendering = enabled; }
+void RetroCore::set_trigger_pressure(int left, int right) { wait_frame();
     host.trigger_pressure[0] = static_cast<std::int16_t>(std::clamp(left, 0, 32767));
     host.trigger_pressure[1] = static_cast<std::int16_t>(std::clamp(right, 0, 32767));
 }
-void RetroCore::set_analog(int left_x, int left_y, int right_x, int right_y) {
+void RetroCore::set_analog(int left_x, int left_y, int right_x, int right_y) { wait_frame();
     const int values[] = {left_x, left_y, right_x, right_y};
     for (int i = 0; i < 4; ++i) host.analog[i] = static_cast<std::int16_t>(std::clamp(values[i], -32768, 32767));
 }
-Dictionary RetroCore::disc_info() const {
+Dictionary RetroCore::disc_info() const { wait_frame();
     Dictionary result;
     const unsigned count = host.disc_count();
     result["count"] = count;
@@ -76,13 +111,24 @@ Dictionary RetroCore::disc_info() const {
     result["labels"] = labels;
     return result;
 }
-bool RetroCore::change_disc(int index) { return index >= 0 && host.change_disc(static_cast<unsigned>(index)); }
-bool RetroCore::run_frame(int buttons) { return host.step(static_cast<std::uint16_t>(buttons)); }
-PackedByteArray RetroCore::vmu_lcd(int index) const { return index >= 0 ? pack(host.vmu_lcd(static_cast<unsigned>(index))) : PackedByteArray(); }
-bool RetroCore::reset() { return host.reset(); }
-PackedByteArray RetroCore::frame() const { return pack(host.rgba); }
-Dictionary RetroCore::info() const {
+bool RetroCore::change_disc(int index) { wait_frame(); return index >= 0 && host.change_disc(static_cast<unsigned>(index)); }
+bool RetroCore::run_frame(int buttons) { wait_frame(); return host.step(static_cast<std::uint16_t>(buttons)); }
+PackedByteArray RetroCore::vmu_lcd(int index) const { wait_frame(); return index >= 0 ? pack(host.vmu_lcd(static_cast<unsigned>(index))) : PackedByteArray(); }
+bool RetroCore::reset() { wait_frame(); frame_pending = false; return host.reset(); }
+PackedByteArray RetroCore::frame() const { wait_frame(); return pack(host.rgba); }
+Dictionary RetroCore::info() const { wait_frame();
     Dictionary result;
+    Array timings;
+    for (const auto& t : frame_timings) {
+        Dictionary timing;
+        timing["wall_us"] = static_cast<int64_t>(t.wall);
+        timing["core_us"] = static_cast<int64_t>(t.step);
+        timing["readback_us"] = static_cast<int64_t>(t.readback);
+        timing["audio_frames"] = static_cast<int64_t>(t.audio);
+        timing["video_changed"] = t.video;
+        timings.push_back(timing);
+    }
+    result["async_steps"] = timings;
     result["loaded"] = host.loaded;
     result["name"] = String::utf8(host.name.c_str());
     result["width"] = host.width; result["height"] = host.height;
@@ -94,9 +140,9 @@ Dictionary RetroCore::info() const {
     return result;
 }
 // Checked after every emulated frame; cheaper than building info()'s Dictionary.
-bool RetroCore::video_changed() const { return host.video_changed; }
-String RetroCore::last_error() const { return String::utf8(host.error.c_str()); }
-int RetroCore::push_audio(const Ref<AudioStreamGeneratorPlayback>& playback) {
+bool RetroCore::video_changed() const { wait_frame(); return host.video_changed; }
+String RetroCore::last_error() const { wait_frame(); return String::utf8(host.error.c_str()); }
+int RetroCore::push_audio(const Ref<AudioStreamGeneratorPlayback>& playback) { wait_frame();
     if (playback.is_null() || host.pcm.empty()) return 0;
     const auto count = static_cast<int64_t>(host.pcm.size() / 2);
     if (playback->get_frames_available() < count) return -1;
@@ -106,13 +152,13 @@ int RetroCore::push_audio(const Ref<AudioStreamGeneratorPlayback>& playback) {
     for (int64_t i = 0; i < count; ++i) values[i] = Vector2(host.pcm[i * 2] / 32768.0f, host.pcm[i * 2 + 1] / 32768.0f);
     return playback->push_buffer(frames) ? static_cast<int>(count) : -1;
 }
-PackedByteArray RetroCore::save_state() { return pack(host.serialize()); }
-bool RetroCore::load_state(const PackedByteArray& state) { return host.unserialize(state.ptr(), static_cast<std::size_t>(state.size())); }
-PackedByteArray RetroCore::save_ram() const { return pack(host.save_ram()); }
-bool RetroCore::load_ram(const PackedByteArray& ram) { return host.set_save_ram(ram.ptr(), static_cast<std::size_t>(ram.size())); }
-void RetroCore::close_game() { close_preview(); host.close_game(); }
-void RetroCore::close() { close_preview(); host.close(); }
-bool RetroCore::load_preview(const String& core_path, const String& game_path, const String& directory) {
+PackedByteArray RetroCore::save_state() { wait_frame(); return pack(host.serialize()); }
+bool RetroCore::load_state(const PackedByteArray& state) { wait_frame(); frame_pending = false; return host.unserialize(state.ptr(), static_cast<std::size_t>(state.size())); }
+PackedByteArray RetroCore::save_ram() const { wait_frame(); return pack(host.save_ram()); }
+bool RetroCore::load_ram(const PackedByteArray& ram) { wait_frame(); return host.set_save_ram(ram.ptr(), static_cast<std::size_t>(ram.size())); }
+void RetroCore::close_game() { wait_frame(); frame_pending = false; close_preview(); host.close_game(); }
+void RetroCore::close() { wait_frame(); frame_pending = false; close_preview(); host.close(); }
+bool RetroCore::load_preview(const String& core_path, const String& game_path, const String& directory) { wait_frame();
     close_preview();
     // Loading the same library path again would share the playing core's globals;
     // a renamed private copy gets its own.
@@ -133,7 +179,7 @@ bool RetroCore::load_preview(const String& core_path, const String& game_path, c
     close_preview();
     return false;
 }
-Dictionary RetroCore::run_preview(int buttons, int frames) {
+Dictionary RetroCore::run_preview(int buttons, int frames) { wait_frame();
     Dictionary result;
     if (!host.loaded || !preview_host.loaded) return result;
     if (!host.serialize_into(preview_state) || !preview_host.unserialize(preview_state.data(), preview_state.size())) return result;

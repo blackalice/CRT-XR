@@ -23,7 +23,7 @@ namespace crt_xr {
 struct CoreThread::State {
     std::mutex mutex;
     std::condition_variable wake, done;
-    const std::function<void()>* pending = nullptr;
+    std::function<void()> pending;
     bool quit = false;
     std::thread thread;
 };
@@ -33,9 +33,11 @@ CoreThread::CoreThread() : state(std::make_unique<State>()) {
         for (;;) {
             state->wake.wait(lock, [state] { return state->quit || state->pending; });
             if (!state->pending) return;
-            const auto* task = state->pending;
+            auto task = std::move(state->pending);
+            // Keep pending set until execution finishes, including while unlocked.
+            state->pending = [] {};
             lock.unlock();
-            (*task)();
+            task();
             lock.lock();
             state->pending = nullptr;
             state->done.notify_all();
@@ -49,10 +51,22 @@ CoreThread::~CoreThread() {
 }
 bool CoreThread::is_current() const { return std::this_thread::get_id() == state->thread.get_id(); }
 void CoreThread::run(const std::function<void()>& task) {
+    post(task);
+    wait();
+}
+void CoreThread::post(std::function<void()> task) {
     std::unique_lock<std::mutex> lock(state->mutex);
-    state->pending = &task;
+    state->done.wait(lock, [this] { return !state->pending; });
+    state->pending = std::move(task);
     state->wake.notify_all();
-    state->done.wait(lock, [this] { return state->pending == nullptr; });
+}
+bool CoreThread::ready() const {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    return !state->pending;
+}
+void CoreThread::wait() const {
+    std::unique_lock<std::mutex> lock(state->mutex);
+    state->done.wait(lock, [this] { return !state->pending; });
 }
 
 thread_local LibretroHost* LibretroHost::active = nullptr;

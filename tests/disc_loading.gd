@@ -77,6 +77,7 @@ func run() -> void:
 	app.emulator.frame_presented.emit(lit)
 	check(app.loading_path.is_empty() and not app.loading_screen.visible, "A frame with picture takes the card down")
 	check(app.world.picture.source_texture == app.emulator.texture, "The game's picture replaces the card")
+	check(app.card_view.render_target_update_mode == SubViewport.UPDATE_ONCE, "Leaving the card redraws its hidden contents instead of retaining the old game title")
 	check(app.world.picture.raster_size == app.world.picture.source_size, "Game handover restores the console's own raster")
 	app.show_loading(zipped)
 	app.emulator.stop()

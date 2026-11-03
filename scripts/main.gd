@@ -1053,8 +1053,8 @@ func show_programme(active: bool, rate: float, aspect: float) -> void:
 	var loading := not loading_path.is_empty()
 	pattern.visible = not active and not loading
 	pattern.set_process(pattern.visible)
-	signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active and not loading else SubViewport.UPDATE_ALWAYS
-	card_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active and not loading else SubViewport.UPDATE_ALWAYS
+	signal_view.render_target_update_mode = SubViewport.UPDATE_ONCE if active and not loading else SubViewport.UPDATE_ALWAYS
+	card_view.render_target_update_mode = SubViewport.UPDATE_ONCE if active and not loading else SubViewport.UPDATE_ALWAYS
 	pattern_words.visible = not active and not loading
 	card_words.visible = loading
 	# Switching programmes is a channel change; the first is the power-on instead.
@@ -1109,7 +1109,10 @@ func end_loading() -> void:
 	loading_screen.visible = false
 	loading_screen.set_process(false)
 	card_words.visible = false
-	card_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	# Clear the cached card after hiding its nodes, even before the new game
+	# has produced a texture. Otherwise the next launch can reuse its old title.
+	card_view.render_target_update_mode = SubViewport.UPDATE_ONCE
+	signal_view.render_target_update_mode = SubViewport.UPDATE_ONCE
 	if emulator.loaded and emulator.texture != null:
 		signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		world.picture.source_rate = emulator.fps

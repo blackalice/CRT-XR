@@ -8,6 +8,11 @@
 class RetroCore : public godot::RefCounted {
     GDCLASS(RetroCore, godot::RefCounted)
     crt_xr::LibretroHost host;
+    std::unique_ptr<crt_xr::CoreThread> frame_worker;
+    bool frame_pending = false, frame_ok = false;
+    struct FrameTiming { std::uint64_t wall, step, readback; std::size_t audio; bool video; };
+    std::vector<FrameTiming> frame_timings;
+    void wait_frame() const;
     // Input preview runs in a second copy of the core so the playing instance is
     // never rewound; its audio then stays continuous for every core.
     crt_xr::LibretroHost preview_host;
@@ -16,6 +21,9 @@ class RetroCore : public godot::RefCounted {
 protected:
     static void _bind_methods();
 public:
+    ~RetroCore();
+    bool begin_frame(int buttons, int frames = 1);
+    int poll_frame(); // 0 running, 1 completed, -1 failed, -2 no request
     bool load_core(const godot::String& path);
     bool load_game(const godot::String& path, const godot::String& saves);
     void set_option(const godot::String& key, const godot::String& value);

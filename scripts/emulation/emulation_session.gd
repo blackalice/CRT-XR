@@ -6,6 +6,9 @@ const DolphinSupport = preload("res://scripts/emulation/dolphin_support.gd")
 ## Godot owns presentation; the native Libretro host owns frame execution/callbacks.
 signal content_changed(texture: Texture2D)
 signal frame_presented(image: Image)
+## Opt-in diagnostic trace. Includes every emulated frame in a catch-up batch,
+## rather than just the last frame left in core.info(). Disabled during play.
+signal frame_profiled(metrics: Dictionary)
 signal status_changed(message: String)
 signal game_changed(active: bool)
 ## A disc ZIP being unpacked before play: bytes done of total, then the outcome
@@ -13,6 +16,18 @@ signal game_changed(active: bool)
 signal unpack_progress(path: String, done: int, total: int)
 signal unpack_finished(path: String, error: String)
 
+var profile_frames := false
+# Hardware cores may spend hundreds of milliseconds compiling. Never wait for that
+# work in a room update; collect completed batches before submitting more.
+var async_pending := false
+var async_completed := false
+var async_sample_rate := 48000.0
+var vmu_pixels := PackedByteArray()
+const ASYNC_AUDIO_RESERVE_FRAMES := 8
+var async_audio_capacity := 0
+var async_audio_skips := 0
+var async_audio_priming := false
+var async_audio_recoveries := 0
 var auto_saved := true
 var core: RefCounted
 var loaded := false
@@ -160,6 +175,7 @@ func load_rom(path: String) -> bool:
 	reload_controls()
 	core_identity = str(info.name)
 	fps = float(info.fps)
+	async_sample_rate = float(info.sample_rate)
 	auto_saved = true
 	core_failed = false
 	loaded = true
@@ -208,6 +224,12 @@ func _process(delta: float) -> void:
 	if skip_delta:
 		skip_delta = false
 		return
+	if uses_async():
+		process_async(delta)
+		return
+	var profile_start := Time.get_ticks_usec() if profile_frames else 0
+	var profile_steps = [] if profile_frames else null
+	var profile_audio := 0
 	accumulator += minf(delta, 0.25)
 	late_pressure = maxf(0.0, late_pressure - delta * 2.0)
 	var period := 1.0 / fps
@@ -220,19 +242,27 @@ func _process(delta: float) -> void:
 	var pressure: PackedInt32Array = input.pressure
 	core.set_trigger_pressure(pressure[0], pressure[1])
 	while accumulator >= period and frames < 8:
+		var step_start := Time.get_ticks_usec() if profile_frames else 0
 		if not core.run_frame(buttons):
 			var message := str(core.last_error())
 			fail_core()
 			report(message, true)
 			return
+		if profile_frames:
+			var info: Dictionary = core.info()
+			profile_steps.append({"wall_us": Time.get_ticks_usec() - step_start,
+				"core_us": info.step_usec, "readback_us": info.readback_usec,
+				"audio_frames": info.audio_frames, "video_changed": info.video_changed})
 		accumulator -= period
 		frames += 1
 		auto_saved = false
 		rendered = rendered or core.video_changed()
+		var audio_start := Time.get_ticks_usec() if profile_frames else 0
 		if playback != null and core.push_audio(playback) < 0:
 			audio_overflows += 1
 			if audio_overflows == 1 or audio_overflows % 300 == 0:
 				push_warning("Audio buffer full; dropped an audio batch. Check frame pacing.")
+		if profile_frames: profile_audio += Time.get_ticks_usec() - audio_start
 	if accumulator >= period:
 		slow_frames += 1
 		accumulator = fmod(accumulator, period)
@@ -244,13 +274,113 @@ func _process(delta: float) -> void:
 			report("Input preview paused for this game: it needs the full frame time.", true)
 		if slow_frames == 1 or slow_frames % 300 == 0:
 			push_warning("Emulator cannot keep up with real time; reduce rendering load")
+	var present_start := Time.get_ticks_usec() if profile_frames else 0
 	if rendered:
 		var preview := preview_frame(buttons, run_ahead) if run_ahead > 0 and preview_possible() else {}
 		if not paused: update_texture(true, preview)
+	var present_us := Time.get_ticks_usec() - present_start if profile_frames else 0
 	sram_timer += delta
 	if sram_timer >= 10.0:
 		sram_timer = 0.0
 		flush_sram()
+	if profile_frames:
+		frame_profiled.emit({"mode": "sync", "fps": fps, "audio_skips": playback.get_skips() if playback != null else 0, "audio_queued": async_audio_capacity - playback.get_frames_available() if playback != null else 0, "at_us": profile_start, "delta_us": int(delta * 1000000.0),
+			"process_us": Time.get_ticks_usec() - profile_start, "steps": profile_steps,
+			"audio_us": profile_audio, "present_us": present_us,
+			"audio_overflows": audio_overflows, "slow_frames": slow_frames})
+
+func uses_async() -> bool:
+	return system_id in ["gamecube", "dreamcast", "n64"]
+
+# The VMU display only reads a completed snapshot; it must never join a job.
+func vmu_lcd() -> PackedByteArray:
+	return vmu_pixels
+
+# Audio consumption paces native jobs, at most four frames per batch.
+# Without an audio device, headless tests use the wall-clock accumulator.
+# Silence already played by the device is lost wall time, not audio to replay.
+# All generated audio is retained in order; no emulated frames are skipped.
+func process_async(delta: float) -> void:
+	var started := Time.get_ticks_usec()
+	accumulator += delta
+	if playback != null:
+		var skips := playback.get_skips()
+		if skips > async_audio_skips and not async_audio_priming:
+			player.stream_paused = true
+			async_audio_priming = true
+			async_audio_recoveries += 1
+		async_audio_skips = skips
+		# With sound, the device's consumed samples are the master clock.
+		# A wall-clock catch-up loop cannot repay silence without racing audio.
+		accumulator = 0.0
+	sram_timer += delta
+	var steps: Array = []
+	var audio_us := 0
+	var present_us := 0
+	if async_pending:
+		if not async_completed:
+			var result: int = core.poll_frame()
+			if result < 0:
+				async_pending = false
+				var message := str(core.last_error())
+				fail_core()
+				report(message, true)
+				return
+			async_completed = result == 1
+		if async_completed:
+			var audio_start := Time.get_ticks_usec()
+			# Keep the completed batch until the audio queue has room.
+			if playback == null or core.push_audio(playback) >= 0:
+				audio_us = Time.get_ticks_usec() - audio_start
+				async_pending = false
+				async_completed = false
+				if playback != null and async_audio_priming:
+					var queued := async_audio_capacity - playback.get_frames_available()
+					if queued >= mini(ceili(async_sample_rate / fps) * ASYNC_AUDIO_RESERVE_FRAMES, async_audio_capacity):
+						player.stream_paused = false
+						async_audio_priming = false
+						accumulator = 0.0
+				if system_id == "dreamcast": vmu_pixels = core.vmu_lcd(0)
+				if profile_frames: steps = core.info().async_steps
+				var present_start := Time.get_ticks_usec()
+				if core.video_changed(): update_texture(true)
+				present_us = Time.get_ticks_usec() - present_start
+	if not async_pending:
+		# Periodic RAM reads must also happen between jobs, never during one.
+		if sram_timer >= 10.0:
+			sram_timer = 0.0
+			flush_sram()
+		var period := 1.0 / fps
+		var due := mini(4, int(accumulator / period))
+		if playback != null:
+			var samples_per_frame := ceili(async_sample_rate / fps)
+			var queued := async_audio_capacity - playback.get_frames_available()
+			var target := mini(samples_per_frame * ASYNC_AUDIO_RESERVE_FRAMES, async_audio_capacity)
+			due = clampi(ceili(float(target - queued) / samples_per_frame), 0, 4)
+			due = mini(due, playback.get_frames_available() / samples_per_frame)
+		if due > 0:
+			var input := read_input()
+			var sticks: PackedInt32Array = input.analog
+			core.set_analog(sticks[0], sticks[1], sticks[2], sticks[3])
+			var pressure: PackedInt32Array = input.pressure
+			core.set_trigger_pressure(pressure[0], pressure[1])
+			if core.begin_frame(input.mask, due):
+				async_pending = true
+				accumulator = maxf(0.0, accumulator - period * due)
+				auto_saved = false
+	if profile_frames:
+		frame_profiled.emit({"mode": "async", "clock": "audio" if playback != null else "wall", "priming": async_audio_priming, "audio_recoveries": async_audio_recoveries, "fps": fps, "audio_skips": playback.get_skips() if playback != null else 0, "audio_queued": async_audio_capacity - playback.get_frames_available() if playback != null else 0, "pending": async_pending, "backlog_us": int(accumulator * 1000000.0), "at_us": started, "delta_us": int(delta * 1000000.0),
+			"process_us": Time.get_ticks_usec() - started, "steps": steps,
+			"audio_us": audio_us, "present_us": present_us,
+			"audio_overflows": audio_overflows, "slow_frames": slow_frames})
+
+# Explicit console operations may wait. Normal presentation never does.
+func drain_async() -> void:
+	if not async_pending or core == null: return
+	core.info() # Joins the job before save/restore, pause, reset or teardown.
+	if not async_completed: core.poll_frame()
+	async_pending = false
+	async_completed = false
 
 func preview_possible() -> bool:
 	if preview_suspended or not Registry.SYSTEMS[system_id].get("preview", true): return false
@@ -370,6 +500,7 @@ func fail_core() -> void:
 	set_paused(true)
 
 func set_paused(value: bool) -> void:
+	drain_async()
 	if not value and core_failed:
 		report("The emulator stopped after an error. Load the game again to continue.", true)
 		return
@@ -385,9 +516,17 @@ func restart_audio() -> void:
 	player.stop()
 	tv_audio.clear_tail()
 	playback = null
+	async_audio_skips = 0
+	async_audio_priming = false
+	player.stream_paused = false
+	async_audio_recoveries = 0
 	if loaded and not paused and DisplayServer.get_name() != "headless":
 		player.play()
 		playback = player.get_stream_playback()
+		async_audio_capacity = playback.get_frames_available()
+		if uses_async():
+			async_audio_priming = true
+			player.stream_paused = true
 
 func write_bytes_atomic(path: String, bytes: PackedByteArray) -> bool:
 	var temporary := path + ".tmp"
@@ -468,6 +607,7 @@ func save_state(slot := 0) -> bool:
 	return save_to(state_path(slot),"Saved • Slot %d" % (slot + 1))
 
 func save_to(path: String, description: String) -> bool:
+	drain_async()
 	if not loaded: return false
 	var state: PackedByteArray = core.save_state()
 	if state.is_empty():
@@ -486,6 +626,7 @@ func save_to(path: String, description: String) -> bool:
 
 ## The console's reset button: the game restarts; battery saves and states are kept.
 func reset_game() -> bool:
+	drain_async()
 	if not loaded: return false
 	if not core.reset():
 		report(str(core.last_error()), true)
@@ -504,6 +645,7 @@ func load_auto() -> bool:
 	return load_from(auto_path(),"Continued automatic save")
 
 func load_from(path: String, description: String) -> bool:
+	drain_async()
 	if not loaded: return false
 	var envelope := state_details(path)
 	if envelope.get("rom")!=rom_hash or envelope.get("core")!=core_identity:
@@ -528,6 +670,7 @@ func load_from(path: String, description: String) -> bool:
 ## Releases the core and forgets the previous game, so nothing describes a game
 ## that is no longer loaded.
 func clear_game() -> void:
+	drain_async()
 	# Explicitly close/deinit before changing libraries: callbacks have one owner.
 	if core != null: core.close()
 	core = null
@@ -545,12 +688,14 @@ func fail_load(message: String) -> bool:
 	return false
 
 func stop() -> void:
+	drain_async()
 	flush_sram()
 	if core != null: core.close_game()
 	player.stop()
 	tv_audio.clear_tail()
 	playback = null
 	loaded = false
+	vmu_pixels = PackedByteArray()
 	paused = false
 	texture = null
 	last_frame = null

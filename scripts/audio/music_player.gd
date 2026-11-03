@@ -14,6 +14,14 @@ var track_index := -1
 var metadata: Dictionary = {}
 var kind := ""
 var paused_seek := -1.0
+var local_audio: AudioStreamMP3
+var local_worker := preload("res://scripts/audio/music_decode_worker.gd").new()
+var local_block := PackedVector2Array()
+var local_ended := false
+var local_target := 0.0
+var local_submitted := 0
+var local_capacity := 0
+var seek_save_delay := 0.0
 var album_folder := ""
 const DEFAULTS := {"duck_game":false,"duck_amount":0.5,"volume":0.45,"game_volume":1.0,"reverb":0.12,"directional":0.8,"side":-1.1,"loop":true,"last_file":"","station_url":""}
 var duck_game := false
@@ -49,6 +57,7 @@ var metadata_remaining := 0
 var streaming := false
 
 func _ready() -> void:
+	local_worker.start()
 	add_child(player)
 	bus_name="CRT XR Music "+str(get_instance_id())
 	AudioServer.add_bus()
@@ -82,18 +91,51 @@ func apply_game_level() -> void:
 		game_player.volume_db=-6.0+(linear_to_db(level) if level>0 else -80.0)
 
 func seek(seconds: float) -> void:
-	if kind!="local" or player.stream==null: return
-	var target := clampf(seconds,0,maxf(0,player.stream.get_length()-.05))
-	if player.stream_paused or not player.playing: paused_seek=target
-	else: player.seek(target)
-	save_resume(target)
+	if kind != "local" or local_audio == null: return
+	var target := clampf(seconds, 0, maxf(0, duration() - .05))
+	begin_local(target, player.playing and not player.stream_paused)
+	seek_save_delay = 0.25
+
+func begin_local(target: float, playing: bool) -> void:
+	player.stop()
+	player.stream_paused = false
+	var generator := AudioStreamGenerator.new()
+	generator.mix_rate_mode = AudioStreamGenerator.MIX_RATE_CUSTOM
+	generator.mix_rate = AudioServer.get_mix_rate()
+	generator.buffer_length = .1
+	player.stream = generator
+	playback = null
+	local_target = target; local_submitted = 0
+	local_block = PackedVector2Array(); local_ended = false
+	paused_seek = -1.0 if playing else target
+	local_worker.request(local_audio, target, AudioServer.get_mix_rate())
+	if playing:
+		player.play()
+		playback = player.get_stream_playback()
+		local_capacity = playback.get_frames_available()
 
 func duration() -> float:
-	return player.stream.get_length() if kind=="local" and player.stream!=null else 0.0
+	return local_audio.get_length() if kind == "local" and local_audio != null else 0.0
 
 func position_seconds() -> float:
-	if paused_seek>=0: return paused_seek
-	return player.get_playback_position() if player.stream!=null else 0.0
+	if paused_seek >= 0: return paused_seek
+	if kind == "local":
+		var queued := local_capacity - playback.get_frames_available() if playback != null else 0
+		return minf(duration(), local_target + float(maxi(0, local_submitted - queued)) / AudioServer.get_mix_rate())
+	return player.get_playback_position() if player.stream != null else 0.0
+
+func pump_local() -> void:
+	if playback == null or player.stream_paused: return
+	if local_block.is_empty() and not local_ended:
+		var result: Dictionary = local_worker.take()
+		local_block = result.frames
+		local_ended = result.ended
+	if not local_block.is_empty() and playback.get_frames_available() >= local_block.size():
+		if playback.push_buffer(local_block):
+			local_submitted += local_block.size()
+			local_block = PackedVector2Array()
+	if local_ended and local_block.is_empty() and playback.get_frames_available() == local_capacity:
+		track_finished()
 
 func update_pose(orientation: Quaternion, listener: Vector3, television: Vector3, delta: float) -> void:
 	var local := orientation.inverse()*(television+Vector3(side,-.25,.1)-listener)
@@ -107,7 +149,9 @@ func report_error(message: String) -> void:
 	set_status(message); playback_error.emit(message)
 
 func stop() -> void:
-	if not restoring: save_resume()
+	if not restoring: save_resume(-1.0, false, true)
+	local_worker.request(null, 0.0, AudioServer.get_mix_rate())
+	local_audio = null; local_block = PackedVector2Array(); seek_save_delay = 0.0
 	paused_seek=-1.0
 	player.stop(); player.stream_paused=false; player.stream=null; playback=null; streaming=false
 	if http!=null: http.close()
@@ -172,12 +216,10 @@ func start_track(index: int, ready_only := false, saved_position := 0.0) -> bool
 	track_index=index; kind="local"; last_file=path; metadata=tracks[index]
 	source=str(metadata.title)
 	if not str(metadata.artist).is_empty(): source+=" — "+str(metadata.artist)
-	audio.loop=false; player.stream=audio
-	if ready_only:
-		paused_seek=clampf(saved_position,0,maxf(0,audio.get_length()-.05))
-		set_status("Ready · "+source)
-	else:
-		player.play(); set_status("Playing · "+source); save_resume(0)
+	local_audio = audio
+	begin_local(clampf(saved_position, 0, maxf(0, duration() - .05)) if ready_only else 0.0, not ready_only)
+	set_status(("Ready · " if ready_only else "Playing · ") + source)
+	if not ready_only: save_resume(0, false, true)
 	transport_changed.emit(); return true
 
 func track_finished() -> void:
@@ -196,7 +238,7 @@ func skip(direction: int) -> void:
 	start_track(posmod(track_index+direction,tracks.size()))
 
 func toggle_playback() -> void:
-	save_resume()
+	save_resume(-1.0, false, true)
 	if kind=="radio":
 		if http!=null: stop()
 		else: play_station(station_url)
@@ -205,11 +247,11 @@ func toggle_playback() -> void:
 			# Godot may report playing=false once a paused voice reaches the mixer.
 			# Keep our own cursor rather than treating it as a newly prepared song.
 			paused_seek=position_seconds()
-			player.stream_paused=true; save_resume(paused_seek)
+			player.stream_paused=true; save_resume(paused_seek, false, true)
 			set_status("Paused · "+source)
 		else:
 			var start := maxf(0,paused_seek)
-			player.stream_paused=false; player.play(start); paused_seek=-1
+			begin_local(start, true)
 			set_status("Playing · "+source)
 	elif track_index>=0: start_track(track_index)
 	transport_changed.emit()
@@ -228,13 +270,13 @@ func now_playing() -> String:
 func progress_text() -> String:
 	if kind!="local" or player.stream==null: return ""
 	var elapsed := int(position_seconds())
-	var duration := int(player.stream.get_length())
+	var duration := int(duration())
 	return "%d:%02d / %d:%02d" % [elapsed/60,elapsed%60,duration/60,duration%60]
 
 func play_station(url: String) -> bool:
 	stop(); tracks.clear(); track_index=-1; metadata.clear(); kind="radio"
 	station_url=url.strip_edges(); source="Web radio"; redirects=0
-	save_resume()
+	save_resume(-1.0, false, true)
 	transport_changed.emit()
 	if not ClassDB.class_exists("RadioMP3Decoder"):
 		report_error("Radio decoder unavailable in this build."); return false
@@ -283,11 +325,19 @@ func filter_icy(data: PackedByteArray) -> PackedByteArray:
 	return result
 
 func _process(delta: float) -> void:
+	var bookmark_error := local_worker.last_save_error()
+	if bookmark_error != OK and not resume_warning:
+		resume_warning = true
+		report_error("Music position could not be saved. Check free space and user-folder permissions.")
+	if kind == "local": pump_local()
+	if seek_save_delay > 0.0:
+		seek_save_delay -= delta
+		if seek_save_delay <= 0.0: save_resume(-1.0, false, true)
 	resume_elapsed+=delta
 	# Stop, pause, track changes and quitting save immediately; this only bounds
 	# what a crash could lose without rewriting the file every few seconds.
 	if resume_elapsed>=30:
-		resume_elapsed=0; save_resume()
+		resume_elapsed=0; save_resume(-1.0, false, true)
 	var audible := player.playing and not player.stream_paused and volume>0.0001
 	var target := (1.0-duck_amount) if duck_game and audible else 1.0
 	duck_gain=lerpf(duck_gain,target,1.0-exp(-maxf(delta,0)/(.15 if target<duck_gain else .4)))
@@ -349,7 +399,7 @@ func _process(delta: float) -> void:
 	elif state==HTTPClient.STATUS_CONNECTED and requested and not connecting:
 		fail("Radio ended. Press Play radio to reconnect.")
 
-func save_resume(position := -1.0, clear := false) -> Error:
+func save_resume(position := -1.0, clear := false, background := false) -> Error:
 	if restoring: return OK
 	if not clear and (kind.is_empty() or (kind=="local" and player.stream==null)): return OK
 	var config := ConfigFile.new()
@@ -357,7 +407,7 @@ func save_resume(position := -1.0, clear := false) -> Error:
 	config.set_value("resume","path",str(metadata.get("path",last_file)) if not clear and kind=="local" else "")
 	config.set_value("resume","position",(position if position>=0 else position_seconds()) if not clear and kind=="local" else 0.0)
 	config.set_value("resume","url",station_url if not clear and kind=="radio" else "")
-	var error := ResumeStore.write("user://music-resume.cfg",config)
+	var error := local_worker.save(config, not background)
 	if error!=OK and not resume_warning:
 		resume_warning=true; report_error("Music position could not be saved. Check free space and user-folder permissions.")
 	elif error==OK: resume_warning=false
@@ -395,5 +445,6 @@ func reset_defaults() -> void:
 
 func _exit_tree() -> void:
 	stop()
+	local_worker.close()
 	var index := AudioServer.get_bus_index(bus_name)
 	if index>0: AudioServer.remove_bus(index)

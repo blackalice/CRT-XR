@@ -1,13 +1,13 @@
 extends SceneTree
 const Display = preload("res://scripts/rendering/vmu_display.gd")
-class FakeCore extends RefCounted:
- var calls := 0
- var pixels := PackedByteArray()
- func vmu_lcd(_index): calls += 1; return pixels
 class FakeSession extends Node:
  var loaded := true
  var system_id := "dreamcast"
- var core := FakeCore.new()
+ var calls := 0
+ var pixels := PackedByteArray()
+ func vmu_lcd():
+  calls += 1
+  return pixels
 var failures := 0
 func check(ok: bool, label: String):
  print("PASS: " if ok else "FAIL: ",label)
@@ -18,10 +18,10 @@ func run():
  var panel := Display.new(); parent.add_child(panel)
  check(not panel.visible,"VMU stays hidden before receiving an LCD")
  var session := FakeSession.new()
- session.core.pixels.resize(48*32); session.core.pixels.fill(255)
- session.core.pixels[31*48] = 0
+ session.pixels.resize(48*32); session.pixels.fill(255)
+ session.pixels[31*48] = 0
  panel.tick(0.02,session)
- check(session.core.calls == 0,"LCD polling is capped at 30 Hz")
+ check(session.calls == 0,"LCD polling is capped at 30 Hz")
  panel.tick(0.02,session)
  check(panel.visible and panel.texture.get_size() == Vector2(48,32),"Dreamcast LCD appears as a separate 48 by 32 texture")
  var image := panel.texture.get_image()
@@ -30,9 +30,9 @@ func run():
  panel.tick(0.04,session)
  check(panel.texture_updates == updates,"Unchanged LCD pixels do not upload another texture")
  panel.enabled = false; panel.apply_layout()
- var calls: int = session.core.calls
+ var calls: int = session.calls
  panel.tick(0.04,session)
- check(not panel.visible and session.core.calls == calls,"Hidden VMU stops polling the core")
+ check(not panel.visible and session.calls == calls,"Hidden VMU stops reading the LCD snapshot")
  panel.enabled = true; panel.horizontal = 0.4; panel.width = 0.5; panel.apply_layout()
  check(is_equal_approx(panel.position.x,0.4) and is_equal_approx(panel.scale.x,0.5) and panel.get_parent() == parent,"Placement and size apply to the world-anchored panel")
  session.system_id = "snes"; panel.tick(0.04,session)

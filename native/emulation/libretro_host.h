@@ -16,13 +16,17 @@
 
 namespace crt_xr {
 
-// Runs tasks one at a time on a thread of its own; run() waits for each.
+// Single caller, owned tasks on a persistent thread. run() waits; post() lets
+// the caller poll ready() or wait() before accessing the task's output.
 class CoreThread {
 public:
     CoreThread();
     ~CoreThread();
     bool is_current() const;
     void run(const std::function<void()>& task);
+    void post(std::function<void()> task);
+    bool ready() const;
+    void wait() const;
 private:
     struct State;
     std::unique_ptr<State> state;

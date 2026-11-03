@@ -61,6 +61,35 @@ Audio → TV sound includes **Dip game during music** (Off by default) and **Gam
 
 The last local track, its album queue and timeline position are restored on launch, with the compressed track prepared but its player stopped. Press Play to continue at that position; no sound is emitted during restoration, and game-volume dipping remains inactive. Radio restores its saved URL ready to connect, without connecting or starting audio automatically.
 
-An independent atomic `user://music-resume.cfg` bookmark saves every five seconds, on seeking/pause/source changes, on focus loss and during settings-save/exit. Picture presets and per-game settings do not replace it. Missing removable media keeps the bookmark and displays recovery guidance; Play last MP3 retries the saved position after reconnecting the drive. Invalid positions fall back to zero and out-of-range positions clamp to the track. Existing last-file preferences migrate as ready at zero when no bookmark exists. Reset all clears the bookmark. Abrupt termination may lose up to five seconds of progress.
+An independent atomic `user://music-resume.cfg` bookmark saves every thirty seconds, after a short seek debounce, on pause/source changes, on focus loss and during settings-save/exit. Picture presets and per-game settings do not replace it. Missing removable media keeps the bookmark and displays recovery guidance; Play last MP3 retries the saved position after reconnecting the drive. Invalid positions fall back to zero and out-of-range positions clamp to the track. Existing last-file preferences migrate as ready at zero when no bookmark exists. Reset all clears the bookmark. Abrupt termination may lose up to thirty seconds of progress.
 
 `tests/music_resume.gd` checks a fresh app restoration, silence, album identity, stored position, continuation, missing media, invalid data, reset and radio readiness.
+
+## Background local-MP3 seeking
+
+Local music uses a private MP3 playback on `music_decode_worker.gd` and feeds a
+bounded PCM block into a main-thread audio generator. Timeline requests invalidate
+older seeks and decoded blocks; the worker alone scans and mixes the MP3. Paused
+seeks remain visible and resume from the latest requested position. Stop and track
+changes invalidate outstanding audio. Compressed-file loading and initial metadata
+preparation remain synchronous; this change addresses seeking, not every file-open
+cost.
+
+Routine bookmark writes use the same worker, with pending writes coalesced. Explicit
+`save_resume()` still waits for atomic persistence; shutdown flushes the final bookmark.
+The worker touches no scene nodes. Live radio retains its existing decoder path.
+
+Verification on 3 November 2026: resume, album, music/radio and asynchronous seeking
+checks passed. A synthetic one-hour MP3 was scrubbed near its end, backwards and
+forwards with the complete CRT room rendering on the Deck. Final seek requests
+peaked at 165 microseconds; the largest process-frame gap during scrubbing, including
+the delayed bookmark write, was 16.88 ms. PCM was finite and audible, and final-request
+ordering, paused seek/resume and cancellation passed. Results are in
+`build/music-seek-deck-complete.log`; the isolated test release is
+`music-async-test-20261103`. The matching tested build was subsequently activated
+as `music-async-ready-20261103`, and the owner confirmed the music fix works.
+
+Separate pause/resume measurements still reached roughly 60 ms in the full menu;
+that remaining phase needs profiling rather than being attributed to MP3 seeking.
+The tracking driver was disconnected during these room-rendering tests, so physical
+headset acceptance remains outstanding.

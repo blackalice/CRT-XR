@@ -85,4 +85,4 @@ func tick(delta: float, session: Node) -> void:
  poll_elapsed += delta
  if poll_elapsed < 1.0/30.0: return
  poll_elapsed = fmod(poll_elapsed,1.0/30.0)
- update_lcd(session.core.vmu_lcd(0))
+ update_lcd(session.vmu_lcd())

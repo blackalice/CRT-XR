@@ -3,6 +3,8 @@
 #include <cstdio>
 #include <cstring>
 #include <thread>
+#include <chrono>
+#include <cstdlib>
 
 namespace {
 retro_environment_t environment;
@@ -115,6 +117,8 @@ RETRO_API bool retro_load_game(const retro_game_info* game) {
 RETRO_API void retro_unload_game() {}
 RETRO_API void retro_reset() { counter = 0; }
 RETRO_API void retro_run() {
+    if (const char* delay = std::getenv("CRT_XR_TEST_FRAME_DELAY_MS"))
+        std::this_thread::sleep_for(std::chrono::milliseconds(std::atoi(delay)));
     ++counter;
     poll();
     const bool pressed = input(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B);
