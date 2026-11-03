@@ -35,7 +35,7 @@ tiles, row,column) and recoloured to white for tinting, otherwise unchanged exce
 
 ## Console icons by Tatohead
 
-Fourteen console icons in `assets/icons/consoles/` are from **Console-Iconset**
+Fifteen console icons in `assets/icons/consoles/` are from **Console-Iconset**
 by Tatohead (https://github.com/Tatohead/Console-Iconset), used unmodified at
 their native 32×32 and drawn at twice their size.
 
@@ -61,6 +61,7 @@ Credit: console icons by Tatohead, https://github.com/Tatohead/Console-Iconset.
 | `consoles/segacd.png` | `Console/Sega/Sega Genesis - Mega Drive/GenesisSegaCD.png` |
 | `consoles/psx.png` | `Console/Sony/Playstation.png` |
 | `consoles/n64.png` | `Console/Nintendo/N64/N64.png` |
+| `consoles/dreamcast.png` | `Console/Sega/Sega Dreamcast/Dreamcast.png` |
 | `consoles/atari2600.png` | `Console/Atari/Atari 2600/Atari2600.png` |
 | `consoles/atarilynx.png` | `Console/Atari/Atari Lynx/AtariLynx.png` |
 | `consoles/ngpc.png` | `Console/Snk/NeoGeoPocket/NeogeoPocket.png` |
