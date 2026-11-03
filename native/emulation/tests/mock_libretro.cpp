@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 
 namespace {
 retro_environment_t environment;
@@ -117,6 +118,15 @@ RETRO_API void retro_run() {
     ++counter;
     poll();
     const bool pressed = input(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B);
+    // Dolphin polls input on its emulated CPU thread. Exercise the same C
+    // callbacks without any calling-thread host scope, then join before video.
+    std::thread cpu([&] {
+        const char* saves = nullptr;
+        const bool directory = environment(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &saves) && saves && *saves;
+        ram[7] = static_cast<std::uint8_t>((directory ? 0x80 : 0) |
+            (input(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B) ? 1 : 0));
+    });
+    cpu.join();
 #ifdef MOCK_HW_RENDER
     draw(pressed);
 #else
@@ -139,7 +149,8 @@ RETRO_API void retro_run() {
 #endif
     const std::int16_t samples[] = {1000, -1000, 32767, -32768};
     audio_batch(samples, 2);
-    audio(250, -250);
+    std::thread mixer([] { audio(250, -250); });
+    mixer.join();
     ram[0] = static_cast<std::uint8_t>(counter);
     // Exposed for the host test: the left stick, an analog trigger, the disc and an option.
     ram[1] = static_cast<std::uint8_t>(input(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X) >> 8);

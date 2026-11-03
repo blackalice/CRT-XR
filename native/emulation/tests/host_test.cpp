@@ -29,6 +29,7 @@ int main(int argc, char** argv) {
         check(host.step(0) && host.rgba == expected, "0RGB1555 conversion respects row pitch");
         check(host.step(0) && !host.video_changed && host.rgba == expected, "Duplicate video callbacks retain the previous frame");
         check(host.step(1) && host.rgba[0] == 0 && host.rgba[2] == 255, "Joypad B reaches the core");
+        check(host.save_ram()[7] == 0x81, "Core-owned CPU threads receive their host's input and directories");
         const auto state = host.serialize();
         check(!state.empty() && host.step(0) && host.unserialize(state.data(), state.size()) && host.serialize() == state, "Save state round-trip restores core execution state");
         const std::uint8_t invalid = 1;

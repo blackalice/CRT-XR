@@ -3,11 +3,15 @@
 #include "libretro.h"
 #include "gl_context.h"
 #include <cstdint>
+#include <array>
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace crt_xr {
@@ -24,12 +28,12 @@ private:
     std::unique_ptr<State> state;
 };
 // One Libretro instance, driven from the Godot main thread. Several hosts may
-// coexist when each loads its own copy of a core library; the C callbacks reach
-// whichever host is currently calling into its core.
+// coexist when each loads its own copy of a core library. Per-instance callback
+// functions also reach the correct host from threads owned by the core.
 class LibretroHost {
 public:
     ~LibretroHost();
-    // Cores that draw with the GPU (Nintendo 64 and Dreamcast): set before load_core. Every
+    // Cores that draw with the GPU: set before load_core. Every
     // call into the core then runs on a thread of its own, where the core's hidden
     // OpenGL context lives, so Godot's context on the main thread is never touched.
     bool hardware_rendering = false;
@@ -71,13 +75,48 @@ public:
     std::vector<std::uint8_t> rgba;
     std::vector<std::int16_t> pcm;
 private:
-    // Per thread: a hardware core's callbacks arrive on its own thread.
+    // Libretro callbacks have no userdata. A distinct function set per loaded
+    // host routes callbacks from core-owned CPU threads without a global owner.
+    static constexpr unsigned callback_capacity = 16;
+    static std::array<std::atomic<LibretroHost*>, callback_capacity> callback_hosts;
+    int callback_slot = -1;
+    struct Callbacks {
+        retro_environment_t environment;
+        retro_video_refresh_t video;
+        retro_audio_sample_t audio;
+        retro_audio_sample_batch_t audio_batch;
+        retro_input_poll_t input_poll;
+        retro_input_state_t input;
+        retro_hw_get_current_framebuffer_t framebuffer;
+    };
+    // Set by callback routing as well as direct calls into the core.
     static thread_local LibretroHost* active;
     struct Use {
         LibretroHost* previous;
         explicit Use(const LibretroHost* host) : previous(active) { active = const_cast<LibretroHost*>(host); }
         ~Use() { active = previous; }
     };
+    template <std::size_t Slot> static Callbacks callbacks_for() {
+        return {
+            [](unsigned cmd, void* data) { Use use(callback_hosts[Slot].load()); return environment(cmd, data); },
+            [](const void* data, unsigned w, unsigned h, std::size_t pitch) { Use use(callback_hosts[Slot].load()); video(data, w, h, pitch); },
+            [](std::int16_t l, std::int16_t r) { Use use(callback_hosts[Slot].load()); audio(l, r); },
+            [](const std::int16_t* data, std::size_t frames) { Use use(callback_hosts[Slot].load()); return audio_batch(data, frames); },
+            [] { Use use(callback_hosts[Slot].load()); input_poll(); },
+            [](unsigned port, unsigned device, unsigned index, unsigned id) { Use use(callback_hosts[Slot].load()); return input(port, device, index, id); },
+            [] { Use use(callback_hosts[Slot].load()); return current_framebuffer(); }
+        };
+    }
+    template <std::size_t... Slots> static auto callback_table(std::index_sequence<Slots...>) {
+        return std::array<Callbacks, sizeof...(Slots)>{callbacks_for<Slots>()...};
+    }
+    static const std::array<Callbacks, callback_capacity> callbacks;
+    std::atomic<std::uint16_t> input_buttons{0};
+    std::atomic<std::int16_t> input_analog[4]{};
+    std::atomic<std::int16_t> input_triggers[2]{};
+    std::mutex audio_mutex;
+    std::vector<std::int16_t> pending_pcm;
+    bool audio_overflow = false;
     void* library = nullptr;
     bool initialized = false;
     unsigned controller_ports = 2;
