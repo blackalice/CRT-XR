@@ -194,10 +194,14 @@ func launch_game(path: String, continuing: bool) -> void:
 		if not host.close_settings(): host.end_loading(); return
 		for i in range(3): await host.get_tree().process_frame
 		if DisplayServer.get_name() != "headless": await RenderingServer.frame_post_draw
+		# The channel-change static runs for under half a second; the boot below holds
+		# the main thread, so let the static finish first rather than freeze mid-effect.
+		await host.get_tree().create_timer(0.55).timeout
 		if not host.stop_for_disc(path):
 			host.end_loading()
 			if not menu.visible: host.toggle_settings()
 			menu.show_error(host.emulator.status); return
+		if host.needs_fresh_process(path) and host.restart_into(path, continuing): return
 	if not host.load_game(path): menu.show_error(host.startup_message); return
 	if continuing and not host.emulator.load_auto():
 		host.end_loading()

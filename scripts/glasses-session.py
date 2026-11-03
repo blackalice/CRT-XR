@@ -251,6 +251,10 @@ def run_session(args, app_args, state):
         activate(screens, target, initial_mode)
         here = Path(__file__).resolve().parent
         env = dict(os.environ, CRT_XR_DISPLAY_STATUS=str(status), CRT_XR_STARTUP_GATE=str(gate))
+        # This session's display handshake cannot be repeated for a restarted app, so
+        # the app loads every game in-process here rather than restarting.
+        env.pop("CRT_XR_RESTART_FILE", None)
+        env["CRT_XR_NO_SELF_RESTART"] = "1"
         display_args = ["--display-driver", "wayland"] if os.environ.get("WAYLAND_DISPLAY") else ["--display-driver", "x11"]
         initial_size = "%sx%s" % mode_size(initial_mode)
         child = subprocess.Popen([str(here / "crt-xr.x86_64"), *display_args,

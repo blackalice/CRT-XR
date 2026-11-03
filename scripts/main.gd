@@ -183,6 +183,9 @@ const LOADING_TIMEOUT_MSEC := 30000
 ## game has booted, so shader compiles and cache warm-up happen behind it.
 const LOADING_CARD_SYSTEMS := ["psx", "segacd", "gamecube", "dreamcast"]
 const LOADING_HOLD_MSEC := {"gamecube": 3000}
+## Exit code that asks a supervising launcher to start the app again; the extra
+## arguments (one per line) are in the file named by CRT_XR_RESTART_FILE.
+const RESTART_EXIT_CODE := 86
 var loading_hold := 0
 ## True while load_game swaps games behind the card, which must stay up.
 var loading_game := false
@@ -569,7 +572,12 @@ func start_application() -> void:
 	var arguments := OS.get_cmdline_user_args()
 	for index in range(arguments.size() - 1):
 		if arguments[index] == "--rom":
-			load_game(arguments[index + 1])
+			if load_game(arguments[index + 1]):
+				# Started by a restart (see restart_into): straight into the game.
+				if "--rom-continue" in arguments: emulator.load_auto()
+				if "--rom-play" in arguments:
+					was_paused_before_menu = false
+					close_settings()
 		elif arguments[index] == "--video":
 			# Developer flag until videos are in the library menu.
 			if not play_video(arguments[index + 1]): show_notice(video.status)
@@ -1225,6 +1233,61 @@ func video_input(event: InputEvent) -> bool:
 			video_scrub = 0
 			toggle_settings()
 		_: return false
+	return true
+
+## Dolphin crashes or hangs while booting when it is started a second time in the
+## same process, however cleanly the first game was closed. Every GameCube game
+## after the first therefore starts in a fresh process: a slower launch, but one
+## that cannot take the whole app down.
+func needs_fresh_process(path: String) -> bool:
+	return OS.get_name() == "Linux" and emulator.cores_used.has("dolphin") and CoreRegistry.identify(path) == "gamecube"
+
+## Starts a new process that boots `path` straight into play, then ends this one.
+## A launcher that supervises the app (CRT_XR_RESTART_FILE) does the relaunch;
+## without one the app relaunches itself with its own command line. Returns false,
+## leaving everything as it was, if the restart could not be set up.
+func restart_into(path: String, continuing: bool) -> bool:
+	var extra: Array[String] = ["--rom", path, "--rom-play"]
+	if continuing: extra.append("--rom-continue")
+	if not save_settings(): return false
+	var restart_file := OS.get_environment("CRT_XR_RESTART_FILE")
+	if not restart_file.is_empty():
+		var file := FileAccess.open(restart_file, FileAccess.WRITE)
+		if file == null: return false
+		file.store_string("
+".join(extra) + "
+")
+		file.close()
+		emulator.clear_game()
+		get_tree().quit(RESTART_EXIT_CODE)
+		return true
+	# A launcher that cannot repeat its display handshake keeps the game in-process.
+	if OS.get_environment("CRT_XR_NO_SELF_RESTART") == "1": return false
+	# /proc files report no length, so read a buffer rather than the whole file.
+	var proc := FileAccess.open("/proc/self/cmdline", FileAccess.READ)
+	if proc == null: return false
+	var raw := proc.get_buffer(65536)
+	if raw.is_empty(): return false
+	# The arguments are NUL-separated; get_string_from_utf8 would stop at the first.
+	var words: Array[String] = []
+	var start := 0
+	for i in range(raw.size()):
+		if raw[i] != 0: continue
+		if i > start: words.append(raw.slice(start, i).get_string_from_utf8())
+		start = i + 1
+	if words.is_empty(): return false
+	var command: Array[String] = []
+	var skip_value := false
+	for word in words.slice(1):
+		if skip_value: skip_value = false; continue
+		if word == "--rom": skip_value = true; continue
+		if word in ["--last-game", "--rom-play", "--rom-continue"]: continue
+		command.append(word)
+	if not "--" in command: command.append("--")
+	command.append_array(extra)
+	emulator.clear_game()
+	if OS.create_process(words[0], command) <= 0: return false
+	get_tree().quit()
 	return true
 
 func shows_loading_card(path: String) -> bool:
