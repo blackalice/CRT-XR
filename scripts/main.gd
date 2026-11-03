@@ -178,6 +178,12 @@ var loading_path := ""
 var loading_started := 0
 ## A game still black after this long is shown anyway, whatever it draws.
 const LOADING_TIMEOUT_MSEC := 30000
+## Systems whose boot takes seconds of black or a hitching start: the loading card
+## covers them, and for those in LOADING_HOLD_MSEC it stays up that long after the
+## game has booted, so shader compiles and cache warm-up happen behind it.
+const LOADING_CARD_SYSTEMS := ["psx", "segacd", "gamecube", "dreamcast"]
+const LOADING_HOLD_MSEC := {"gamecube": 3000}
+var loading_hold := 0
 ## True while load_game swaps games behind the card, which must stay up.
 var loading_game := false
 var eyes: Array[Camera3D] = []
@@ -1094,6 +1100,7 @@ func update_loading(path: String, progress: float) -> void:
 func end_loading() -> void:
 	if loading_path.is_empty(): return
 	loading_path = ""
+	loading_hold = 0
 	loading_screen.visible = false
 	loading_screen.set_process(false)
 	card_words.visible = false
@@ -1108,7 +1115,9 @@ func end_loading() -> void:
 ## A game's picture has started once a frame shows something other than black,
 ## sampled on a coarse grid; after the timeout any frame counts.
 func picture_started(image: Image) -> bool:
-	if Time.get_ticks_msec() - loading_started > LOADING_TIMEOUT_MSEC: return true
+	var waited := Time.get_ticks_msec() - loading_started
+	if waited > LOADING_TIMEOUT_MSEC: return true
+	if waited < loading_hold: return false
 	if image == null or image.is_empty(): return false
 	var lit := 0
 	for row in range(12):
@@ -1218,17 +1227,25 @@ func video_input(event: InputEvent) -> bool:
 		_: return false
 	return true
 
+func shows_loading_card(path: String) -> bool:
+	return CoreRegistry.identify(path) in LOADING_CARD_SYSTEMS
+
 func load_game(path: String) -> bool:
 	if visualizer.active: visualizer.leave()
 	startup_message = ""
 	var restore_paused := was_paused_before_menu
 	if video.loaded: stop_video()
 	# Discs boot through seconds of black: the loading card covers them.
-	if CoreRegistry.identify(path) in ["psx", "segacd"]: show_loading(path)
+	var carded := shows_loading_card(path)
+	if carded: show_loading(path)
 	else: end_loading()
 	loading_game = true
 	var opened: bool = emulator.load_rom(path)
 	loading_game = false
+	if opened and carded:
+		# The hold counts from when the game has booted, not from the click.
+		loading_started = Time.get_ticks_msec()
+		loading_hold = int(LOADING_HOLD_MSEC.get(CoreRegistry.identify(path), 0))
 	if not opened:
 		end_loading()
 		startup_message = "Could not open the game. Check the ROM location and emulator files. " + emulator.status

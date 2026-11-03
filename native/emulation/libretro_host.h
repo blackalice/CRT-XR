@@ -132,6 +132,9 @@ private:
     std::unique_ptr<GlContext> gl;
     retro_hw_render_callback hw{};
     bool hw_active = false;
+    // A hardware core that is unloaded before it ever ran a frame (Dolphin) is left
+    // in a state that crashes the next load; close_game runs one frame first.
+    bool ran_frame = false;
     // Runs f on the core's thread when it has one (and is not already there).
     template <class F> auto on_core(F&& f) const -> decltype(f()) {
         if (!worker || worker->is_current()) return f();

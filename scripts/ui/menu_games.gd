@@ -182,8 +182,25 @@ func launch_game(path: String, continuing: bool) -> void:
 	# A zipped disc is hundreds of megabytes: unpack it in the background while
 	# the room keeps tracking, then start it.
 	if host.emulator.needs_unpacking(path): unpack_then_launch(path, continuing); return
+	# A slow-starting system boots on this thread and holds it for a moment: the
+	# card goes up first and gets drawn, so the TV shows it rather than the old
+	# game, the test signal or a frozen menu.
+	if host.shows_loading_card(path):
+		# Card first, drawn, and only then the old game's resume save and stop (a
+		# disc game's state is large): the playing game stays paused behind the menu.
+		host.show_loading(path, 0.0)
+		host.was_paused_before_menu = true
+		host.video_was_paused_before_menu = true
+		if not host.close_settings(): host.end_loading(); return
+		for i in range(3): await host.get_tree().process_frame
+		if DisplayServer.get_name() != "headless": await RenderingServer.frame_post_draw
+		if not host.stop_for_disc(path):
+			host.end_loading()
+			if not menu.visible: host.toggle_settings()
+			menu.show_error(host.emulator.status); return
 	if not host.load_game(path): menu.show_error(host.startup_message); return
 	if continuing and not host.emulator.load_auto():
+		host.end_loading()
 		if not menu.visible: host.toggle_settings() # after an unpack the menu is closed
 		menu.show_error(host.emulator.status+" Choose Start from a fresh boot to play without this resume point.")
 		return
