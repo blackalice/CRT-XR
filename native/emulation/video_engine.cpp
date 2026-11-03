@@ -244,6 +244,9 @@ std::string VideoEngine::error() const {
 
 bool VideoEngine::open(const std::string& path, int lines, Style style, bool hardware) {
     close();
+    // Cleared before the tracks open: a default audio track that cannot be
+    // decoded reports through message, and that must survive to the caller.
+    { std::lock_guard<std::mutex> guard(lock); message.clear(); }
     std::string why;
     if (!load(why)) { fail(why); return false; }
     AVFormatContext* input = nullptr;
@@ -321,7 +324,6 @@ bool VideoEngine::open(const std::string& path, int lines, Style style, bool har
     samples_read = 0;
     samples_time = -1.0;
     cues.clear();
-    message.clear();
     running = true;
     worker = std::thread(&VideoEngine::run, this);
     return true;
@@ -417,7 +419,9 @@ void VideoEngine::request_software() {
     std::lock_guard<std::mutex> guard(lock);
     if (!gpu_open) return;
     software_pending = true;
-    seek_target = last_frame_time;
+    // A user seek that has not been applied yet is where playback is going; it
+    // must not be replaced by where the failed hardware decoder had got to.
+    if (!seek_pending) seek_target = last_frame_time;
 }
 
 std::string VideoEngine::decoding() const {

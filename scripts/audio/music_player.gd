@@ -163,11 +163,12 @@ func start_track(index: int, ready_only := false, saved_position := 0.0) -> bool
 		report_error("MP3 unavailable. Reconnect its drive or choose another file."); return false
 	if path.get_extension().to_lower()!="mp3" or file.get_length()>MAX_FILE_BYTES:
 		report_error("Choose an MP3 no larger than 256 MB."); return false
-	# Release the previous compressed track before loading the next; never preload an album.
-	stop()
+	# Decode first: a file that fails must not take the playing track with it.
+	# (Only the one next track is held beside it; an album is never preloaded.)
 	var audio := AudioStreamMP3.load_from_file(path)
 	if audio==null or audio.get_length()<=0:
 		report_error("This file could not be decoded as MP3."); return false
+	stop()
 	track_index=index; kind="local"; last_file=path; metadata=tracks[index]
 	source=str(metadata.title)
 	if not str(metadata.artist).is_empty(): source+=" — "+str(metadata.artist)
@@ -252,7 +253,9 @@ static func parse_url(url: String) -> Dictionary:
 func connect_url(url: String) -> bool:
 	var parts := parse_url(url)
 	if parts.is_empty() or parts.scheme not in ["http","https"] or str(parts.host).is_empty():
-		report_error("Enter a direct http:// or https:// MP3 stream URL."); return false
+		# fail() also drops any connection a redirect left closed, so the next
+		# poll cannot misreport it as a disconnect.
+		fail("Enter a direct http:// or https:// MP3 stream URL."); return false
 	http=HTTPClient.new(); http.read_chunk_size=16384
 	request_path=str(parts.path)
 	if request_path.is_empty(): request_path="/"

@@ -229,6 +229,8 @@ var view_diagnosed := false
 var sbs_prompt: Control
 var sbs_startup := false
 var sbs_starting := false
+## start_application builds the whole scene; three startup paths reach it.
+var application_started := false
 var startup_loading := false
 var menu_boot_pending := false
 var windows_sbs_size := Vector2i.ZERO
@@ -316,9 +318,12 @@ func start_sbs_session() -> void:
 	if not settings_panel.visible: power_on.begin()
 	if resume_game: emulator.set_paused(false)
 	get_window().grab_focus()
+	sbs_starting = false
 	print("SBS startup: same-window handover complete")
 
 func start_application() -> void:
+	if application_started: return
+	application_started = true
 	fade_material.shader = load("res://shaders/eye_fade.gdshader")
 	if not windows_fixed_start and OS.get_name() in ["Linux", "Windows"] and not "--simulate" in OS.get_cmdline_user_args():
 		use_tracking(true)
@@ -684,6 +689,8 @@ func _process(delta: float) -> void:
 		bar.track(video.path.get_file().get_basename(), video.clock, float(video.info.get("duration", 0.0)), video.paused, delta, bar_allowed)
 	for notice in notices: notice.visible = notice_time > 0.0
 	var menu_open := settings_panel.visible
+	# A core that never shows a frame must not keep the card up for ever.
+	if not loading_path.is_empty() and emulator.loaded and Time.get_ticks_msec() - loading_started > LOADING_TIMEOUT_MSEC: end_loading()
 	# Warm up the physical tube first. The live space shader keeps moving while
 	# the logo timeline and its audio remain held at their first frame.
 	tv_menu.update(delta)
@@ -987,13 +994,14 @@ func toggle_settings() -> void:
 	menu.open_pause()
 	refresh_startup_status()
 
-func close_settings() -> void:
-	if not is_instance_valid(settings_panel) or not settings_panel.visible: return
+## Returns true when the menu is closed afterwards (false: saving failed and it stays open).
+func close_settings() -> bool:
+	if not is_instance_valid(settings_panel) or not settings_panel.visible: return true
 	stop_boot_sound()
 	if is_instance_valid(menu.boot): menu.boot.finish()
 	if not save_settings():
 		menu.show_error("Settings could not be saved. Check free space and user-folder permissions. Your changes are still here.")
-		return
+		return false
 	menu.error_label.hide()
 	if not settings_on_open.is_empty() and capture_settings().encode_to_text() != settings_on_open: show_notice("Settings saved")
 	settings_on_open = ""
@@ -1004,6 +1012,9 @@ func close_settings() -> void:
 	if emulator.loaded: emulator.set_paused(true if visualizer.active else was_paused_before_menu)
 	if video.loaded and not video.ended: video.set_paused(true if visualizer.active else was_paused_before_menu, true)
 	if not is_instance_valid(sbs_prompt): power_on.begin()
+	# Nothing is left to wait for once the menu is gone.
+	menu_boot_pending = false
+	return true
 
 ## Degauss: closes the menu so the wobble and colour swirl show on the picture.
 func degauss() -> void:

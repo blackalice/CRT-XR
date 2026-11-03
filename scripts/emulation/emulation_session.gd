@@ -17,6 +17,9 @@ var auto_saved := true
 var core: RefCounted
 var loaded := false
 var paused := false
+## The core reported a failed frame or lost its state: it cannot be trusted to
+## run again or to be written as a resume point until a game is loaded afresh.
+var core_failed := false
 var status := "Test signal / no game loaded"
 var rom_path := ""
 ## The file the core opened: rom_path, or its cartridge unpacked from a ZIP.
@@ -106,31 +109,33 @@ func load_rom(path: String) -> bool:
 	if Registry.needs_unpacking(path):
 		report("The disc in " + path.get_file() + " has to be unpacked first. Choose the game again from the library.", true)
 		return false
-	if not save_auto(): return false
-	stop()
-	# Explicitly close/deinit before changing libraries: callbacks have one owner.
-	if core != null: core.close()
-	core = ClassDB.instantiate("RetroCore")
-	system_id = detected
-	display_aspect = Registry.SYSTEMS[system_id].aspect
 	# Preserve existing SNES paths; new systems have independent save namespaces.
-	save_directory = "user://saves" if system_id == "snes" else "user://saves/" + system_id + "/" + Registry.SYSTEMS[system_id].core
-	core.set_hardware_rendering(Registry.SYSTEMS[system_id].get("hardware", false))
-	if not core.load_core(selected_path):
-		report(str(core.last_error()), true)
-		core = null
-		return false
-	var saves := ProjectSettings.globalize_path(save_directory)
+	var new_save_directory: String = "user://saves" if detected == "snes" else "user://saves/" + detected + "/" + Registry.SYSTEMS[detected].core
+	var saves := ProjectSettings.globalize_path(new_save_directory)
+	# Everything that can fail without touching the playing game happens first,
+	# so a missing folder or system file leaves the current game running.
+	# (Staging skips identical files, so it is safe beside a running core.)
 	var error := DirAccess.make_dir_recursive_absolute(saves)
 	if error != OK:
 		report("Cannot create save directory: " + error_string(error), true)
 		return false
-	Registry.stage_bios(system_id, saves)
-	if system_id == "gamecube":
+	Registry.stage_bios(detected, saves)
+	if detected == "gamecube":
 		var stage_error := DolphinSupport.stage(saves)
 		if stage_error != OK:
 			report("Could not prepare Dolphin system files: " + error_string(stage_error), true)
 			return false
+	if not save_auto(): return false
+	stop()
+	# From here the old game is gone (callbacks have one owner, so the new core
+	# cannot load beside it); any failure must leave nothing loaded.
+	clear_game()
+	core = ClassDB.instantiate("RetroCore")
+	system_id = detected
+	display_aspect = Registry.SYSTEMS[system_id].aspect
+	save_directory = new_save_directory
+	core.set_hardware_rendering(Registry.SYSTEMS[system_id].get("hardware", false))
+	if not core.load_core(selected_path): return fail_load(str(core.last_error()))
 	var spec: Dictionary = Registry.SYSTEMS[system_id]
 	if spec.has("controller"): core.set_controller(spec.controller)
 	for key in spec.get("options", {}): core.set_option(key, spec.options[key])
@@ -138,11 +143,8 @@ func load_rom(path: String) -> bool:
 	for key in selected_options: core.set_option(key, selected_options[key])
 	var content := Registry.content_file(path)
 	if content.is_empty():
-		report("Could not unpack the game from " + path.get_file() + ". Its ZIP may be damaged or use a compression method other than Deflate.", true)
-		return false
-	if not core.load_game(content, saves):
-		report(str(core.last_error()), true)
-		return false
+		return fail_load("Could not unpack the game from " + path.get_file() + ". Its ZIP may be damaged or use a compression method other than Deflate.")
+	if not core.load_game(content, saves): return fail_load(str(core.last_error()))
 	rom_path = path
 	content_path = content
 	preview_copy = ""
@@ -159,6 +161,7 @@ func load_rom(path: String) -> bool:
 	core_identity = str(info.name)
 	fps = float(info.fps)
 	auto_saved = true
+	core_failed = false
 	loaded = true
 	paused = false
 	accumulator = 0.0
@@ -218,8 +221,9 @@ func _process(delta: float) -> void:
 	core.set_trigger_pressure(pressure[0], pressure[1])
 	while accumulator >= period and frames < 8:
 		if not core.run_frame(buttons):
-			set_paused(true)
-			report(str(core.last_error()), true)
+			var message := str(core.last_error())
+			fail_core()
+			report(message, true)
 			return
 		accumulator -= period
 		frames += 1
@@ -287,7 +291,7 @@ func preview_frame(buttons: int, frames := 1) -> Dictionary:
 	var started := Time.get_ticks_usec()
 	var state: PackedByteArray = core.save_state()
 	if state.is_empty():
-		run_ahead = 0
+		preview_suspended = true # this game only; the run_ahead setting is the user's
 		push_warning("Input preview unavailable for this core; using normal presentation.")
 		return {}
 	var ram: PackedByteArray = core.save_ram()
@@ -304,14 +308,14 @@ func preview_frame(buttons: int, frames := 1) -> Dictionary:
 	var restored: bool = core.load_state(state)
 	var ram_restored: bool = ram.is_empty() or core.load_ram(ram)
 	if not restored or not ram_restored:
-		set_paused(true)
+		fail_core()
 		report("Input preview could not restore game state. Reload the game with preview disabled.", true)
-		run_ahead = 0
+		preview_suspended = true # this game only; the run_ahead setting is the user's
 		return {}
 	preview_time_usec += Time.get_ticks_usec() - started
 	preview_count += 1
 	if not ok:
-		run_ahead = 0
+		preview_suspended = true # this game only; the run_ahead setting is the user's
 		push_warning("Input preview failed; using normal presentation.")
 		return {}
 	return {"bytes": bytes, "width": info.width, "height": info.height}
@@ -360,7 +364,15 @@ func reload_controls() -> void:
 	# should not make it zoom the TV instead.
 	gamepad.right_stick_game = Registry.SYSTEMS[system_id].get("analog", false) or controls.right_stick != "buttons" 		or controls.buttons.keys().any(func(input): return input.begins_with("rs_"))
 
+## Stops a broken core without making it look like a user pause.
+func fail_core() -> void:
+	core_failed = true
+	set_paused(true)
+
 func set_paused(value: bool) -> void:
+	if not value and core_failed:
+		report("The emulator stopped after an error. Load the game again to continue.", true)
+		return
 	paused = value
 	accumulator = 0.0
 	skip_delta = true
@@ -447,7 +459,7 @@ static func state_time(path: String) -> String:
 	return Time.get_datetime_string_from_unix_time(stamp).replace("T"," ")+" UTC" if stamp>0 else "Unknown time"
 
 func save_auto() -> bool:
-	if not loaded or auto_saved: return true
+	if not loaded or auto_saved or core_failed: return true
 	if not save_to(auto_path(),"Automatic resume saved"): return false
 	auto_saved=true
 	return true
@@ -508,9 +520,29 @@ func load_from(path: String, description: String) -> bool:
 	accumulator = 0.0
 	skip_delta = true
 	auto_saved=false
+	core_failed = false
 	update_texture(true)
 	report("%s • %s" % [description,rom_path.get_file().get_basename()])
 	return true
+
+## Releases the core and forgets the previous game, so nothing describes a game
+## that is no longer loaded.
+func clear_game() -> void:
+	# Explicitly close/deinit before changing libraries: callbacks have one owner.
+	if core != null: core.close()
+	core = null
+	rom_path = ""
+	content_path = ""
+	rom_hash = ""
+	core_identity = ""
+	preview_copy = ""
+
+## A load that failed after the previous game stopped: report it and leave the
+## session empty rather than holding a core with no game.
+func fail_load(message: String) -> bool:
+	report(message, true)
+	clear_game()
+	return false
 
 func stop() -> void:
 	flush_sram()

@@ -200,7 +200,9 @@ bool LibretroHost::load_game(const std::string& path, const std::string& directo
         for (unsigned port = 1; port < controller_ports; ++port) fn_set_controller_port_device(port, RETRO_DEVICE_NONE);
         retro_system_av_info av{};
         fn_get_system_av_info(&av);
-        if (!av_info(av)) { close_game(); return false; }
+        // context_destroy answers a context_reset that has not happened yet on
+        // these two failure paths, so the core must not be told to destroy.
+        if (!av_info(av)) { hw.context_destroy = nullptr; close_game(); return false; }
         if (hw_active) {
             // The core draws into a framebuffer as large as its largest frame,
             // then sets up its GL state (Libretro's context_reset).
@@ -208,7 +210,7 @@ bool LibretroHost::load_game(const std::string& path, const std::string& directo
             const unsigned h = std::max(av.geometry.max_height, av.geometry.base_height);
             if (w == 0 || h == 0 || w > 4096 || h > 4096 || !gl->resize(w, h, hw.depth, hw.stencil, error)) {
                 if (error.empty()) error = "Core reported an unsupported frame size";
-                close_game(); return false;
+                hw.context_destroy = nullptr; close_game(); return false;
             }
             if (hw.context_reset) hw.context_reset();
         }

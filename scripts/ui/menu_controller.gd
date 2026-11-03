@@ -446,6 +446,8 @@ func refresh() -> void:
 
 func open_pause() -> void:
 	remember(); clear_input()
+	# Opening the menu starts from a clean slate: no half-finished edit or rename.
+	editing_id = ""; rename_room = -1; rename_preset = -1; entry_initialized = false
 	mode = "pause"; preview = false
 	selected_id = "resume" if host.emulator.loaded or host.video.loaded else ("home.continue" if FileAccess.file_exists(host.last_game_path) else "home.library")
 	memory[state_key()] = {"id":selected_id,"scroll":0}
@@ -502,7 +504,10 @@ func back() -> void:
 		"launch": restore(games.launch_origin)
 		"slot": mode="settings"; render()
 		"folder_path": restore(games.folder_path_origin)
-		"rename": mode="my_room" if rename_room>=0 else ("my_preset" if rename_preset>=0 else "slot"); render()
+		"rename":
+			mode="my_room" if rename_room>=0 else ("my_preset" if rename_preset>=0 else "slot")
+			# The targets belong to this rename only; a later rename sets its own.
+			rename_room=-1; rename_preset=-1; render()
 		"my_preset", "my_room": mode="settings"; render()
 		"states": mode="pause"; render()
 		"music_browser": restore(music.music_origin)
@@ -769,7 +774,7 @@ func get_items() -> Array:
 			var saved := FileAccess.file_exists(h.profile_path()) or FileAccess.file_exists(h.profile_path()+".bak")
 			return [catalog.action("slot.save","Save current setup",save_setup,"Stores current room, view and picture in this slot."),
 				catalog.unavailable(catalog.action("slot.load","Load setup",h.load_profile,"Apply this slot while retaining display mode and tracking provider.",not saved),"Save a setup to this slot first."),
-				catalog.action("slot.rename","Rename slot",func(): rename_preset=-1; mode="rename"; entry_initialized=false; clear_input(); render(); keys.focus_entry(),"Use the on-screen keys or a physical keyboard."),
+				catalog.action("slot.rename","Rename slot",func(): rename_preset=-1; rename_room=-1; mode="rename"; entry_initialized=false; clear_input(); render(); keys.focus_entry(),"Use the on-screen keys or a physical keyboard."),
 				catalog.unavailable(catalog.action("slot.undo","Undo last setup load",h.undo_profile,"Restores the settings from before the last setup load.",h.profile_undo==null),"Available after loading a setup.")]
 		"folder_path": return keys.text_keys()+[catalog.action("folder_path.open","Open folder",games.submit_folder_path,"Opens a local folder or a network share you can access in Windows."),catalog.action("folder_path.cancel","Cancel",back)]
 		"my_preset": return pictures.items()

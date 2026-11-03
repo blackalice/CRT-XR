@@ -60,6 +60,11 @@ var player := AudioStreamPlayer.new()
 var playback: AudioStreamGeneratorPlayback
 var capacity := 0 # generator frames when empty
 var waiting_for_audio := false
+## How much longer the picture may wait for sound before it runs on its own
+## clock: a seek past the end of the sound, or a track that never decodes,
+## must not hold the picture forever.
+var audio_wait := 0.0
+const AUDIO_WAIT_SECONDS := 2.0
 ## True when this video's sound goes to a real output (false headless or silent).
 var audio_output := false
 ## A seek made while paused still shows its frame, so scrubbing moves the picture.
@@ -158,6 +163,9 @@ func field_rate() -> float:
 ## `quiet` pauses for the menu: no clunk and no PAUSE on the picture, since
 ## the menu itself shows the video is paused.
 func set_paused(value: bool, quiet := false) -> void:
+	# A finished video stays stopped until it is seeked or restarted; resuming it
+	# would only run out of frames again and announce the end twice.
+	if ended and not value: return
 	var changed := loaded and value != paused
 	if changed:
 		osd_steady = "PAUSE" if value and not quiet else ""
@@ -323,8 +331,14 @@ func restart_audio() -> void:
 	player.stop()
 	playback = null
 	priming = 0.0
-	audio_output = decoder != null and decoder.has_audio() and DisplayServer.get_name() != "headless"
+	audio_output = wants_audio_output()
 	waiting_for_audio = audio_output
+	audio_wait = AUDIO_WAIT_SECONDS
+
+## Whether sound should reach the speakers. The decoder switches audio tracks
+## on its own thread, so this can change a few frames after a track is chosen.
+func wants_audio_output() -> bool:
+	return decoder != null and decoder.has_audio() and DisplayServer.get_name() != "headless"
 
 ## The player starts only once decoded sound exists (a GPU decoder can take a
 ## few frames to begin), so the mixer never runs on an empty buffer.
@@ -361,6 +375,9 @@ func _process(delta: float) -> void:
 		update_subtitles()
 		return
 	preview_pending = false
+	# A track switch that failed (or one that brought sound to a silent video)
+	# shows up here once the decoder has applied it.
+	if wants_audio_output() != audio_output: restart_audio()
 	if audio_output and playback == null and decoder.audio_time() >= 0.0: start_audio()
 	# Without an output the sound is discarded; before it starts, it is kept.
 	if playback != null or not audio_output: decoder.push_audio(playback)
@@ -375,9 +392,14 @@ func _process(delta: float) -> void:
 		clock += minf(delta, 0.25)
 	else:
 		var heard := heard_position()
-		if waiting_for_audio:
+		if waiting_for_audio and is_nan(heard):
 			# Hold the picture until the sound starts, then start together.
-			if is_nan(heard): return
+			audio_wait -= minf(delta, 0.25)
+			if audio_wait > 0.0: return
+			# No sound came: carry on with the frame clock (the sound joins in,
+			# and takes over the clock, if it arrives later).
+			waiting_for_audio = false
+		elif waiting_for_audio:
 			waiting_for_audio = false
 			clock = heard
 		else:
