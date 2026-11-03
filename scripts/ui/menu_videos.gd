@@ -145,7 +145,7 @@ func select_video(path: String) -> void:
 
 func play_video(path: String, from_seconds: float) -> void:
 	if not host.play_video(path,from_seconds): menu.show_error(host.startup_message); return
-	host.was_paused_before_menu=false
+	host.video_was_paused_before_menu=false
 	host.close_settings()
 
 ## The deck's LCD: paused or playing, and the elapsed time.
@@ -177,7 +177,7 @@ func video_pause_items() -> Array:
 		"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); video.set_tape(h.video_tape); h.save_library(),
 		"help":"Plays videos as if from a VHS tape, with noise bars when you fast-forward or rewind. Applies to every video; also in Videos → VCR."}
 	# Resume leads as it does for games; playback controls stay in the deck.
-	var restart: Dictionary = menu.catalog.action("video.restart","Start over",func(): video.seek_to(0.0); h.was_paused_before_menu=false; h.close_settings(),"")
+	var restart: Dictionary = menu.catalog.action("video.restart","Start over",func(): video.seek_to(0.0); h.video_was_paused_before_menu=false; h.close_settings(),"")
 	restart.merge({"layout":"transport","icon":"refresh","caption":"Start over"})
 	var stop: Dictionary = menu.catalog.action("video.stop","Stop video",func(): h.stop_video(); menu.open_pause(),"Saves your place and returns the TV to its test signal.")
 	stop.merge({"layout":"transport","icon":"stop","caption":"Stop"})

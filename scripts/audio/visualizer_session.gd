@@ -44,7 +44,7 @@ func enter() -> bool:
  if OS.has_feature("editor"): library=ProjectSettings.globalize_path("res://extensions/bin/"+name)
  if not FileAccess.file_exists(library):
   host.menu.show_error("projectM is unavailable. Build or install the visualiser libraries."); return false
- saved={"texture":host.world.picture.source_texture,"rate":host.world.picture.source_rate,"aspect":host.world.picture.source_aspect,"raster":host.world.picture.raster_size,"driven":host.world.picture.frame_driven,"paused":host.was_paused_before_menu,"light":host.world.screen_light.source}
+ saved={"texture":host.world.picture.source_texture,"rate":host.world.picture.source_rate,"aspect":host.world.picture.source_aspect,"raster":host.world.picture.raster_size,"driven":host.world.picture.frame_driven,"paused":host.was_paused_before_menu,"video_paused":host.video_was_paused_before_menu,"light":host.world.screen_light.source}
  if host.tv_menu.active:
   for key in ["texture","rate","aspect","raster","driven"]: saved[key]=host.tv_menu.saved[key]
  capture=AudioEffectCapture.new(); capture.buffer_length=0.1
@@ -80,10 +80,10 @@ func leave(restore := true) -> void:
   picture.source_rate=saved.rate;picture.source_aspect=saved.aspect
   picture.set_source(saved.texture,saved.driven,saved.raster)
   host.world.screen_light.set_image(saved.light)
-  host.was_paused_before_menu=saved.paused
+  host.was_paused_before_menu=saved.paused;host.video_was_paused_before_menu=saved.video_paused
   if not host.settings_panel.visible:
    if host.emulator.loaded:host.emulator.set_paused(saved.paused)
-   if host.video.loaded:host.video.set_paused(saved.paused,true)
+   if host.video.loaded:host.video.set_paused(saved.video_paused,true)
   host.pattern.set_process(not host.emulator.loaded and not host.video.loaded)
 
 func next(direction: int) -> void:

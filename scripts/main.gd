@@ -120,7 +120,9 @@ var signal_view: SubViewport
 var card_view: SubViewport
 var card_words: Node2D
 var pattern_words: Node2D
-var was_paused_before_menu := false
+var was_paused_before_menu := false # the game's, restored when the menu closes
+## The video's own: a game and a video never share one pause-restore value.
+var video_was_paused_before_menu := false
 var provider: TrackingProvider = Simulated.new()
 ## "glasses" (XR Gaming on Linux, VITURE SDK on Windows) or "opentrack" (UDP 4242).
 var tracking_source := "glasses"
@@ -985,7 +987,7 @@ func toggle_settings() -> void:
 	was_paused_before_menu = emulator.paused
 	if emulator.loaded: emulator.set_paused(true)
 	if video.loaded:
-		was_paused_before_menu = video.paused
+		video_was_paused_before_menu = video.paused
 		video.set_paused(true, true)
 		remember_video_position()
 	emulator.gamepad.set_menu_active(true)
@@ -1010,7 +1012,7 @@ func close_settings() -> bool:
 	menu_ambience.silence()
 	emulator.gamepad.set_menu_active(false)
 	if emulator.loaded: emulator.set_paused(true if visualizer.active else was_paused_before_menu)
-	if video.loaded and not video.ended: video.set_paused(true if visualizer.active else was_paused_before_menu, true)
+	if video.loaded and not video.ended: video.set_paused(true if visualizer.active else video_was_paused_before_menu, true)
 	if not is_instance_valid(sbs_prompt): power_on.begin()
 	# Nothing is left to wait for once the menu is gone.
 	menu_boot_pending = false
