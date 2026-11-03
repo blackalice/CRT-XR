@@ -16,7 +16,7 @@ const DEFINITIONS := {
 	"gamecube": {"name":"GameCube", "core":"dolphin", "extensions":[], "aspect":4.0/3.0,
 		"analog":true, "triggers":true, "preview":false, "hardware":true,
 		"options":{"dolphin_efb_scale":"1", "dolphin_cpu_core":"1", "dolphin_dsp_hle":"enabled",
-			"dolphin_main_cpu_thread":"enabled", "dolphin_aspect_ratio":"2"}},
+			"dolphin_main_cpu_thread":"enabled", "dolphin_aspect_ratio":"2", "dolphin_call_back_audio_method":"1"}},
 	"snes": {"name":"SNES", "core":"snes9x", "extensions":["sfc","smc","swc","fig"], "aspect":4.0/3.0},
 	"nes": {"name":"NES", "core":"nestopia", "extensions":["nes","unf","unif"], "aspect":4.0/3.0},
 	"megadrive": {"name":"Mega Drive", "core":"genesis_plus_gx", "extensions":["md","gen","smd"], "aspect":4.0/3.0},

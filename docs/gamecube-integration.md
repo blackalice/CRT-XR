@@ -2,8 +2,10 @@
 
 The first integration slice is opt-in with `CRT_XR_EXPERIMENTAL_GAMECUBE=1`.
 Without it, GameCube discovery and settings remain absent from release builds.
-No Dolphin binary or system data is included in the current packages, and no
-GameCube gameplay or Steam Deck performance claim has been validated yet.
+The Deck test release enables this flag in its launch wrapper and adds a Linux
+Dolphin core and system data. Standard cross-platform packages remain unchanged;
+there is no Windows Dolphin core yet. This is an experimental gameplay test,
+not a claim of full GameCube compatibility or consistent Deck performance.
 
 Implemented: header-based ISO/GCM and RVZ/WIA discovery (including exclusion of
 Wii images), M3U grouping, the matching console icon, control stick and C-stick,
@@ -21,12 +23,22 @@ Source reviewed: https://github.com/libretro/dolphin at
 The [Libretro setup guide](https://docs.libretro.com/library/dolphin/) describes
 the required Sys data and the supported rendering interfaces.
 
-The core supports the host's OpenGL path. The current source requires at least
-CMake 3.25 and GCC 12 (or Clang 15), exceeding the existing Ubuntu 22.04 build
-image's default toolchain. Its recursive source dependencies must be pinned,
-archived and licensed before extending the release-core builder. Keep the
-existing release cores on their current toolchain until the Dolphin build is
-proven compatible with the Deck and both export targets.
+The core uses the host's OpenGL path. `Dockerfile.dolphin` keeps the existing
+Ubuntu 22.04 baseline, adding GCC 12 and CMake 3.28.4 for this core only.
+`scripts/build-dolphin-deck.py` builds the Linux test core, archives the pinned
+source and required dependency gitlinks, preserves the licences and Sys data,
+and records binary/source/data hashes in `cores/dolphin-test-build.json`.
+Existing release cores keep their current toolchain and evidence.
+The recorded `dolphin-no-gba-player.patch` guards Game Boy Player configuration
+references when the unused mGBA integration is disabled. Its unpatched source
+archive and the applied patch are both included in the test package.
+
+The native host assigns distinct callback functions to each loaded core, so
+callbacks from Dolphin's CPU thread reach the correct instance. Controller
+values are atomic snapshots; an audio queue protected by a mutex separates
+CPU-thread audio delivery from presentation. Hardware frames up to 4096 pixels
+per dimension are accepted within the framebuffer allocated at load, including
+the optional 2x resolution setting. Software framebuffer limits are unchanged.
 
 Dolphin expects `<system>/dolphin-emu/Sys` and `<save>/User`. CRT XR currently
 supplies the same writable directory for system and save files, so the support
@@ -39,11 +51,11 @@ licences must accompany the eventual package. A console BIOS is not required.
 
 ## Remaining before enabling by default
 
-1. Produce pinned Linux and Windows core builds, complete dependency/source
-   archives and licences, and include Sys in exports and package manifests.
-2. Boot an original GameCube homebrew probe through the native host. Verify
-   callbacks on Dolphin's CPU/GPU threads: the host currently uses a thread-local
-   active instance and cannot assume callbacks stay on the calling thread.
+1. Add a Windows core build and integrate both targets with standard exports.
+   The Deck test release separately carries its source/data/build evidence.
+2. Expand the native regression coverage for long-running CPU/GPU interactions
+   and core reloads. `tests/gamecube_runtime.gd` accepts a caller-supplied game
+   and an isolated save directory for real-core boot/video/audio/state tests.
 3. Verify frame pacing, audio, analog trigger half/full presses, C-stick,
    reset, disc switching, memory-card persistence and save-state round trips.
 4. Benchmark real gameplay on the Deck with the CRT room enabled, including
@@ -54,3 +66,16 @@ licences must accompany the eventual package. A console BIOS is not required.
 Foundation checks: run Godot with `--headless --path . --script tests/gamecube.gd`
 once without the environment opt-in and once with it. The tests use generated
 header/data fixtures; they do not establish that Dolphin boots or renders.
+
+## Deck test results (3 November 2026)
+
+The enabled test release passed 1,200-frame runs with Mario Party 4 (ISO) and
+Super Smash Brothers Melee (RVZ), using isolated saves. Both produced changing
+video and stereo audio, restored a save state, reset and unloaded successfully.
+Mario Party's file-selection screen was visually checked. The states were about
+92.7 MB, exceeding the older 64 MiB limit; native states now have a 256 MiB cap
+and the file reader allows one additional MiB for the metadata envelope.
+
+These are boot/menu checks, not representative gameplay benchmarks. Melee had
+a 311 ms cold-run outlier. Shader compilation and heavier scenes still need
+user gameplay testing with the room and headset active.

@@ -68,3 +68,13 @@ the same source archive. `scripts/build-release-cores.py` records exact compiler
 configure/build arguments and hashes. The build image requires OpenGL development
 headers (`libgl-dev`). Full source and component notices accompany distribution
 through the existing release workflow. No console BIOS or games are distributed.
+
+## GameCube Deck test integration (3 November 2026)
+
+The separate GameCube Deck test build uses `Dockerfile.dolphin` and
+`scripts/build-dolphin-deck.py`, with Linux-only evidence in
+`third_party/cores/dolphin-test-build.json`. Its pinned source archive contains
+all required dependency gitlinks; the test package retains Dolphin's COPYING,
+SPDX licence texts and the Sys data's embedded notices. This does not add an
+unbuilt Windows Dolphin entry to the validated release-core manifest. See
+`docs/gamecube-integration.md` for the opt-in/runtime contract.

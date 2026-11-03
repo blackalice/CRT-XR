@@ -97,6 +97,14 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   Glow, GLSL-FXAA (MIT) and readerwriterqueue (BSD) under the
   `cores/GLideN64-*-LICENSE` files.
 
+* Dolphin (experimental GameCube Deck build), the Dolphin and libretro contributors.
+  Source: https://github.com/libretro/dolphin/tree/b93001ed50c8b34e6ead4eed713c2005a80386e4
+  Upstream's `COPYING` describes the aggregate source as GPLv3-compatible;
+  individual files and dependencies retain their SPDX/component licences.
+  The test package includes `cores/Dolphin-LICENSE.txt`, `cores/Dolphin-LICENSES/`,
+  pinned complete source in `cores/sources/dolphin-*.tar.gz`, and build evidence
+  in `cores/dolphin-test-build.json`. Redistributable Sys data is included with
+  its embedded font/component notices; no console BIOS or games are included.
 * Flycast (Dreamcast), GPL version 2 or later, Flycast contributors.
   Source: https://github.com/flyinghead/flycast/tree/7adbf3caef251b153e348df3f469a0f35878339d
   Full licence: `cores/Flycast-LICENSE.txt`. The OpenGL libretro build includes
