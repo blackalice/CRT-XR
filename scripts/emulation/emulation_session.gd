@@ -16,6 +16,9 @@ signal game_changed(active: bool)
 signal unpack_progress(path: String, done: int, total: int)
 signal unpack_finished(path: String, error: String)
 
+var disc_snapshot := {"count": 0, "index": 0, "labels": PackedStringArray()}
+var transition_busy := false
+var transition_thread: Thread
 var profile_frames := false
 # Hardware cores may spend hundreds of milliseconds compiling. Never wait for that
 # work in a room update; collect completed batches before submitting more.
@@ -97,6 +100,124 @@ func default_core_path() -> String:
 	return Registry.core_path(system_id)
 
 func load_rom(path: String) -> bool:
+	if transition_busy: return false
+	# The shared implementation only yields when background is true. Dynamic
+	# dispatch keeps this existing synchronous API usable by probes/startup.
+	return call("_load_rom", path, false)
+
+func run_job(job: Callable):
+	transition_thread = Thread.new()
+	var error := transition_thread.start(job)
+	if error != OK:
+		push_error("Background loading worker unavailable: " + error_string(error))
+		transition_thread = null
+		return job.call()
+	while transition_thread.is_alive(): await get_tree().process_frame
+	var result = transition_thread.wait_to_finish()
+	transition_thread = null
+	return result
+
+static func write_transition_file(path: String, bytes: PackedByteArray) -> Error:
+	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
+	if file == null: return FileAccess.get_open_error()
+	file.store_buffer(bytes)
+	file.flush()
+	var error := file.get_error()
+	file.close()
+	if error != OK: return error
+	return DirAccess.rename_absolute(ProjectSettings.globalize_path(path + ".tmp"), ProjectSettings.globalize_path(path))
+
+func drain_transition_frame() -> void:
+	while async_pending and not async_completed:
+		var result: int = core.poll_frame()
+		if result == 0: await get_tree().process_frame
+		else:
+			async_completed = true
+			if result < 0: core_failed = true
+	drain_async()
+
+func stop_for_launch() -> bool:
+	if transition_busy: return false
+	transition_busy = true
+	var old_paused := paused
+	paused = true
+	await drain_transition_frame()
+	var native_core := core
+	var needs_save := loaded and not auto_saved and not core_failed
+	var envelope := {"format": 1, "rom": rom_hash, "core": core_identity, "saved_at": int(Time.get_unix_time_from_system()), "game": rom_path.get_file()}
+	if last_frame != null:
+		var thumbnail := last_frame.duplicate()
+		thumbnail.resize(mini(256, roundi(192.0 * display_aspect)), 192, Image.INTERPOLATE_NEAREST)
+		envelope["thumbnail"] = thumbnail.save_png_to_buffer()
+	var resume_path := auto_path()
+	var ram_path := battery_path()
+	var preserve_ram := loaded and sram_restore_ok
+	var previous_ram := sram_written
+	var error: String = await run_job(func():
+		if native_core == null: return ""
+		if needs_save:
+			var state: PackedByteArray = native_core.save_state()
+			if state.is_empty(): return "Could not save automatic resume: " + str(native_core.last_error())
+			envelope["state"] = state
+			var saved := write_transition_file(resume_path, var_to_bytes(envelope))
+			if saved != OK: return "Could not save automatic resume: " + error_string(saved)
+		if preserve_ram:
+			var ram: PackedByteArray = native_core.save_ram()
+			if not ram.is_empty() and ram != previous_ram:
+				var saved := write_transition_file(ram_path, ram)
+				if saved != OK: return "Could not save battery memory: " + error_string(saved)
+		native_core.close()
+		return "")
+	if not error.is_empty():
+		paused = old_paused
+		transition_busy = false
+		report(error, true)
+		return false
+	core = null
+	finish_stop()
+	clear_game()
+	transition_busy = false
+	return true
+
+func load_auto_async() -> bool:
+	if transition_busy or not loaded: return false
+	transition_busy = true
+	await drain_transition_frame()
+	var native_core := core
+	var path := auto_path()
+	var hash := rom_hash
+	var identity := core_identity
+	var error: String = await run_job(func():
+		var envelope := state_details(path)
+		if envelope.get("rom") != hash or envelope.get("core") != identity: return "Save is unreadable or does not match this game. Your save was kept."
+		var restored: bool = native_core.load_state(envelope.state)
+		if not restored and native_core.run_frame(0): restored = native_core.load_state(envelope.state)
+		return "" if restored else str(native_core.last_error()))
+	transition_busy = false
+	if not error.is_empty():
+		report(error, true)
+		return false
+	restart_audio()
+	accumulator = 0.0
+	skip_delta = true
+	auto_saved = false
+	core_failed = false
+	disc_snapshot = core.disc_info()
+	update_texture(true)
+	report("Continued automatic save • " + rom_path.get_file().get_basename())
+	return true
+
+func load_rom_async(path: String) -> bool:
+	if transition_busy: return false
+	if loaded:
+		report("Stop the playing game before starting a background load.", true)
+		return false
+	transition_busy = true
+	var result: bool = await _load_rom(path, true)
+	transition_busy = false
+	return result
+
+func _load_rom(path: String, background: bool) -> bool:
 	if not ClassDB.class_exists("RetroCore"):
 		report("Native emulation module missing. Build the emulator dependencies first.", true)
 		return false
@@ -134,14 +255,20 @@ func load_rom(path: String) -> bool:
 	if error != OK:
 		report("Cannot create save directory: " + error_string(error), true)
 		return false
-	Registry.stage_bios(detected, saves)
-	if detected == "gamecube":
-		var stage_error := DolphinSupport.stage(saves)
-		if stage_error != OK:
-			report("Could not prepare Dolphin system files: " + error_string(stage_error), true)
-			return false
-	if not save_auto(): return false
-	stop()
+	var staging = func():
+		Registry.stage_bios(detected, saves)
+		return DolphinSupport.stage(saves) if detected == "gamecube" else OK
+	var stage_error: int = await run_job(staging) if background else staging.call()
+	if stage_error != OK:
+		report("Could not prepare console system files: " + error_string(stage_error), true)
+		return false
+	if not background:
+		if not save_auto(): return false
+		stop()
+	elif core != null:
+		var previous_core := core
+		await run_job(func(): previous_core.close(); return true)
+		core = null
 	# From here the old game is gone (callbacks have one owner, so the new core
 	# cannot load beside it); any failure must leave nothing loaded.
 	clear_game()
@@ -150,7 +277,9 @@ func load_rom(path: String) -> bool:
 	display_aspect = Registry.SYSTEMS[system_id].aspect
 	save_directory = new_save_directory
 	core.set_hardware_rendering(Registry.SYSTEMS[system_id].get("hardware", false))
-	if not core.load_core(selected_path): return fail_load(str(core.last_error()))
+	var native_core := core
+	var opened_core: bool = await run_job(func(): return native_core.load_core(selected_path)) if background else core.load_core(selected_path)
+	if not opened_core: return fail_load(str(core.last_error()))
 	var spec: Dictionary = Registry.SYSTEMS[system_id]
 	if spec.has("controller"): core.set_controller(spec.controller)
 	for key in spec.get("options", {}): core.set_option(key, spec.options[key])
@@ -159,7 +288,11 @@ func load_rom(path: String) -> bool:
 	var content := Registry.content_file(path)
 	if content.is_empty():
 		return fail_load("Could not unpack the game from " + path.get_file() + ". Its ZIP may be damaged or use a compression method other than Deflate.")
-	if not core.load_game(content, saves): return fail_load(str(core.last_error()))
+	var opened_game: bool = await run_job(func(): return native_core.load_game(content, saves)) if background else core.load_game(content, saves)
+	if not opened_game:
+		var message := str(core.last_error())
+		if background: await run_job(func(): native_core.close(); return true)
+		return fail_load(message)
 	rom_path = path
 	content_path = content
 	preview_copy = ""
@@ -172,6 +305,7 @@ func load_rom(path: String) -> bool:
 		Registry.archive_game(path)["sha256"] = rom_hash
 	else: rom_hash = Registry.content_hash(path)
 	var info: Dictionary = core.info()
+	disc_snapshot = core.disc_info()
 	reload_controls()
 	core_identity = str(info.name)
 	fps = float(info.fps)
@@ -201,7 +335,8 @@ func load_rom(path: String) -> bool:
 			if ram.size()<initial.size():
 				for i in range(ram.size()): initial[i]=ram[i]
 				ram=initial
-		if ram.is_empty() or not core.load_ram(ram):
+		var restored_ram: bool = await run_job(func(): return native_core.load_ram(ram)) if background and not ram.is_empty() else (not ram.is_empty() and core.load_ram(ram))
+		if not restored_ram:
 			sram_restore_ok = false
 			report("Could not restore SRAM: " + str(core.last_error()), true)
 	# Load the preview copy now, inside the game-load pause, rather than as a
@@ -219,7 +354,7 @@ func load_rom(path: String) -> bool:
 
 func _process(delta: float) -> void:
 	Input.flush_buffered_events()
-	if not loaded or paused:
+	if transition_busy or not loaded or paused:
 		return
 	if skip_delta:
 		skip_delta = false
@@ -500,7 +635,13 @@ func fail_core() -> void:
 	set_paused(true)
 
 func set_paused(value: bool) -> void:
-	drain_async()
+	if transition_busy:
+		paused = value
+		return
+	# A submitted batch owns no scene objects. Let it finish while paused;
+	# opening the menu must not wait for its CPU work or GPU readback.
+	# Resume collects it normally; a launch drains it asynchronously.
+	if not uses_async(): drain_async()
 	if not value and core_failed:
 		report("The emulator stopped after an error. Load the game again to continue.", true)
 		return
@@ -547,6 +688,7 @@ func write_bytes_atomic(path: String, bytes: PackedByteArray) -> bool:
 	return error == OK
 
 func flush_sram() -> void:
+	if transition_busy: return
 	if not loaded or not sram_restore_ok: return
 	var ram: PackedByteArray = core.save_ram()
 	if ram.is_empty() or ram == sram_written: return
@@ -598,6 +740,9 @@ static func state_time(path: String) -> String:
 	return Time.get_datetime_string_from_unix_time(stamp).replace("T"," ")+" UTC" if stamp>0 else "Unknown time"
 
 func save_auto() -> bool:
+	if transition_busy:
+		report("A game is loading. Please wait for it to finish.", true)
+		return false
 	if not loaded or auto_saved or core_failed: return true
 	if not save_to(auto_path(),"Automatic resume saved"): return false
 	auto_saved=true
@@ -607,6 +752,9 @@ func save_state(slot := 0) -> bool:
 	return save_to(state_path(slot),"Saved • Slot %d" % (slot + 1))
 
 func save_to(path: String, description: String) -> bool:
+	if transition_busy:
+		report("A game is loading. Please wait for it to finish.", true)
+		return false
 	drain_async()
 	if not loaded: return false
 	var state: PackedByteArray = core.save_state()
@@ -626,6 +774,9 @@ func save_to(path: String, description: String) -> bool:
 
 ## The console's reset button: the game restarts; battery saves and states are kept.
 func reset_game() -> bool:
+	if transition_busy:
+		report("A game is loading. Please wait for it to finish.", true)
+		return false
 	drain_async()
 	if not loaded: return false
 	if not core.reset():
@@ -645,6 +796,9 @@ func load_auto() -> bool:
 	return load_from(auto_path(),"Continued automatic save")
 
 func load_from(path: String, description: String) -> bool:
+	if transition_busy:
+		report("A game is loading. Please wait for it to finish.", true)
+		return false
 	drain_async()
 	if not loaded: return false
 	var envelope := state_details(path)
@@ -663,6 +817,7 @@ func load_from(path: String, description: String) -> bool:
 	skip_delta = true
 	auto_saved=false
 	core_failed = false
+	disc_snapshot = core.disc_info()
 	update_texture(true)
 	report("%s • %s" % [description,rom_path.get_file().get_basename()])
 	return true
@@ -688,13 +843,18 @@ func fail_load(message: String) -> bool:
 	return false
 
 func stop() -> void:
+	if transition_busy: return
 	drain_async()
 	flush_sram()
 	if core != null: core.close_game()
+	finish_stop()
+
+func finish_stop() -> void:
 	player.stop()
 	tv_audio.clear_tail()
 	playback = null
 	loaded = false
+	disc_snapshot = {"count": 0, "index": 0, "labels": PackedStringArray()}
 	vmu_pixels = PackedByteArray()
 	paused = false
 	texture = null
@@ -705,13 +865,18 @@ func stop() -> void:
 
 ## The loaded game's discs: {count, index, labels}; count is 0 for one-disc games.
 func disc_info() -> Dictionary:
-	return core.disc_info() if loaded else {"count": 0, "index": 0, "labels": PackedStringArray()}
+	if transition_busy: return {"count": 0, "index": 0, "labels": PackedStringArray()}
+	return disc_snapshot if loaded else {"count": 0, "index": 0, "labels": PackedStringArray()}
 
 func change_disc(index: int) -> bool:
+	if transition_busy:
+		report("A game is loading. Please wait for it to finish.", true)
+		return false
 	if not loaded: return false
 	if not core.change_disc(index):
 		report(str(core.last_error()), true)
 		return false
+	disc_snapshot = core.disc_info()
 	auto_saved = false
 	report("Disc %d inserted • %s" % [index + 1, rom_path.get_file().get_basename()])
 	return true
@@ -748,6 +913,8 @@ func _unpacked(path: String, error: String) -> void:
 	unpack_finished.emit(path, error)
 
 func _exit_tree() -> void:
+	if transition_thread != null and transition_thread.is_started(): transition_thread.wait_to_finish()
+	transition_busy = false
 	unpack_cancelled = true
 	if unpack_thread != null: unpack_thread.wait_to_finish()
 	save_auto()

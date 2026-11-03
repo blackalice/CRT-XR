@@ -467,13 +467,15 @@ func start_application() -> void:
 		if active: stop_boot_sound()
 		# A game stopped from the menu takes its loading card with it.
 		if not active and not loading_game: end_loading()
-		show_game_cover(emulator.rom_path if active else "")
-		change_game_preferences(active)
-		show_programme(active, emulator.fps, emulator.display_aspect)
+		profile_boot_action("cover", func(): show_game_cover(emulator.rom_path if active else ""))
+		profile_boot_action("preferences", func(): change_game_preferences(active))
+		profile_boot_action("programme", func(): show_programme(active, emulator.fps, emulator.display_aspect))
 		if active:
 			last_game_path = emulator.rom_path
-			if not play_history.played(last_game_path): show_notice("Could not save recently played games")
-			if save_library() != OK: show_notice("Could not save the recent game location"))
+			profile_boot_action("history", func():
+				if not play_history.played(last_game_path): show_notice("Could not save recently played games"))
+			profile_boot_action("library", func():
+				if save_library() != OK: show_notice("Could not save the recent game location")))
 	video = VideoSession.new()
 	add_child(video)
 	ffmpeg_installer = FfmpegInstaller.new()
@@ -987,6 +989,7 @@ func set_stereo(value: bool) -> void:
 		DisplayServer.window_set_size(Vector2i(1280, 360) if value else (Vector2i(1280,800) if "--deck-mono" in OS.get_cmdline_user_args() else Vector2i(1280,720)))
 
 func toggle_settings() -> void:
+	var profile_start := Time.get_ticks_usec()
 	if settings_panel.visible:
 		close_settings()
 		return
@@ -1002,9 +1005,11 @@ func toggle_settings() -> void:
 	settings_panel.show()
 	menu.open_pause()
 	refresh_startup_status()
+	if emulator.profile_frames: print("PROFILE_BOOT menu_open at=", profile_start, " us=", Time.get_ticks_usec() - profile_start)
 
 ## Returns true when the menu is closed afterwards (false: saving failed and it stays open).
 func close_settings() -> bool:
+	var profile_start := Time.get_ticks_usec()
 	if not is_instance_valid(settings_panel) or not settings_panel.visible: return true
 	stop_boot_sound()
 	if is_instance_valid(menu.boot): menu.boot.finish()
@@ -1023,6 +1028,7 @@ func close_settings() -> bool:
 	if not is_instance_valid(sbs_prompt): power_on.begin()
 	# Nothing is left to wait for once the menu is gone.
 	menu_boot_pending = false
+	if emulator.profile_frames: print("PROFILE_BOOT menu_close at=", profile_start, " us=", Time.get_ticks_usec() - profile_start)
 	return true
 
 ## Degauss: closes the menu so the wobble and colour swirl show on the picture.
@@ -1136,14 +1142,23 @@ func picture_started(image: Image) -> bool:
 
 ## Before a zipped disc unpacks: the playing game is saved and stopped (it would
 ## play on behind the card), any video too, and the card goes up.
-func stop_for_disc(path: String) -> bool:
+func stop_for_disc(path: String, background := false) -> bool:
 	if video.loaded: stop_video()
-	if not emulator.save_auto(): return false
-	emulator.stop()
-	show_loading(path, 0.0)
+	loading_game = true
+	var stopped := true
+	if background: stopped = await emulator.stop_for_launch()
+	else:
+		stopped = emulator.save_auto()
+		if stopped: emulator.stop()
+	loading_game = false
+	if not stopped: return false
+	if loading_path.is_empty() or loading_path == path: show_loading(path, 0.0)
 	return true
 
 func play_video(path: String, from_seconds := 0.0) -> bool:
+	if loading_game:
+		startup_message = "A game is still loading. Please wait for it to finish."
+		return false
 	if visualizer.active: visualizer.leave()
 	startup_message = ""
 	end_loading()
@@ -1235,10 +1250,22 @@ func video_input(event: InputEvent) -> bool:
 		_: return false
 	return true
 
+func profile_boot_action(label: String, action: Callable) -> void:
+	var started := Time.get_ticks_usec()
+	action.call()
+	if emulator.profile_frames:
+		print("PROFILE_BOOT ", label, " at=", started, " us=", Time.get_ticks_usec() - started)
+
 func shows_loading_card(path: String) -> bool:
 	return CoreRegistry.identify(path) in LOADING_CARD_SYSTEMS
 
 func load_game(path: String) -> bool:
+	return call("_load_game", path, false)
+
+func load_game_async(path: String, background := true) -> bool:
+	return await _load_game(path, background)
+
+func _load_game(path: String, background: bool) -> bool:
 	if visualizer.active: visualizer.leave()
 	startup_message = ""
 	var restore_paused := was_paused_before_menu
@@ -1248,13 +1275,14 @@ func load_game(path: String) -> bool:
 	if carded: show_loading(path)
 	else: end_loading()
 	loading_game = true
-	var opened: bool = emulator.load_rom(path)
+	var opened: bool = await emulator.load_rom_async(path) if background else emulator.load_rom(path)
 	loading_game = false
-	if opened and carded:
+	if opened and carded and loading_path == path:
 		# The hold counts from when the game has booted, not from the click.
 		loading_started = Time.get_ticks_msec()
 		loading_hold = int(LOADING_HOLD_MSEC.get(CoreRegistry.identify(path), 0))
 	if not opened:
+		if not loading_path.is_empty() and loading_path != path: return false
 		end_loading()
 		startup_message = "Could not open the game. Check the ROM location and emulator files. " + emulator.status
 		if not settings_panel.visible: toggle_settings()

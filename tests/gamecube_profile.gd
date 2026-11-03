@@ -7,6 +7,7 @@ var phase := "startup"
 var last_tick := 0
 var last_draw := 0
 var failures := 0
+var channel_finishes := 0
 
 func _initialize() -> void: call_deferred("run")
 
@@ -37,6 +38,8 @@ func run() -> void:
 	await frames(30)
 	if OS.get_environment("CRT_XR_PROFILE_ROOM") == "off":
 		for view in app.views: view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	app.tv_effects.finished.connect(func(effect):
+		if effect == "channel": channel_finishes += 1)
 	app.emulator.profile_frames = true
 	app.emulator.frame_profiled.connect(func(metrics: Dictionary):
 		metrics["kind"] = "emulation"
@@ -50,9 +53,12 @@ func run() -> void:
 	var play_frames := int(OS.get_environment("CRT_XR_PROFILE_FRAMES")) if OS.has_environment("CRT_XR_PROFILE_FRAMES") else 300
 	for round in range(rounds):
 		for game in games:
+			phase = "menu:%d:%s" % [round, game.get_file()]
 			if not app.settings_panel.visible: app.toggle_settings()
+			await frames(3)
 			var continuing: bool = FileAccess.file_exists(app.emulator.auto_path_for(game))
 			phase = "load:%d:%s:%s" % [round, "resume" if continuing else "fresh", game.get_file()]
+			var effects_before := channel_finishes
 			app.menu.games.launch_game(game, continuing)
 			for i in range(900):
 				await process_frame
@@ -61,6 +67,9 @@ func run() -> void:
 				failures += 1
 				print("FAIL ", phase)
 				break
+			if channel_finishes - effects_before > 1:
+				failures += 1
+				print("FAIL duplicate channel animation ", game)
 			phase = "play:%d:%s:%s" % [round, "resume" if continuing else "fresh", game.get_file()]
 			await frames(play_frames)
 			print("PROFILE phase ", phase)

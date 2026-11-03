@@ -1,5 +1,36 @@
 # GameCube stability: core-fix continuation, 3 November 2026
 
+## Loading-transition follow-up after `2706709`
+
+Fixed the double channel cue: `stop_for_disc` now retains `loading_game` across
+save/stop so `game_changed(false)` cannot dismiss and recreate the selected card.
+Superseded choices cannot replace a newer card or surface an obsolete boot error.
+
+Menu-driven disc launches now run staging, native open/load, automatic-state
+serialization/encoding/atomic writing, SRAM persistence, teardown and Continue
+restoration on background jobs. Signals, scene nodes, textures and audio setup
+remain on the main thread. A transition owns the core exclusively; concurrent
+save/reset/disc actions reject access. Save failure preserves the playing core and
+previous resume. Existing synchronous startup/probe APIs remain synchronous.
+Opening pause no longer joins a frame; disc information uses a completed snapshot
+so the menu cannot indirectly wait for native work either.
+
+Final isolated Deck test (`async-boot-test-20261103`): TimeSplitters, Tech Romancer
+and Mario Golf, each fresh then Continue, passed in one process without duplicate
+static cues. Across the last two six-launch runs, worst process gaps during launch/boot/restore
+were 17.36 ms for GameCube and 23.29 ms for Dreamcast; none exceeded 50 ms. Pause-menu opening is
+measured separately and still takes about 30-35 ms to build its UI. The tracking
+driver was disconnected, so physical headset acceptance is not claimed. Evidence:
+`build/async-boot-evidence/`. Background lifecycle/save-failure, nonblocking pause,
+loading-card, active-boot selection races and existing wrapper/state tests pass.
+
+The test pack is private; unchanged assets share the installed release's files.
+Only redundant inactive test copies created during this work were removed to free
+space: `gamecube-audio-20261103`, `hardware-async-20261103`,
+`music-async-test-20261103`. Ready/rollback releases, saves and media are preserved.
+The active Deck release remains `music-async-ready-20261103`.
+
+
 The original handover below is historical. The owner clarified the symptoms:
 crashes, freezes, restarts and stutters while switching games in **Gaming Mode**,
 plus the loading screen naming the wrong game. They explicitly want the core
@@ -160,7 +191,7 @@ reset and teardown explicitly drain the batch. Periodic SRAM reads run between
 jobs. Elapsed time remains in the async accumulator rather than dropping the
 backlog at eight frames. This preserves the emulated sequence, but cannot undo
 already-audible silence during a CPU stall. Audio continuity/clock recovery is
-still an acceptance item: the long TimeSplitters trace carried roughly 0.4–0.7 s
+still an acceptance item: the long TimeSplitters trace carried roughly 0.4â€“0.7 s
 of wall-clock debt, even though the room stayed smooth. Do not describe this as
 eliminating the game's CPU stall or proving glitch-free sound.
 

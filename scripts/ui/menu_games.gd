@@ -186,9 +186,8 @@ func launch_game(path: String, continuing: bool) -> void:
 	# A zipped disc is hundreds of megabytes: unpack it in the background while
 	# the room keeps tracking, then start it.
 	if host.emulator.needs_unpacking(path): unpack_then_launch(path, continuing); return
-	# A slow-starting system boots on this thread and holds it for a moment: the
-	# card goes up first and gets drawn, so the TV shows it rather than the old
-	# game, the test signal or a frozen menu.
+	# Draw one loading card before the background save/unload/boot sequence.
+	# The same card owns the complete transition to the selected game.
 	if host.shows_loading_card(path):
 		# Card first, drawn, and only then the old game's resume save and stop (a
 		# disc game's state is large): the playing game stays paused behind the menu.
@@ -198,20 +197,33 @@ func launch_game(path: String, continuing: bool) -> void:
 		if not host.close_settings(): host.end_loading(); return
 		for i in range(3): await host.get_tree().process_frame
 		if DisplayServer.get_name() != "headless": await RenderingServer.frame_post_draw
-		# The channel-change static runs for under half a second; the boot below holds
-		# the main thread, so let the static finish first rather than freeze mid-effect.
+		# Keep the short channel cue before changing consoles; the work below
+		# runs in the background while the room continues to update.
 		await host.get_tree().create_timer(0.55).timeout
 		if generation != launch_generation or host.loading_path != path: return
-		if not host.stop_for_disc(path):
+		while host.loading_game: await host.get_tree().process_frame
+		if generation != launch_generation or host.loading_path != path: return
+		var stopped: bool = await host.stop_for_disc(path, true)
+		if generation != launch_generation: return
+		if not stopped:
 			host.end_loading()
 			if not menu.visible: host.toggle_settings()
 			menu.show_error(host.emulator.status); return
-	if not host.load_game(path): menu.show_error(host.startup_message); return
-	if continuing and not host.emulator.load_auto():
-		host.end_loading()
-		if not menu.visible: host.toggle_settings() # after an unpack the menu is closed
-		menu.show_error(host.emulator.status+" Choose Start from a fresh boot to play without this resume point.")
-		return
+	while host.loading_game: await host.get_tree().process_frame
+	if generation != launch_generation: return
+	var opened: bool = await host.load_game_async(path, host.shows_loading_card(path))
+	if generation != launch_generation: return
+	if not opened: menu.show_error(host.startup_message); return
+	if continuing:
+		host.loading_game = true
+		var resumed: bool = await host.emulator.load_auto_async()
+		host.loading_game = false
+		if generation != launch_generation: return
+		if not resumed:
+			host.end_loading()
+			if not menu.visible: host.toggle_settings()
+			menu.show_error(host.emulator.status + " Choose Start from a fresh boot to play without this resume point.")
+			return
 	var feedback: String = host.emulator.status
 	host.was_paused_before_menu=false
 	host.close_settings()
@@ -223,7 +235,11 @@ func unpack_then_launch(path: String, continuing: bool) -> void:
 	var emulator: Node = host.emulator
 	if not emulator.unpacking.is_empty() and emulator.unpacking != path:
 		menu.show_error("Another disc is still being unpacked. Try again when it is ready."); return
-	if not host.stop_for_disc(path): menu.show_error(emulator.status); return
+	host.show_loading(path, 0.0)
+	host.was_paused_before_menu = true
+	if not host.close_settings(): host.end_loading(); return
+	if not await host.stop_for_disc(path, true): menu.show_error(emulator.status); return
+	if host.loading_path != path: return
 	emulator.unpack_disc(path)
 	if not emulator.unpack_progress.is_connected(show_unpack_progress): emulator.unpack_progress.connect(show_unpack_progress)
 	# One launch per unpack: a second choice of the same game replaces the first.

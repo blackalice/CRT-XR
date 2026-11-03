@@ -37,11 +37,19 @@ func run() -> void:
 	app.use_tracking(false)
 	await process_frame
 	await process_frame
+	app.show_loading("Pending.iso")
+	app.loading_game = true
+	check(not app.play_video("Missing.mp4") and app.loading_path == "Pending.iso", "A video choice cannot interrupt an active native boot")
+	app.loading_game = false
+	app.end_loading()
 	app.menu_on_tv = false # the card and game take the tube; the menu floats over them
 	if not app.menu.visible: app.toggle_settings()
 	var progress := []
 	app.emulator.unpack_progress.connect(func(_path, done, total): progress.append(float(done) / total))
 	app.menu.games.launch_game(zipped, false)
+	for i in range(600):
+		if app.loading_path == zipped and not app.menu.visible: break
+		await create_timer(.005).timeout
 	check(not app.menu.visible, "Choosing a zipped disc goes back to the room")
 	check(app.loading_path == zipped and app.loading_screen.visible and not app.pattern.visible, "The TV shows the loading card, not the test signal")
 	check(app.world.picture.source_texture == app.card_view.get_texture(), "The card is the picture on the tube")
@@ -80,6 +88,10 @@ func run() -> void:
 	check(app.card_view.render_target_update_mode == SubViewport.UPDATE_ONCE, "Leaving the card redraws its hidden contents instead of retaining the old game title")
 	check(app.world.picture.raster_size == app.world.picture.source_size, "Game handover restores the console's own raster")
 	app.show_loading(zipped)
+	app.loading_screen.elapsed = 1.25
+	app.tv_effects.elapsed = 0.2
+	app.stop_for_disc(zipped)
+	check(app.loading_path == zipped and app.loading_screen.elapsed == 1.25 and app.tv_effects.elapsed == 0.2, "Stopping the previous game preserves the selected card and does not restart static")
 	app.emulator.stop()
 	check(app.loading_path.is_empty() and app.pattern.visible, "Stopping the game takes the card down for the test signal")
 	check(app.pattern_words.visible and not app.card_words.visible and app.card_view.render_target_update_mode == SubViewport.UPDATE_ALWAYS and app.world.picture.source_texture == app.card_view.get_texture(), "Idle signal uses the sharp text overlay and keeps updating")

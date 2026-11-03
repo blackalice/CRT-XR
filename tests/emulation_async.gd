@@ -49,8 +49,12 @@ func run() -> void:
 	session.vmu_pixels = PackedByteArray([255, 0])
 	start = Time.get_ticks_msec()
 	check(session.vmu_lcd() == PackedByteArray([255, 0]) and Time.get_ticks_msec() - start < 30, "VMU reads the last snapshot while a native job is stalled")
+	start = Time.get_ticks_msec()
 	session.set_paused(true)
-	check(not session.async_pending and session.accumulator == 0.0, "pause joins pending work and resets the wall clock")
+	check(session.async_pending and session.accumulator == 0.0 and Time.get_ticks_msec() - start < 30, "pause resets the clock without joining a stalled native job")
+	start = Time.get_ticks_msec()
+	session.disc_info()
+	check(Time.get_ticks_msec() - start < 30, "pause-menu disc information never joins the native job")
 	session.stop()
 	session.queue_free()
 	await process_frame
