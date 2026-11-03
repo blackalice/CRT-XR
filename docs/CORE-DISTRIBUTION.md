@@ -57,3 +57,14 @@ The TV source is kept byte-for-byte, SHA-256 6342fcebb5faae40854d3639f97b386b302
 Retain Timothy Ahene's credit, source and CC BY 4.0 link, and the modification notice in THIRD_PARTY.md. The table's CC BY 4.0 attribution and carpet/sound CC0 provenance are retained separately. These artistic assets are not blanket-relicensed under the application's MIT or the NES combination's GPL terms.
 
 The source package additionally contains the pinned godot-cpp tree and Godot 4.5.1 engine source, with the upstream engine/component notices retained. SOURCE-ACCESS.md in each executable package names and hashes the companion source archive. Keep that archive on the same GitHub release/download page.
+
+## Dreamcast development integration (3 November 2026)
+
+Flycast is built as a replaceable OpenGL-only libretro library from
+`7adbf3caef251b153e348df3f469a0f35878339d` with the source tree and required
+submodules archived together. Pinned submodule revisions come from the parent
+tree, including the nested tinycmmc build dependency. Both desktop binaries use
+the same source archive. `scripts/build-release-cores.py` records exact compilers,
+configure/build arguments and hashes. The build image requires OpenGL development
+headers (`libgl-dev`). Full source and component notices accompany distribution
+through the existing release workflow. No console BIOS or games are distributed.

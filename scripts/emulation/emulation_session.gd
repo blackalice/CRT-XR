@@ -202,6 +202,8 @@ func _process(delta: float) -> void:
 	var buttons: int = input.mask
 	var sticks: PackedInt32Array = input.analog
 	core.set_analog(sticks[0], sticks[1], sticks[2], sticks[3])
+	var pressure: PackedInt32Array = input.pressure
+	core.set_trigger_pressure(pressure[0], pressure[1])
 	while accumulator >= period and frames < 8:
 		if not core.run_frame(buttons):
 			set_paused(true)
@@ -304,6 +306,9 @@ func preview_frame(buttons: int, frames := 1) -> Dictionary:
 
 func update_texture(force := false, preview: Dictionary = {}) -> void:
 	var info: Dictionary = preview if not preview.is_empty() else core.info()
+	# GPU cores can revise their refresh rate after boot or a state restore.
+	# Follow the live core clock rather than accumulating drift at the load rate.
+	if preview.is_empty(): fps = float(info.fps)
 	if (not force and not info.video_changed) or int(info.width) == 0:
 		return
 	var bytes: PackedByteArray = preview.bytes if not preview.is_empty() else core.frame()
@@ -327,7 +332,7 @@ func input_mask() -> int:
 
 ## The controller through the game's layout, with the keyboard's fixed keys added.
 func read_input() -> Dictionary:
-	if gamepad.menu_active: return {"mask": 0, "analog": PackedInt32Array([0, 0, 0, 0])}
+	if gamepad.menu_active: return {"mask": 0, "analog": PackedInt32Array([0, 0, 0, 0]), "pressure": PackedInt32Array([0, 0])}
 	# Before a game loads, the current console's standard layout.
 	var layout: Dictionary = controls if not controls.is_empty() else Layouts.standard(system_id, Registry.SYSTEMS[system_id])
 	var input: Dictionary = gamepad.read(layout)

@@ -41,6 +41,8 @@
 
 Bring your own games and music. Cartridges can be plain files or sit alone in a ZIP (Deflate or stored; 7z and RAR are not read). Sega CD discs can be a `.cue` sheet, a `.bin` carrying the Sega CD header, or a CHD in a Sega CD folder (`segacd`, `megacd`, or a folder inside one). A zipped game shares its saves with the same game unzipped. Sega CD and Atari Lynx need their hardware's own files: the Sega CD BIOS (`bios_CD_U.bin` and friends) and the Lynx boot ROM (`lynxboot.img`). CRT XR finds them in the `bios` folder next to your `roms` folder (the EmuDeck layout), in `~/Applications/CRT-XR/bios` on the Deck, or in a `bios` folder next to `CRT-XR.exe` on Windows. The game library names anything still missing.
 
+Development checkout: experimental Dreamcast support via Flycast is available; see [Dreamcast setup and validation](docs/emulation.md#dreamcast-development). Steam Deck gameplay acceptance is pending.
+
 ## Download the beta
 
 **Beta.15 (0.1.0-beta.15)** adds PlayStation and Nintendo 64, controller layouts with per-game overrides, a 90s console-style menu and animated startup, expanded quick settings, console settings and projectM music visuals. It includes the updated Steam artwork and all beta.14.1 fixes. See the [beta.15 release notes](docs/RELEASE-NOTES-beta.15.md). **Testers with XREAL, Rokid, RayNeo or other glasses are still wanted**, along with reports from other Windows and Linux systems; only VITURE Pro 2 has been tested for XR use.

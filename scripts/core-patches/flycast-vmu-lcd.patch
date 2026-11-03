@@ -1,0 +1,78 @@
+diff --git a/core/rend/osd.cpp b/core/rend/osd.cpp
+index a88d8d7..9d00372 100644
+--- a/core/rend/osd.cpp
++++ b/core/rend/osd.cpp
+@@ -18,6 +18,28 @@
+ #include "stdclass.h"
+ #ifdef LIBRETRO
+ #include "vmu_xhair.h"
++#include <libretro.h>
++#include <mutex>
++
++namespace {
++std::mutex crt_vmu_mutex;
++u8 crt_vmu_pixels[8][48 * 32]{};
++bool crt_vmu_valid[8]{};
++}
++// Optional CRT XR extension: a separate monochrome LCD, never an overlay.
++extern "C" RETRO_API bool retro_crt_xr_vmu_lcd(unsigned index, u8* destination, size_t size)
++{
++	if (index >= 8 || !destination || size != 48 * 32) return false;
++	std::lock_guard<std::mutex> lock(crt_vmu_mutex);
++	if (!crt_vmu_valid[index]) return false;
++	memcpy(destination, crt_vmu_pixels[index], 48 * 32);
++	return true;
++}
++void crt_xr_clear_vmu_lcd()
++{
++	std::lock_guard<std::mutex> lock(crt_vmu_mutex);
++	memset(crt_vmu_valid, 0, sizeof(crt_vmu_valid));
++}
+ #endif
+ 
+ u32 vmu_lcd_data[8][48 * 32];
+@@ -29,6 +51,13 @@ void push_vmu_screen(int bus_id, int bus_port, u8* buffer)
+ 	int vmu_id = bus_id * 2 + bus_port;
+ 	if (vmu_id < 0 || vmu_id >= (int)std::size(vmu_lcd_data))
+ 		return;
++	#ifdef LIBRETRO
++	{
++		std::lock_guard<std::mutex> lock(crt_vmu_mutex);
++		memcpy(crt_vmu_pixels[vmu_id], buffer, 48 * 32);
++		crt_vmu_valid[vmu_id] = true;
++	}
++	#endif
+ 	u32 *p = &vmu_lcd_data[vmu_id][0];
+ 	for (int i = 0; i < (int)std::size(vmu_lcd_data[vmu_id]); i++, buffer++)
+ #ifdef LIBRETRO
+diff --git a/core/rend/osd.h b/core/rend/osd.h
+index f88a138..1bc78ab 100644
+--- a/core/rend/osd.h
++++ b/core/rend/osd.h
+@@ -50,8 +50,14 @@ static inline bool crosshairNeeded(int port)
+ 	return true;
+ }
+ 
++#ifdef LIBRETRO
++void crt_xr_clear_vmu_lcd();
++#endif
+ static inline void blankVmus()
+ {
++	#ifdef LIBRETRO
++	crt_xr_clear_vmu_lcd();
++	#endif
+ 	memset(vmu_lcd_data, 0, sizeof(vmu_lcd_data));
+ 	memset(vmuLastChanged, 0, sizeof(vmuLastChanged));
+ }
+diff --git a/shell/libretro/libretro.cpp b/shell/libretro/libretro.cpp
+index c5f781a..40d6609 100644
+--- a/shell/libretro/libretro.cpp
++++ b/shell/libretro/libretro.cpp
+@@ -2524,6 +2524,7 @@ bool retro_unserialize(const void * data, size_t size)
+ 		}
+ 
+ 	try {
++		blankVmus();
+ 		Deserializer deser(data, size);
+ 		emu.loadstate(deser);
+ 	    retro_audio_flush_buffer();

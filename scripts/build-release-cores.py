@@ -58,6 +58,16 @@ SPECS=[
    ['GLideN64/licenses/gles2n64/LICENSE','GLideN64-gles2n64-LICENSE.txt'],['GLideN64/licenses/GlideHQ/gpl-2.0.txt','GLideN64-GlideHQ-LICENSE.txt'],
    ['GLideN64/licenses/Glow/LICENSE','GLideN64-Glow-LICENSE.txt'],['GLideN64/licenses/GLSL-FXAA/LICENSE.md','GLideN64-GLSL-FXAA-LICENSE.md'],
    ['GLideN64/licenses/readerwriterqueue/LICENSE.md','GLideN64-readerwriterqueue-LICENSE.md']]},
+ # OpenGL only, matching the host. Required submodules are archived at the gitlink
+ # revisions from this pinned tree so source-only releases can rebuild offline.
+ {'core':'flycast','repository':'flycast','patches':['flycast-vmu-lcd.patch'],'revision':'7adbf3caef251b153e348df3f469a0f35878339d','recipe':'cmake',
+  'submodules':['core/deps/libchdr','core/deps/asio','core/deps/xbyak','core/deps/tinygettext','core/deps/tinygettext/external/tinycmmc'],
+  'cmake_args':['-DLIBRETRO=ON','-DUSE_VULKAN=OFF','-DUSE_DX9=OFF','-DUSE_DX11=OFF',
+                '-DUSE_OPENMP=OFF','-DUSE_LUA=OFF','-DUSE_HOST_LIBZIP=OFF','-DUSE_BREAKPAD=OFF'],
+  'licenses':[['LICENSE','Flycast-LICENSE.txt'],['core/deps/libchdr/LICENSE.txt','Flycast-libchdr-LICENSE.txt'],
+              ['core/deps/asio/asio/LICENSE_1_0.txt','Flycast-Asio-LICENSE.txt'],
+              ['core/deps/xbyak/COPYRIGHT','Flycast-Xbyak-LICENSE.txt'],
+              ['core/deps/tinygettext/LICENSE.md','Flycast-tinygettext-LICENSE.txt']]},
 ]
 def digest(path):return hashlib.sha256(path.read_bytes()).hexdigest()
 def output(*args):return subprocess.check_output(args,text=True).strip()
@@ -81,7 +91,24 @@ def main():
   archive=sources/(repository+'-'+revision+'.tar.gz')
   if (repo/'.git').exists():
    assert output('git','-C',str(repo),'rev-parse',revision)==revision,repository+': revision must be a full commit hash present in '+str(repo)
-   subprocess.run(['git','-C',str(repo),'archive','--format=tar.gz','--prefix='+repository+'/', '--output='+str(archive),revision],check=True)
+   if spec.get('submodules'):
+    # Merge Git archives, never local working-tree files or nested .git metadata.
+    with tempfile.TemporaryDirectory(prefix='crt-xr-source-') as staging:
+     snapshots=[('',revision,repo)]
+     for module in spec['submodules']:
+      parent=next(((prefix.rstrip('/'),commit,checkout) for prefix,commit,checkout in reversed(snapshots) if prefix and module.startswith(prefix)),('',revision,repo))
+      relative=module[len(parent[0])+1:] if parent[0] else module
+      commit=output('git','-C',str(parent[2]),'ls-tree',parent[1],relative).split()[2]
+      snapshots.append((module+'/',commit,repo/module))
+     with tarfile.open(archive,'w:gz') as combined:
+      for index,(prefix,commit,checkout) in enumerate(snapshots):
+       part=Path(staging)/(str(index)+'.tar')
+       subprocess.run(['git','-C',str(checkout),'archive','--format=tar','--prefix='+repository+'/'+prefix,'--output='+str(part),commit],check=True)
+       with tarfile.open(part) as source_tar:
+        for member in source_tar:
+         combined.addfile(member,source_tar.extractfile(member) if member.isfile() else None)
+   else:
+    subprocess.run(['git','-C',str(repo),'archive','--format=tar.gz','--prefix='+repository+'/', '--output='+str(archive),revision],check=True)
    epoch=output('git','-C',str(repo),'show','-s','--format=%ct',revision)
   else:
    # Source releases have no .git directories: validate the bundled archive
@@ -115,7 +142,7 @@ def main():
      if spec.get('recipe')=='cmake':
       # Upstream libretro CI recipe; LIBMGBA_ONLY disables optional host libraries
       # (PNG, SQLite, Lua, FFmpeg...) so the core has no extra runtime dependencies.
-      configure=['cmake','-S',str(source),'-B',str(Path(work)/'cmake-build'),'-DCMAKE_BUILD_TYPE=Release','-DLIBMGBA_ONLY=ON','-DBUILD_LIBRETRO=ON']
+      configure=['cmake','-S',str(source),'-B',str(Path(work)/'cmake-build'),'-DCMAKE_BUILD_TYPE=Release','-DLIBMGBA_ONLY=ON','-DBUILD_LIBRETRO=ON']+spec.get('cmake_args',[])
       if platform=='windows':
        configure+=['-DCMAKE_TOOLCHAIN_FILE='+str(ROOT/'native/emulation/mingw.cmake'),'-DCMAKE_SHARED_LINKER_FLAGS=-static -static-libgcc -static-libstdc++']
       subprocess.run(configure,env=env,stdout=stream,stderr=subprocess.STDOUT,check=True)
@@ -154,8 +181,9 @@ def main():
  # Source-only releases use this tracked evidence when tools/<core> has no Git metadata.
  evidence=ROOT/'third_party/cores/release-builds.json'
  evidence.parent.mkdir(parents=True,exist_ok=True)
- evidence.write_bytes(manifest.read_bytes())
- for spec in SPECS:
+ desktop_evidence=dict(previous,builds=[b for b in previous['builds'] if b['platform'] in ('linux','windows')])
+ evidence.write_text(json.dumps(desktop_evidence,indent=2)+'\n',encoding='utf-8')
+ for spec in [spec for spec in SPECS if spec['core'] in chosen]:
   for relative,stored in spec['licenses']:
    with tarfile.open(sources/(spec['repository']+'-'+spec['revision']+'.tar.gz'),'r:gz') as tar:
     (cores/stored).write_bytes(tar.extractfile(spec['repository']+'/'+relative).read())

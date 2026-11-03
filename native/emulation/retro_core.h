@@ -21,11 +21,13 @@ public:
     void set_option(const godot::String& key, const godot::String& value);
     void set_controller(int device);
     void set_hardware_rendering(bool enabled);
+    void set_trigger_pressure(int left, int right);
     void set_analog(int left_x, int left_y, int right_x, int right_y);
     godot::Dictionary disc_info() const;
     bool change_disc(int index);
     bool run_frame(int buttons);
     bool reset();
+    godot::PackedByteArray vmu_lcd(int index = 0) const;
     godot::PackedByteArray frame() const;
     godot::Dictionary info() const;
     bool video_changed() const;

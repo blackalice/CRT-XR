@@ -29,7 +29,7 @@ private:
 class LibretroHost {
 public:
     ~LibretroHost();
-    // Cores that draw with the GPU (the Nintendo 64): set before load_core. Every
+    // Cores that draw with the GPU (Nintendo 64 and Dreamcast): set before load_core. Every
     // call into the core then runs on a thread of its own, where the core's hidden
     // OpenGL context lives, so Godot's context on the main thread is never touched.
     bool hardware_rendering = false;
@@ -37,6 +37,7 @@ public:
     bool load_game(const std::string& path, const std::string& save_directory);
     bool step(std::uint16_t buttons);
     bool reset();
+    std::vector<std::uint8_t> vmu_lcd(unsigned index) const;
     void close_game();
     void close();
     std::vector<std::uint8_t> serialize();
@@ -59,8 +60,10 @@ public:
     unsigned port_device = RETRO_DEVICE_JOYPAD;
     // Left X/Y, right X/Y in Libretro's -32768..32767 range, held for the next step().
     std::int16_t analog[4] = {0, 0, 0, 0};
+    std::int16_t trigger_pressure[2] = {0, 0};
     unsigned width = 0, height = 0;
     bool video_changed = false;
+    std::uint64_t step_usec = 0, readback_usec = 0; // last frame, for profiling
     // False tells the core its audio is unused (input preview) and drops samples.
     bool want_audio = true;
     double fps = 60.0, sample_rate = 32040.0;
@@ -77,6 +80,8 @@ private:
     };
     void* library = nullptr;
     bool initialized = false;
+    unsigned controller_ports = 2;
+    bool (*fn_vmu_lcd)(unsigned, std::uint8_t*, std::size_t) = nullptr;
     retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
     std::uint16_t buttons = 0;
     std::string system_dir, save_dir;

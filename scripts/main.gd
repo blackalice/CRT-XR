@@ -15,6 +15,7 @@ const VideoLibrary = preload("res://scripts/video/video_library.gd")
 const VideoBar = preload("res://scripts/ui/video_bar.gd")
 const FfmpegInstaller = preload("res://scripts/video/ffmpeg_installer.gd")
 const Menu = preload("res://scripts/ui/menu_controller.gd")
+var vmu_display := preload("res://scripts/rendering/vmu_display.gd").new()
 var menu: PanelContainer
 const Showcase = preload("res://scripts/presets/showcase.gd")
 const SettingsDefaults = preload("res://scripts/ui/settings_defaults.gd")
@@ -413,6 +414,7 @@ func start_application() -> void:
 		visual_bar.use_visualizer()
 		panel.add_child(visual_bar)
 		visualizer_bars.append(visual_bar)
+	world.television.add_child(vmu_display)
 	emulator = Emulation.new()
 	add_child(emulator)
 	music=preload("res://scripts/audio/music_player.gd").new()
@@ -447,6 +449,7 @@ func start_application() -> void:
 		if tv_menu == null or tv_menu.lights_room(): world.screen_light.set_image(image)
 		world.picture.frame_presented(image))
 	emulator.game_changed.connect(func(active):
+		vmu_display.clear()
 		if active: stop_boot_sound()
 		# A game stopped from the menu takes its loading card with it.
 		if not active and not loading_game: end_loading()
@@ -574,6 +577,12 @@ func start_application() -> void:
 		if is_instance_valid(menu.boot): menu.boot.set_process(false)
 
 func apply_settings(config: ConfigFile) -> void:
+	for key in vmu_display.DEFAULTS: vmu_display.set(key,config.get_value("vmu",key,vmu_display.DEFAULTS[key]))
+	vmu_display.horizontal = clampf(vmu_display.horizontal,-1.5,1.5)
+	vmu_display.vertical = clampf(vmu_display.vertical,-1.5,-0.1)
+	vmu_display.forward = clampf(vmu_display.forward,0.2,1.5)
+	vmu_display.width = clampf(vmu_display.width,0.2,0.8)
+	vmu_display.apply_layout()
 	SettingsStore.migrate_view_fov(config)
 	SettingsStore.migrate_screen_glow(config)
 	picture_preset_id=str(config.get_value("menu","picture_preset_id",""))
@@ -749,6 +758,7 @@ func _process(delta: float) -> void:
 	var tv_position: Vector3 = tv_menu.lean_position(Vector3(0, 1.25 + height_offset, -distance))
 	if world.television.position != tv_position: world.television.position = tv_position
 	if world.television.scale != Vector3.ONE * tv_scale: world.television.scale = Vector3.ONE * tv_scale
+	vmu_display.tick(delta,emulator)
 	emulator.tv_audio.update_pose(displayed,Vector3(0,1.25,0),world.television.position,delta)
 	music.update_pose(displayed,Vector3(0,1.25,0),world.television.position,delta)
 	diagnostics_elapsed += delta
@@ -1527,6 +1537,7 @@ func capture_settings() -> ConfigFile:
 	if provider.real: xr_fov=vertical_fov
 	else: desktop_fov=vertical_fov
 	var config := ConfigFile.new()
+	for key in vmu_display.DEFAULTS: config.set_value("vmu",key,vmu_display.get(key))
 	config.set_value("tracking", "source", tracking_source)
 	config.set_value("menu","picture_preset_id",picture_preset_id)
 	config.set_value("menu","picture_preset_signature",picture_preset_signature)

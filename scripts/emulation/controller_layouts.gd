@@ -32,6 +32,7 @@ const A := 8; const X := 9; const L := 10; const R := 11; const L2 := 12; const 
 
 ## The console's own names for the buttons each core reads, in menu order.
 const NAMES := {
+	"dreamcast": [[B,"A"],[A,"B"],[Y,"X"],[X,"Y"],[L2,"L"],[R2,"R"],[START,"Start"]],
 	"snes": [[B,"B"],[A,"A"],[Y,"Y"],[X,"X"],[L,"L"],[R,"R"],[SELECT,"Select"],[START,"Start"]],
 	"nes": [[B,"B"],[A,"A"],[Y,"Turbo B"],[X,"Turbo A"],[SELECT,"Select"],[START,"Start"]],
 	"megadrive": [[Y,"A"],[B,"B"],[A,"C"],[L,"X"],[X,"Y"],[R,"Z"],[SELECT,"Mode"],[START,"Start"]],
@@ -62,6 +63,8 @@ static func standard(system: String, spec: Dictionary) -> Dictionary:
 	var buttons := {"south": B, "east": A, "west": Y, "north": X, "l1": L, "r1": R, "back": SELECT, "start": START,
 		"up": UP, "down": DOWN, "left": LEFT, "right": RIGHT}
 	if spec.get("triggers", false): buttons.merge({"l2": L2, "r2": R2})
+	if system == "dreamcast":
+		for input in ["l1", "r1", "back"]: buttons.erase(input)
 	if system == "psx": buttons["l3"] = L3
 	var analog: bool = spec.get("analog", false)
 	if not analog: buttons.merge({"ls_up": UP, "ls_down": DOWN, "ls_left": LEFT, "ls_right": RIGHT})

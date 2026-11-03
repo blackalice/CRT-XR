@@ -97,9 +97,18 @@ BIOS, commercial ROMs or third-party game artwork are supplied.
   Glow, GLSL-FXAA (MIT) and readerwriterqueue (BSD) under the
   `cores/GLideN64-*-LICENSE` files.
 
+* Flycast (Dreamcast), GPL version 2 or later, Flycast contributors.
+  Source: https://github.com/flyinghead/flycast/tree/7adbf3caef251b153e348df3f469a0f35878339d
+  Full licence: `cores/Flycast-LICENSE.txt`. The OpenGL libretro build includes
+  libchdr (BSD), Asio (Boost Software License), Xbyak (BSD) and tinygettext (zlib);
+  their full notices ship as `cores/Flycast-*-LICENSE.txt`. Other bundled
+  dependency notices remain in the complete source snapshot. Required submodules,
+  including tinygettext's tinycmmc build helpers, are archived at the pinned
+  tree's gitlink revisions. The CRT XR VMU patch (`scripts/core-patches/flycast-vmu-lcd.patch`) exports the LCD separately and ships with the corresponding sources. No Dreamcast BIOS or games are included.
+
 Release cores are locally compiled from the exact revisions above. `cores/core-builds.json`
 records the actual binary/source archive SHA-256 hashes, compiler versions and
-build arguments (make, or CMake for mGBA). Complete upstream source snapshots are under `cores/sources/`.
+build arguments (make, or CMake for mGBA and Flycast). Complete upstream source snapshots are under `cores/sources/`.
 The release also supplies the corresponding application/host/bindings source and
 build materials. Earlier buildbot binaries are kept only in ignored local backups.
 No bit-for-bit equivalence with Libretro's official builds is claimed. See

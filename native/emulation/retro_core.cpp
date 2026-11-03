@@ -29,6 +29,8 @@ void RetroCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_option", "key", "value"), &RetroCore::set_option);
     ClassDB::bind_method(D_METHOD("set_controller", "device"), &RetroCore::set_controller);
     ClassDB::bind_method(D_METHOD("set_hardware_rendering", "enabled"), &RetroCore::set_hardware_rendering);
+    ClassDB::bind_method(D_METHOD("vmu_lcd", "index"), &RetroCore::vmu_lcd, DEFVAL(0));
+    ClassDB::bind_method(D_METHOD("set_trigger_pressure", "left", "right"), &RetroCore::set_trigger_pressure);
     ClassDB::bind_method(D_METHOD("set_analog", "left_x", "left_y", "right_x", "right_y"), &RetroCore::set_analog);
     ClassDB::bind_method(D_METHOD("disc_info"), &RetroCore::disc_info);
     ClassDB::bind_method(D_METHOD("change_disc", "index"), &RetroCore::change_disc);
@@ -56,6 +58,10 @@ void RetroCore::set_option(const String& key, const String& value) { host.set_op
 void RetroCore::set_controller(int device) { host.port_device = static_cast<unsigned>(device); }
 // Before load_core: the core then runs on its own thread with a hidden OpenGL context.
 void RetroCore::set_hardware_rendering(bool enabled) { host.hardware_rendering = enabled; }
+void RetroCore::set_trigger_pressure(int left, int right) {
+    host.trigger_pressure[0] = static_cast<std::int16_t>(std::clamp(left, 0, 32767));
+    host.trigger_pressure[1] = static_cast<std::int16_t>(std::clamp(right, 0, 32767));
+}
 void RetroCore::set_analog(int left_x, int left_y, int right_x, int right_y) {
     const int values[] = {left_x, left_y, right_x, right_y};
     for (int i = 0; i < 4; ++i) host.analog[i] = static_cast<std::int16_t>(std::clamp(values[i], -32768, 32767));
@@ -72,6 +78,7 @@ Dictionary RetroCore::disc_info() const {
 }
 bool RetroCore::change_disc(int index) { return index >= 0 && host.change_disc(static_cast<unsigned>(index)); }
 bool RetroCore::run_frame(int buttons) { return host.step(static_cast<std::uint16_t>(buttons)); }
+PackedByteArray RetroCore::vmu_lcd(int index) const { return index >= 0 ? pack(host.vmu_lcd(static_cast<unsigned>(index))) : PackedByteArray(); }
 bool RetroCore::reset() { return host.reset(); }
 PackedByteArray RetroCore::frame() const { return pack(host.rgba); }
 Dictionary RetroCore::info() const {
@@ -80,6 +87,8 @@ Dictionary RetroCore::info() const {
     result["name"] = String::utf8(host.name.c_str());
     result["width"] = host.width; result["height"] = host.height;
     result["fps"] = host.fps; result["sample_rate"] = host.sample_rate;
+    result["step_usec"] = static_cast<int64_t>(host.step_usec);
+    result["readback_usec"] = static_cast<int64_t>(host.readback_usec);
     result["video_changed"] = host.video_changed;
     result["audio_frames"] = static_cast<int64_t>(host.pcm.size() / 2);
     return result;
@@ -134,6 +143,7 @@ Dictionary RetroCore::run_preview(int buttons, int frames) {
     const auto ram = host.save_ram();
     if (!ram.empty()) preview_host.set_save_ram(ram.data(), ram.size());
     std::copy(std::begin(host.analog), std::end(host.analog), std::begin(preview_host.analog));
+    std::copy(std::begin(host.trigger_pressure), std::end(host.trigger_pressure), std::begin(preview_host.trigger_pressure));
     for (int i = 0; i < std::max(frames, 1); ++i)
         if (!preview_host.step(static_cast<std::uint16_t>(buttons))) return result;
     if (preview_host.width == 0) return result;

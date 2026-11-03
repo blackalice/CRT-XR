@@ -34,6 +34,11 @@ const SYSTEMS := {
 	"psx": {"name":"PlayStation", "core":"pcsx_rearmed", "extensions":[], "aspect":4.0/3.0,
 		"controller":(2 << 8) | 5, "analog":true, "triggers":true, "preview":false,
 		"bios_optional":["scph5501.bin","scph5500.bin","scph5502.bin","scph1001.bin","scph7001.bin","scph101.bin","psxonpsp660.bin","ps1_rom.bin"]},
+	"dreamcast": {"name":"Dreamcast", "core":"flycast", "extensions":["gdi","cdi"], "aspect":4.0/3.0,
+		"analog":true, "triggers":true, "preview":false, "hardware":true,
+		"bios_optional":["dc_boot.bin"],
+		"options":{"reicast_internal_resolution":"640x480", "reicast_alpha_sorting":"per-triangle (normal)",
+			"reicast_threaded_rendering":"disabled", "reicast_vblank_pacing":"enabled"}},
 	# GLideN64 at the console's own 320x240, so the CRT draws native lines. The
 	# host applies the stick deadzone, so the core's is off. Independent C-buttons
 	# (alt-map) give every N64 button its own input, so controller layouts decide
@@ -54,7 +59,7 @@ static func identify(path: String) -> String:
 	# A CHD's sectors are compressed, so its console folder says what it holds.
 	if extension == "chd":
 		var folder := folder_system(path)
-		return folder if folder in ["segacd", "psx"] else ""
+		return folder if folder in ["segacd", "psx", "dreamcast"] else ""
 	var system := extension_system(extension)
 	if not system.is_empty(): return system
 	# .md also means Markdown, so do not list arbitrary documentation as ROMs.
@@ -152,7 +157,7 @@ static func content_hash(path: String) -> String:
 		return hashing.finish().hex_encode()
 	# PlayStation images run to hundreds of megabytes: their opening megabyte holds
 	# the volume and boot data that tell discs apart, and the size goes in too.
-	if extension in ["pbp", "iso"] or (extension == "bin" and FileAccess.get_size(path) > LARGE_IMAGE and identify(path) == "psx"):
+	if extension in ["pbp", "iso", "cdi"] or (extension == "bin" and FileAccess.get_size(path) > LARGE_IMAGE and identify(path) == "psx"):
 		var image := FileAccess.open(path, FileAccess.READ)
 		if image == null: return ""
 		var sampled := HashingContext.new()
@@ -236,22 +241,41 @@ static func playlist_files(m3u_path: String) -> Array[String]:
 		files.append(name if name.is_absolute_path() else m3u_path.get_base_dir().path_join(name).simplify_path())
 	return files
 
-## A playlist of PlayStation discs (multi-disc games); its first disc decides.
+## A playlist of matching PlayStation or Dreamcast discs; reject mixed systems.
 static func playlist_identify(m3u_path: String) -> String:
 	var files := playlist_files(m3u_path)
 	if files.is_empty() or files[0].get_extension().to_lower() in ["m3u", "zip"]: return ""
-	return "psx" if identify(files[0]) == "psx" else ""
+	var system := identify(files[0])
+	for file in files:
+		if file.get_extension().to_lower() in ["m3u", "zip"] or identify(file) != system: return ""
+	return system if system in ["psx", "dreamcast"] else ""
 
 ## Files a cue sheet or playlist among paths already stands for, so a game appears
 ## once rather than as its cue, its tracks and each disc of its playlist.
+static func gdi_files(path: String) -> Array[String]:
+	var files: Array[String] = []
+	var pattern := RegEx.new()
+	pattern.compile('^[0-9]+\\s+[0-9]+\\s+[0-9]+\\s+[0-9]+\\s+(?:"([^"\\r\\n]+)"|([^\\s]+))\\s+[0-9]+\\s*$')
+	for line in FileAccess.get_file_as_string(path).split("\n"):
+		var found := pattern.search(line.strip_edges())
+		if found != null:
+			var name := found.get_string(1) if not found.get_string(1).is_empty() else found.get_string(2)
+			files.append(path.get_base_dir().path_join(name).simplify_path())
+	return files
+
 static func playlist_members(paths: Array) -> Dictionary:
 	var members := {}
 	for path in paths:
 		var extension: String = path.get_extension().to_lower()
 		if extension == "cue":
 			for file in cue_files(path): members[file] = true
-		elif extension == "m3u":
-			for file in playlist_files(path): members[file] = true
+		elif extension == "gdi":
+			for file in gdi_files(path): members[file] = true
+		elif extension == "m3u" and not playlist_identify(path).is_empty():
+			for file in playlist_files(path):
+				members[file] = true
+				if file.get_extension().to_lower() == "gdi":
+					for track in gdi_files(file): members[track] = true
 	return members
 
 ## Sector layouts of disc images: raw 2352-byte sectors (Mode 2, then Mode 1),
@@ -350,13 +374,15 @@ static func preferred_bios_folder() -> String:
 	return base.path_join("bios")
 
 static func bios_file(name: String) -> String:
-	for folder in bios_sources():
-		if FileAccess.file_exists(folder.path_join(name)): return folder.path_join(name)
+	for source_folder in bios_sources():
+		var folder: String = source_folder.path_join(name.get_base_dir())
+		var filename := name.get_file()
+		if FileAccess.file_exists(folder.path_join(filename)): return folder.path_join(filename)
 		# Dumps are named SCPH5501.BIN as often as scph5501.bin, and the Steam
 		# Deck's file system tells the two apart.
 		if not DirAccess.dir_exists_absolute(folder): continue
 		for file in DirAccess.get_files_at(folder):
-			if file.to_lower() == name.to_lower(): return folder.path_join(file)
+			if file.to_lower() == filename.to_lower(): return folder.path_join(file)
 	return ""
 
 static func bios_satisfied(system: String) -> bool:
@@ -367,8 +393,12 @@ static func bios_satisfied(system: String) -> bool:
 	return false
 
 static func stage_bios(system: String, destination: String) -> void:
+	if system == "dreamcast":
+		destination = destination.path_join("dc")
+		DirAccess.make_dir_recursive_absolute(destination)
 	for name in SYSTEMS[system].get("bios_any", []) + SYSTEMS[system].get("bios_optional", []):
 		var source := bios_file(name)
+		if source.is_empty() and system == "dreamcast": source = bios_file("dc/" + name)
 		if source.is_empty(): continue
 		var target := destination.path_join(name)
 		# Refresh a staged copy the user has since replaced.

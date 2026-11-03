@@ -22,6 +22,7 @@ Steam Deck deployment and hardware validation follow separately.
 | Vectrex | vecx | `.vec` |
 | Nintendo 64 | Mupen64Plus-Next (GLideN64) | `.z64`, `.n64`, `.v64` (any byte order), plain or alone in a ZIP |
 | PlayStation | PCSX ReARMed | `.cue`, `.bin`/`.iso` with a PlayStation volume, PS1 `.pbp`, `.m3u` playlists; `.chd` or zipped discs in a PlayStation folder |
+| Dreamcast (development) | Flycast (OpenGL) | `.gdi`, `.cdi`, `.chd` in a Dreamcast folder, `.m3u` playlists |
 
 `.md` and `.bin` require a SEGA cartridge header (Mega Drive) or the
 `SEGADISCSYSTEM` header (Sega CD) to avoid treating documents and unrelated
@@ -382,3 +383,101 @@ from this limited diagnostic program. Per-eye menus pass local GPU/controller
 checks; the automatic KDE display launcher is prepared but needs a hardware
 check. Audio-clock tuning and Gaming Mode remain further work. See
 [display setup](display-setup.md).
+
+## Dreamcast (development)
+
+The development build adds Flycast through the existing library and Emulation
+settings pages. Steam Deck game compatibility and full SBS performance still
+require hardware acceptance; this does not describe existing beta.15 downloads.
+
+Use `dreamcast`, `segadreamcast` or `dc` folders. GDI descriptors stay beside
+all their track files; the library hides tracks and playlist members. CHD is
+recommended for a single-file disc. CDI is also supported. Multi-disc games use
+an `.m3u` playlist and the existing **Change disc** action. Dreamcast archives,
+Naomi/Atomiswave, light guns and multiplayer are outside this integration.
+
+Native 640×480, 4:3 and normal per-triangle transparency are the defaults.
+Input preview is disabled. **Emulation → Consoles → Dreamcast** exposes internal
+resolution (up to 960×720), transparency and Audio DSP with existing reset and
+per-game inheritance controls. Leave native resolution on Steam Deck until
+performance has been checked in the full room/SBS setup. Rendering stays on the
+core worker thread; threaded rendering inside Flycast is disabled, with its
+vblank pacing option enabled so each host step advances one console vblank.
+
+The left stick, face buttons, Start and proportional L2/R2 use the existing
+controller layout editor. Dreamcast A/B/X/Y use the bottom/right/left/top buttons.
+Trigger pressure follows remapping; digital controls mapped to triggers press
+them fully. R3 and the menu chord retain their usual roles.
+
+Flycast can use its HLE BIOS. An optional user-supplied `dc_boot.bin` is found
+in normal BIOS locations, directly or under `dc/`, and staged into the core's
+writable `dc` directory. BIOS setup never replaces VMU or NVRAM files. Flycast
+manages shared VMUs under `user://saves/dreamcast/flycast/dc/`; keep the entire
+directory when backing up. Save-state slots and automatic resume use existing
+per-game paths. In-game VMU saving, disc swaps and suspend/resume need Deck
+acceptance with representative games.
+
+Validation commands (use an isolated Godot user-data directory):
+
+```text
+python tests/make_dreamcast_probe.py
+godot --headless --path . --script tests/dreamcast.gd
+godot --path . --script tests/flycast_runtime.gd
+```
+
+The original CC0 SH-4 ELF checks startup, vblank execution, state restore and
+reset. It does not exercise game graphics or establish compatibility or Deck
+speed. Windows real-core smoke checks and the settings visual review pass;
+Linux and Windows cores are built from pinned source with recorded hashes.
+
+### Tech Romancer timing investigation (3 November 2026)
+
+On the Steam Deck, an isolated 640×480 Tech Romancer benchmark measured 1,200
+steps after 1,200 warm-up steps, using fresh test saves and no room rendering.
+Normal settings averaged 4.080 ms per core step (95th percentile 6.848 ms,
+maximum 11.920 ms); none exceeded 16.7 ms. GPU readback, included in step time,
+averaged 1.314 ms (95th percentile 2.879 ms). Disabling DSP averaged 4.071 ms;
+disabling DSP plus fast transparency averaged 4.078 ms. This sequence provides
+no evidence for reducing those quality defaults. It does not reproduce a
+controlled fight or establish combined room/SBS performance.
+
+The host now follows the core's live refresh rate when presenting frames,
+instead of retaining its initial load-time rate after boot/state timing changes.
+A focused timing regression and the main-library card regression pass on Deck.
+Dreamcast's missing library-card metadata is fixed, with a fallback for future
+registered systems. Full-scene profiling and reducing synchronous GPU readback
+remain the next performance investigations; no zero-copy or asynchronous
+readback implementation is claimed here.
+
+### Floating VMU LCD
+
+**Emulation → VMU** controls the first player's first VMU LCD. It is enabled by
+default, appears only after the game sends LCD data, and floats below/in front
+of the TV. Look down with head tracking to see it. Position is relative to the
+TV, so it follows TV placement and scale while remaining anchored in the room.
+Horizontal position, vertical position, distance in front of the TV and display
+width use the existing sliders, reset and preview controls. These preferences
+are global and are saved with setups. The panel remains available while paused;
+leaving Dreamcast clears the old LCD.
+
+The LCD retains 48×32 pixels with nearest filtering and muted monochrome colours.
+It is separate from the CRT image and does not receive scanlines/composite
+processing. Hidden panels do not poll the core; visible panels poll at most
+30 times a second and upload only changed images. Two small unlit quads draw
+the LCD and bezel, with no extra viewport or shadow pass.
+
+The pinned Flycast source is patched by
+`scripts/core-patches/flycast-vmu-lcd.patch`. An optional `retro_crt_xr_vmu_lcd`
+export returns decoded LCD bytes independently of Flycast's in-picture overlay
+settings. Access is locked and copied on the core thread. Older/unpatched cores
+return no LCD. The patch is included and hashed in each core's build evidence
+and corresponding-source materials. This displays a VMU attached to the running
+Dreamcast; standalone VMU games and additional player/slot selection are not
+included.
+
+Deck validation: Tech Romancer supplied a readable 48×32 logo through the new
+channel, and a VMU A1 save file was created in the isolated test folder. LCD
+polling averaged approximately 57 microseconds per call over 3,000 polls. A
+controller-port regression now checks all advertised ports are initialised:
+Flycast waits for all four before configuring expansion devices, so sending
+only ports 0 and 1 prevented VMU attachment in the original integration.

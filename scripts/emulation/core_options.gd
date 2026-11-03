@@ -3,6 +3,7 @@ extends RefCounted
 const Store = preload("res://scripts/ui/settings_store.gd")
 const PATH := "user://core-options.cfg"
 const OPTIONS := {
+ "dreamcast": [["reicast_internal_resolution", "Internal resolution", ["Default", "960×720"], ["", "960x720"], "Default is 640×480. Higher resolutions cost more performance."], ["reicast_alpha_sorting", "Transparency", ["Default", "Fast", "Accurate"], ["", "per-strip (fast, least accurate)", "per-triangle (normal)"], "Fast sorting can cause visual glitches."], ["reicast_enable_dsp", "Audio DSP", ["Default", "Off", "On"], ["", "disabled", "enabled"], "Accurate audio effects cost more performance."]],
  "snes": [["snes9x_region", "Region", ["Automatic", "NTSC", "PAL"], ["", "ntsc", "pal"], "Incorrect regions can change game speed."], ["snes9x_reduce_sprite_flicker", "Reduce sprite flicker", ["Default", "Off", "On"], ["", "disabled", "enabled"], "Can cause visual glitches in some games."]],
  "nes": [["nestopia_nospritelimit", "Remove sprite limit", ["Default", "Off", "On"], ["", "disabled", "enabled"], "Reduces flicker but can cause visual glitches."]],
  "megadrive": [["genesis_plus_gx_region_detect", "Region", ["Automatic", "USA", "Europe", "Japan"], ["", "ntsc-u", "pal", "ntsc-j"], "Incorrect regions can change game speed."], ["genesis_plus_gx_no_sprite_limit", "Remove sprite limit", ["Default", "Off", "On"], ["", "disabled", "enabled"], "Can cause visual glitches."]],
@@ -40,6 +41,7 @@ static func overrides(system: String, game: String) -> Dictionary:
 
 ## Display labels for the defaults of the pinned builds. These do not override the cores.
 const DEFAULT_LABELS := {
+ "reicast_internal_resolution":"640×480", "reicast_alpha_sorting":"Accurate", "reicast_enable_dsp":"On",
  "snes9x_region":"Automatic", "snes9x_reduce_sprite_flicker":"Off",
  "nestopia_nospritelimit":"Off", "genesis_plus_gx_region_detect":"Automatic",
  "genesis_plus_gx_no_sprite_limit":"Off", "gambatte_gbc_color_correction":"Game Boy Color",

@@ -93,7 +93,7 @@ func core_option_row(system: String, game: String, definition: Array) -> Diction
 		item["detail_getter"] = func(): return "From console" if CoreOptions.choice_index(system, game, definition) == 0 else "Game override"
 	return item
 
-const CORE_SYSTEMS := ["snes", "nes", "megadrive", "mastersystem", "gamegear", "segacd", "gameboy", "gba", "ngpc", "psx", "n64"]
+const CORE_SYSTEMS := ["snes", "nes", "megadrive", "mastersystem", "gamegear", "segacd", "gameboy", "gba", "ngpc", "psx", "n64", "dreamcast"]
 var expanded_core_console := ""
 var core_game_context := ""
 
@@ -376,7 +376,11 @@ func pages(category: int) -> Array:
 				elif h.emulator.separate_preview: input_delay.disabled_reason="The separate preview core could not start for %s." % console
 				else: input_delay.disabled_reason="%s needs Separate preview core: its sound buzzes with a same-core preview." % console
 			var separate_preview := toggle("controls.separate_preview","Separate preview core",h.emulator,"separate_preview",true,"Runs preview in a second core to keep audio clean. Uses more memory. PS1/N64: unavailable; off: SNES only.",func(): h.emulator.set_separate_preview(h.emulator.separate_preview); menu.refresh(),false)
-			return core_option_pages() + [page("Performance",[input_delay,separate_preview]),page("Info",[
+			var vmu = h.vmu_display
+			var vmu_rows: Array = [toggle("vmu.enabled","Floating VMU display",vmu,"enabled",true,"Shows player one's VMU LCD below the TV during Dreamcast games. Look down to see it. The panel stays anchored in the room.",vmu.apply_layout)]
+			for spec in [["horizontal","Horizontal position",-1.5,1.5,0.05],["vertical","Vertical position",-1.5,-0.1,0.05],["forward","Distance in front of TV",0.2,1.5,0.05],["width","Display width",0.2,0.8,0.02]]:
+				vmu_rows.append(number("vmu."+spec[0],spec[1],vmu,spec[0],spec[2],spec[3],spec[4],vmu.DEFAULTS[spec[0]],"m","Relative to the TV. Changes apply immediately and are saved with your settings.",vmu.apply_layout))
+			return core_option_pages() + [page("VMU",vmu_rows),page("Performance",[input_delay,separate_preview]),page("Info",[
 				action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate."),
 				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")])]
 

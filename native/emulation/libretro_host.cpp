@@ -1,6 +1,7 @@
 #include "libretro_host.h"
 #include "gl_context.h"
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
@@ -93,6 +94,8 @@ void LibretroHost::close() {
 #endif
         }
         library = nullptr;
+        fn_vmu_lcd = nullptr;
+        controller_ports = 2;
         options.clear();
         overrides.clear();
         disk = {};
@@ -114,6 +117,7 @@ bool LibretroHost::load_core(const std::string& path) {
         if (!library) { error = "Cannot load native core or one of its dependencies: " + path; return false; }
 #define BIND(method) fn_##method = reinterpret_cast<decltype(fn_##method)>(symbol("retro_" #method)); if (!fn_##method) { error = "Core missing retro_" #method; close(); return false; }
         BIND(api_version); BIND(init); BIND(deinit); BIND(set_environment); BIND(set_video_refresh);
+        fn_vmu_lcd = reinterpret_cast<decltype(fn_vmu_lcd)>(symbol("retro_crt_xr_vmu_lcd"));
         BIND(set_audio_sample); BIND(set_audio_sample_batch); BIND(set_input_poll); BIND(set_input_state);
         BIND(get_system_info); BIND(get_system_av_info); BIND(set_controller_port_device);
         BIND(load_game); BIND(unload_game); BIND(reset); BIND(run); BIND(serialize_size); BIND(serialize); BIND(unserialize);
@@ -175,7 +179,7 @@ bool LibretroHost::load_game(const std::string& path, const std::string& directo
         }
         loaded = true;
         fn_set_controller_port_device(0, port_device);
-        fn_set_controller_port_device(1, RETRO_DEVICE_NONE);
+        for (unsigned port = 1; port < controller_ports; ++port) fn_set_controller_port_device(port, RETRO_DEVICE_NONE);
         retro_system_av_info av{};
         fn_get_system_av_info(&av);
         if (!av_info(av)) { close_game(); return false; }
@@ -210,9 +214,21 @@ bool LibretroHost::step(std::uint16_t mask) {
         pcm.clear();
         video_changed = false;
         error.clear();
+        readback_usec = 0;
+        const auto started = std::chrono::steady_clock::now();
         fn_run();
+        step_usec = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
         if (insert_countdown > 0 && --insert_countdown == 0 && disk.set_eject_state) disk.set_eject_state(false);
         return error.empty();
+    });
+}
+std::vector<std::uint8_t> LibretroHost::vmu_lcd(unsigned index) const {
+    if (!loaded || !fn_vmu_lcd || index >= 8) return {};
+    return on_core([&] {
+        Use use(this);
+        std::vector<std::uint8_t> pixels(48 * 32);
+        if (!fn_vmu_lcd(index, pixels.data(), pixels.size())) pixels.clear();
+        return pixels;
     });
 }
 bool LibretroHost::reset() {
@@ -306,8 +322,15 @@ bool LibretroHost::environment(unsigned command, void* data) {
     case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
         active->disk = data ? *static_cast<const retro_disk_control_ext_callback*>(data) : retro_disk_control_ext_callback{};
         return true;
+    case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: {
+        if (!data) return false;
+        const auto* ports = static_cast<const retro_controller_info*>(data);
+        unsigned count = 0;
+        while (count < 16 && ports[count].types) ++count;
+        active->controller_ports = std::max(2u, count);
+        return true;
+    }
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
-    case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
     case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO: return true;
     default: return false;
@@ -336,9 +359,11 @@ void LibretroHost::video(const void* data, unsigned w, unsigned h, std::size_t p
     LibretroHost& host = *active;
     if (data == RETRO_HW_FRAME_BUFFER_VALID) {
         // The core drew into the hidden framebuffer: read it back for the TV.
+        const auto started = std::chrono::steady_clock::now();
         if (!host.hw_active || w == 0 || h == 0 || w > 1024 || h > 1024 || !host.gl->read(w, h, host.hw.bottom_left_origin, host.rgba)) {
             host.error = "Unsupported core video buffer"; return;
         }
+        host.readback_usec += std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
         host.width = w; host.height = h; host.video_changed = true;
         return;
     }
@@ -385,6 +410,8 @@ void LibretroHost::input_poll() {}
 std::int16_t LibretroHost::input(unsigned port, unsigned device, unsigned index, unsigned id) {
     if (!active || port != 0) return 0;
     if ((device & RETRO_DEVICE_MASK) == RETRO_DEVICE_ANALOG) {
+        if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON && id >= RETRO_DEVICE_ID_JOYPAD_L2 && id <= RETRO_DEVICE_ID_JOYPAD_R2)
+            return active->trigger_pressure[id - RETRO_DEVICE_ID_JOYPAD_L2] > 0 ? active->trigger_pressure[id - RETRO_DEVICE_ID_JOYPAD_L2] : ((active->buttons >> id) & 1 ? 0x7FFF : 0);
         if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON) return id < 16 && (active->buttons >> id) & 1 ? 0x7FFF : 0;
         return index < 2 && id < 2 ? active->analog[index * 2 + id] : 0;
     }

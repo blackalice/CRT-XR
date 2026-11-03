@@ -18,6 +18,10 @@ int main(int argc, char** argv) {
         check(host.load_core(argv[1]), "Fixture core dynamically loads");
         check(host.load_game(argv[3], argv[4]), "Legacy core option default and ROM loading work");
         check(host.step(0) && host.width == 2 && host.height == 2, "Core framebuffer dimensions captured");
+        check(host.save_ram()[6] == 15, "Every advertised controller port is initialized, including disconnected ports");
+        const auto lcd = host.vmu_lcd(0);
+        check(lcd.size() == 48 * 32 && lcd[0] == 255 && lcd[1] == 0 && lcd[48] == 255, "Optional VMU channel returns the separate LCD pixels");
+        check(host.vmu_lcd(8).empty(), "Out-of-range VMU port is rejected");
         const auto expected = host.rgba;
         check(expected.size() == 16 && expected[0] == 255 && expected[1] == 0 && expected[8] == 0 && expected[10] == 255, "RGB565 channel conversion respects row pitch");
         check(host.pcm.size() == 6 && host.pcm[0] == 1000 && host.pcm[3] == -32768 && host.pcm[4] == 250, "Batch and single stereo audio callbacks preserve PCM");
@@ -38,6 +42,10 @@ int main(int argc, char** argv) {
         {
             host.analog[0] = 0x4000;
             check(host.step(1 << RETRO_DEVICE_ID_JOYPAD_L2) && host.save_ram()[1] == 0x40 && host.save_ram()[2] == 1, "Analog stick and trigger reach the core");
+            host.trigger_pressure[0] = 8192;
+            check(host.step(1 << RETRO_DEVICE_ID_JOYPAD_L2) && host.save_ram()[5] == 32, "Partial trigger pressure survives a digital trigger bit");
+            host.trigger_pressure[0] = 0;
+            check(host.step(0) && host.save_ram()[5] == 0, "Released trigger returns to zero");
             check(host.save_ram()[4] == 0, "Core option default applies without an override");
             host.set_option("fixture_choice", "second");
             check(host.step(0) && host.save_ram()[4] == 1, "A core option override wins over the default");
@@ -67,6 +75,7 @@ int main(int argc, char** argv) {
         }
         host.close();
         check(host.load_core(argv[2]), "Real Snes9x core dynamically loads");
+        check(host.vmu_lcd(0).empty(), "A core without the VMU extension returns no LCD");
         check(host.load_game(argv[3], argv[4]), "Real Snes9x loads original diagnostic ROM");
         bool executed = true;
         for (int i = 0; i < 90; ++i) executed = host.step(0) && executed;
