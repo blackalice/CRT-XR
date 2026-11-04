@@ -18,6 +18,7 @@ const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
 ## Page builders and actions, one helper per area; each reaches the menu and host.
+var state_previews := preload("res://scripts/emulation/state_previews.gd").new()
 var preparing_pause := false
 var pause_cache := {}
 var pause_cache_owner: Control
@@ -219,6 +220,10 @@ func begin_boot() -> void:
 
 
 func _ready() -> void:
+	add_child(state_previews)
+	state_previews.ready_for.connect(func(path):
+		if not visible: return
+		if items.any(func(item): return item.get("thumbnail_path", "") == path) or (mode == "launch" and host.emulator.auto_path_for(games.launch_path) == path) or (mode == "confirm" and confirmation.get("preview", "") == path): refresh())
 	for helper in [pictures,videos,music,games,play,keys,controls]: helper.host=host; helper.menu=self
 	theme = MenuSkin.create()
 	host.box_art.art_ready.connect(thumbnail_arrived)
@@ -1083,7 +1088,9 @@ func _render(incremental: bool) -> void:
 		heading.text = CATEGORIES[category]
 	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
-	if mode=="confirm": confirm_panel.describe("",confirmation.detail,confirmation.get("preview",""))
+	if mode=="confirm":
+		state_previews.request(confirmation.get("preview", ""))
+		confirm_panel.describe("",confirmation.detail,confirmation.get("preview",""))
 	rename_field.visible = mode in ["rename","radio_url","folder_path","video_search"]
 	rename_field.max_length=2048 if mode in ["radio_url","folder_path"] else (64 if mode=="video_search" else 32)
 	rename_field.placeholder_text="D:/roms or //server/share/roms" if mode=="folder_path" else "Direct MP3 stream URL" if mode=="radio_url" else ("Part of a video's name" if mode=="video_search" else "Name · Use on-screen keys or type")
@@ -1144,6 +1151,7 @@ func _render(incremental: bool) -> void:
 		column.add_child(hero)
 		var preview_panel := ResumePreview.new(); hero.add_child(preview_panel)
 		var auto: String=host.emulator.auto_path_for(games.launch_path)
+		state_previews.request(auto)
 		preview_panel.describe(auto,"Saved " + ago(host.emulator.state_stamp(auto)))
 		var actions := VBoxContainer.new(); actions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; actions.alignment=BoxContainer.ALIGNMENT_CENTER
 		actions.add_theme_constant_override("separation",12); hero.add_child(actions)

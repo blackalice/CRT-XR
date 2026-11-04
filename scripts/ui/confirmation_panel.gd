@@ -24,7 +24,7 @@ func describe(title: String, detail: String, state_path := "") -> void:
 
 	thumbnail.hide()
 	if not state_path.is_empty():
-		var details := preload("res://scripts/emulation/emulation_session.gd").state_details(state_path)
+		var details := preload("res://scripts/emulation/emulation_session.gd").state_metadata(state_path)
 		if details.get("thumbnail") is PackedByteArray:
 			var image := Image.new()
 			if image.load_png_from_buffer(details.thumbnail)==OK:

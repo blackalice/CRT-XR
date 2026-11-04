@@ -14,6 +14,10 @@ func run() -> void:
 	check(await session.load_rom_async(rom), "background load publishes a ready game")
 	check(ticks > 0 and not session.transition_busy, "scene updates continue through native loading")
 	for i in range(5): session.core.run_frame(0)
+	session.update_texture(true)
+	check(await session.save_state_async(2), "manual state saves in the background")
+	check(not session.state_metadata(session.state_path(2)).is_empty(), "manual save publishes lightweight metadata")
+	check(await session.reset_game_async() and await session.load_state_async(2), "manual reset and load run through guarded background jobs")
 	session.auto_saved = false
 	var automatic: String = session.auto_path()
 	var directory: String = session.save_directory

@@ -201,7 +201,7 @@ func launch_game(path: String, continuing: bool) -> void:
 		# runs in the background while the room continues to update.
 		await host.get_tree().create_timer(0.55).timeout
 		if generation != launch_generation or host.loading_path != path: return
-		while host.loading_game: await host.get_tree().process_frame
+		while host.loading_game or host.emulator.get("transition_busy") == true: await host.get_tree().process_frame
 		if generation != launch_generation or host.loading_path != path: return
 		var stopped: bool = await host.stop_for_disc(path, true)
 		if generation != launch_generation: return
@@ -209,7 +209,7 @@ func launch_game(path: String, continuing: bool) -> void:
 			host.end_loading()
 			if not menu.visible: host.toggle_settings()
 			menu.show_error(host.emulator.status); return
-	while host.loading_game: await host.get_tree().process_frame
+	while host.loading_game or host.emulator.get("transition_busy") == true: await host.get_tree().process_frame
 	if generation != launch_generation: return
 	var opened: bool = await host.load_game_async(path, host.shows_loading_card(path))
 	if generation != launch_generation: return

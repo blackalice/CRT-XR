@@ -71,9 +71,11 @@ Local music uses a private MP3 playback on `music_decode_worker.gd` and feeds a
 bounded PCM block into a main-thread audio generator. Timeline requests invalidate
 older seeks and decoded blocks; the worker alone scans and mixes the MP3. Paused
 seeks remain visible and resume from the latest requested position. Stop and track
-changes invalidate outstanding audio. Compressed-file loading and initial metadata
-preparation remain synchronous; this change addresses seeking, not every file-open
-cost.
+changes invalidate outstanding audio. Interactive compressed-file loading and album metadata preparation now also use
+a background loader. New selections supersede older requests; Stop cancels a
+pending open. Existing sound is retained until a replacement is valid. Startup
+prepares the saved track asynchronously without autoplaying it. Next, album advance
+and Play last MP3 use this path too; synchronous APIs remain for diagnostic probes.
 
 Routine bookmark writes use the same worker, with pending writes coalesced. Explicit
 `save_resume()` still waits for atomic persistence; shutdown flushes the final bookmark.
@@ -93,3 +95,12 @@ Separate pause/resume measurements still reached roughly 60 ms in the full menu;
 that remaining phase needs profiling rather than being attributed to MP3 seeking.
 The tracking driver was disconnected during these room-rendering tests, so physical
 headset acceptance remains outstanding.
+
+### Background file-open validation
+
+One-hour synthetic MP3s were opened with the complete CRT room rendering on the
+Deck. Across two runs, the worst scene gap was 17.07 ms. Failed opens preserve the old
+stream, latest selection wins, and Stop invalidates pending opens. Tests also cover
+rapid Next requests, bad album entries without a retry loop, album repeat, saved
+positions and radio regressions. Raw evidence is in `build/state-music-deck*.log`.
+The candidate is `state-music-test-20261103`; the installed release is unchanged.

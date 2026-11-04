@@ -35,8 +35,11 @@ func music_browser_items() -> Array:
 	var album: Array=host.music.album_tracks(music_dir)
 	if not album.is_empty():
 		result.append(menu.entry(menu.catalog.action("music.album","Play this album",func():
-			if host.music.play_album(music_dir): panel_hidden=false; menu.mode="pause"; menu.clear_input(); menu.render()
-			else: menu.show_error(host.music.status),"Play this folder in disc/track order, falling back to natural filenames.",false,""),menu.SECTION_HERE,"album","primary","%d tracks in disc and track order" % album.size()))
+			var folder := music_dir
+			if await host.music.play_album_async(folder):
+				panel_hidden=false
+				if menu.mode == "music_browser" and music_dir == folder: menu.mode="pause"; menu.clear_input(); menu.render()
+			else: pass,"Play this folder in disc/track order, falling back to natural filenames.",false,""),menu.SECTION_HERE,"album","primary","%d tracks in disc and track order" % album.size()))
 	result.append_array(menu.up_entry("music.up",music_dir,open_music_browser))
 	for name in DirAccess.get_directories_at(music_dir):
 		if name.begins_with("."): continue
@@ -45,8 +48,11 @@ func music_browser_items() -> Array:
 	for tag in album:
 		var path: String=tag.path
 		var row: Dictionary=menu.entry(menu.catalog.action("music.track."+path,str(tag.title),func():
-			if host.music.play_file(path): panel_hidden=false; menu.mode="pause"; menu.clear_input(); menu.render()
-			else: menu.show_error(host.music.status),"Play from this track, then continue through the folder. "+str(tag.album),false,"›"),menu.SECTION_INSIDE,"music")
+			var folder := music_dir
+			if await host.music.play_file_async(path):
+				panel_hidden=false
+				if menu.mode == "music_browser" and music_dir == folder: menu.mode="pause"; menu.clear_input(); menu.render()
+			else: pass,"Play from this track, then continue through the folder. "+str(tag.album),false,"›"),menu.SECTION_INSIDE,"music")
 		if not str(tag.artist).is_empty(): row["layout"]="game"; row["detail"]=str(tag.artist)
 		entries.append(row)
 	if entries.is_empty():

@@ -1,5 +1,32 @@
 # GameCube stability: core-fix continuation, 3 November 2026
 
+## Save-display and manual-operation follow-up
+
+States remain backward-compatible format-1 `.rst` envelopes. New writes commit a
+small `.rst.preview` sidecar containing display metadata and compressed thumbnail,
+validated against the primary file's size/mtime and a fixed-size header hash.
+A new optional envelope revision distinguishes same-size, same-timestamp writes. UI timestamps, confirmation cards
+and save-slot previews read only this bounded sidecar. Missing/invalid sidecars use
+a timestamp/placeholder while one background service migrates the legacy envelope.
+Migration does not rewrite the primary state. A commit mutex serializes migration
+with save+preview commits so a stale migration cannot replace a new preview.
+Preview files are disposable; failure to generate one does not invalidate a save.
+
+Manual slot save/load/reset now use exclusive background jobs and asynchronously
+drain in-flight emulation before touching the core. Slot actions and reset dialogs
+use those paths. Serialization, full-state reading and atomic writes run off the
+scene thread. Synchronous probe APIs remain. Failed writes preserve the prior save;
+transition guards prevent overlapping core operations and cross-media interruptions.
+
+Two isolated Deck validations on TimeSplitters passed: primary states about 58 MB,
+preview sidecars about 32 KB; legacy preview-page construction 17-20 ms. Worst
+room-frame gap across manual save/load/reset and legacy migration was 35.08 ms.
+Windows/Linux tests additionally cover sidecar/source mismatch, concurrent migration
+and save commits, failed-save preservation, and legacy byte-for-byte preservation.
+The final candidate remains `state-music-test-20261103`, with isolated XDG saves.
+The active release has not been changed by this follow-up.
+
+
 ## Menu responsiveness follow-up
 
 Loading fixes are committed as `d8a9a4d` and were activated on the Deck as

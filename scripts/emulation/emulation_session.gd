@@ -2,6 +2,7 @@ extends Node
 const Registry = preload("res://scripts/emulation/core_registry.gd")
 const Layouts = preload("res://scripts/emulation/controller_layouts.gd")
 const CoreOptions = preload("res://scripts/emulation/core_options.gd")
+const StateStore = preload("res://scripts/emulation/state_store.gd")
 const DolphinSupport = preload("res://scripts/emulation/dolphin_support.gd")
 ## Godot owns presentation; the native Libretro host owns frame execution/callbacks.
 signal content_changed(texture: Texture2D)
@@ -159,7 +160,7 @@ func stop_for_launch() -> bool:
 			var state: PackedByteArray = native_core.save_state()
 			if state.is_empty(): return "Could not save automatic resume: " + str(native_core.last_error())
 			envelope["state"] = state
-			var saved := write_transition_file(resume_path, var_to_bytes(envelope))
+			var saved := StateStore.write_state(resume_path, envelope)
 			if saved != OK: return "Could not save automatic resume: " + error_string(saved)
 		if preserve_ram:
 			var ram: PackedByteArray = native_core.save_ram()
@@ -180,11 +181,16 @@ func stop_for_launch() -> bool:
 	return true
 
 func load_auto_async() -> bool:
+	return await load_from_async(auto_path(), "Continued automatic save")
+
+func load_state_async(slot := 0) -> bool:
+	return await load_from_async(state_path(slot), "Loaded • Slot %d" % (slot + 1))
+
+func load_from_async(path: String, description: String) -> bool:
 	if transition_busy or not loaded: return false
 	transition_busy = true
 	await drain_transition_frame()
 	var native_core := core
-	var path := auto_path()
 	var hash := rom_hash
 	var identity := core_identity
 	var error: String = await run_job(func():
@@ -204,7 +210,7 @@ func load_auto_async() -> bool:
 	core_failed = false
 	disc_snapshot = core.disc_info()
 	update_texture(true)
-	report("Continued automatic save • " + rom_path.get_file().get_basename())
+	report(description + " • " + rom_path.get_file().get_basename())
 	return true
 
 func load_rom_async(path: String) -> bool:
@@ -723,25 +729,67 @@ static func auto_path_for(path: String) -> String:
 	return "" if hash.is_empty() else folder.path_join(hash+".auto.rst")
 
 static func state_details(path: String) -> Dictionary:
-	var file := FileAccess.open(path,FileAccess.READ)
-	# Allow the native state cap plus its small game/core metadata envelope.
-	if file==null or file.get_length()<4 or file.get_length()>257*1024*1024: return {}
-	var value = bytes_to_var(file.get_buffer(file.get_length()))
-	if not value is Dictionary or value.get("format")!=1 or not value.get("state") is PackedByteArray: return {}
-	return value
+	return StateStore.read_state(path)
+
+static func state_metadata(path: String) -> Dictionary:
+	return StateStore.metadata(path)
 
 ## When a state was saved (Unix time), or 0 when unknown.
 static func state_stamp(path: String) -> int:
-	return int(state_details(path).get("saved_at", FileAccess.get_modified_time(path)))
+	return int(state_metadata(path).get("saved_at", FileAccess.get_modified_time(path)))
 
 static func state_time(path: String) -> String:
-	var value := state_details(path)
+	var value := state_metadata(path)
 	var stamp := int(value.get("saved_at",FileAccess.get_modified_time(path)))
 	return Time.get_datetime_string_from_unix_time(stamp).replace("T"," ")+" UTC" if stamp>0 else "Unknown time"
 
+func save_state_async(slot := 0) -> bool:
+	if transition_busy or not loaded or core_failed: return false
+	transition_busy = true
+	await drain_transition_frame()
+	if core_failed:
+		transition_busy = false
+		fail_core()
+		report("Cannot save after a frame error. Your previous save was kept.", true)
+		return false
+	var native_core := core
+	var path := state_path(slot)
+	var envelope := {"format": 1, "rom": rom_hash, "core": core_identity, "saved_at": int(Time.get_unix_time_from_system()), "game": rom_path.get_file()}
+	if last_frame != null:
+		var image := last_frame.duplicate()
+		image.resize(mini(256, roundi(192 * display_aspect)), 192, Image.INTERPOLATE_NEAREST)
+		envelope["thumbnail"] = image.save_png_to_buffer()
+	report("Saving • Slot %d" % (slot + 1))
+	var error: String = await run_job(func():
+		var state: PackedByteArray = native_core.save_state()
+		if state.is_empty(): return "Could not save state: " + str(native_core.last_error())
+		envelope["state"] = state
+		var saved := StateStore.write_state(path, envelope)
+		return "" if saved == OK else "Could not save state: " + error_string(saved))
+	transition_busy = false
+	accumulator = 0.0; skip_delta = true
+	restart_audio()
+	if not error.is_empty(): report(error, true); return false
+	report("Saved • Slot %d" % (slot + 1))
+	return true
+
+func reset_game_async() -> bool:
+	if transition_busy or not loaded: return false
+	transition_busy = true
+	await drain_transition_frame()
+	var native_core := core
+	var success: bool = await run_job(func(): return native_core.reset())
+	transition_busy = false
+	if not success: report(str(core.last_error()), true); return false
+	accumulator = 0.0; skip_delta = true; auto_saved = false
+	restart_audio()
+	disc_snapshot = core.disc_info()
+	report("Reset • " + rom_path.get_file().get_basename())
+	return true
+
 func save_auto() -> bool:
 	if transition_busy:
-		report("A game is loading. Please wait for it to finish.", true)
+		report("Please wait for the current game operation to finish.", true)
 		return false
 	if not loaded or auto_saved or core_failed: return true
 	if not save_to(auto_path(),"Automatic resume saved"): return false
@@ -753,7 +801,7 @@ func save_state(slot := 0) -> bool:
 
 func save_to(path: String, description: String) -> bool:
 	if transition_busy:
-		report("A game is loading. Please wait for it to finish.", true)
+		report("Please wait for the current game operation to finish.", true)
 		return false
 	drain_async()
 	if not loaded: return false
@@ -767,7 +815,9 @@ func save_to(path: String, description: String) -> bool:
 		var width := mini(256,roundi(192.0*display_aspect))
 		thumbnail.resize(width,maxi(1,roundi(width/display_aspect)),Image.INTERPOLATE_NEAREST)
 		envelope["thumbnail"]=thumbnail.save_png_to_buffer()
-	if not write_bytes_atomic(path, var_to_bytes(envelope)):
+	var saved := StateStore.write_state(path, envelope)
+	if saved != OK:
+		report("Could not save state: " + error_string(saved), true)
 		return false
 	report("%s • %s" % [description,rom_path.get_file().get_basename()])
 	return true
@@ -775,7 +825,7 @@ func save_to(path: String, description: String) -> bool:
 ## The console's reset button: the game restarts; battery saves and states are kept.
 func reset_game() -> bool:
 	if transition_busy:
-		report("A game is loading. Please wait for it to finish.", true)
+		report("Please wait for the current game operation to finish.", true)
 		return false
 	drain_async()
 	if not loaded: return false
@@ -797,7 +847,7 @@ func load_auto() -> bool:
 
 func load_from(path: String, description: String) -> bool:
 	if transition_busy:
-		report("A game is loading. Please wait for it to finish.", true)
+		report("Please wait for the current game operation to finish.", true)
 		return false
 	drain_async()
 	if not loaded: return false
@@ -870,7 +920,7 @@ func disc_info() -> Dictionary:
 
 func change_disc(index: int) -> bool:
 	if transition_busy:
-		report("A game is loading. Please wait for it to finish.", true)
+		report("Please wait for the current game operation to finish.", true)
 		return false
 	if not loaded: return false
 	if not core.change_disc(index):

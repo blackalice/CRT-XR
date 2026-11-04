@@ -545,7 +545,7 @@ func start_application() -> void:
 	visualizer.host=self
 	add_child(visualizer)
 	build_settings()
-	music.restore_resume()
+	music.restore_resume_async()
 	for panel in panels:
 		var overlay := TextureRect.new()
 		overlay.texture = menu_view.get_texture()
@@ -1156,8 +1156,8 @@ func stop_for_disc(path: String, background := false) -> bool:
 	return true
 
 func play_video(path: String, from_seconds := 0.0) -> bool:
-	if loading_game:
-		startup_message = "A game is still loading. Please wait for it to finish."
+	if loading_game or emulator.transition_busy:
+		startup_message = "A game operation is still running. Please wait for it to finish."
 		return false
 	if visualizer.active: visualizer.leave()
 	startup_message = ""
