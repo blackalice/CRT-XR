@@ -381,7 +381,8 @@ func pages(category: int) -> Array:
 			var vmu_rows: Array = [toggle("vmu.enabled","Floating VMU display",vmu,"enabled",true,"Shows player one's VMU LCD below the TV during Dreamcast games. Look down to see it. The panel stays anchored in the room.",vmu.apply_layout)]
 			for spec in [["horizontal","Horizontal position",-1.5,1.5,0.05],["vertical","Vertical position",-1.5,-0.1,0.05],["forward","Distance in front of TV",0.2,1.5,0.05],["width","Display width",0.2,0.8,0.02]]:
 				vmu_rows.append(number("vmu."+spec[0],spec[1],vmu,spec[0],spec[2],spec[3],spec[4],vmu.DEFAULTS[spec[0]],"m","Relative to the TV. Changes apply immediately and are saved with your settings.",vmu.apply_layout))
-			return core_option_pages() + [page("VMU",vmu_rows),page("Performance",[input_delay,separate_preview]),page("Info",[
+			var game_fps := toggle("emulation.game_fps","Show game frame rate",h,"game_fps_visible",false,"Shows the game's own frame rate and speed in the top corner while you play. Unlike Steam's counter, it measures the emulator, not the room.",unchanged,false)
+			return core_option_pages() + [page("VMU",vmu_rows),page("Performance",[input_delay,separate_preview,game_fps]),page("Info",[
 				action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate."),
 				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")])]
 

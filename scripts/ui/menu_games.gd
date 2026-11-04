@@ -224,6 +224,7 @@ func launch_game(path: String, continuing: bool) -> void:
 			if not menu.visible: host.toggle_settings()
 			menu.show_error(host.emulator.status + " Choose Start from a fresh boot to play without this resume point.")
 			return
+		host.resume_ready(path)
 	var feedback: String = host.emulator.status
 	host.was_paused_before_menu=false
 	host.close_settings()

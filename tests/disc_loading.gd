@@ -100,6 +100,20 @@ func run() -> void:
 	app.loading_started -= app.LOADING_TIMEOUT_MSEC + 1
 	check(app.picture_started(black), "A game still black after the timeout is shown anyway")
 	app.end_loading()
+	# Continue: once the resume point is restored the game is mid-play. Its next
+	# picture takes the card down, dark or not, without the fresh-boot hold.
+	app.show_loading(zipped)
+	app.loading_hold = 3000
+	check(not app.picture_started(black), "A fresh boot keeps the card up through its hold")
+	app.resume_ready(zipped)
+	check(app.loading_hold == 0 and app.picture_started(black), "A restored game's next picture shows at once, even a dark one")
+	app.resume_ready("Another.iso")
+	app.end_loading()
+	check(not app.loading_resumed, "Taking the card down clears the resume state")
+	app.show_loading(zipped)
+	app.resume_ready("Another.iso")
+	check(not app.loading_resumed, "Another game's resume cannot release this card")
+	app.end_loading()
 	check(app.loading_screen.short_title("Final Fantasy VII (USA) (Disc 1)") == "Final Fantasy VII (Disc 1)", "The card keeps the disc number and drops the region")
 	app.queue_free()
 	await process_frame

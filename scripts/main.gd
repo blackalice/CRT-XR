@@ -184,6 +184,9 @@ const LOADING_TIMEOUT_MSEC := 30000
 const LOADING_CARD_SYSTEMS := ["psx", "segacd", "gamecube", "dreamcast"]
 const LOADING_HOLD_MSEC := {"gamecube": 3000}
 var loading_hold := 0
+## Set once Continue has restored the resume point: the game is mid-play, so its
+## next picture takes the card down, dark or not, with no boot hold.
+var loading_resumed := false
 ## True while load_game swaps games behind the card, which must stay up.
 var loading_game := false
 var eyes: Array[Camera3D] = []
@@ -194,6 +197,13 @@ var metrics_visible := false:
 	set(value):
 		metrics_visible=value
 		for label in diagnostics: label.visible=value
+## The game's own frame rate in each eye's top-right corner while a game plays.
+var game_fps_labels: Array[Label] = []
+var game_fps_visible := false:
+	set(value):
+		game_fps_visible=value
+		if not value:
+			for label in game_fps_labels: label.visible=false
 var settings_panel: PanelContainer
 var row: HBoxContainer
 var screenshot_pending := false
@@ -405,6 +415,15 @@ func start_application() -> void:
 		hud.add_theme_constant_override("shadow_offset_y", 1)
 		panel.add_child(hud)
 		diagnostics.append(hud)
+		var game_rate := Label.new()
+		game_rate.visible=false
+		game_rate.add_theme_font_size_override("font_size", 16)
+		game_rate.add_theme_color_override("font_shadow_color", Color.BLACK)
+		game_rate.add_theme_constant_override("shadow_offset_x", 1)
+		game_rate.add_theme_constant_override("shadow_offset_y", 1)
+		game_rate.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		panel.add_child(game_rate)
+		game_fps_labels.append(game_rate)
 		# Each eye fades at its own edges, including at the SBS join.
 		panel.material = fade_material
 		var notice := Label.new()
@@ -619,6 +638,7 @@ func apply_settings(config: ConfigFile) -> void:
 	for key in music.DEFAULTS: music.set(key,config.get_value("music",key,music.DEFAULTS[key]))
 	music.apply()
 	metrics_visible=bool(config.get_value("preferences","metrics_visible",false))
+	game_fps_visible=bool(config.get_value("preferences","game_fps_visible",false))
 	power_on.enabled=bool(config.get_value("atmosphere","power_on",true))
 	power_on.sound_level=float(config.get_value("atmosphere","power_sound",0.60))
 	power_on.reduced_motion=menu_reduced_motion
@@ -788,6 +808,7 @@ func _process(delta: float) -> void:
 		# Parallel axes, asymmetric frusta; no toe-in. Convergence is zero disparity distance.
 		var near_plane := 0.05
 		eyes[i].set_frustum(2.0 * near_plane * tan(deg_to_rad(vertical_fov) / 2.0), Vector2(-offset * near_plane / convergence, 0), near_plane, 50.0)
+		if refresh_diagnostics: update_game_fps(i)
 		if refresh_diagnostics and diagnostics[i].visible and not menu_open:
 			var a := displayed.get_euler() * 180.0 / PI
 			diagnostics[i].text = "CRT XR   /   %s\n%s\nYaw %+.1f   Pitch %+.1f   Roll %+.1f\n%.2fm  /  IPD %.0fmm  /  %.0f fps\nL + R + Start / Esc: menu   R3 / R: recenter" % ["LEFT" if stereo and i == 0 else ("RIGHT" if stereo else "DESKTOP"), provider.status, a.y, a.x, a.z, distance, ipd * 1000, Engine.get_frames_per_second()]
@@ -1088,6 +1109,7 @@ func show_loading(path: String, progress := -1.0) -> void:
 	if starting:
 		loading_screen.elapsed = 0.0
 		loading_hold = 0
+		loading_resumed = false
 	loading_screen.queue_redraw()
 	card_words.queue_redraw()
 	loading_screen.visible = true
@@ -1104,6 +1126,13 @@ func show_loading(path: String, progress := -1.0) -> void:
 	world.picture.set_source(card_view.get_texture(), false, Vector2(Pattern.SIZE))
 	if starting and power_on.progress >= 1.0: tv_effects.play("channel")
 
+## Continue restored the game behind the card: show it from its next picture.
+## (The fresh-boot hold exists for shader compiles during a disc's boot.)
+func resume_ready(path: String) -> void:
+	if loading_path != path: return
+	loading_hold = 0
+	loading_resumed = true
+
 func update_loading(path: String, progress: float) -> void:
 	if loading_path == path: loading_screen.progress = progress
 
@@ -1112,6 +1141,7 @@ func end_loading() -> void:
 	if loading_path.is_empty(): return
 	loading_path = ""
 	loading_hold = 0
+	loading_resumed = false
 	loading_screen.visible = false
 	loading_screen.set_process(false)
 	card_words.visible = false
@@ -1131,6 +1161,7 @@ func end_loading() -> void:
 func picture_started(image: Image) -> bool:
 	var waited := Time.get_ticks_msec() - loading_started
 	if waited > LOADING_TIMEOUT_MSEC: return true
+	if loading_resumed: return image != null and not image.is_empty()
 	if waited < loading_hold: return false
 	if image == null or image.is_empty(): return false
 	var lit := 0
@@ -1503,6 +1534,7 @@ func load_showcase_setup() -> void:
 	var merged := capture_settings()
 	SettingsStore.copy_sections(Showcase.config(),merged,PackedStringArray(["view","room","crt","picture","audio","atmosphere","emulation"]))
 	merged.set_value("preferences","metrics_visible",false)
+	merged.set_value("preferences","game_fps_visible",false)
 	apply_settings(merged)
 	if active_game_key.is_empty(): picture_baseline=capture_settings()
 	rebuild_settings()
@@ -1540,6 +1572,20 @@ func fit_tv_to_view() -> void:
 	recenter()
 	rebuild_settings.call_deferred()
 	show_notice("TV fitted to neutral view")
+
+## "GameCube  59.9 fps  100%": emulated frames per second and the speed against
+## the game's own rate. Hidden in menus, while paused and behind a loading card.
+func update_game_fps(eye: int) -> void:
+	var label := game_fps_labels[eye]
+	var show: bool = game_fps_visible and emulator.loaded and not emulator.paused and loading_path.is_empty() and not settings_panel.visible
+	if label.visible != show: label.visible = show
+	if not show: return
+	var target: float = maxf(emulator.fps, 1.0)
+	var console: String = emulator.Registry.SYSTEMS[emulator.system_id].name
+	label.text = "%s   %.1f fps   %d%%" % [console, emulator.game_fps, roundi(emulator.game_fps / target * 100.0)]
+	label.add_theme_color_override("font_color", Color.WHITE if emulator.game_fps >= target * 0.97 else Color("ffd060"))
+	label.reset_size()
+	label.position = Vector2(panels[eye].size.x - label.size.x - 22.0, 18.0)
 
 func show_notice(message: String) -> void:
 	for notice in notices: notice.text = message
@@ -1620,6 +1666,7 @@ func capture_settings() -> ConfigFile:
 	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
+	config.set_value("preferences","game_fps_visible",game_fps_visible)
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns"]: config.set_value("accessibility",key,get(key))
 	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
 	config.set_value("accessibility","menu_music_volume",menu_music_volume)
