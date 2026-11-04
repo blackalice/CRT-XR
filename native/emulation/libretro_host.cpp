@@ -267,6 +267,23 @@ bool LibretroHost::step(std::uint16_t mask) {
         return error.empty();
     });
 }
+void LibretroHost::set_async_readback(bool enabled) {
+    on_core([&] {
+        if (async_readback == enabled) return;
+        async_readback = enabled;
+        if (!enabled && gl) gl->discard_async();
+    });
+}
+int LibretroHost::collect_readback() {
+    if (!loaded) return -1;
+    return on_core([&] {
+        if (!async_readback || !hw_active || !gl) return -1;
+        unsigned w = 0, h = 0;
+        const int result = gl->poll_async(rgba, w, h);
+        if (result == 1) { width = w; height = h; }
+        return result;
+    });
+}
 std::vector<std::uint8_t> LibretroHost::vmu_lcd(unsigned index) const {
     if (!loaded || !fn_vmu_lcd || index >= 8) return {};
     return on_core([&] {
@@ -282,6 +299,7 @@ bool LibretroHost::reset() {
         Use use(this);
         error.clear();
         fn_reset(); // The console's reset button; cartridge SRAM is kept.
+        if (async_readback && gl) gl->discard_async();
         return error.empty();
     });
 }
@@ -400,16 +418,29 @@ const std::vector<std::uint32_t>& lookup(bool rgb565) {
 }
 }
 void LibretroHost::video(const void* data, unsigned w, unsigned h, std::size_t pitch) {
-    if (!active || !data) return; // null is a duplicate frame
+    if (!active) return;
     LibretroHost& host = *active;
+    const bool async = host.async_readback && host.hw_active && host.gl && host.gl->async_available();
+    if (!data) { // a duplicate frame
+        // A read still in flight would otherwise stay unseen until the next new frame.
+        unsigned rw = 0, rh = 0;
+        if (async && host.gl->finish_async(host.rgba, rw, rh) == 1) { host.width = rw; host.height = rh; host.video_changed = true; }
+        return;
+    }
     if (data == RETRO_HW_FRAME_BUFFER_VALID) {
         // The core drew into the hidden framebuffer: read it back for the TV.
         const auto started = std::chrono::steady_clock::now();
-        if (!host.hw_active || w == 0 || h == 0 || w > 4096 || h > 4096 || !host.gl->read(w, h, host.hw.bottom_left_origin, host.rgba)) {
-            host.error = "Unsupported core video buffer"; return;
+        if (!host.hw_active || w == 0 || h == 0 || w > 4096 || h > 4096) { host.error = "Unsupported core video buffer"; return; }
+        if (async) {
+            unsigned rw = 0, rh = 0;
+            const int result = host.gl->read_async(w, h, host.hw.bottom_left_origin, host.rgba, rw, rh);
+            if (result < 0) { host.error = "Unsupported core video buffer"; return; }
+            if (result == 1) { host.width = rw; host.height = rh; host.video_changed = true; }
+        } else {
+            if (!host.gl->read(w, h, host.hw.bottom_left_origin, host.rgba)) { host.error = "Unsupported core video buffer"; return; }
+            host.width = w; host.height = h; host.video_changed = true;
         }
         host.readback_usec += std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
-        host.width = w; host.height = h; host.video_changed = true;
         return;
     }
     const unsigned bytes = host.pixel_format == RETRO_PIXEL_FORMAT_XRGB8888 ? 4 : 2;
@@ -493,6 +524,8 @@ bool LibretroHost::unserialize(const std::uint8_t* data, std::size_t size) {
     return on_core([&] {
         Use use(this);
         if (!loaded || size == 0 || size > 256 * 1024 * 1024 || !fn_unserialize(data, size)) { error = "Core rejected save state"; return false; }
+        // A read started before the restore shows the old moment: drop it.
+        if (async_readback && gl) gl->discard_async();
         return true;
     });
 }

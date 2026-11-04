@@ -28,6 +28,23 @@ var async_completed := false
 var async_sample_rate := 48000.0
 var vmu_pixels := PackedByteArray()
 const ASYNC_AUDIO_RESERVE_FRAMES := 8
+## Hardware cores stream: the native worker runs frames back to back, paced by
+## the queued audio, instead of one batch per room update. Each picture is read
+## back without waiting for the GPU (one emulated frame later). Both can be
+## turned off for comparison with CRT_XR_STREAM=0 / CRT_XR_ASYNC_READBACK=0.
+var streaming_enabled := OS.get_environment("CRT_XR_STREAM") != "0"
+var async_readback := OS.get_environment("CRT_XR_ASYNC_READBACK") != "0"
+## SRAM is read between frames: the stream stops, the read follows, it restarts.
+var stream_sram_pending := false
+## Audio queued ahead of the speaker, in emulated frames: it is the sound's delay
+## behind the picture, and the cover for slow frames. It starts low, grows when
+## the device runs dry, and shrinks again after a calm spell.
+const STREAM_RESERVE_MIN := 3
+const STREAM_RESERVE_START := 4
+const STREAM_RESERVE_MAX := 10
+const STREAM_RESERVE_CALM := 10.0
+var stream_reserve := STREAM_RESERVE_START
+var stream_calm := 0.0
 var async_audio_capacity := 0
 var async_audio_skips := 0
 var async_audio_priming := false
@@ -129,6 +146,12 @@ static func write_transition_file(path: String, bytes: PackedByteArray) -> Error
 	return DirAccess.rename_absolute(ProjectSettings.globalize_path(path + ".tmp"), ProjectSettings.globalize_path(path))
 
 func drain_transition_frame() -> void:
+	if streams() and (async_pending or stream_sram_pending):
+		core.stop_stream()
+		while core.stream_running(): await get_tree().process_frame
+		if core.stream_info().failed: core_failed = true
+		async_pending = false
+		stream_sram_pending = false
 	while async_pending and not async_completed:
 		var result: int = core.poll_frame()
 		if result == 0: await get_tree().process_frame
@@ -316,6 +339,12 @@ func _load_rom(path: String, background: bool) -> bool:
 	core_identity = str(info.name)
 	fps = float(info.fps)
 	async_sample_rate = float(info.sample_rate)
+	stream_reserve = STREAM_RESERVE_START
+	stream_calm = 0.0
+	audio_pitch_bias = 0.0
+	frame_phase = 0.0
+	game_fps_samples.clear()
+	game_fps = 0.0
 	auto_saved = true
 	core_failed = false
 	loaded = true
@@ -371,9 +400,9 @@ func _process(delta: float) -> void:
 	var profile_start := Time.get_ticks_usec() if profile_frames else 0
 	var profile_steps = [] if profile_frames else null
 	var profile_audio := 0
-	accumulator += minf(delta, 0.25)
+	steer_audio(delta, SYNC_AUDIO_MARGIN + 1.0 / fps)
+	var due := frames_due(delta)
 	late_pressure = maxf(0.0, late_pressure - delta * 2.0)
-	var period := 1.0 / fps
 	var frames := 0
 	var rendered := false
 	var input := read_input()
@@ -382,7 +411,7 @@ func _process(delta: float) -> void:
 	core.set_analog(sticks[0], sticks[1], sticks[2], sticks[3])
 	var pressure: PackedInt32Array = input.pressure
 	core.set_trigger_pressure(pressure[0], pressure[1])
-	while accumulator >= period and frames < 8:
+	while frames < mini(due, 8):
 		var step_start := Time.get_ticks_usec() if profile_frames else 0
 		if not core.run_frame(buttons):
 			var message := str(core.last_error())
@@ -394,7 +423,6 @@ func _process(delta: float) -> void:
 			profile_steps.append({"wall_us": Time.get_ticks_usec() - step_start,
 				"core_us": info.step_usec, "readback_us": info.readback_usec,
 				"audio_frames": info.audio_frames, "video_changed": info.video_changed})
-		accumulator -= period
 		frames += 1
 		auto_saved = false
 		rendered = rendered or core.video_changed()
@@ -404,9 +432,8 @@ func _process(delta: float) -> void:
 			if audio_overflows == 1 or audio_overflows % 300 == 0:
 				push_warning("Audio buffer full; dropped an audio batch. Check frame pacing.")
 		if profile_frames: profile_audio += Time.get_ticks_usec() - audio_start
-	if accumulator >= period:
+	if due > 8: # the room fell so far behind that frames were given up
 		slow_frames += 1
-		accumulator = fmod(accumulator, period)
 		late_pressure += 1.0
 		if run_ahead > 0 and not preview_suspended and late_pressure >= PREVIEW_SUSPEND_PRESSURE:
 			preview_suspended = true
@@ -415,6 +442,7 @@ func _process(delta: float) -> void:
 			report("Input preview paused for this game: it needs the full frame time.", true)
 		if slow_frames == 1 or slow_frames % 300 == 0:
 			push_warning("Emulator cannot keep up with real time; reduce rendering load")
+	count_game_frames(frames, delta)
 	var present_start := Time.get_ticks_usec() if profile_frames else 0
 	if rendered:
 		var preview := preview_frame(buttons, run_ahead) if run_ahead > 0 and preview_possible() else {}
@@ -425,10 +453,72 @@ func _process(delta: float) -> void:
 		sram_timer = 0.0
 		flush_sram()
 	if profile_frames:
-		frame_profiled.emit({"mode": "sync", "fps": fps, "audio_skips": playback.get_skips() if playback != null else 0, "audio_queued": async_audio_capacity - playback.get_frames_available() if playback != null else 0, "at_us": profile_start, "delta_us": int(delta * 1000000.0),
+		frame_profiled.emit({"mode": "sync", "shown": rendered, "fps": fps, "audio_skips": playback.get_skips() if playback != null else 0, "audio_queued": async_audio_capacity - playback.get_frames_available() if playback != null else 0, "at_us": profile_start, "delta_us": int(delta * 1000000.0),
 			"process_us": Time.get_ticks_usec() - profile_start, "steps": profile_steps,
 			"audio_us": profile_audio, "present_us": present_us,
 			"audio_overflows": audio_overflows, "slow_frames": slow_frames})
+
+## The game's own frame rate: emulated frames per second over the last two
+## seconds (independent of the room's rendering rate). A rolling window keeps
+## the readout steady: half-second windows swung ±2 fps on one frame's timing.
+var game_fps := 0.0
+var game_fps_total := 0
+var game_fps_samples: Array[Vector2i] = []
+func count_game_frames(frames: int, _delta: float) -> void:
+	game_fps_total += frames
+	var now := Time.get_ticks_msec()
+	game_fps_samples.append(Vector2i(now, game_fps_total))
+	while game_fps_samples.size() > 2 and now - game_fps_samples[0].x > 2000: game_fps_samples.pop_front()
+	var span := now - game_fps_samples[0].x
+	if span >= 500: game_fps = (game_fps_total - game_fps_samples[0].y) * 1000.0 / span
+
+## Display-locked pacing. Each room update is one display refresh (or several,
+## after a hitch). A game whose rate is within 1% of the room's runs exactly one
+## frame per refresh, so every refresh shows a new game frame; other rates
+## (50 Hz games at 60 Hz) follow a fixed fractional pattern. The difference
+## between the game's and the display's clocks is taken up by the audio
+## playback speed instead (steer_audio), never by repeating or skipping frames.
+## Pacing on the audio device's demand ran frames in bursts of two at its
+## ~21 ms mixing chunks, so one refresh in five repeated a frame and the next
+## skipped one.
+const DISPLAY_LOCK := 0.01
+var room_period := 1.0 / 60.0
+var frame_phase := 0.0
+func frames_due(delta: float) -> int:
+	delta = minf(delta, 0.25)
+	if delta <= 0.0: return 0
+	var refreshes := maxi(1, roundi(delta / room_period))
+	if refreshes <= 2: room_period = lerpf(room_period, delta / refreshes, 0.02)
+	var ratio := fps * room_period
+	# Lock to an exact 1:1, 1:2 or 2:1 cadence when within 1%: a 60 Hz game on a
+	# 120 Hz room then alternates evenly instead of drifting into double gaps.
+	for locked in [1.0, 0.5, 2.0]:
+		if absf(ratio / locked - 1.0) < DISPLAY_LOCK: ratio = locked
+	frame_phase += refreshes * ratio
+	var due := int(floor(frame_phase + 0.000001))
+	frame_phase -= due
+	return due
+
+## Holds the audio queue (the sound's delay behind the picture) near a target
+## by playing it up to 0.5% faster or slower (inaudible), with a slow integral
+## for the steady offset between the audio device's clock and the display's.
+## Classic cores read the queue at its low point, before this update's frames
+## are pushed: SYNC_AUDIO_MARGIN plus one frame (a 22 ms low point underran on
+## 50 Hz SNES; 32-35 ms ran cleanly).
+const SYNC_AUDIO_MARGIN := 0.015
+const AUDIO_PITCH_LIMIT := 0.005
+var audio_pitch_bias := 0.0
+func steer_audio(delta: float, target_seconds: float) -> void:
+	if playback == null or async_audio_capacity <= 0 or async_sample_rate <= 0.0 or async_audio_priming: return
+	var queued := float(async_audio_capacity - playback.get_frames_available()) / async_sample_rate
+	var excess := (queued - target_seconds) / (1.0 / 60.0)
+	audio_pitch_bias = clampf(audio_pitch_bias + excess * minf(delta, 0.1) * 0.0005, -0.004, 0.004)
+	player.pitch_scale = clampf(1.0 + excess * 0.002 + audio_pitch_bias, 1.0 - AUDIO_PITCH_LIMIT, 1.0 + AUDIO_PITCH_LIMIT)
+
+## Streams only with an extension built with streaming (an older native build
+## keeps the batch path).
+func streams() -> bool:
+	return streaming_enabled and uses_async() and core != null and core.has_method("start_stream")
 
 func uses_async() -> bool:
 	return system_id in ["gamecube", "dreamcast", "n64"]
@@ -442,6 +532,10 @@ func vmu_lcd() -> PackedByteArray:
 # Silence already played by the device is lost wall time, not audio to replay.
 # All generated audio is retained in order; no emulated frames are skipped.
 func process_async(delta: float) -> void:
+	if streams():
+		process_stream(delta)
+		return
+	count_game_frames(0, delta)
 	var started := Time.get_ticks_usec()
 	accumulator += delta
 	if playback != null:
@@ -506,6 +600,7 @@ func process_async(delta: float) -> void:
 			var pressure: PackedInt32Array = input.pressure
 			core.set_trigger_pressure(pressure[0], pressure[1])
 			if core.begin_frame(input.mask, due):
+				count_game_frames(due, 0.0)
 				async_pending = true
 				accumulator = maxf(0.0, accumulator - period * due)
 				auto_saved = false
@@ -515,9 +610,89 @@ func process_async(delta: float) -> void:
 			"audio_us": audio_us, "present_us": present_us,
 			"audio_overflows": audio_overflows, "slow_frames": slow_frames})
 
+## Streaming room update: hand over input, push produced audio, show the newest
+## picture. Nothing here waits for the worker.
+func process_stream(delta: float) -> void:
+	var started := Time.get_ticks_usec()
+	stream_calm += delta
+	if playback != null:
+		var skips := playback.get_skips()
+		if skips > async_audio_skips and not async_audio_priming:
+			player.stream_paused = true
+			async_audio_priming = true
+			async_audio_recoveries += 1
+			set_stream_reserve(stream_reserve + 2)
+		async_audio_skips = skips
+	if stream_calm >= STREAM_RESERVE_CALM and stream_reserve > STREAM_RESERVE_MIN:
+		set_stream_reserve(stream_reserve - 1)
+	sram_timer += delta
+	var info: Dictionary = core.stream_info()
+	count_game_frames(info.steps.size(), delta)
+	if async_pending and not core.stream_running():
+		async_pending = false # the loop ended: requested, or a failed frame
+		if info.failed:
+			fail_core()
+			report(str(info.error), true)
+			return
+	var input := read_input()
+	var sticks: PackedInt32Array = input.analog
+	var pressure: PackedInt32Array = input.pressure
+	core.stream_input(input.mask, sticks[0], sticks[1], sticks[2], sticks[3], pressure[0], pressure[1])
+	# This refresh's frames start now, with the input just handed over.
+	core.stream_tick(frames_due(delta))
+	steer_audio(delta, float(stream_reserve) / fps)
+	var audio_start := Time.get_ticks_usec()
+	core.stream_audio(playback, async_audio_capacity)
+	if playback != null and async_audio_priming:
+		var queued := async_audio_capacity - playback.get_frames_available()
+		if queued >= mini(ceili(async_sample_rate / fps) * stream_reserve, async_audio_capacity) * 0.8:
+			player.stream_paused = false
+			async_audio_priming = false
+	var audio_us := Time.get_ticks_usec() - audio_start
+	var present_start := Time.get_ticks_usec()
+	var bytes: PackedByteArray = core.stream_frame()
+	if not bytes.is_empty():
+		fps = float(info.fps)
+		update_texture(true, {"bytes": bytes, "width": info.width, "height": info.height})
+	var present_us := Time.get_ticks_usec() - present_start
+	if system_id == "dreamcast": vmu_pixels = core.stream_vmu_lcd()
+	# Battery RAM is read between frames, never during one.
+	if sram_timer >= 10.0 and not stream_sram_pending:
+		stream_sram_pending = true
+		core.stop_stream()
+	if stream_sram_pending and not core.stream_running():
+		async_pending = false
+		stream_sram_pending = false
+		sram_timer = 0.0
+		flush_sram()
+	if not async_pending and not stream_sram_pending:
+		async_pending = core.start_stream(stream_reserve, async_readback)
+		if system_id == "dreamcast": core.stream_vmu(true)
+		auto_saved = false
+	if profile_frames:
+		frame_profiled.emit({"mode": "stream", "clock": "audio" if playback != null else "wall", "priming": async_audio_priming, "audio_recoveries": async_audio_recoveries, "fps": fps, "audio_skips": playback.get_skips() if playback != null else 0, "audio_queued": async_audio_capacity - playback.get_frames_available() if playback != null else 0, "pending": async_pending, "pending_audio": info.pending_audio, "shown": not bytes.is_empty(), "dropped": info.dropped, "at_us": started, "delta_us": int(delta * 1000000.0),
+			"process_us": Time.get_ticks_usec() - started, "steps": info.steps,
+			"picture_ages_us": info.picture_ages_us, "reserve": stream_reserve,
+			"audio_us": audio_us, "present_us": present_us,
+			"audio_overflows": audio_overflows, "slow_frames": slow_frames})
+
+func set_stream_reserve(frames: int) -> void:
+	stream_calm = 0.0
+	frames = clampi(frames, STREAM_RESERVE_MIN, STREAM_RESERVE_MAX)
+	if frames == stream_reserve: return
+	stream_reserve = frames
+	if core != null and core.has_method("stream_set_reserve"): core.stream_set_reserve(frames)
+
 # Explicit console operations may wait. Normal presentation never does.
 func drain_async() -> void:
-	if not async_pending or core == null: return
+	if core == null: return
+	if streams():
+		if async_pending or stream_sram_pending: core.info() # stops the stream and joins its frame
+		async_pending = false
+		async_completed = false
+		stream_sram_pending = false
+		return
+	if not async_pending: return
 	core.info() # Joins the job before save/restore, pause, reset or teardown.
 	if not async_completed: core.poll_frame()
 	async_pending = false
@@ -648,6 +823,8 @@ func set_paused(value: bool) -> void:
 	# opening the menu must not wait for its CPU work or GPU readback.
 	# Resume collects it normally; a launch drains it asynchronously.
 	if not uses_async(): drain_async()
+	# A stream stops by itself after its frame in flight; resume restarts it.
+	elif value and streams(): core.stop_stream()
 	if not value and core_failed:
 		report("The emulator stopped after an error. Load the game again to continue.", true)
 		return
@@ -667,6 +844,7 @@ func restart_audio() -> void:
 	async_audio_priming = false
 	player.stream_paused = false
 	async_audio_recoveries = 0
+	player.pitch_scale = 1.0 # steer_audio adjusts it within ±0.5% while playing
 	if loaded and not paused and DisplayServer.get_name() != "headless":
 		player.play()
 		playback = player.get_stream_playback()

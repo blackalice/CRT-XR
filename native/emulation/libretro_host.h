@@ -44,6 +44,14 @@ public:
     bool load_core(const std::string& path);
     bool load_game(const std::string& path, const std::string& save_directory);
     bool step(std::uint16_t buttons);
+    // Hardware cores: read each frame back without waiting for the GPU, showing
+    // it one emulated frame later. Off returns to synchronous reads.
+    void set_async_readback(bool enabled);
+    // Between frames: collects the last frame's asynchronous read if the GPU has
+    // finished it, into rgba/width/height. 1 collected, 0 not yet, -1 none pending.
+    int collect_readback();
+    // True when pictures really arrive late: a GPU core with asynchronous reads.
+    bool readback_deferred() const { return async_readback && hw_active && gl && gl->async_available(); }
     bool reset();
     std::vector<std::uint8_t> vmu_lcd(unsigned index) const;
     void close_game();
@@ -136,6 +144,7 @@ private:
     std::unique_ptr<GlContext> gl;
     retro_hw_render_callback hw{};
     bool hw_active = false;
+    bool async_readback = false; // only touched on the core's thread
     // Runs f on the core's thread when it has one (and is not already there).
     template <class F> auto on_core(F&& f) const -> decltype(f()) {
         if (!worker || worker->is_current()) return f();

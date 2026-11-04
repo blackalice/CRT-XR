@@ -34,6 +34,7 @@ func run() -> void:
 	var session = preload("res://scripts/emulation/emulation_session.gd").new()
 	root.add_child(session)
 	session.set_process(false)
+	session.streaming_enabled = false # the batch path; tests/emulation_stream.gd covers streaming
 	session.core = ClassDB.instantiate("RetroCore")
 	check(session.core.load_core(ProjectSettings.globalize_path("res://build/emulation-linux/libcrt_xr_mock_core.so")), "session fixture loads")
 	check(session.core.load_game(ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc"), ProjectSettings.globalize_path("user://")), "session fixture game loads")

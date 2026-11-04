@@ -5,6 +5,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <chrono>
+#include <thread>
 
 void check(bool value, const std::string& message) {
     if (!value) throw std::runtime_error(message);
@@ -124,6 +126,28 @@ int main(int argc, char** argv) {
             check(gpu.step(1) && top(5)[0] == 0 && top(5)[2] == 255, "Input reaches the GPU core");
             const auto state = gpu.serialize();
             check(!state.empty() && gpu.unserialize(state.data(), state.size()), "GPU core states round-trip on its thread");
+            // Asynchronous readback: each picture arrives one emulated frame later.
+            gpu.set_async_readback(true);
+            check(gpu.step(1) && !gpu.video_changed, "An asynchronous read is not waited for");
+            check(gpu.step(0) && gpu.video_changed && top(5)[0] == 0 && top(5)[2] == 255, "The previous frame's picture arrives next frame");
+            check(bottom(5)[1] == 255 && bottom(5)[3] == 255, "Asynchronous rows are flipped and made opaque");
+            check(gpu.step(0) && gpu.video_changed && top(5)[0] == 255, "Asynchronous frames keep their order");
+            {
+                // Between frames the picture is collected once the GPU is done.
+                check(gpu.readback_deferred() && gpu.step(1), "A deferred frame runs");
+                int collected = 0;
+                for (int i = 0; i < 2000 && collected == 0; ++i) {
+                    collected = gpu.collect_readback();
+                    if (collected == 0) std::this_thread::sleep_for(std::chrono::microseconds(250));
+                }
+                check(collected == 1 && top(5)[2] == 255, "The frame's picture is collected between frames");
+                check(gpu.collect_readback() == -1, "Nothing is collected twice");
+                check(gpu.step(0) && !gpu.video_changed, "A frame after an early collection repeats nothing");
+                check(gpu.collect_readback() >= 0, "The next picture is pending again");
+                while (gpu.collect_readback() == 0) std::this_thread::sleep_for(std::chrono::microseconds(250));
+            }
+            gpu.set_async_readback(false);
+            check(gpu.step(1) && gpu.video_changed && top(5)[2] == 255, "Synchronous reads resume without a stale frame");
             check(gpu.load_game(argv[3], argv[4]) && gpu.step(0) && top(5)[0] == 255, "A second game reuses the context");
             gpu.close();
             check(!gpu.loaded, "The GPU core closes with its context");

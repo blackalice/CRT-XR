@@ -190,8 +190,18 @@ func pass_mode(active: bool) -> int:
 	if not active: return SubViewport.UPDATE_DISABLED
 	return SubViewport.UPDATE_ONCE if paused or frame_driven else SubViewport.UPDATE_ALWAYS
 
+## Called while the new frame is uploaded, before this room frame draws. The
+## shared passes are scheduled now: this node processes before the emulator and
+## video players, so waiting for _process would show the previous frame's pass
+## output for one more room frame.
 func frame_presented(_image: Image = null) -> void:
-	frame_pending = true
+	if frame_driven and not paused: schedule_passes()
+	else: frame_pending = true
+
+func schedule_passes() -> void:
+	frame_pending = false
+	if decode_active: decode.render_target_update_mode = SubViewport.UPDATE_ONCE
+	if beam_active: beam.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 func _process(delta: float) -> void:
 	update_beam_state()
@@ -202,9 +212,7 @@ func _process(delta: float) -> void:
 		last_frame_index = frame_index
 		decoder.set_shader_parameter("frame_index", frame_index)
 	if frame_driven and not paused and (frame_pending or index_changed):
-		frame_pending = false
-		if decode_active: decode.render_target_update_mode = SubViewport.UPDATE_ONCE
-		if beam_active: beam.render_target_update_mode = SubViewport.UPDATE_ONCE
+		schedule_passes()
 	if paused != was_paused:
 		was_paused = paused
 		refresh()

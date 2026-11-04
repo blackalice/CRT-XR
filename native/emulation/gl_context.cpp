@@ -18,7 +18,21 @@ constexpr GLenum FRAMEBUFFER = 0x8D40, READ_FRAMEBUFFER = 0x8CA8, RENDERBUFFER =
     DEPTH24_STENCIL8 = 0x88F0, DEPTH_COMPONENT24 = 0x81A6, COLOR_ATTACHMENT0 = 0x8CE0, DEPTH_ATTACHMENT = 0x8D00,
     DEPTH_STENCIL_ATTACHMENT = 0x821A, FRAMEBUFFER_COMPLETE = 0x8CD5, RGBA = 0x1908, UNSIGNED_BYTE = 0x1401,
     READ_FRAMEBUFFER_BINDING = 0x8CAA, PIXEL_PACK_BUFFER = 0x88EB, PIXEL_PACK_BUFFER_BINDING = 0x88ED,
-    PACK_ALIGNMENT = 0x0D05, PACK_ROW_LENGTH = 0x0D02;
+    PACK_ALIGNMENT = 0x0D05, PACK_ROW_LENGTH = 0x0D02, STREAM_READ = 0x88E1, MAP_READ_BIT = 0x0001,
+    SYNC_GPU_COMMANDS_COMPLETE = 0x9117, SYNC_FLUSH_COMMANDS_BIT = 0x0001, WAIT_FAILED = 0x911D, TIMEOUT_EXPIRED = 0x911B;
+using GLsync = void*; using GLsizeiptr = std::ptrdiff_t; using GLintptr = std::ptrdiff_t; using GLuint64 = std::uint64_t;
+// Optional: asynchronous readback through pixel-pack buffers (OpenGL 3.2+).
+struct GlAsync {
+    void (GL_CALL* GenBuffers)(GLsizei, GLuint*);
+    void (GL_CALL* DeleteBuffers)(GLsizei, const GLuint*);
+    void (GL_CALL* BufferData)(GLenum, GLsizeiptr, const void*, GLenum);
+    void* (GL_CALL* MapBufferRange)(GLenum, GLintptr, GLsizeiptr, unsigned);
+    unsigned char (GL_CALL* UnmapBuffer)(GLenum);
+    GLsync (GL_CALL* FenceSync)(GLenum, unsigned);
+    GLenum (GL_CALL* ClientWaitSync)(GLsync, unsigned, GLuint64);
+    void (GL_CALL* DeleteSync)(GLsync);
+} gla{};
+bool async_loaded = false;
 struct Gl {
     void (GL_CALL* GenFramebuffers)(GLsizei, GLuint*);
     void (GL_CALL* DeleteFramebuffers)(GLsizei, const GLuint*);
@@ -45,6 +59,22 @@ bool load_gl() {
         bind(gl.RenderbufferStorage, "glRenderbufferStorage") && bind(gl.FramebufferRenderbuffer, "glFramebufferRenderbuffer") &&
         bind(gl.CheckFramebufferStatus, "glCheckFramebufferStatus") && bind(gl.ReadPixels, "glReadPixels") &&
         bind(gl.GetIntegerv, "glGetIntegerv") && bind(gl.PixelStorei, "glPixelStorei") && bind(gl.BindBuffer, "glBindBuffer");
+}
+bool load_gl_async() {
+    return bind(gla.GenBuffers, "glGenBuffers") && bind(gla.DeleteBuffers, "glDeleteBuffers") &&
+        bind(gla.BufferData, "glBufferData") && bind(gla.MapBufferRange, "glMapBufferRange") &&
+        bind(gla.UnmapBuffer, "glUnmapBuffer") && bind(gla.FenceSync, "glFenceSync") &&
+        bind(gla.ClientWaitSync, "glClientWaitSync") && bind(gla.DeleteSync, "glDeleteSync");
+}
+// Copies rows into rgba, top row first, with an opaque alpha whatever the core left.
+void copy_rows(const std::uint8_t* source, unsigned width, unsigned height, bool flip, std::vector<std::uint8_t>& rgba) {
+    const std::size_t stride = static_cast<std::size_t>(width) * 4;
+    rgba.resize(stride * height);
+    for (unsigned y = 0; y < height; ++y) {
+        const auto* from = reinterpret_cast<const std::uint32_t*>(source + (flip ? height - 1 - y : y) * stride);
+        auto* to = reinterpret_cast<std::uint32_t*>(rgba.data() + y * stride);
+        for (unsigned x = 0; x < width; ++x) to[x] = from[x] | 0xFF000000u;
+    }
 }
 
 #ifdef _WIN32
@@ -182,6 +212,7 @@ bool GlContext::create(unsigned major, unsigned minor, bool core_profile, std::s
     }
 #endif
     if (!load_gl()) { error = "The OpenGL driver lacks framebuffer objects"; destroy(); return false; }
+    async_loaded = load_gl_async();
     return true;
 }
 
@@ -237,8 +268,98 @@ bool GlContext::read(unsigned width, unsigned height, bool flip, std::vector<std
     return true;
 }
 
+bool GlContext::async_available() const { return context && async_loaded; }
+
+// Starts reading this frame into a pixel-pack buffer without waiting for the GPU,
+// then collects the read started on the previous call: the GPU finishes drawing
+// a frame while the core emulates the next. The picture is one frame late.
+int GlContext::read_async(unsigned width, unsigned height, bool flip, std::vector<std::uint8_t>& rgba,
+                          unsigned& out_width, unsigned& out_height) {
+    if (!async_available() || !fbo || width == 0 || height == 0 || width > fbo_width || height > fbo_height) return -1;
+    GLint read_binding = 0, pack_buffer = 0, alignment = 4, row_length = 0;
+    gl.GetIntegerv(READ_FRAMEBUFFER_BINDING, &read_binding);
+    gl.GetIntegerv(PIXEL_PACK_BUFFER_BINDING, &pack_buffer);
+    gl.GetIntegerv(PACK_ALIGNMENT, &alignment);
+    gl.GetIntegerv(PACK_ROW_LENGTH, &row_length);
+    gl.PixelStorei(PACK_ALIGNMENT, 4);
+    gl.PixelStorei(PACK_ROW_LENGTH, 0);
+    PendingRead& issue = pending[next_pending];
+    const std::size_t size = static_cast<std::size_t>(width) * height * 4;
+    if (issue.fence) { gla.DeleteSync(issue.fence); issue.fence = nullptr; } // never collected: drop it
+    if (!issue.buffer) gla.GenBuffers(1, &issue.buffer);
+    gla_bind_pack(issue.buffer);
+    if (issue.capacity < size) { gla.BufferData(PIXEL_PACK_BUFFER, static_cast<GLsizeiptr>(size), nullptr, STREAM_READ); issue.capacity = size; }
+    gl.BindFramebuffer(READ_FRAMEBUFFER, fbo);
+    gl.ReadPixels(0, 0, static_cast<GLsizei>(width), static_cast<GLsizei>(height), RGBA, UNSIGNED_BYTE, nullptr);
+    issue.fence = gla.FenceSync(SYNC_GPU_COMMANDS_COMPLETE, 0);
+    issue.width = width; issue.height = height; issue.flip = flip;
+    next_pending ^= 1;
+    const int result = collect(pending[next_pending], rgba, out_width, out_height);
+    gl.BindFramebuffer(READ_FRAMEBUFFER, static_cast<GLuint>(read_binding));
+    gla_bind_pack(static_cast<GLuint>(pack_buffer));
+    gl.PixelStorei(PACK_ALIGNMENT, alignment);
+    gl.PixelStorei(PACK_ROW_LENGTH, row_length);
+    return result;
+}
+
+// The newest started read, if any, waiting for the GPU when needed (a repeated
+// frame, or before stopping). Returns 1 with a picture, 0 with none pending.
+int GlContext::finish_async(std::vector<std::uint8_t>& rgba, unsigned& out_width, unsigned& out_height) {
+    if (!async_available()) return 0;
+    GLint pack_buffer = 0;
+    gl.GetIntegerv(PIXEL_PACK_BUFFER_BINDING, &pack_buffer);
+    const int result = collect(pending[next_pending ^ 1], rgba, out_width, out_height);
+    gla_bind_pack(static_cast<GLuint>(pack_buffer));
+    return result;
+}
+
+// The newest started read without waiting: 1 collected, 0 not finished on the
+// GPU yet, -1 none pending.
+int GlContext::poll_async(std::vector<std::uint8_t>& rgba, unsigned& out_width, unsigned& out_height) {
+    if (!async_available()) return -1;
+    PendingRead& read = pending[next_pending ^ 1];
+    if (!read.fence) return -1;
+    const GLenum status = gla.ClientWaitSync(read.fence, SYNC_FLUSH_COMMANDS_BIT, 0);
+    if (status == TIMEOUT_EXPIRED) return 0;
+    GLint pack_buffer = 0;
+    gl.GetIntegerv(PIXEL_PACK_BUFFER_BINDING, &pack_buffer);
+    const int result = collect(read, rgba, out_width, out_height);
+    gla_bind_pack(static_cast<GLuint>(pack_buffer));
+    return result == 1 ? 1 : -1;
+}
+
+void GlContext::gla_bind_pack(unsigned buffer) { gl.BindBuffer(PIXEL_PACK_BUFFER, static_cast<GLuint>(buffer)); }
+
+int GlContext::collect(PendingRead& read, std::vector<std::uint8_t>& rgba, unsigned& out_width, unsigned& out_height) {
+    if (!read.fence) return 0;
+    // Normally already signalled: it was issued a whole emulated frame ago.
+    const GLenum waited = gla.ClientWaitSync(read.fence, SYNC_FLUSH_COMMANDS_BIT, 250000000ull);
+    gla.DeleteSync(read.fence);
+    read.fence = nullptr;
+    if (waited == WAIT_FAILED) return -1;
+    gla_bind_pack(read.buffer);
+    const std::size_t size = static_cast<std::size_t>(read.width) * read.height * 4;
+    const auto* mapped = static_cast<const std::uint8_t*>(gla.MapBufferRange(PIXEL_PACK_BUFFER, 0, static_cast<GLsizeiptr>(size), MAP_READ_BIT));
+    if (!mapped) return -1;
+    copy_rows(mapped, read.width, read.height, read.flip, rgba);
+    gla.UnmapBuffer(PIXEL_PACK_BUFFER);
+    out_width = read.width; out_height = read.height;
+    return 1;
+}
+
+void GlContext::discard_async() {
+    if (!context) return;
+    for (auto& read : pending) {
+        if (read.fence && async_loaded) gla.DeleteSync(read.fence);
+        if (read.buffer && async_loaded) gla.DeleteBuffers(1, &read.buffer);
+        read = PendingRead{};
+    }
+    next_pending = 0;
+}
+
 void GlContext::destroy_framebuffer() {
     if (!context) return;
+    discard_async();
     if (fbo) gl.DeleteFramebuffers(1, &fbo);
     if (color) gl.DeleteRenderbuffers(1, &color);
     if (depth_stencil) gl.DeleteRenderbuffers(1, &depth_stencil);
