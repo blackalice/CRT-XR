@@ -21,7 +21,10 @@ func press(button: int, down := true) -> void:
 	app._input(event)
 
 func run() -> void:
-	DirAccess.remove_absolute(ProjectSettings.globalize_path("user://settings.cfg"))
+	# Defaults, not what an earlier run saved: the settings store falls back to
+	# the backup when settings.cfg is missing.
+	for name in ["user://settings.cfg", "user://settings.cfg.bak"]:
+		DirAccess.remove_absolute(ProjectSettings.globalize_path(name))
 	app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
 	await settle()

@@ -36,10 +36,14 @@ func run():
 					var context := "%d/%d %s large=%s" % [cat,section,kind,large]
 					if sidebar_width < 0: sidebar_width = m.sidebar_panel.size.x
 					check(is_equal_approx(m.sidebar_panel.size.x, sidebar_width), "Category sidebar width stays fixed: " + context)
+					# Tabs sit in a sideways-scrolling strip (one row, the chosen tab in
+					# view); a category with many sections scrolls rather than wraps.
 					var tabs_ok := true
 					for tab in m.section_tabs.get_children():
-						tabs_ok=tabs_ok and inside(m.section_bar,tab) and is_equal_approx(tab.position.y,0)
-					check(tabs_ok and m.get_rect().end.x<=960 and m.get_rect().end.y<=720,"Section tabs fit a single line: "+context)
+						tabs_ok=tabs_ok and is_equal_approx(tab.position.y,0)
+					var chosen: Control = m.section_tabs.get_child(section) if section < m.section_tabs.get_child_count() else null
+					tabs_ok=tabs_ok and chosen!=null and inside(m.section_scroll,chosen)
+					check(tabs_ok and m.get_rect().end.x<=960 and m.get_rect().end.y<=720,"Section tabs stay on one line with the chosen tab in view: "+context)
 					var contents_ok := true
 					for row in m.rows:
 						contents_ok=contents_ok and inside(row,row.title_label) and inside(row,row.value_label)

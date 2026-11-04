@@ -16,10 +16,13 @@ SOURCE=ROOT/'tools/lrps2'
 URL='https://github.com/libretro/ps2.git'
 REVISION='88098c430d1e20f7541e4160b9a17e1f90d83446'
 BUILD=ROOT/'build/lrps2-linux'
-# lrps2-image-maps: when no hole near the core takes its main and code maps,
-# map them over an arena in the core's own .bss (upstream #186 removed that
-# fallback; the recompilers then abort in a crowded address space).
-PATCHES=['lrps2-image-maps.patch']
+# lrps2-image-maps: map the main and code maps over an arena in the core's own
+# .bss, always in reach and at one address for every game (upstream #186 removed
+# its .bss fallback; the recompilers then abort in a crowded address space).
+# lrps2-vtlb-moved-map: the VTLB tables cached across games are carved again
+# when the main map was placed elsewhere for the next game (the core stays
+# loaded, so a stale cache pointed into unmapped memory and vtlb_Init crashed).
+PATCHES=['lrps2-image-maps.patch','lrps2-vtlb-moved-map.patch']
 FLAGS=['-DCMAKE_BUILD_TYPE=Release','-DLIBRETRO=ON','-DUSE_VULKAN=OFF']
 # The repository is bind-mounted from Windows, so its owner differs.
 ENV=dict(os.environ,GIT_CONFIG_COUNT='1',GIT_CONFIG_KEY_0='safe.directory',GIT_CONFIG_VALUE_0='*')

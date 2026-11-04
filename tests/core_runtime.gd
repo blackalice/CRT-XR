@@ -19,6 +19,11 @@ func run():
 	var saves := OS.get_environment("CRT_XR_TEST_SAVE")
 	if roms.is_empty() or saves.is_empty(): fail("Set an existing ROM and an isolated test save directory"); return
 	for index in roms.size():
+		# CRT_XR_TEST_ALTERNATE_IMAGE_MAPS=1: LRPS2's memory goes near the core for
+		# even games and into its image for odd ones, so a placement moves between
+		# games in one process (as a crowded address space makes it do in play).
+		if OS.get_environment("CRT_XR_TEST_ALTERNATE_IMAGE_MAPS") == "1":
+			OS.set_environment("CRT_XR_LRPS2_IMAGE_MAPS", "1" if index % 2 == 1 else "0")
 		if not run_one(roms[index], saves.path_join(str(index)) if roms.size() > 1 else saves): return
 	quit()
 

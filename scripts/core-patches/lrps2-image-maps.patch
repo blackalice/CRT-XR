@@ -1,5 +1,5 @@
 diff --git a/pcsx2/Memory.c b/pcsx2/Memory.c
-index d97b3d1c9..f576336ca 100644
+index d97b3d1c9..86ade9af9 100644
 --- a/pcsx2/Memory.c
 +++ b/pcsx2/Memory.c
 @@ -36,6 +36,7 @@ BIOS
@@ -10,16 +10,17 @@ index d97b3d1c9..f576336ca 100644
  #include <string.h>
  
  #include "common/Pcsx2Defs.h"
-@@ -72,6 +73,34 @@ BIOS
+@@ -72,6 +73,35 @@ BIOS
   * (vtlb.cpp: "if ((sptr)p < 0)"), so guest RAM stays below it. */
  #define MAIN_CEILING  ((uptr)1 << (sizeof(uptr) * 8 - 1))
  
 +#if defined(__linux__)
-+/* CRT XR: when no hole near the image takes both maps (a host whose address
-+ * space is crowded around the module, as a Godot room with other cores can be),
-+ * they are mapped over this arena in the image's own .bss instead: inside the
-+ * image, so always within reach of its globals and of each other. Untouched
-+ * .bss costs address space only. */
++/* CRT XR: both maps are mapped over this arena in the image's own .bss: inside
++ * the image, so always within reach of its globals and of each other, whatever
++ * else the host has mapped around the module (a Godot room with other cores
++ * crowds it). It is also the same address for every game while the core stays
++ * loaded, which state kept across games assumes. The near search remains for a
++ * host where the arena cannot be mapped. Untouched .bss costs address space only. */
 +#define FALLBACK_ARENA_SIZE (HOSTMEM_MAIN_SIZE + HOSTMEM_CODE_SIZE + 2 * RESERVE_ALIGN)
 +static u8 s_fallback_arena[FALLBACK_ARENA_SIZE] __attribute__((aligned(4096)));
 +
@@ -36,8 +37,8 @@ index d97b3d1c9..f576336ca 100644
 +		vmm_unmap(&m->main);
 +		return false;
 +	}
-+	log_cb(RETRO_LOG_WARN, "No hole near the core for its memory maps: placed them in the core's own image "
-+	                       "(main at %p, code at %p).\n", (void*)m->main.baseptr, (void*)m->code.baseptr);
++	log_cb(RETRO_LOG_INFO, "Placed the memory maps in the core's own image (main at %p, code at %p).\n",
++	       (void*)m->main.baseptr, (void*)m->code.baseptr);
 +	return true;
 +}
 +#endif
@@ -45,15 +46,15 @@ index d97b3d1c9..f576336ca 100644
  /* Any object in the image will do as the point the image is found from. */
  static const char s_image_anchor = 0;
  static near_space_t s_space;
-@@ -127,7 +156,14 @@ bool sys_memory_init(SysMainMemory* m)
+@@ -127,7 +157,14 @@ bool sys_memory_init(SysMainMemory* m)
  		return false;
  	}
  
 -	if (!place_maps(m))
 +#if defined(__linux__)
-+	/* CRT_XR_LRPS2_IMAGE_MAPS=1 takes the in-image placement directly, to test it. */
-+	const char* force_image = getenv("CRT_XR_LRPS2_IMAGE_MAPS");
-+	bool placed = (force_image && force_image[0] == '1') ? place_maps_in_image(m) : (place_maps(m) || place_maps_in_image(m));
++	/* CRT_XR_LRPS2_IMAGE_MAPS=0 tries the near search first, to test it. */
++	const char* image_maps = getenv("CRT_XR_LRPS2_IMAGE_MAPS");
++	bool placed = (image_maps && image_maps[0] == '0') ? (place_maps(m) || place_maps_in_image(m)) : (place_maps_in_image(m) || place_maps(m));
 +#else
 +	bool placed = place_maps(m);
 +#endif
