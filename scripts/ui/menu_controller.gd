@@ -146,6 +146,10 @@ var sidebar_panel: PanelContainer
 var section_rule: ColorRect
 var section_bar: HBoxContainer
 var section_tabs: HBoxContainer
+var section_block: VBoxContainer
+var section_scroll: ScrollContainer
+## How far a tab's underline reaches below its text to sit on the baseline rule.
+const SECTION_UNDERLINE_REACH := 8
 var scroll: ScrollContainer
 var column: VBoxContainer
 var compact: Label
@@ -364,13 +368,29 @@ func _ready() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation",8)
 	body.add_child(content)
+	# Bar and baseline rule sit flush in one block so a tab's underline can land on
+	# the rule while the tabs themselves live in a clipping scroll strip.
+	section_block = VBoxContainer.new()
+	section_block.add_theme_constant_override("separation",0)
+	content.add_child(section_block)
 	section_bar = HBoxContainer.new()
 	section_bar.add_theme_constant_override("separation",6)
-	content.add_child(section_bar)
+	section_block.add_child(section_bar)
+	# Tabs keep their size; when a category has more than fits, the strip scrolls
+	# sideways to keep the chosen tab in view instead of widening the page.
+	section_scroll = ScrollContainer.new()
+	section_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	section_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	section_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	section_scroll.follow_focus=false
+	section_bar.add_child(section_scroll)
+	var tabs_margin := MarginContainer.new()
+	tabs_margin.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	tabs_margin.add_theme_constant_override("margin_bottom",SECTION_UNDERLINE_REACH)
+	section_scroll.add_child(tabs_margin)
 	section_tabs = HBoxContainer.new()
-	section_tabs.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	section_tabs.add_theme_constant_override("separation",8)
-	section_bar.add_child(section_tabs)
+	tabs_margin.add_child(section_tabs)
 	section_hint=key_hint(); section_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	section_hint.tooltip_text="Previous / next section"
 	section_bar.add_child(section_hint)
@@ -378,7 +398,7 @@ func _ready() -> void:
 	section_bar.add_child(section_pad_hint)
 	# A baseline under the tabs; the chosen tab's underline sits on it.
 	section_rule=ColorRect.new(); section_rule.color=Color("3a3f46"); section_rule.custom_minimum_size.y=1
-	section_rule.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(section_rule)
+	section_rule.mouse_filter=Control.MOUSE_FILTER_IGNORE; section_block.add_child(section_rule)
 	scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -533,6 +553,20 @@ func switch_category(delta: int) -> void:
 	subsection = int(sections.get(category,0))
 	render()
 	if category != previous: play_navigation_click()
+
+## Scrolls the tab strip so the chosen tab, plus a little of its neighbours, is in
+## view. Waits a frame because freshly built tabs have no layout yet.
+func reveal_section_tab(tab: Control) -> void:
+	await get_tree().process_frame
+	if not is_instance_valid(tab) or not is_instance_valid(section_scroll): return
+	var view := section_scroll.size.x
+	var slack := 48.0
+	var left := tab.position.x - slack
+	var right := tab.position.x + tab.size.x + slack
+	var scroll_x := float(section_scroll.scroll_horizontal)
+	if left < scroll_x: scroll_x = left
+	elif right > scroll_x + view: scroll_x = right - view
+	section_scroll.scroll_horizontal = int(maxf(scroll_x, 0.0))
 
 func switch_section(delta: int) -> void:
 	if mode!="settings" or preview: return
@@ -1052,7 +1086,7 @@ func _render(incremental: bool) -> void:
 	sidebar.visible = mode=="settings" and not preview
 	sidebar_panel.visible = sidebar.visible
 	section_bar.visible = mode=="settings" and not preview and catalog.pages(category).size() > 1
-	section_rule.visible = section_bar.visible
+	section_block.visible = section_bar.visible
 	for i in range(sidebar_buttons.size()):
 		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("3b3329") if i==category else Color.TRANSPARENT,i==category))
 		sidebar_buttons[i].add_theme_color_override("icon_normal_color",MenuSkin.TEXT if i==category else MenuSkin.MUTED)
@@ -1071,12 +1105,12 @@ func _render(incremental: bool) -> void:
 			var tab := Button.new()
 			tab.text = str(pages[i].title)
 			tab.focus_mode=Control.FOCUS_NONE
-			tab.add_theme_font_size_override("font_size",18 if pages.size() >= 6 else (20 if host.menu_large_text else 18))
+			tab.add_theme_font_size_override("font_size",20 if host.menu_large_text else 18)
 			MenuSkin.weigh(tab,MenuSkin.SEMIBOLD if i==subsection else MenuSkin.REGULAR)
 			var tab_style := MenuSkin.box(Color.TRANSPARENT,MenuSkin.AMBER,0,6)
 			tab_style.set_corner_radius_all(0)
 			# Reach down to the baseline rule so the underline sits on it.
-			tab_style.expand_margin_bottom=8
+			tab_style.expand_margin_bottom=SECTION_UNDERLINE_REACH
 			if i==subsection: tab_style.border_width_bottom=3
 			tab.add_theme_stylebox_override("normal",tab_style)
 			tab.add_theme_stylebox_override("pressed",tab_style)
@@ -1085,6 +1119,7 @@ func _render(incremental: bool) -> void:
 			tab.add_theme_color_override("font_color",MenuSkin.TEXT if i==subsection else MenuSkin.MUTED)
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
+			if i==subsection: reveal_section_tab.call_deferred(tab)
 		heading.text = CATEGORIES[category]
 	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
