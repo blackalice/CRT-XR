@@ -1,5 +1,124 @@
 # GameCube stability: core-fix continuation, 3 November 2026
 
+## Performance follow-up, 4 November 2026: streaming and asynchronous readback
+
+The Deck was not the limit. In full 1080p SBS (two 1920x1080 eyes), during F-Zero GX's
+3D attract race the old build emulated only 52 fps while the GPU was ~40% busy at
+~600 MHz and the APU drew ~6.5 W of 15 W. Two serializations caused it:
+the worker idled between batches until the next room update collected one, and every frame
+blocked on `glReadPixels` (3.7 ms of a ~15 ms step). F-Zero GX's Dolphin game INI forces
+single-core (`CPUThread = False`, like 98 other IDs), so it is a worst case.
+
+- `RetroCore` streaming (`start_stream`/`stream_*`): the worker runs frames back to back,
+  paced by the audio the device still has queued; the room update only exchanges input,
+  audio and the newest picture. Any other core call stops the stream (joining its frame);
+  pause and the 10 s SRAM read request a stop without waiting. Hardware sessions use it
+  when the extension has it (`CRT_XR_STREAM=0` restores batches).
+- `GlContext::read_async`: pixel-pack buffers and fences; each picture arrives one emulated
+  frame later (`CRT_XR_ASYNC_READBACK=0` restores blocking reads). Duplicate frames collect
+  the read in flight.
+
+| SBS 1080p, 3D window | before | after |
+|---|---|---|
+| F-Zero GX emulated fps | 52.3 | 59.9 |
+| F-Zero GX step p50 / readback | 14.95 / 3.7 ms | 11.2 / 0.87 ms |
+| F-Zero GX audio recoveries | 74 | 3 (boot/title only) |
+| Double Dash step p50 / readback | 8.7 / 6.1 ms | 6.6 / 0.86 ms |
+
+Room frames: worst 18-20 ms in all streamed runs. Remaining 40-110 ms Dolphin steps occur
+at scene changes; hybrid ubershaders did not reduce them (shader cache is warm and persisted).
+Dreamcast and N64 fresh/resume runs stay at full speed. Tests: 5 new async-readback host
+checks (GPU fixture), `tests/emulation_stream.gd`. Deck test release:
+`gc-stream-test-20261104` (not activated). Benchmark:
+`scripts/deck-dev/profile-gamecube-sbs.sh <release> 4800 fzero on 0 "90:x" fzero-bench`,
+analysed from 24 s (F-Zero needs its isolated profile's memory-card save; snapshots
+stall the room ~200 ms, so measure with snapshot interval 0). The Windows DLL has not been
+rebuilt; the session falls back to batches when `start_stream` is missing.
+
+### Latency follow-up (same day)
+
+- Picture pipeline: the shared decode/beam passes were scheduled from the pipeline's own
+  `_process`, which runs before the emulator and video players, so every new frame showed
+  the previous frame's pass output for one more room frame (~17 ms, all cores and videos).
+  `frame_presented` now schedules them at once (`tests/picture_frame_latency.gd`).
+- Readback: the streaming worker collects the asynchronous read as soon as the GPU fence
+  signals while it waits for the next frame (`GlContext::poll_async`,
+  `LibretroHost::collect_readback`). Picture age from the end of emulation to the room's
+  pickup: p50 8-13 ms, i.e. only the wait for the next room frame.
+- Streamed audio: the worker pushes into the `AudioStreamGenerator` itself (single
+  producer) and paces on its live fill level; the reserve is adaptive (start 4, floor 3,
+  +2 per underrun, -1 per 10 s calm, max 10). F-Zero GX queued audio 127 -> ~59 ms median
+  over 150 s (floor 3 for long stretches, underruns at ~1/min at scene changes);
+  Dreamcast/N64 ~60 ms.
+- Classic cores: gentle rate control (at most 0.5%, no resampling) holds the queue's low
+  point at 15 ms + one emulated frame; queued audio is a steady 47-52 ms (previously
+  33-79 ms depending on start, free to drift). Lower targets underran on 50 Hz SNES.
+- GameCube core option "Immediate frame output" (`dolphin_immediate_xfb`), off by default.
+- Not changed: input is still sampled once per room frame (Godot delivers joypad events
+  per main-loop iteration; fresher input needs a native evdev reader), and the
+  Godot/Gamescope/glasses presentation queue is unmeasured (needs photon timing).
+- Screen and TV-audio effects add no delay: the TV bus effects are in-place (no delay
+  line in the direct path) and the shader passes now draw in the same room frame.
+
+### Continue card, Dolphin messages, game frame rate (same day)
+
+- Continue: the 3 s GameCube hold counted from the boot, but the resume point is restored
+  after it, so the restored game ran ~2.5 s behind the card (longer in dark scenes, which
+  failed the brightness test up to the 30 s timeout). `menu_games` now calls
+  `resume_ready`, and the game's next picture takes the card down, dark or not; fresh boots
+  keep the hold. Deck: card down 14-15 ms after the first restored picture (total
+  2.1-2.7 s from Continue, previously 4.7-5.0 s). Restore, reset, load and close also drop
+  the stream's unshown picture, unplayed audio and any GPU read in flight
+  (`discard_stream_output`, `discard_async` in `unserialize`/`reset`).
+- `dolphin_osd_enabled` is off by default (registry), with a "Dolphin messages" core
+  option to turn it on. It removed the GPU/driver line drawn over the first second.
+- "Show game frame rate" (Settings > Emulation > Performance, `game_fps_visible`): each
+  eye's top-right corner shows console, emulated frames per second (half-second windows)
+  and speed against the game's own rate, yellow below 97%; hidden in menus, while paused
+  and behind the card. It counts emulated frames, so a game that renders at 30 fps still
+  reads ~60 (Dolphin's "VPS").
+- Tests: `tests/loading_resume.gd`, extra checks in `tests/disc_loading.gd` (the latter
+  cannot run in WSL: Snes9x aborts in `retro_load_game` there, also with older builds).
+
+### Display-locked pacing (same day, from a real play trace)
+
+A play session traced with `scripts/diagnostics/live_trace.gd` (flag file
+`user://frame-trace.on`, analysed with `scripts/deck-dev/analyze-play-trace.py`) showed
+streamed cores running frames in pairs: the worker was paced by the audio device, and
+Godot's mixer takes ~1024-sample (21 ms) chunks, so one room frame in five got no new
+picture and the next got two (one never shown): 1100 irregular room frames/min in
+F-Zero GX, felt as uneven motion and slightly late input. The glasses reported 119.93 Hz
+with the room at a steady 60 (likely Steam's frame limit).
+
+Now `frames_due` locks emulation to the room: exactly 1:1 (or 1:2, 2:1) when within 1%,
+a fixed fractional pattern otherwise (50 Hz on 60 Hz: 5 of 6), catching up after hitches.
+Streamed cores receive the frames through `RetroCore::stream_tick`, started at once with
+the input just handed over. The clock difference goes into the audio:
+`AudioStreamPlayer.pitch_scale` moves within ±0.5% (inaudible) to hold the queue at its
+target, with a slow integral; emulation speed is no longer nudged. The game frame-rate
+readout uses a 2 s rolling window (half-second windows swung ±2 fps).
+
+Deck, same scenes: F-Zero GX irregular room frames 1102 -> 73/min (remaining pairs are its
+slowest frames finishing just after a refresh), picture age p50 10.6 -> 5.8 ms (p95 22.9 ->
+9.1). PS1 0/min, N64 and Dreamcast 6-18/min, 50 Hz SNES an exact 5-of-6 pattern. Tests:
+`tests/frame_pacing.gd`, grants in `tests/emulation_stream.gd`. Live as
+`pacing-ready-20261104`; the trace flag is still set for the next play session.
+
+### Parked: native controller reader
+
+Considered reading controllers natively (evdev) just before each streamed frame, saving
+~8 ms on average (0-17 ms), mainly for GameCube/Dreamcast/N64; classic cores already read
+input and emulate in the same room update. Parked by the owner on 4 November 2026.
+Downsides: on the Deck, Steam Input exposes a virtual controller with the player's
+remapping (the raw device must not be read; Gaming and Desktop modes differ); device
+permissions outside the logged-in seat or in sandboxes; a second Windows implementation;
+matching Godot device IDs and hotplug; duplicating `gamepad_input.gd` (layouts, menu
+chord, blocked buttons, deadzones, trigger thresholds, active device, menu gating) with a
+risk of the two disagreeing; rumble would still go through Godot; hard to test headless.
+Cheaper first step if revisited: let the stream worker start a frame just after the room
+hands over fresh input whenever the audio reserve can wait a few milliseconds.
+Measure on the glasses first.
+
 ## Save-display and manual-operation follow-up
 
 States remain backward-compatible format-1 `.rst` envelopes. New writes commit a
