@@ -12,7 +12,7 @@ func open_music_browser(path := "") -> void:
 	if menu.mode!="music_browser": music_origin=menu.snapshot()
 	menu.remember(); menu.clear_input()
 	if path.is_empty():
-		path=music_dir if not music_dir.is_empty() else host.music.last_file.get_base_dir()
+		path=music_dir if not music_dir.is_empty() else (host.music_folder if not host.music_folder.is_empty() else host.music.last_file.get_base_dir())
 		if path.is_empty(): path=OS.get_system_dir(OS.SYSTEM_DIR_MUSIC)
 		if DirAccess.open(path)==null: path=menu.library.home_folder()
 	if DirAccess.open(path)==null: menu.show_error("Folder unavailable. Reconnect its drive."); return
@@ -33,6 +33,10 @@ func music_browser_items() -> Array:
 	var result: Array=[]
 	var entries: Array=[]
 	var album: Array=host.music.album_tracks(music_dir)
+	# First-run setup chooses the folder the music browser opens first.
+	if menu.welcome.choosing=="music":
+		var here := music_dir
+		result.append(menu.entry(menu.catalog.action("music.use_folder","Use this folder for music",func(): menu.welcome.music_chosen(here),"Music opens here from now on. Your files stay where they are.",false,""),menu.SECTION_HERE,"check","primary","Albums in this folder and its subfolders"))
 	if not album.is_empty():
 		result.append(menu.entry(menu.catalog.action("music.album","Play this album",func():
 			var folder := music_dir

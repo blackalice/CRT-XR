@@ -18,12 +18,18 @@ var material_logo: ShaderMaterial
 var layout: Control
 var layout_colour: Color
 var prepare_frames := 3
+## First-run setup's Welcome logo: instead of flipping away, the boot logo
+## glides down onto it while the planet settles, so setup follows on unbroken.
+var landing: Control
+const GLIDE_FROM := 1.45
+const GLIDE_TO := 2.75
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	z_index = 20
 	material_space = menu.backdrop.material
+	if menu.mode == "welcome" and is_instance_valid(menu.welcome.logo): landing = menu.welcome.logo
 	frames = JSON.parse_string(FileAccess.get_file_as_string(MOTION_PATH)).frames
 	layout = menu.heading.get_parent().get_parent()
 	layout_colour = layout.modulate
@@ -75,13 +81,14 @@ func prepare() -> void:
 			visual_row += 1
 			last_y = child.global_position.y
 		targets.append([child, child.modulate, REVEAL + 0.08 + minf(visual_row * 0.055, 0.44)])
+	if is_instance_valid(landing): landing.modulate.a = 0.0
 	prepared = true
 	seek(elapsed)
 	layout.modulate = layout_colour
 
 func collect_rows(parent: Control, content: Array[Control]) -> void:
 	for child in parent.get_children():
-		if not child is Control or not child.visible: continue
+		if not child is Control or not child.visible or child == landing: continue
 		if child in menu.rows:
 			content.append(child)
 		elif child is BoxContainer or child is GridContainer:
@@ -104,12 +111,18 @@ func seek(seconds: float) -> void:
 	var a: Array = frames[int(frame_at)]
 	var b: Array = frames[mini(int(frame_at) + 1, frames.size() - 1)]
 	var blend := frame_at - floorf(frame_at)
-	mark.modulate.a = lerpf(a[4], b[4], blend)
-	material_logo.set_shader_parameter("angle", lerpf(a[5], b[5], blend))
+	var gliding := is_instance_valid(landing)
+	mark.modulate.a = 1.0 if gliding else lerpf(a[4], b[4], blend)
+	material_logo.set_shader_parameter("angle", 0.0 if gliding else lerpf(a[5], b[5], blend))
 	material_space.set_shader_parameter("boot_settle", lerpf(a[6], b[6], blend))
 	var squeeze := lerpf(a[3], b[3], blend)
 	mark.size = Vector2(348, 400) * squeeze
 	mark.position = ((size - mark.size) * 0.5).snapped(Vector2(2, 2))
+	if gliding and prepared:
+		var travel := smoothstep(GLIDE_FROM, GLIDE_TO, elapsed)
+		var target := Rect2(landing.global_position - global_position, landing.size)
+		mark.position = mark.position.lerp(target.position, travel).snapped(Vector2(2, 2))
+		mark.size = mark.size.lerp(target.size, travel)
 	for i in range(3): diamonds[i].modulate.a = lerpf(a[i], b[i], blend)
 	for target in targets:
 		if is_instance_valid(target[0]):
@@ -138,5 +151,6 @@ func finish(interrupted := true) -> void:
 	layout.modulate = layout_colour
 	for target in targets:
 		if is_instance_valid(target[0]): target[0].modulate = target[1]
+	if is_instance_valid(landing): landing.modulate.a = 1.0
 	menu.clear_input()
 	queue_free()

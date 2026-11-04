@@ -78,8 +78,10 @@ func library_tool_items() -> Array:
 func browser_items() -> Array:
 	var here: String = menu.library.current_dir
 	var result: Array=[menu.entry(menu.catalog.action("folder.remember","Use this folder for my library",func():
-		set_default(here)
-		if host.default_rom_dir==here: open_library(),"Every supported console in this folder and its subfolders becomes your library. Choose the parent ROM folder, not one console's folder.",false,""),menu.SECTION_HERE,"check","primary","Finds games for every console in here and its subfolders")]
+		var for_setup: bool = menu.welcome.choosing=="library"
+		if not set_default(here): return
+		if for_setup: menu.welcome.library_chosen()
+		elif host.default_rom_dir==here: open_library(),"Every supported console in this folder and its subfolders becomes your library. Choose the parent ROM folder, not one console's folder.",false,""),menu.SECTION_HERE,"check","primary","Finds games for every console in here and its subfolders")]
 	result.append_array(menu.up_entry("folder.up",here,open_folder))
 	for item in menu.library.entries:
 		var path: String=item.path

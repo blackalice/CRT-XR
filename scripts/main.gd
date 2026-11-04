@@ -100,6 +100,10 @@ var menu_depth := true
 var menu_curve := false
 ## The menu on the TV itself (menu_on_tv.gd), or floating in front of it.
 var menu_on_tv := true
+## First-run setup (scripts/ui/menu_welcome.gd) has been finished or skipped.
+var welcome_done := true
+## The folder the music browser opens first, chosen in first-run setup.
+var music_folder := ""
 ## Accessibility: use the separate reading picture instead of the current CRT settings.
 var menu_clean_feed := false
 var tv_menu: Node
@@ -537,12 +541,17 @@ func start_application() -> void:
 	var showcase_defaults := Showcase.config()
 	SettingsStore.copy_sections(showcase_defaults,defaults,showcase_defaults.get_sections())
 	apply_settings(settings_store.read("user://settings.cfg", defaults))
+	# New users see first-run setup. Settings saved before it existed, with no
+	# [welcome] entry, belong to someone already set up.
+	var stored: ConfigFile = settings_store.read("user://settings.cfg")
+	welcome_done = bool(stored.get_value("welcome", "done", not stored.get_sections().is_empty()))
 	picture_baseline = capture_settings()
 	var recent := settings_store.read("user://recent.cfg")
 	if recent.has_section("library"):
 		last_game_path = str(recent.get_value("library", "last_game", ""))
 		default_rom_dir = str(recent.get_value("library", "default_rom_dir", ""))
 	video_dir = str(recent.get_value("video", "folder", ""))
+	music_folder = str(recent.get_value("music", "folder", ""))
 	video_style = clampi(int(recent.get_value("video", "style", 0)), 0, VideoSession.STYLES.size() - 1)
 	# "line_count" replaces "lines": the old key held the earlier 480 default,
 	# which hid the scanlines, so it is not carried over.
@@ -612,6 +621,12 @@ func start_application() -> void:
 	startup_message = settings_store.warning if startup_message.is_empty() else startup_message
 	if not emulator.loaded and not video.loaded and not settings_panel.visible and not "--capture" in arguments:
 		toggle_settings()
+	# First-run setup follows the boot animation on a plain start, ahead of the
+	# last-game chooser the Steam launcher asks for. Test scripts and launches
+	# straight into a game skip it; --welcome-preview forces it.
+	var welcome_forced := "--welcome-preview" in arguments
+	if (not welcome_done or welcome_forced) and settings_panel.visible and not emulator.loaded and not video.loaded and not "--capture" in arguments and (welcome_forced or not "--script" in OS.get_cmdline_args()):
+		menu.welcome.open()
 	refresh_startup_status()
 	if "--capture" in arguments:
 		power_on.started=true; power_on.set_progress(1.0)
@@ -869,12 +884,15 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if emulator.gamepad.handle_event(event):
-		toggle_settings()
+		# First-run setup teaches the shortcut rather than closing on it.
+		if settings_panel.visible and menu.mode == "welcome": menu.welcome.menu_shortcut()
+		else: toggle_settings()
 		get_viewport().set_input_as_handled()
 		return
 	if settings_panel.visible:
 		if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
-			close_settings()
+			if menu.mode == "welcome": menu.welcome.menu_shortcut()
+			else: close_settings()
 		elif menu.handle(event): pass
 		elif event is InputEventMouse:
 			for panel in panels:
@@ -1037,6 +1055,8 @@ func toggle_settings() -> void:
 	settings_on_open = capture_settings().encode_to_text()
 	settings_panel.show()
 	menu.open_pause()
+	# Setup left part-way (the menu was closed for it) carries on where it was.
+	if menu.welcome.active: menu.welcome.resume()
 	refresh_startup_status()
 	if emulator.profile_frames: print("PROFILE_BOOT menu_open at=", profile_start, " us=", Time.get_ticks_usec() - profile_start)
 
@@ -1344,6 +1364,7 @@ func save_library() -> Error:
 	recent.set_value("library", "last_game", last_game_path)
 	recent.set_value("library", "default_rom_dir", default_rom_dir)
 	recent.set_value("video", "folder", video_dir)
+	recent.set_value("music", "folder", music_folder)
 	recent.set_value("video", "style", video_style)
 	recent.set_value("video", "line_count", video_lines)
 	recent.set_value("video", "hardware", video_hardware)
@@ -1683,6 +1704,7 @@ func capture_settings() -> ConfigFile:
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region"]: config.set_value("accessibility",key,get(key))
 	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
 	config.set_value("accessibility","menu_music_volume",menu_music_volume)
+	config.set_value("welcome","done",welcome_done)
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
 	config.set_value("emulation", "separate_preview", emulator.separate_preview)
 	config.set_value("view", "right_stick_distance", right_stick_distance)

@@ -89,6 +89,7 @@ var games := preload("res://scripts/ui/menu_games.gd").new()
 var play := preload("res://scripts/ui/menu_play.gd").new()
 var keys := preload("res://scripts/ui/menu_keys.gd").new()
 var controls := preload("res://scripts/ui/menu_controls.gd").new()
+var welcome := preload("res://scripts/ui/menu_welcome.gd").new()
 ## File screens share one structure: where you are (the location bar), what
 ## you can do here (THIS FOLDER), what is inside (CONTENTS) and other places
 ## (GO TO). Section names are shown as small headers between rows.
@@ -153,6 +154,10 @@ const SECTION_UNDERLINE_REACH := 8
 var scroll: ScrollContainer
 var column: VBoxContainer
 var compact: Label
+## Rows that stay put below a scrolling page, such as first-run setup's Next.
+var pinned: VBoxContainer
+## First-run setup's six step marks, beside the subtitle.
+var step_marks: HBoxContainer
 var confirm_panel: PanelContainer
 var music_heading: Label
 ## The Now playing deck's second line, and what fills both lines.
@@ -228,7 +233,7 @@ func _ready() -> void:
 	state_previews.ready_for.connect(func(path):
 		if not visible: return
 		if items.any(func(item): return item.get("thumbnail_path", "") == path) or (mode == "launch" and host.emulator.auto_path_for(games.launch_path) == path) or (mode == "confirm" and confirmation.get("preview", "") == path): refresh())
-	for helper in [pictures,videos,music,games,play,keys,controls]: helper.host=host; helper.menu=self
+	for helper in [pictures,videos,music,games,play,keys,controls,welcome]: helper.host=host; helper.menu=self
 	theme = MenuSkin.create()
 	host.box_art.art_ready.connect(thumbnail_arrived)
 	sound_player=AudioStreamPlayer.new(); sound_player.volume_db=-28; add_child(sound_player)
@@ -291,6 +296,9 @@ func _ready() -> void:
 	subtitle_row = HBoxContainer.new(); subtitle_row.add_theme_constant_override("separation",8)
 	scan_icon = RowIcon.new("scan", MenuSkin.AMBER); scan_icon.hide()
 	subtitle_row.add_child(scan_icon); subtitle_row.add_child(subtitle)
+	step_marks = HBoxContainer.new(); step_marks.add_theme_constant_override("separation",4)
+	step_marks.size_flags_vertical = Control.SIZE_SHRINK_CENTER; step_marks.hide()
+	subtitle_row.add_child(step_marks)
 	layout.add_child(subtitle_row)
 	location_bar=LocationBar.new(); location_bar.hide(); layout.add_child(location_bar)
 	# Messages name controls in braces ("press {R1}"): drawn as the same glyphs as the hints.
@@ -434,6 +442,8 @@ func _ready() -> void:
 	compact.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	compact.add_theme_color_override("font_color",MenuSkin.AMBER)
 	layout.add_child(compact); compact.hide()
+	pinned = VBoxContainer.new(); pinned.add_theme_constant_override("separation",6)
+	layout.add_child(pinned); pinned.hide()
 	help_label = GlyphText.new("", 20, Color("09132b"))
 	help_label.controller=input_kind=="controller"
 	help_label.custom_minimum_size.y = 64
@@ -516,6 +526,7 @@ func state_key() -> String:
 		"my_preset": return "my_preset:%d" % pictures.my_preset
 		"my_room": return "my_room:%d" % my_room
 		"states": return "states:%s" % play.states_saving
+		"welcome": return "welcome:"+welcome.step
 	return mode
 
 func remember() -> void:
@@ -594,7 +605,10 @@ func back() -> void:
 		"pause": host.close_settings()
 		"settings", "library": mode="pause"; render()
 		"library_tools": mode="library"; render()
-		"browser", "volumes", "drives": mode="library_tools"; render()
+		"browser", "volumes", "drives":
+			# A folder picker opened by first-run setup returns to it.
+			if welcome.choosing=="library": welcome.resume()
+			else: mode="library_tools"; render()
 		"games", "recent", "favourites": mode="library"; render()
 		"alphabet": mode=games.alphabet_origin; render()
 		"launch": restore(games.launch_origin)
@@ -617,6 +631,7 @@ func back() -> void:
 		"radio_url": mode="settings"; render()
 		"help": restore(help_origin)
 		"confirm": restore(return_state)
+		"welcome": welcome.back()
 
 func ask(title: String, detail: String, callback: Callable, preview_path := "") -> void:
 	remember(); return_state = snapshot(); clear_input()
@@ -852,6 +867,7 @@ func get_items() -> Array:
 		"recent", "favourites": return games.history_items()
 		"settings": return catalog.pages(category)[subsection].rows
 		"help": return []
+		"welcome": return welcome.items()
 		"library": return games.library_items()
 		"library_tools": return games.library_tool_items()
 		"games": return games.console_items()
@@ -895,11 +911,12 @@ func _render(incremental: bool) -> void:
 	rendering = true
 	layout_revision+=1
 	var build_revision := layout_revision
+	for child in pinned.get_children(): pinned.remove_child(child); child.queue_free()
 	items = get_items()
 	profile_stages["items_us"] = Time.get_ticks_usec() - profile_start
 	var profile_stage := Time.get_ticks_usec()
 	if preview:
-		items = items.filter(func(item): return item.get("quick_preview",false) if mode == "pause" else item.get("visual",false))
+		items = items.filter(func(item): return item.get("quick_preview",false) if mode in ["pause","welcome"] else item.get("visual",false))
 		if mode == "pause":
 			for item in items: item.erase("layout")
 	column.add_theme_constant_override("separation", 4 if mode == "pause" else 6)
@@ -954,7 +971,7 @@ func _render(incremental: bool) -> void:
 				await get_tree().process_frame
 				if layout_revision != build_revision: return
 				slice_started = Time.get_ticks_usec()
-			var parent: Container=column
+			var parent: Container=pinned if item.get("pinned",false) else column
 			if item.get("layout","") in ["transport","music_seek","music_link","video_resume","video_seek"]:
 				if music_layout==null:
 					var watching: bool = items.any(func(entry): return str(entry.get("layout","")).begins_with("video_"))
@@ -1121,7 +1138,7 @@ func _render(incremental: bool) -> void:
 			section_tabs.add_child(tab)
 			if i==subsection: reveal_section_tab.call_deferred(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm":
 		state_previews.request(confirmation.get("preview", ""))
@@ -1145,7 +1162,9 @@ func _render(incremental: bool) -> void:
 	subtitle.visible = not preview and not location_bar.visible
 	position = Vector2(36,522) if preview else Vector2(36,28)
 	size = Vector2(888,170) if preview else Vector2(888,664)
-	help_label.visible = not preview and not mode in ["help","library","games","launch"] # These pages use the room for content.
+	help_label.visible = not preview and not mode in ["help","library","games","launch"] and not (mode=="welcome" and welcome.step=="welcome") # These pages use the room for content.
+	# The Welcome page is the boot logo's landing place: no title bar above it.
+	heading.get_parent().visible = not (mode=="welcome" and welcome.step=="welcome")
 	help_frame.visible = help_label.visible
 	if preview: heading.add_theme_font_size_override("font_size",22)
 	else: heading.add_theme_font_size_override("font_size",32)
@@ -1194,6 +1213,8 @@ func _render(incremental: bool) -> void:
 		select(selected_id,false)
 	if mode=="help":
 		column.add_child(HelpArticle.build(help_copy,host.menu_large_text))
+	if mode=="welcome": welcome.decorate()
+	pinned.visible = pinned.get_child_count()>0 and not preview
 	if mode=="library" and not rom_index.scanning: scan_preferred_id=""
 	if saved.has("scroll") and not preview: restore_scroll.call_deferred(int(saved.scroll),layout_revision)
 	elif not preview: reveal_after_layout.call_deferred(layout_revision)
@@ -1307,6 +1328,8 @@ func select(id: String, user_action := true) -> void:
 func reveal_selected() -> void:
 	var row = selected_row()
 	if row==null or preview: return
+	# Pinned rows stay in view below the page; nothing to scroll.
+	if not column.is_ancestor_of(row): return
 	# The first row of a section brings its header with it, so the section's
 	# name is never scrolled just out of view; the top row scrolls fully home.
 	# Rows inside a panel (Now playing, the music player) count as the panel:
@@ -1375,6 +1398,7 @@ func refresh_labels() -> void:
 	elif mode=="states": subtitle.text = host.emulator.rom_path.get_file().get_basename()+" · %d slots" % play.STATE_SLOTS
 	elif mode=="my_room": subtitle.text = "Room %d · %s" % [my_room+1,"✓ In use" if host.rooms.active()=="mine.%d" % my_room else ("Saved" if host.rooms.saved(my_room) else "Empty")]
 	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [pictures.my_preset+1,"✓ Active" if pictures.applied_preset()=="mine.%d" % pictures.my_preset else ("Saved" if pictures.my_preset_saved(pictures.my_preset) else "Empty")]
+	elif mode=="welcome": subtitle.text = welcome.subtitle()
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
 	else: subtitle.text = ""
 	# Highlighted when Picture changes belong to one game or to videos, not everything.
@@ -1383,6 +1407,7 @@ func refresh_labels() -> void:
 	# under the title stays for browsing, where it says where you are.
 	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible and not mode in ["pause","settings"]
 	subtitle_row.visible = subtitle.visible
+	show_step_marks(welcome.number() if mode=="welcome" and subtitle.visible else 0)
 	scan_icon.visible = mode=="library" and rom_index.scanning
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0 and notification_context==state_key(): help_label.text = notification
@@ -1405,7 +1430,7 @@ func refresh_labels() -> void:
 	refresh_hints(row)
 
 func preview_available() -> bool:
-	if mode=="pause": return items.any(func(item): return item.get("quick_preview",false))
+	if mode in ["pause","welcome"]: return items.any(func(item): return item.get("quick_preview",false))
 	if mode!="settings": return false
 	return items.any(func(item): return item.get("visual",false) and not item.get("disabled",false) and item.kind!="action")
 
@@ -1422,6 +1447,19 @@ func request_exit() -> void:
 	if mode!="pause": return
 	var detail := "Your place in this video and your settings will be saved." if host.video.loaded else ("An automatic resume point, settings and cartridge SRAM will be saved." if host.emulator.loaded else "Your settings will be saved.")
 	ask("Exit CRT XR?",detail,host.request_exit)
+
+## First-run setup's progress: six marks, the steps reached lit amber.
+func show_step_marks(reached: int) -> void:
+	step_marks.visible = reached > 0
+	if reached <= 0: return
+	if step_marks.get_child_count() != 6:
+		for i in range(6):
+			var mark := Panel.new(); mark.custom_minimum_size = Vector2(26, 8)
+			mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			step_marks.add_child(mark)
+	for i in range(6):
+		var lit := i < reached
+		step_marks.get_child(i).add_theme_stylebox_override("panel", MenuSkin.box(MenuSkin.AMBER if lit else Color("152763"), Color("fff0b0") if lit else Color("526fd0"), 2, 0))
 
 func refresh_hints(row) -> void:
 	var pad := input_kind=="controller"
@@ -1478,6 +1516,7 @@ func refresh_hints(row) -> void:
 	elif mode=="launch":
 		parts.append_array(["A Select" if pad else "Enter Select", ("B " if pad else "Backspace ") + games.launch_return_label()])
 	elif mode=="confirm": parts.append_array(["A Choose" if pad else "Enter Choose","B Cancel" if pad else "Backspace Cancel"])
+	elif mode=="welcome": parts=welcome.hints(row,pad)
 	elif mode in ["folder_path","rename","radio_url"]: parts=["D-pad Keys","A Type",go_back] if pad else ["Type or click keys","Enter Submit",go_back]
 	else: parts.append_array([open,go_back])
 	hints.text=" · ".join(parts)
@@ -1489,6 +1528,7 @@ func footer_pressed(action: String) -> void:
 	elif control in ["B","Backspace"]: back()
 	elif control=="X" and action.ends_with("Preview"): toggle_preview()
 	elif control=="Y" and action.ends_with("Reset"): reset_option()
+	elif control=="X" and action.ends_with("Skip setup"): welcome.skip()
 
 func navigate_library(next: Vector2i) -> void:
 	var row=selected_row()
@@ -1566,6 +1606,8 @@ func navigate(next: Vector2i) -> void:
 				else: select(rows[aligned(candidate, from_row)].item.id)
 				return
 			candidate+=next.y
+		# Setup pages with little to select scroll their content instead.
+		if mode=="welcome": scroll.scroll_vertical+=next.y*80; return
 		if mode=="pause" and next.y>0 and exit_footer.visible:
 			finish_editing(); exit_selected=true
 			for row in rows: row.set_selected(false)
@@ -1619,19 +1661,19 @@ func jump_entries(amount: int) -> void:
 
 func adjust(delta: int) -> void:
 	var row = selected_row()
-	if row != null and row.item.get("quick_preview",false) and mode == "pause" and not preview:
+	if row != null and row.item.get("quick_preview",false) and mode in ["pause","welcome"] and not preview:
 		toggle_preview()
 		return
 	if row!=null and row.item.kind=="seek":
 		row.item.setter.call(float(row.item.getter.call())+10*delta); row.refresh(); return
 	if row==null or row.disabled: return
-	if mode!="settings" and not (mode=="pause" and (str(row.item.id).begins_with("video.") or row.item.get("quick",false))): return
+	if mode!="settings" and mode!="welcome" and not (mode=="pause" and (str(row.item.id).begins_with("video.") or row.item.get("quick",false))): return
 	var item: Dictionary = row.item
 	match item.kind:
 		"number": item.setter.call(clampf(snappedf(float(item.getter.call())+delta*float(item.step),float(item.step)),item.min,item.max))
 		"choice": item.setter.call(posmod(int(item.getter.call())+delta,item.choices.size()))
 		"toggle": item.setter.call(delta>0)
-	row.refresh(); notify("Changed · Saved when you close the menu")
+	row.refresh(); notify("Changed · Saved when you finish setup" if mode=="welcome" else "Changed · Saved when you close the menu")
 
 func activate() -> void:
 	if exit_selected: request_exit(); return
@@ -1663,14 +1705,14 @@ func reset_option() -> void:
 	row.refresh(); notify("Selected option restored to its default")
 
 func toggle_preview() -> void:
-	if mode not in ["settings", "pause"]: return
+	if mode not in ["settings", "pause", "welcome"]: return
 	if preview:
 		remember(); preview=false; clear_input(); render(); return
 	if not preview_available(): return
 	var row=selected_row()
-	if row==null or row.disabled or not row.item.get("quick_preview" if mode == "pause" else "visual",false):
+	if row==null or row.disabled or not row.item.get("quick_preview" if mode in ["pause","welcome"] else "visual",false):
 		for candidate in rows:
-			if not candidate.disabled and candidate.item.get("quick_preview" if mode == "pause" else "visual",false):
+			if not candidate.disabled and candidate.item.get("quick_preview" if mode in ["pause","welcome"] else "visual",false):
 				select(candidate.item.id,false); break
 	finish_editing(); remember(); preview=true; clear_input(); render()
 
@@ -1739,7 +1781,8 @@ func handle(event: InputEvent) -> bool:
 				elif mode in ["games","recent","favourites"]: games.game_title_action()
 				else: reset_option()
 			JOY_BUTTON_X:
-				if mode=="browser": games.open_cards()
+				if mode=="welcome": welcome.skip()
+				elif mode=="browser": games.open_cards()
 				elif mode in ["games","recent","favourites"]: games.toggle_favourite()
 				else: toggle_preview()
 			JOY_BUTTON_RIGHT_STICK: host.recenter()
@@ -1794,7 +1837,8 @@ func handle(event: InputEvent) -> bool:
 					if mode in ["games","recent","favourites"]: games.game_title_action()
 					else: reset_option()
 				KEY_X:
-					if mode in ["games","recent","favourites"]: games.toggle_favourite()
+					if mode=="welcome": welcome.skip()
+					elif mode in ["games","recent","favourites"]: games.toggle_favourite()
 					else: toggle_preview()
 				KEY_J:
 					if mode in ["games","recent","favourites"]: games.open_alphabet()
@@ -1824,10 +1868,11 @@ func update_direction() -> void:
 func _process(delta: float) -> void:
 	if is_instance_valid(boot) and boot.active: return
 	scan_refresh_elapsed+=delta
-	if mode=="library" and rom_index.scanning and scan_refresh_elapsed>.25 and scan_revision!=rom_index.revision:
+	var welcome_found := mode=="welcome" and welcome.step=="found"
+	if (mode=="library" or welcome_found) and rom_index.scanning and scan_refresh_elapsed>.25 and scan_revision!=rom_index.revision:
 		scan_refresh_elapsed=0; scan_revision=rom_index.revision; remember(); render()
 	if rom_index.scanning and rom_index.step():
-		if mode in ["library","games"]:
+		if mode in ["library","games"] or welcome_found:
 			remember(); render()
 	if preview and size.y>190: fit_panel()
 	if direction!=Vector2i.ZERO:

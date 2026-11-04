@@ -234,6 +234,8 @@ func set_video_folder(path: String) -> void:
 		host.video_dir=previous
 		menu.show_error("The video folder could not be saved. Check that user storage is writable."); return
 	host.video_library.refresh()
+	if menu.welcome.choosing=="video" and not path.is_empty():
+		menu.welcome.resume(); menu.notify("Video folder ready."); return
 	video_view_dir=path; video_page=0; menu.mode="videos"; menu.render()
 	menu.notify("Video folder removed. Your videos are unchanged." if path.is_empty() else "Video folder ready.")
 

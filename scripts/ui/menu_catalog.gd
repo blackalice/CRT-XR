@@ -68,7 +68,7 @@ func toggle(id: String, label: String, target: Object, key: String, fallback: bo
 
 ## Icons for settings rows that lead somewhere or do something, by row id.
 const ROW_ICONS := {"view.fit":"fit","view.recenter":"view","tracking.fixed":"view",
-	"system.version":"help","system.glasses":"help","system.device":"help","system.controls":"help","system.help":"help","system.credits":"help"}
+	"system.version":"help","system.setup":"refresh","system.glasses":"help","system.device":"help","system.controls":"help","system.help":"help","system.credits":"help"}
 
 func page(title: String, rows: Array) -> Dictionary:
 	for row in rows:
@@ -403,6 +403,7 @@ func pages(category: int) -> Array:
 				action("system.glasses","Using glasses",func(): menu.open_help("Using glasses",menu.play.glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),
 				action("system.device","Device status",func(): menu.open_help("Device status","!! "+menu.status_title+"\n"+menu.status_detail),"Current display and tracking status."),
 				action("system.controls","Controls",func(): menu.open_help("Controls",CONTROLS_GUIDE),"Controller and keyboard shortcuts."),
+				action("system.setup","Run setup again",func(): menu.welcome.open(),"The first-run setup: the menu shortcut, your view, console region, game library, videos and music, and comfort options."),
 				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting",TROUBLESHOOTING_GUIDE),"Help with glasses, games, audio and saving."),
 				action("system.credits","Credits & licences",func(): menu.open_help("Credits & licences",FileAccess.get_file_as_string("res://THIRD_PARTY.md")),"Godot, libretro, and the artists and developers behind CRT XR."),
 				action("system.diagnostics","Copy diagnostics",func():
