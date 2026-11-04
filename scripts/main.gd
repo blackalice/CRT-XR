@@ -60,6 +60,10 @@ var game_list_columns := 1
 var console_region := "pal"
 var menu_high_contrast := false
 var menu_reduced_motion := false
+## The menu screensaver: on/off, and seconds without input before it starts.
+var menu_screensaver := true
+var menu_screensaver_delay := 120.0
+const SCREENSAVER_DELAYS := [30.0, 60.0, 120.0, 300.0, 600.0, 900.0]
 var menu_sounds := false
 var menu_boot_sound := true
 var boot_audio: AudioStreamPlayer
@@ -665,6 +669,9 @@ func apply_settings(config: ConfigFile) -> void:
 	menu_depth = bool(config.get_value("accessibility","menu_depth",true))
 	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
 	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
+	menu_screensaver = bool(config.get_value("accessibility","menu_screensaver",true))
+	var delay = config.get_value("accessibility","menu_screensaver_delay",120.0)
+	menu_screensaver_delay = float(delay) if typeof(delay) in [TYPE_INT, TYPE_FLOAT] and float(delay) in SCREENSAVER_DELAYS else 120.0
 	for key in music.DEFAULTS: music.set(key,config.get_value("music",key,music.DEFAULTS[key]))
 	music.apply()
 	metrics_visible=bool(config.get_value("preferences","metrics_visible",false))
@@ -875,6 +882,10 @@ func _input(event: InputEvent) -> void:
 	if is_instance_valid(menu): menu.release_input(event)
 	if is_instance_valid(sbs_prompt): return
 	if is_instance_valid(menu): menu.note_input(event)
+	# Input that only wakes the menu from its screensaver goes no further.
+	if is_instance_valid(menu) and menu.idle_input(event):
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(menu) and menu.boot_cancel_pressed(event):
 		menu_boot_pending = false
 		stop_boot_sound()
@@ -1557,6 +1568,8 @@ func reset_all_options() -> void:
 	menu_depth = true
 	menu_on_tv = true
 	haptic_strength = 0.8
+	menu_screensaver = true
+	menu_screensaver_delay = 120.0
 	power_on.enabled=true; power_on.sound_level=.60; power_on.reduced_motion=false; power_on.apply()
 	tv_effects.channel_change=true; tv_effects.power_off_effect=true; tv_effects.reduced_motion=false
 	rebuild_settings()
@@ -1704,7 +1717,7 @@ func capture_settings() -> ConfigFile:
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
 	config.set_value("preferences","game_fps_visible",game_fps_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region"]: config.set_value("accessibility",key,get(key))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","menu_screensaver","menu_screensaver_delay"]: config.set_value("accessibility",key,get(key))
 	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
 	config.set_value("accessibility","menu_music_volume",menu_music_volume)
 	config.set_value("welcome","done",welcome_done)

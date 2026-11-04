@@ -429,6 +429,11 @@ func pages(category: int) -> Array:
 					"help":"Shows console names and icons as they were sold in your region. Games and saves are not affected."},
 				toggle("access.tv","Menu on the TV",h,"menu_on_tv",true,"Shows the menu on the TV. Adjust with preview keeps it floating over the game.",func(): menu.refresh(),false),
 				toggle("access.depth","Menu depth",h,"menu_depth",true,"When the menu floats, side-by-side 3D places it in front of the TV and dims the room. Off gives a flat menu. Has no effect while the menu is on the TV.",func(): menu.refresh(),false),
+				]),page("Screensaver",[
+				toggle("access.screensaver","Screensaver",h,"menu_screensaver",true,"When the menu is left alone, the page gives way to the logo drifting across space. Any button brings the menu straight back.",func(): menu.refresh(),false),
+				unavailable({"id":"access.screensaver_delay","label":"Start after","kind":"choice","choices":["30 seconds","1 minute","2 minutes","5 minutes","10 minutes","15 minutes"],"default":2,"visual":false,"disabled":not h.menu_screensaver,
+					"getter":func(): return maxi(0,h.SCREENSAVER_DELAYS.find(h.menu_screensaver_delay)),"setter":func(value): h.menu_screensaver_delay=h.SCREENSAVER_DELAYS[int(value)],
+					"help":"How long the menu waits without input before the screensaver starts."},"Turn on Screensaver first."),
 				]),page("Audio & vibration",[
 				toggle("access.menu_music","Menu music",h,"menu_music_enabled",true,"Quiet background music while menus are open. Waits for the boot sound to tail off and yields to your own music.",h.apply_menu_music,false),
 				number("access.menu_music_volume","Menu music volume",h,"menu_music_volume",0,1,.05,.10,"percent","Independent of game, album and radio volume. Zero mutes the menu music.",h.apply_menu_music,false),

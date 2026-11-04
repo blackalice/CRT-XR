@@ -206,6 +206,10 @@ var entry_initialized := false
 var sound_player: AudioStreamPlayer
 var focus_tween: Tween
 var boot: Control
+var screensaver: Control
+## Seconds the open menu has gone without input; the screensaver starts after
+## host.menu_screensaver_delay of them.
+var idle_time := 0.0
 
 static func is_steam_deck() -> bool:
 	if OS.get_name()!="Linux": return false
@@ -227,6 +231,41 @@ func begin_boot() -> void:
 	boot.menu = self
 	add_child(boot)
 
+func screensaver_allowed() -> bool:
+	# Not over first-run setup, the boot sequence, typing or a preview of the picture.
+	if not host.menu_screensaver or not visible or preview or mode == "welcome": return false
+	if is_instance_valid(boot) and boot.active: return false
+	var focus := get_viewport().gui_get_focus_owner()
+	return not (focus is LineEdit)
+
+func begin_screensaver() -> void:
+	if is_instance_valid(screensaver): return
+	screensaver = preload("res://scripts/ui/menu_screensaver.gd").new()
+	screensaver.menu = self
+	add_child(screensaver)
+
+func end_screensaver() -> void:
+	idle_time = 0.0
+	if not is_instance_valid(screensaver): return
+	screensaver.finish()
+	screensaver = null
+	clear_input()
+
+static func wakes(event: InputEvent) -> bool:
+	if event is InputEventKey or event is InputEventJoypadButton or event is InputEventMouseButton: return event.pressed
+	if event is InputEventJoypadMotion: return absf(event.axis_value) > .35
+	if event is InputEventMouseMotion: return event.relative.length() > 2.0
+	return false
+
+## Any input counts as activity; while the screensaver is up it only wakes the
+## menu, so the press that brings the page back does not also act on it.
+func idle_input(event: InputEvent) -> bool:
+	if not wakes(event): return false
+	idle_time = 0.0
+	if not is_instance_valid(screensaver): return false
+	end_screensaver()
+	return true
+
 
 func _ready() -> void:
 	add_child(state_previews)
@@ -234,6 +273,8 @@ func _ready() -> void:
 		if not visible: return
 		if items.any(func(item): return item.get("thumbnail_path", "") == path) or (mode == "launch" and host.emulator.auto_path_for(games.launch_path) == path) or (mode == "confirm" and confirmation.get("preview", "") == path): refresh())
 	for helper in [pictures,videos,music,games,play,keys,controls,welcome]: helper.host=host; helper.menu=self
+	# The menu stops processing once hidden, so the screensaver is put away here.
+	visibility_changed.connect(func(): if not visible: end_screensaver())
 	theme = MenuSkin.create()
 	host.box_art.art_ready.connect(thumbnail_arrived)
 	sound_player=AudioStreamPlayer.new(); sound_player.volume_db=-28; add_child(sound_player)
@@ -1866,6 +1907,12 @@ func update_direction() -> void:
 		if next!=Vector2i.ZERO: navigate(next)
 
 func _process(delta: float) -> void:
+	if screensaver_allowed():
+		idle_time += delta
+		if idle_time >= host.menu_screensaver_delay: begin_screensaver()
+	else:
+		idle_time = 0.0
+		if is_instance_valid(screensaver): end_screensaver()
 	if is_instance_valid(boot) and boot.active: return
 	scan_refresh_elapsed+=delta
 	var welcome_found := mode=="welcome" and welcome.step=="found"

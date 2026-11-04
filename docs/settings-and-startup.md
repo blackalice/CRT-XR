@@ -81,6 +81,8 @@ shows the automatic resume preview. Preview capture reuses the presented CPU fra
 
 About & Help includes scrollable controls, troubleshooting, device status, full credits
 and diagnostics. Device status stays separate from the selected action’s help. Menu → Accessibility provides larger text, stronger contrast, reduced animation and Clean menu feed. The menu on the CRT uses the current picture settings by default, including colour, CRT effects, fitting and composite decoding. Clean menu feed restores the separate RGB reading picture without changing game settings. Auto composite keeps the current programme’s PAL/NTSC rate while the menu is shown. Menu layout and placement, sounds and vibration have their own sections.
+
+**Screensaver** (Menu → Screensaver, on by default) takes over when the open menu has had no input for the chosen time (30 seconds to 15 minutes, default 2 minutes). The page fades away and the logo card drifts diagonally across the space backdrop, taking a new colour at every edge. Any key, button, stick push or click brings the page straight back; that input is used only to wake the menu, so it never selects or changes anything. It does not start during first-run setup, the boot sequence, adjust-with-preview or while typing in a text field. With Reduced animation the logo moves to a new resting place every few seconds instead of drifting.
 Focus transitions only change colour; the UI remains a sharp shared 2D texture.
 Controller shortcuts use drawn button icons and follow the last input method. With Menu sounds enabled, valid L1/R1 category or game-page changes and L2/R2 subsection changes play the supplied click. Held controls, ignored shortcuts and page boundaries stay silent.
 
