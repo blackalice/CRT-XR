@@ -15,6 +15,7 @@ const OPTIONS := {
  "n64": [["mupen64plus-43screensize", "Internal resolution", ["Default", "640×480", "960×720"], ["", "640x480", "960x720"], "Higher resolutions cost more performance and change the CRT appearance."]]
 }
 static func group(system: String) -> String:
+ if system == "wii": return "gamecube"
  return "megadrive" if system in ["mastersystem", "gamegear", "segacd"] else system
 static func definitions(system: String) -> Array:
  return OPTIONS.get(group(system), [])

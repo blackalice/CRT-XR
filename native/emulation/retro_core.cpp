@@ -31,6 +31,7 @@ void RetroCore::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_option", "key", "value"), &RetroCore::set_option);
     ClassDB::bind_method(D_METHOD("set_controller", "device"), &RetroCore::set_controller);
     ClassDB::bind_method(D_METHOD("set_hardware_rendering", "enabled"), &RetroCore::set_hardware_rendering);
+    ClassDB::bind_method(D_METHOD("set_destroy_context_first", "enabled"), &RetroCore::set_destroy_context_first);
     ClassDB::bind_method(D_METHOD("vmu_lcd", "index"), &RetroCore::vmu_lcd, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("set_trigger_pressure", "left", "right"), &RetroCore::set_trigger_pressure);
     ClassDB::bind_method(D_METHOD("set_analog", "left_x", "left_y", "right_x", "right_y"), &RetroCore::set_analog);
@@ -375,6 +376,7 @@ void RetroCore::set_option(const String& key, const String& value) { wait_frame(
 void RetroCore::set_controller(int device) { wait_frame(); host.port_device = static_cast<unsigned>(device); }
 // Before load_core: the core then runs on its own thread with a hidden OpenGL context.
 void RetroCore::set_hardware_rendering(bool enabled) { wait_frame(); host.hardware_rendering = enabled; }
+void RetroCore::set_destroy_context_first(bool enabled) { wait_frame(); host.destroy_context_first = enabled; }
 void RetroCore::set_trigger_pressure(int left, int right) { wait_frame();
     host.trigger_pressure[0] = static_cast<std::int16_t>(std::clamp(left, 0, 32767));
     host.trigger_pressure[1] = static_cast<std::int16_t>(std::clamp(right, 0, 32767));

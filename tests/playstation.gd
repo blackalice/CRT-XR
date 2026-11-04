@@ -61,7 +61,7 @@ func run() -> void:
 	write(roms + "/loose/Multi.pbp", eboot("PSTITLEIMG00"))
 	write(roms + "/loose/Portable.pbp", eboot("NPUMDIMG"))
 	check(Registry.identify(roms + "/loose/Eboot.pbp") == "psx" and Registry.identify(roms + "/loose/Multi.pbp") == "psx", "PS1 eboots are recognised")
-	check(Registry.identify(roms + "/loose/Portable.pbp").is_empty(), "A PSP eboot is not offered")
+	check(Registry.identify(roms + "/loose/Portable.pbp") == ("psp" if Registry.SYSTEMS.has("psp") else ""), "A PSP eboot is PSP only when PSP is enabled")
 
 	# A two-disc game: the playlist stands for its cues, and the cues for their tracks.
 	var game := roms + "/psx/Saga"

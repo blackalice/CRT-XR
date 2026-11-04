@@ -1,9 +1,11 @@
 extends Node
 const Registry = preload("res://scripts/emulation/core_registry.gd")
+const Folders = preload("res://scripts/content/console_folders.gd")
 const Layouts = preload("res://scripts/emulation/controller_layouts.gd")
 const CoreOptions = preload("res://scripts/emulation/core_options.gd")
 const StateStore = preload("res://scripts/emulation/state_store.gd")
 const DolphinSupport = preload("res://scripts/emulation/dolphin_support.gd")
+const CoreData = preload("res://scripts/emulation/core_data.gd")
 ## Godot owns presentation; the native Libretro host owns frame execution/callbacks.
 signal content_changed(texture: Texture2D)
 signal frame_presented(image: Image)
@@ -259,13 +261,16 @@ func _load_rom(path: String, background: bool) -> bool:
 		return false
 	var selected_path := Registry.core_path(detected)
 	if not FileAccess.file_exists(selected_path):
-		if detected == "gamecube":
-			report("GameCube is experimental. Its Dolphin core is not included in this build.", true)
+		if detected in Folders.EXPERIMENTAL:
+			report("%s is experimental. Its core is not included in this build." % Registry.SYSTEMS[detected].name, true)
 			return false
 		report("%s core missing. Restore %s from the application package." % [Registry.SYSTEMS[detected].name, selected_path], true)
 		return false
-	if detected == "gamecube" and not DolphinSupport.available():
+	if Registry.SYSTEMS[detected].core == "dolphin" and not DolphinSupport.available():
 		report("Dolphin system files are missing. Restore the core-data/dolphin-emu/Sys folder from the GameCube build.", true)
+		return false
+	if not CoreData.available(Registry.SYSTEMS[detected]):
+		report("%s system files are missing. Restore the core-data/%s folder from the application package." % [Registry.SYSTEMS[detected].name, Registry.SYSTEMS[detected].core_data.source], true)
 		return false
 	if not Registry.bios_satisfied(detected):
 		report("%s needs its BIOS. Put one of %s in the bios folder next to your roms folder, or in %s, then reload the game." % [Registry.SYSTEMS[detected].name, ", ".join(PackedStringArray(Registry.SYSTEMS[detected].bios_any)), Registry.preferred_bios_folder()], true)
@@ -286,7 +291,8 @@ func _load_rom(path: String, background: bool) -> bool:
 		return false
 	var staging = func():
 		Registry.stage_bios(detected, saves)
-		return DolphinSupport.stage(saves) if detected == "gamecube" else OK
+		if Registry.SYSTEMS[detected].core == "dolphin": return DolphinSupport.stage(saves)
+		return CoreData.stage(Registry.SYSTEMS[detected], saves)
 	var stage_error: int = await run_job(staging) if background else staging.call()
 	if stage_error != OK:
 		report("Could not prepare console system files: " + error_string(stage_error), true)
@@ -306,12 +312,14 @@ func _load_rom(path: String, background: bool) -> bool:
 	display_aspect = Registry.SYSTEMS[system_id].aspect
 	save_directory = new_save_directory
 	core.set_hardware_rendering(Registry.SYSTEMS[system_id].get("hardware", false))
+	if core.has_method("set_destroy_context_first"): core.set_destroy_context_first(Registry.SYSTEMS[system_id].get("context_first", false))
 	var native_core := core
 	var opened_core: bool = await run_job(func(): return native_core.load_core(selected_path)) if background else core.load_core(selected_path)
 	if not opened_core: return fail_load(str(core.last_error()))
 	var spec: Dictionary = Registry.SYSTEMS[system_id]
 	if spec.has("controller"): core.set_controller(spec.controller)
 	for key in spec.get("options", {}): core.set_option(key, spec.options[key])
+	if spec.has("bios_option"): core.set_option(spec.bios_option, Registry.first_bios(system_id))
 	var selected_options := CoreOptions.overrides(system_id, Registry.content_hash(path))
 	for key in selected_options: core.set_option(key, selected_options[key])
 	var content := Registry.content_file(path)
@@ -521,7 +529,7 @@ func streams() -> bool:
 	return streaming_enabled and uses_async() and core != null and core.has_method("start_stream")
 
 func uses_async() -> bool:
-	return system_id in ["gamecube", "dreamcast", "n64"]
+	return system_id in ["gamecube", "wii", "dreamcast", "n64", "ps2", "psp"]
 
 # The VMU display only reads a completed snapshot; it must never join a job.
 func vmu_lcd() -> PackedByteArray:

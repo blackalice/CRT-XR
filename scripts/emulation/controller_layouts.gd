@@ -34,6 +34,10 @@ const A := 8; const X := 9; const L := 10; const R := 11; const L2 := 12; const 
 const NAMES := {
 	"gamecube": [[A,"A"],[B,"B"],[X,"X"],[Y,"Y"],[L2,"L"],[R2,"R"],[R,"Z"],[L3,"L soft press"],[R3,"R soft press"],[START,"Start"]],
 	"dreamcast": [[B,"A"],[A,"B"],[Y,"X"],[X,"Y"],[L2,"L"],[R2,"R"],[START,"Start"]],
+	# A Wii Remote with a Classic Controller: SNES-style face buttons.
+	"wii": [[B,"b"],[A,"a"],[Y,"y"],[X,"x"],[L,"ZL"],[R,"ZR"],[L2,"L"],[R2,"R"],[SELECT,"−"],[START,"+"]],
+	"ps2": [[B,"Cross"],[A,"Circle"],[Y,"Square"],[X,"Triangle"],[L,"L1"],[R,"R1"],[L2,"L2"],[R2,"R2"],[L3,"L3"],[R3,"R3"],[SELECT,"Select"],[START,"Start"]],
+	"psp": [[B,"Cross"],[A,"Circle"],[Y,"Square"],[X,"Triangle"],[L,"L"],[R,"R"],[SELECT,"Select"],[START,"Start"]],
 	"snes": [[B,"B"],[A,"A"],[Y,"Y"],[X,"X"],[L,"L"],[R,"R"],[SELECT,"Select"],[START,"Start"]],
 	"nes": [[B,"B"],[A,"A"],[Y,"Turbo B"],[X,"Turbo A"],[SELECT,"Select"],[START,"Start"]],
 	"megadrive": [[Y,"A"],[B,"B"],[A,"C"],[L,"X"],[X,"Y"],[R,"Z"],[SELECT,"Mode"],[START,"Start"]],
@@ -69,7 +73,7 @@ static func standard(system: String, spec: Dictionary) -> Dictionary:
 	if spec.get("triggers", false): buttons.merge({"l2": L2, "r2": R2})
 	if system == "dreamcast":
 		for input in ["l1", "r1", "back"]: buttons.erase(input)
-	if system == "psx": buttons["l3"] = L3
+	if system in ["psx", "ps2"]: buttons["l3"] = L3
 	var analog: bool = spec.get("analog", false)
 	if not analog: buttons.merge({"ls_up": UP, "ls_down": DOWN, "ls_left": LEFT, "ls_right": RIGHT})
 	return {"buttons": buttons, "left_stick": "analog" if analog else "buttons", "right_stick": "analog" if analog else "buttons"}

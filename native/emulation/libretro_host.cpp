@@ -6,6 +6,9 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstring>
+#include <cstdlib>
+#include <ctime>
+#include <mutex>
 #include <cmath>
 #include <filesystem>
 #include <fstream>
@@ -80,8 +83,9 @@ LibretroHost::~LibretroHost() {
 void LibretroHost::close_game() {
     on_core([&] {
         Use use(this);
-        if (loaded) fn_unload_game();
         // The core lets go of its GL objects; the context stays for the next game.
+        if (hw_active && destroy_context_first && hw.context_destroy) { hw.context_destroy(); hw.context_destroy = nullptr; }
+        if (loaded) fn_unload_game();
         if (hw_active) {
             if (hw.context_destroy) hw.context_destroy();
             gl->destroy_framebuffer();
@@ -174,6 +178,7 @@ bool LibretroHost::load_core(const std::string& path) {
 }
 bool LibretroHost::load_game(const std::string& path, const std::string& directory) {
     if (!library) { error = "No core loaded"; return false; }
+    shutdown_requested = false;
     close_game();
     return on_core([&] {
         Use use(this);
@@ -264,6 +269,7 @@ bool LibretroHost::step(std::uint16_t mask) {
         }
         step_usec = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
         if (insert_countdown > 0 && --insert_countdown == 0 && disk.set_eject_state) disk.set_eject_state(false);
+        if (shutdown_requested && error.empty()) error = "The emulator stopped: the game could not be started";
         return error.empty();
     });
 }
@@ -396,6 +402,8 @@ bool LibretroHost::environment(unsigned command, void* data) {
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
     case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO: return true;
+    // A core that cannot run what it loaded (PPSSPP after a failed boot) asks to stop.
+    case RETRO_ENVIRONMENT_SHUTDOWN: active->shutdown_requested = true; return true;
     default: return false;
     }
 }
@@ -499,9 +507,34 @@ std::int16_t LibretroHost::input(unsigned port, unsigned device, unsigned index,
     if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return static_cast<std::int16_t>(mask);
     return id < 16 ? (mask >> id) & 1 : 0;
 }
-void LibretroHost::log(retro_log_level, const char* format, ...) {
+// Cores' warnings and errors also go to <state>/crt_xr/core.log (XDG_STATE_HOME,
+// else ~/.local/state), one flushed line at a time, so a core's last words survive
+// a crash; the Steam session log only carries Godot's own output.
+static std::FILE* core_log_file() {
+    static std::FILE* file = [] {
+        std::string folder;
+        if (const char* state = std::getenv("XDG_STATE_HOME"); state && *state) folder = state;
+        else if (const char* home = std::getenv("HOME"); home && *home) folder = std::string(home) + "/.local/state";
+        else return static_cast<std::FILE*>(nullptr);
+        std::error_code ignored;
+        std::filesystem::create_directories(folder + "/crt_xr", ignored);
+        return std::fopen((folder + "/crt_xr/core.log").c_str(), "a");
+    }();
+    return file;
+}
+void LibretroHost::log(retro_log_level level, const char* format, ...) {
     std::fputs("[Libretro] ", stderr);
     va_list arguments; va_start(arguments, format); std::vfprintf(stderr, format, arguments); va_end(arguments);
+    if (level < RETRO_LOG_WARN) return;
+    static std::mutex file_mutex;
+    std::lock_guard<std::mutex> lock(file_mutex);
+    if (std::FILE* file = core_log_file()) {
+        const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+        char stamp[32]; std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+        std::fprintf(file, "%s %s ", stamp, level == RETRO_LOG_ERROR ? "ERROR" : "WARN");
+        va_list copy; va_start(copy, format); std::vfprintf(file, format, copy); va_end(copy);
+        std::fflush(file);
+    }
 }
 std::vector<std::uint8_t> LibretroHost::serialize() {
     std::vector<std::uint8_t> state;

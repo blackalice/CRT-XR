@@ -22,14 +22,29 @@ const UNSUPPORTED := ["32x","3do","amiga","amiga600","amiga1200","amigacd32","am
 static func key(name: String) -> String:
 	return name.to_lower().replace(" ","").replace("-","").replace("_","")
 
+## Consoles behind a development opt-in, with their folder names. Wii shares
+## the GameCube opt-in: both run on Dolphin.
+const EXPERIMENTAL := {
+	"gamecube": ["gamecube", "nintendogamecube", "gc", "ngc"],
+	"wii": ["wii", "nintendowii"],
+	"ps2": ["ps2", "playstation2", "sonyplaystation2"],
+	"psp": ["psp", "playstationportable", "sonyplaystationportable"]}
+const OPT_IN := {"gamecube": "CRT_XR_EXPERIMENTAL_GAMECUBE", "wii": "CRT_XR_EXPERIMENTAL_GAMECUBE",
+	"ps2": "CRT_XR_EXPERIMENTAL_PS2", "psp": "CRT_XR_EXPERIMENTAL_PSP"}
+
 static func system(name: String) -> String:
-	if gamecube_enabled() and key(name) in ["gamecube", "nintendogamecube", "gc", "ngc"]: return "gamecube"
+	for console in EXPERIMENTAL:
+		if experimental_enabled(console) and key(name) in EXPERIMENTAL[console]: return console
 	return ALIASES.get(key(name),"")
 
 static func unsupported(name: String) -> bool:
-	if gamecube_enabled() and key(name) in ["gamecube", "nintendogamecube", "gc", "ngc"]: return false
+	for console in EXPERIMENTAL:
+		if experimental_enabled(console) and key(name) in EXPERIMENTAL[console]: return false
 	return key(name) in UNSUPPORTED
 
 ## Development opt-in until the Dolphin build, system data and Deck runtime are validated.
 static func gamecube_enabled() -> bool:
-	return OS.get_environment("CRT_XR_EXPERIMENTAL_GAMECUBE") == "1"
+	return experimental_enabled("gamecube")
+
+static func experimental_enabled(console: String) -> bool:
+	return OPT_IN.has(console) and OS.get_environment(OPT_IN[console]) == "1"

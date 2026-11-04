@@ -191,8 +191,8 @@ const LOADING_TIMEOUT_MSEC := 30000
 ## Systems whose boot takes seconds of black or a hitching start: the loading card
 ## covers them, and for those in LOADING_HOLD_MSEC it stays up that long after the
 ## game has booted, so shader compiles and cache warm-up happen behind it.
-const LOADING_CARD_SYSTEMS := ["psx", "segacd", "gamecube", "dreamcast"]
-const LOADING_HOLD_MSEC := {"gamecube": 3000}
+const LOADING_CARD_SYSTEMS := ["psx", "segacd", "gamecube", "wii", "dreamcast", "ps2", "psp"]
+const LOADING_HOLD_MSEC := {"gamecube": 3000, "wii": 3000, "ps2": 3000, "psp": 3000}
 var loading_hold := 0
 ## Set once Continue has restored the resume point: the game is mid-play, so its
 ## next picture takes the card down, dark or not, with no boot hold.
@@ -615,7 +615,10 @@ func start_application() -> void:
 		elif arguments[index] == "--video":
 			# Developer flag until videos are in the library menu.
 			if not play_video(arguments[index + 1]): show_notice(video.status)
-	if "--last-game" in arguments and not "--rom" in arguments and not last_game_path.is_empty() and FileAccess.file_exists(last_game_path):
+	# The Steam launcher asks for the last game: its Continue chooser when it has
+	# an automatic resume point. Without one (a game that crashed before saving)
+	# nothing starts on its own; Home's Continue still offers it.
+	if "--last-game" in arguments and not "--rom" in arguments and not last_game_path.is_empty() and FileAccess.file_exists(last_game_path) and FileAccess.file_exists(emulator.auto_path_for(last_game_path)):
 		if not settings_panel.visible: toggle_settings()
 		menu.games.select_file(last_game_path)
 	startup_message = settings_store.warning if startup_message.is_empty() else startup_message

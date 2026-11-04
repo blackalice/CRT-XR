@@ -11,12 +11,16 @@ func run():
 	var rom := OS.get_environment("CRT_XR_GAMECUBE_ROM")
 	var saves := OS.get_environment("CRT_XR_GAMECUBE_SAVE")
 	if rom.is_empty() or saves.is_empty(): fail("Set an existing ROM and an isolated test save directory"); return
-	if Registry.identify(rom) != "gamecube": fail("Game is not identified as GameCube"); return
+	# GameCube or Wii: both run on Dolphin with their own registry defaults.
+	var system := Registry.identify(rom)
+	if not system in ["gamecube", "wii"]: fail("Game is not identified as GameCube or Wii"); return
+	var spec: Dictionary = Registry.SYSTEMS[system]
 	if Support.stage(saves) != OK: fail("Dolphin Sys data cannot be staged"); return
 	var core = ClassDB.instantiate("RetroCore")
 	core.set_hardware_rendering(true)
-	if not core.load_core(Registry.core_path("gamecube")): fail(str(core.last_error())); return
-	for key in Registry.SYSTEMS.gamecube.options: core.set_option(key, Registry.SYSTEMS.gamecube.options[key])
+	if not core.load_core(Registry.core_path(system)): fail(str(core.last_error())); return
+	for key in spec.options: core.set_option(key, spec.options[key])
+	if spec.has("controller"): core.set_controller(spec.controller)
 	if not core.load_game(rom, saves): fail(str(core.last_error())); return
 	print("PASS: Real Dolphin core loads ", rom.get_file())
 	var pictures := 0

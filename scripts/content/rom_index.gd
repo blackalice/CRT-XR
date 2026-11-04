@@ -107,7 +107,7 @@ func step(budget_usec := 2000, entry_budget := 128) -> bool:
 
 func finish() -> void:
 	# A disc's cue or playlist stands for its tracks and discs: list the game once.
-	for system in ["segacd", "psx", "dreamcast", "gamecube"]:
+	for system in ["segacd", "psx", "dreamcast", "gamecube", "wii", "ps2"]:
 		if not games.has(system): continue
 		var members := Registry.playlist_members(games[system].map(func(game): return game.path))
 		if not members.is_empty(): games[system] = games[system].filter(func(game): return not members.has(game.path))

@@ -1,0 +1,59 @@
+{
+  "core": "pcsx2 (LRPS2)",
+  "platform": "linux",
+  "status": "Experimental Deck test build",
+  "source_url": "https://github.com/libretro/ps2.git",
+  "source_commit": "88098c430d1e20f7541e4160b9a17e1f90d83446",
+  "source_archive": "sources/lrps2-88098c430d1e20f7541e4160b9a17e1f90d83446.tar.gz",
+  "source_sha256": "99d08bd6fa391eef64a1c1843512ac9317ba9236c48acac0253f8f053376c98a",
+  "patches": [
+    {
+      "path": "sources/lrps2-image-maps.patch",
+      "sha256": "74a77194b4e3a25f5684c3154346b0c4ed48aea46fa01e513b7cba08604652df"
+    }
+  ],
+  "binary_sha256": "0431327c8fe8385bf791a21a2e43e9186752002812bd02e4a15e05caa3c753db",
+  "compiler": "g++-12 (Ubuntu 12.3.0-1ubuntu1~22.04.3) 12.3.0",
+  "cmake_flags": [
+    "-DCMAKE_BUILD_TYPE=Release",
+    "-DLIBRETRO=ON",
+    "-DUSE_VULKAN=OFF"
+  ],
+  "elf": {
+    "needed": [
+      "libstdc++.so.6",
+      "libm.so.6",
+      "libc.so.6"
+    ],
+    "max_glibc": "GLIBC_2.34",
+    "max_glibcxx": "GLIBCXX_3.4.29",
+    "max_cxxabi": "CXXABI_1.3.9",
+    "retro_exports": [
+      "retro_api_version",
+      "retro_cheat_reset",
+      "retro_cheat_set",
+      "retro_deinit",
+      "retro_get_memory_data",
+      "retro_get_memory_size",
+      "retro_get_region",
+      "retro_get_system_av_info",
+      "retro_get_system_info",
+      "retro_init",
+      "retro_load_game",
+      "retro_load_game_special",
+      "retro_reset",
+      "retro_run",
+      "retro_serialize",
+      "retro_serialize_size",
+      "retro_set_audio_sample",
+      "retro_set_audio_sample_batch",
+      "retro_set_controller_port_device",
+      "retro_set_environment",
+      "retro_set_input_poll",
+      "retro_set_input_state",
+      "retro_set_video_refresh",
+      "retro_unload_game",
+      "retro_unserialize"
+    ]
+  }
+}
