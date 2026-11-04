@@ -91,6 +91,45 @@ CRT XR uses its own Godot user-data directory. On first launch it copies prefere
 
 On Linux, preferences are normally in `~/.local/share/godot/app_userdata/CRT XR/`; logs launched through Steam are under `${XDG_STATE_HOME:-$HOME/.local/state}/crt_xr/`. On Windows they are normally under `%APPDATA%/Godot/app_userdata/CRT XR/`. Development scripts intentionally use isolated `tools/userdata/`.
 
+## Recording a play-session trace
+
+To measure what a player actually feels (uneven motion, late input, audio
+dropouts), CRT XR can record a timing trace of ordinary play. It is off unless a
+flag file exists in the user-data folder when the app starts; nothing in the
+menus turns it on, and ordinary launches never trace.
+
+On the Steam Deck, from WSL with the Deck SSH master open:
+
+```bash
+scripts/deck-dev/play-trace.sh on       # trace from the next launch
+# play normally from Steam, then quit CRT XR from its own menu
+scripts/deck-dev/play-trace.sh pull     # copy to build/play-traces/ and summarise
+scripts/deck-dev/play-trace.sh off      # stop tracing from the next launch
+scripts/deck-dev/play-trace.sh clear    # delete the traces on the Deck
+scripts/deck-dev/play-trace.sh status
+```
+
+Elsewhere, create an empty `frame-trace.on` in the user-data folder (see above)
+and read `traces/<start time>.jsonl` from the same folder; summarise with
+`python scripts/deck-dev/analyze-play-trace.py <trace.jsonl>`.
+
+Each session writes one JSON-lines file (`scripts/diagnostics/live_trace.gd`):
+every room frame's interval and draw time, the emulator's per-frame step times,
+whether a new picture reached the TV, game frames replaced before they were
+shown, picture age, the audio queue and dropouts, and once a second the game,
+pause, menu and loading-card state. Lines are written from a worker task every
+five seconds, so quitting through Steam loses at most the last few seconds. A
+session is a few megabytes per few minutes, and tracing adds a little work per
+frame: turn it off when done.
+
+The summary counts only time actually playing. Its key lines: `room` (refresh
+rate and late frames), `game` (emulated rate and slow emulator steps),
+`picture` (room frames that repeated a frame and game frames dropped unseen:
+with display-locked pacing these should be rare, except the fixed pattern of a
+50 Hz game on a 60 Hz display) and `audio` (dropouts and the delay behind the
+picture). It also lists the worst moments in minutes from the start of the
+session, to match against what the player noticed.
+
 
 ## Windows XR release builds
 

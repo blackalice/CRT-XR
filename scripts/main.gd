@@ -449,6 +449,11 @@ func start_application() -> void:
 	world.television.add_child(vmu_display)
 	emulator = Emulation.new()
 	add_child(emulator)
+	var LiveTrace = preload("res://scripts/diagnostics/live_trace.gd")
+	if LiveTrace.requested():
+		var trace = LiveTrace.new()
+		add_child(trace)
+		trace.start(self)
 	music=preload("res://scripts/audio/music_player.gd").new()
 	menu_ambience = preload("res://scripts/audio/menu_ambience.gd").new()
 	menu_ambience.name = "MenuAmbience"
