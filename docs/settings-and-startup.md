@@ -21,6 +21,20 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 | Menu | Accessibility; Layout & placement; Audio & vibration |
 | About & Help | About, controls, device status, troubleshooting, credits and diagnostics; Settings management |
 
+**Console region** (Menu → Layout & placement) chooses PAL (Europe, the default), NTSC (Americas) or Japan. It changes only how consoles are named and pictured in the menus; games, saves and folder recognition are unaffected. Consoles that differ by region:
+
+| Console | PAL | NTSC | Japan |
+|---|---|---|---|
+| SNES | SNES | SNES (US icon) | Super Famicom (SFC) |
+| NES | NES | NES | Famicom (FC) |
+| Mega Drive | Mega Drive | Genesis (GEN) | Mega Drive |
+| Master System | Master System | Master System | Mark III |
+| PC Engine | PC Engine | TurboGrafx-16 (TG-16) | PC Engine |
+| Sega CD | Mega-CD | Sega CD | Mega-CD |
+| Dreamcast | blue swirl icon | blue swirl icon | red swirl icon |
+
+Every other console keeps one name and icon in all regions. The setting is saved with the Menu settings and returns to PAL under Reset all settings. Names, short names and icon files are defined in `scripts/emulation/core_registry.gd` (`REGIONAL`); add an entry there to give another console a regional variant.
+
 Core settings offer console-wide defaults under Consoles and per-game overrides under This game. The playing console moves to the top, is marked Playing, and expands when the game changes. Console options sit inside the expanded group; selecting the header hides them. Other consoles remain accessible. This game identifies the loaded game and shows effective inherited values with From console or Game override beneath each setting. Y returns an option to its console setting. Changes apply when the game next loads. Sega consoles have separate preferences even where they share a core.
 
 Up/down selects, left/right adjusts immediately, A toggles switches or opens actions,

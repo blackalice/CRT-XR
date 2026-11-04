@@ -24,6 +24,11 @@ Steam Deck deployment and hardware validation follow separately.
 | PlayStation | PCSX ReARMed | `.cue`, `.bin`/`.iso` with a PlayStation volume, PS1 `.pbp`, `.m3u` playlists; `.chd` or zipped discs in a PlayStation folder |
 | Dreamcast (development) | Flycast (OpenGL) | `.gdi`, `.cdi`, `.chd` in a Dreamcast folder, `.m3u` playlists |
 
+Console names and menu icons follow **Menu → Layout & placement → Console region**
+(PAL, NTSC or Japan): for example Mega Drive / Genesis, Sega CD / Mega-CD and
+PC Engine / TurboGrafx-16 switch name and icon. The setting changes presentation
+only. See `docs/settings-and-startup.md` for the full table.
+
 `.md` and `.bin` require a SEGA cartridge header (Mega Drive) or the
 `SEGADISCSYSTEM` header (Sega CD) to avoid treating documents and unrelated
 binary files as games; a `.cue` sheet resolves its first image the same way.

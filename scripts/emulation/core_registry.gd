@@ -13,7 +13,7 @@ extends RefCounted
 const Archive = preload("res://scripts/content/rom_archive.gd")
 const Folders = preload("res://scripts/content/console_folders.gd")
 const DEFINITIONS := {
-	"gamecube": {"name":"GameCube", "core":"dolphin", "extensions":[], "aspect":4.0/3.0,
+	"gamecube": {"name":"GameCube", "short":"GC", "core":"dolphin", "extensions":[], "aspect":4.0/3.0,
 		"analog":true, "triggers":true, "preview":false, "hardware":true,
 		"options":{"dolphin_efb_scale":"1", "dolphin_cpu_core":"1", "dolphin_dsp_hle":"enabled",
 			"dolphin_main_cpu_thread":"enabled", "dolphin_aspect_ratio":"2", "dolphin_call_back_audio_method":"1",
@@ -21,26 +21,26 @@ const DEFINITIONS := {
 			"dolphin_osd_enabled":"disabled"}},
 	"snes": {"name":"SNES", "core":"snes9x", "extensions":["sfc","smc","swc","fig"], "aspect":4.0/3.0},
 	"nes": {"name":"NES", "core":"nestopia", "extensions":["nes","unf","unif"], "aspect":4.0/3.0},
-	"megadrive": {"name":"Mega Drive", "core":"genesis_plus_gx", "extensions":["md","gen","smd"], "aspect":4.0/3.0},
-	"mastersystem": {"name":"Master System", "core":"genesis_plus_gx", "extensions":["sms"], "aspect":4.0/3.0},
-	"gamegear": {"name":"Game Gear", "core":"genesis_plus_gx", "extensions":["gg"], "aspect":10.0/9.0},
-	"gameboy": {"name":"Game Boy / Color", "core":"gambatte", "extensions":["gb","gbc"], "aspect":10.0/9.0},
-	"gba": {"name":"Game Boy Advance", "core":"mgba", "extensions":["gba"], "aspect":240.0/160.0},
+	"megadrive": {"name":"Mega Drive", "short":"MD", "core":"genesis_plus_gx", "extensions":["md","gen","smd"], "aspect":4.0/3.0},
+	"mastersystem": {"name":"Master System", "short":"SMS", "core":"genesis_plus_gx", "extensions":["sms"], "aspect":4.0/3.0},
+	"gamegear": {"name":"Game Gear", "short":"GG", "core":"genesis_plus_gx", "extensions":["gg"], "aspect":10.0/9.0},
+	"gameboy": {"name":"Game Boy / Color", "short":"GB/GBC", "core":"gambatte", "extensions":["gb","gbc"], "aspect":10.0/9.0},
+	"gba": {"name":"Game Boy Advance", "short":"GBA", "core":"mgba", "extensions":["gba"], "aspect":240.0/160.0},
 	"pcengine": {"name":"PC Engine / TurboGrafx-16", "short":"PC Engine", "core":"mednafen_pce_fast", "extensions":["pce"], "aspect":4.0/3.0},
-	"segacd": {"name":"Sega CD / Mega-CD", "core":"genesis_plus_gx", "extensions":[], "aspect":4.0/3.0,
+	"segacd": {"name":"Sega CD / Mega-CD", "short":"Sega CD", "core":"genesis_plus_gx", "extensions":[], "aspect":4.0/3.0,
 		"bios_any":["bios_CD_U.bin","bios_CD_E.bin","bios_CD_J.bin"]},
-	"atari2600": {"name":"Atari 2600", "core":"stella", "extensions":["a26"], "aspect":4.0/3.0},
-	"atarilynx": {"name":"Atari Lynx", "core":"mednafen_lynx", "extensions":["lynx"], "aspect":160.0/102.0,
+	"atari2600": {"name":"Atari 2600", "short":"2600", "core":"stella", "extensions":["a26"], "aspect":4.0/3.0},
+	"atarilynx": {"name":"Atari Lynx", "short":"Lynx", "core":"mednafen_lynx", "extensions":["lynx"], "aspect":160.0/102.0,
 		"bios_any":["lynxboot.img"]},
-	"ngpc": {"name":"Neo Geo Pocket / Color", "short":"Neo Geo Pocket", "core":"mednafen_ngp", "extensions":["ngp","ngpc","ngc"], "aspect":16.0/15.0},
+	"ngpc": {"name":"Neo Geo Pocket / Color", "short":"NGPC", "core":"mednafen_ngp", "extensions":["ngp","ngpc","ngc"], "aspect":16.0/15.0},
 	"vectrex": {"name":"Vectrex", "core":"vecx", "extensions":["vec"], "aspect":4.0/3.0},
 	# A DualShock (RETRO_DEVICE_SUBCLASS(ANALOG, 1)) stays digital until a game asks
 	# for analog, so pad-only games behave as with the original controller. The core
 	# has a built-in BIOS replacement; a real BIOS improves compatibility.
-	"psx": {"name":"PlayStation", "core":"pcsx_rearmed", "extensions":[], "aspect":4.0/3.0,
+	"psx": {"name":"PlayStation", "short":"PS1", "core":"pcsx_rearmed", "extensions":[], "aspect":4.0/3.0,
 		"controller":(2 << 8) | 5, "analog":true, "triggers":true, "preview":false,
 		"bios_optional":["scph5501.bin","scph5500.bin","scph5502.bin","scph1001.bin","scph7001.bin","scph101.bin","psxonpsp660.bin","ps1_rom.bin"]},
-	"dreamcast": {"name":"Dreamcast", "core":"flycast", "extensions":["gdi","cdi"], "aspect":4.0/3.0,
+	"dreamcast": {"name":"Dreamcast", "short":"DC", "core":"flycast", "extensions":["gdi","cdi"], "aspect":4.0/3.0,
 		"analog":true, "triggers":true, "preview":false, "hardware":true,
 		"bios_optional":["dc_boot.bin"],
 		"options":{"reicast_internal_resolution":"640x480", "reicast_alpha_sorting":"per-triangle (normal)",
@@ -56,7 +56,38 @@ const DEFINITIONS := {
 			"mupen64plus-astick-deadzone":"0", "mupen64plus-cpucore":"dynamic_recompiler", "mupen64plus-alt-map":"True"}}
 }
 
+## Where the console collection comes from: names and icons follow it. PAL is the base
+## in DEFINITIONS; each region overrides only what differs (name, short, icon file).
+const REGIONS := ["pal", "ntsc", "japan"]
+const REGION_LABELS := ["PAL (Europe)", "NTSC (Americas)", "Japan"]
+const REGIONAL := {
+	"snes": {"ntsc":{"icon":"snes_ntsc"}, "japan":{"name":"Super Famicom", "short":"SFC"}},
+	"nes": {"japan":{"name":"Famicom", "short":"FC", "icon":"famicom"}},
+	"megadrive": {"pal":{"icon":"megadrive_eu"}, "japan":{"icon":"megadrive_eu"},
+		"ntsc":{"name":"Genesis", "short":"GEN", "icon":"megadrive"}},
+	"mastersystem": {"japan":{"name":"Mark III", "short":"Mark III", "icon":"mastersystem_jp"}},
+	"pcengine": {"pal":{"name":"PC Engine"}, "japan":{"name":"PC Engine"},
+		"ntsc":{"name":"TurboGrafx-16", "short":"TG-16", "icon":"turbografx"}},
+	"segacd": {"pal":{"name":"Mega-CD", "short":"Mega-CD", "icon":"megacd"}, "japan":{"name":"Mega-CD", "short":"Mega-CD", "icon":"megacd"},
+		"ntsc":{"name":"Sega CD", "short":"Sega CD"}},
+	"dreamcast": {"pal":{"icon":"dreamcast_blue"}, "ntsc":{"icon":"dreamcast_blue"}}
+}
+static var region := "pal"
+
 static var SYSTEMS: Dictionary = available_systems()
+
+## Names and icons for a region; run again to switch. Mutates SYSTEMS in place so
+## everything reading a console's name, short or icon follows.
+static func apply_region(id: String) -> void:
+	region = id if id in REGIONS else "pal"
+	for system in SYSTEMS:
+		var spec: Dictionary = SYSTEMS[system]
+		var base: Dictionary = DEFINITIONS[system]
+		spec["name"] = base.name
+		if base.has("short"): spec["short"] = base.short
+		else: spec.erase("short")
+		spec["icon"] = base.get("icon", system)
+		for key in REGIONAL.get(system, {}).get(region, {}): spec[key] = REGIONAL[system][region][key]
 
 static func available_systems() -> Dictionary:
 	var systems := DEFINITIONS.duplicate(true)

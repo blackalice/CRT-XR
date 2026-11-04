@@ -419,6 +419,10 @@ func pages(category: int) -> Array:
 				{"id":"access.game_columns","label":"Game list columns","kind":"choice","choices":["1 column", "2 columns", "3 columns"],"default":0,"visual":false,
 					"getter":func(): return h.game_list_columns - 1,"setter":func(value): h.game_list_columns=int(value)+1,
 					"help":"Choose the layout for console, recent and favourite game lists. Left and right move between games in multi-column views."},
+				{"id":"access.region","label":"Console region","kind":"choice","choices":Array(h.emulator.Registry.REGION_LABELS),"default":0,"visual":false,
+					"getter":func(): return maxi(0,h.emulator.Registry.REGIONS.find(h.console_region)),
+					"setter":func(value): h.apply_console_region(h.emulator.Registry.REGIONS[int(value)]); menu.refresh(),
+					"help":"Shows console names and icons as they were sold in your region. Games and saves are not affected."},
 				toggle("access.tv","Menu on the TV",h,"menu_on_tv",true,"Shows the menu on the TV. Adjust with preview keeps it floating over the game.",func(): menu.refresh(),false),
 				toggle("access.depth","Menu depth",h,"menu_depth",true,"When the menu floats, side-by-side 3D places it in front of the TV and dims the room. Off gives a flat menu. Has no effect while the menu is on the TV.",func(): menu.refresh(),false),
 				]),page("Audio & vibration",[

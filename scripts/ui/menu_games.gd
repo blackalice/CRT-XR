@@ -47,7 +47,7 @@ func library_items() -> Array:
 		var id: String=system
 		var count: int=menu.rom_index.games.get(id,[]).size()
 		if count==0: continue
-		result.append(menu.card(menu.catalog.action("library.system."+id,menu.library.Registry.SYSTEMS[id].get("short",menu.library.Registry.SYSTEMS[id].name),func(): open_system(id),"",false,"%d game%s" % [count,"" if count==1 else "s"]),identity.get(id,["CONSOLE","c3cbd9"])[0],id,Color(identity.get(id,["CONSOLE","c3cbd9"])[1]),"YOUR CONSOLES"))
+		result.append(menu.card(menu.catalog.action("library.system."+id,menu.library.Registry.SYSTEMS[id].name,func(): open_system(id),"",false,"%d game%s" % [count,"" if count==1 else "s"]),identity.get(id,["CONSOLE","c3cbd9"])[0],menu.library.Registry.SYSTEMS[id].get("icon",id),Color(identity.get(id,["CONSOLE","c3cbd9"])[1]),"YOUR CONSOLES"))
 	if h.default_rom_dir.is_empty():
 		result.push_front(menu.card(menu.catalog.action("library.setup","Set up your ROM library",open_library_tools,"Choose the folder containing snes, nes, megadrive and your other systems. Subfolders are included automatically."),"START HERE","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP"))
 	var detail := "Choose your main ROM folder" if h.default_rom_dir.is_empty() else "Folders · SD cards · Refresh"
