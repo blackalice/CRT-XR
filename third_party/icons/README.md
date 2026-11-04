@@ -35,7 +35,7 @@ tiles, row,column) and recoloured to white for tinting, otherwise unchanged exce
 
 ## Console icons by Tatohead
 
-Fourteen console icons in `assets/icons/consoles/` are from **Console-Iconset**
+Twenty-three console icons in `assets/icons/consoles/` are from **Console-Iconset**
 by Tatohead (https://github.com/Tatohead/Console-Iconset), used unmodified at
 their native 32×32 and drawn at twice their size.
 
@@ -61,9 +61,18 @@ Credit: console icons by Tatohead, https://github.com/Tatohead/Console-Iconset.
 | `consoles/segacd.png` | `Console/Sega/Sega Genesis - Mega Drive/GenesisSegaCD.png` |
 | `consoles/psx.png` | `Console/Sony/Playstation.png` |
 | `consoles/n64.png` | `Console/Nintendo/N64/N64.png` |
+| `consoles/gamecube.png` | `Console/Nintendo/GameCube/GameCube.png` |
+| `consoles/dreamcast.png` | `Console/Sega/Sega Dreamcast/Dreamcast.png` |
 | `consoles/atari2600.png` | `Console/Atari/Atari 2600/Atari2600.png` |
 | `consoles/atarilynx.png` | `Console/Atari/Atari Lynx/AtariLynx.png` |
 | `consoles/ngpc.png` | `Console/Snk/NeoGeoPocket/NeogeoPocket.png` |
+| `consoles/snes_ntsc.png` | `Console/Nintendo/SNES/SNES.png` |
+| `consoles/famicom.png` | `Console/Nintendo/Famicom-NES/Famicom.png` |
+| `consoles/megadrive_eu.png` | `Console/Sega/Sega Genesis - Mega Drive/Genesis2.png` |
+| `consoles/megacd.png` | `Console/Sega/Sega Genesis - Mega Drive/GenesisSegaCDb.png` |
+| `consoles/mastersystem_jp.png` | `Console/Sega/Sega Master System/SegaMarkIII.png` |
+| `consoles/turbografx.png` | `Console/NEC/PC Engine TurboGrafx-16/TurboGrafx-16.png` |
+| `consoles/dreamcast_blue.png` | `Console/Sega/Sega Dreamcast/Dreamcastb.png` |
 
 The Vectrex and the library cards (Recent, Favourites, Locations, Videos) are
 original to CRT XR. The icons depict the consoles' hardware; console names,

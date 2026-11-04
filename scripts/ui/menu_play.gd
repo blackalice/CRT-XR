@@ -18,6 +18,7 @@ func state_items() -> Array:
 		var slot: int=i
 		var path: String=host.emulator.state_path(slot)
 		var saved: bool=FileAccess.file_exists(path)
+		if saved: menu.state_previews.request(path)
 		var help: String=("Replaces this save with the game as it is now." if saved else "Saves the game as it is now.") if states_saving else ("Returns to this point. Progress since then is lost." if saved else "Nothing is saved here yet.")
 		var item: Dictionary=menu.entry(menu.catalog.action("state.%d" % slot,"Slot %d" % (slot+1),func(): choose_state(slot),help,not states_saving and not saved,""),"","","","Saved "+menu.ago(host.emulator.state_stamp(path)) if saved else "Empty")
 		item["thumbnail_path"]=path; item["thumbnail_icon"]="save"; item["thumbnail_size"]=Vector2(64,48); item["thumbnail"]=state_picture(path)
@@ -25,7 +26,7 @@ func state_items() -> Array:
 	return result
 
 static func state_picture(path: String) -> Texture2D:
-	var details: Dictionary=preload("res://scripts/emulation/emulation_session.gd").state_details(path)
+	var details: Dictionary=preload("res://scripts/emulation/emulation_session.gd").state_metadata(path)
 	if not details.get("thumbnail") is PackedByteArray: return null
 	var image := Image.new()
 	return ImageTexture.create_from_image(image) if image.load_png_from_buffer(details.thumbnail)==OK else null
@@ -85,8 +86,14 @@ func state_action(saving: bool) -> void:
 	else: perform_state_action(true)
 
 func reset_game() -> void:
-	menu.ask("Reset the game?","Restarts %s as if you pressed the console's reset button. Progress since your last save is lost; battery saves and save states are kept." % host.emulator.rom_path.get_file().get_basename(),func():
-		if host.emulator.reset_game(): host.close_settings(); host.show_notice(host.emulator.status)
+	menu.ask("Reset the game?", "Restarts %s as if you pressed the console's reset button. Progress since your last save is lost; battery saves and save states are kept." % host.emulator.rom_path.get_file().get_basename(), func():
+		if host.emulator.transition_busy: return
+		var origin_mode: String = menu.mode
+		var success: bool = await host.emulator.reset_game_async()
+		if not host.loading_path.is_empty(): return
+		if success:
+			if menu.mode == origin_mode: host.close_settings()
+			host.show_notice(host.emulator.status)
 		else: menu.show_error(host.emulator.status))
 
 ## Multi-disc games (an .m3u playlist) swap to the next disc, wrapping round, as
@@ -103,7 +110,12 @@ func change_disc(index: int, _count: int) -> void:
 		else: menu.show_error(host.emulator.status))
 
 func perform_state_action(saving: bool, slot := 0) -> void:
-	var succeeded: bool = host.emulator.save_state(slot) if saving else host.emulator.load_state(slot)
+	call("_perform_state_action", saving, slot)
+
+func _perform_state_action(saving: bool, slot: int) -> void:
+	if host.emulator.transition_busy: return
+	var succeeded: bool = await host.emulator.save_state_async(slot) if saving else await host.emulator.load_state_async(slot)
+	if not host.loading_path.is_empty(): return
 	if succeeded:
 		host.show_notice(host.emulator.status)
 		# A loaded save is where you want to be: back to the game.
@@ -143,9 +155,16 @@ func home_items() -> Array:
 	return home+main+menu.music.music_actions()+menu.quick_controls()+tiles
 
 ## The pause menu while a game is loaded: Resume leads, actions sit in tiles.
+func resume_game() -> void:
+	if not host.close_settings(): return
+	if host.emulator.loaded and host.visualizer.active:
+		host.visualizer.leave()
+		host.was_paused_before_menu = false
+		host.emulator.set_paused(false)
+
 func pause_items() -> Array:
 	var h=host
-	var resume: Dictionary = menu.entry(menu.catalog.action("resume","Resume",h.close_settings,"Return to the game with your settings saved.",not h.emulator.loaded,""),"","play")
+	var resume: Dictionary = menu.entry(menu.catalog.action("resume","Resume",resume_game,"Return to the game with your settings saved.",not h.emulator.loaded,""),"","play")
 	resume["hero"] = true
 	resume["min_height"] = 56
 	var result: Array = [resume]

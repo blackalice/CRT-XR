@@ -18,6 +18,64 @@ const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
 ## Page builders and actions, one helper per area; each reaches the menu and host.
+var state_previews := preload("res://scripts/emulation/state_previews.gd").new()
+var preparing_pause := false
+var pause_cache := {}
+var pause_cache_owner: Control
+
+func prepare_pause() -> void:
+	if visible or preparing_pause: return
+	preparing_pause = true
+	while host.loading_game or host.emulator.transition_busy:
+		await get_tree().process_frame
+		if visible:
+			preparing_pause = false
+			return
+	var previous_mode := mode
+	var previous_preview := preview
+	var previous_selection := selected_id
+	var previous_revision := layout_revision
+	mode = "pause"
+	preview = false
+	await _render(true)
+	if not visible and layout_revision == previous_revision + 1:
+		mode = previous_mode
+		preview = previous_preview
+		selected_id = previous_selection
+	preparing_pause = false
+
+func pause_row_shape(definition: Dictionary) -> Dictionary:
+	var shape := {}
+	for key in definition:
+		if key in ["label", "disabled", "disabled_reason", "value", "help", "nav_row", "nav_col", "tile_index", "tile_count", "tile_columns"] or typeof(definition[key]) == TYPE_CALLABLE: continue
+		shape[key] = definition[key]
+	if definition.get("layout", "") == "transport" and definition.get("icon", "") in ["play", "pause"]: shape["icon"] = "play_pause"
+	return shape
+
+func pause_style() -> Array:
+	return [host.menu_large_text, host.menu_high_contrast, input_kind]
+
+func pause_shape(definitions: Array) -> String:
+	return JSON.stringify([definitions.map(pause_row_shape), pause_style()])
+
+func park_layout() -> void:
+	if not is_instance_valid(pause_cache_owner):
+		pause_cache_owner = Control.new()
+		pause_cache_owner.hide()
+		pause_cache_owner.process_mode = Node.PROCESS_MODE_DISABLED
+		add_child(pause_cache_owner)
+	for child in column.get_children():
+		column.remove_child(child)
+		if child in pause_cache.get("children", []): pause_cache_owner.add_child(child)
+		else: child.queue_free()
+
+func discard_pause_cache() -> void:
+	for child in pause_cache.get("children", []):
+		if is_instance_valid(child):
+			child.get_parent().remove_child(child)
+			child.queue_free()
+	pause_cache = {}
+
 var backdrop: ColorRect
 var help_frame: PanelContainer
 var subtitle_row: HBoxContainer
@@ -31,6 +89,7 @@ var games := preload("res://scripts/ui/menu_games.gd").new()
 var play := preload("res://scripts/ui/menu_play.gd").new()
 var keys := preload("res://scripts/ui/menu_keys.gd").new()
 var controls := preload("res://scripts/ui/menu_controls.gd").new()
+var welcome := preload("res://scripts/ui/menu_welcome.gd").new()
 ## File screens share one structure: where you are (the location bar), what
 ## you can do here (THIS FOLDER), what is inside (CONTENTS) and other places
 ## (GO TO). Section names are shown as small headers between rows.
@@ -88,9 +147,17 @@ var sidebar_panel: PanelContainer
 var section_rule: ColorRect
 var section_bar: HBoxContainer
 var section_tabs: HBoxContainer
+var section_block: VBoxContainer
+var section_scroll: ScrollContainer
+## How far a tab's underline reaches below its text to sit on the baseline rule.
+const SECTION_UNDERLINE_REACH := 8
 var scroll: ScrollContainer
 var column: VBoxContainer
 var compact: Label
+## Rows that stay put below a scrolling page, such as first-run setup's Next.
+var pinned: VBoxContainer
+## First-run setup's six step marks, beside the subtitle.
+var step_marks: HBoxContainer
 var confirm_panel: PanelContainer
 var music_heading: Label
 ## The Now playing deck's second line, and what fills both lines.
@@ -162,7 +229,11 @@ func begin_boot() -> void:
 
 
 func _ready() -> void:
-	for helper in [pictures,videos,music,games,play,keys,controls]: helper.host=host; helper.menu=self
+	add_child(state_previews)
+	state_previews.ready_for.connect(func(path):
+		if not visible: return
+		if items.any(func(item): return item.get("thumbnail_path", "") == path) or (mode == "launch" and host.emulator.auto_path_for(games.launch_path) == path) or (mode == "confirm" and confirmation.get("preview", "") == path): refresh())
+	for helper in [pictures,videos,music,games,play,keys,controls,welcome]: helper.host=host; helper.menu=self
 	theme = MenuSkin.create()
 	host.box_art.art_ready.connect(thumbnail_arrived)
 	sound_player=AudioStreamPlayer.new(); sound_player.volume_db=-28; add_child(sound_player)
@@ -225,6 +296,9 @@ func _ready() -> void:
 	subtitle_row = HBoxContainer.new(); subtitle_row.add_theme_constant_override("separation",8)
 	scan_icon = RowIcon.new("scan", MenuSkin.AMBER); scan_icon.hide()
 	subtitle_row.add_child(scan_icon); subtitle_row.add_child(subtitle)
+	step_marks = HBoxContainer.new(); step_marks.add_theme_constant_override("separation",4)
+	step_marks.size_flags_vertical = Control.SIZE_SHRINK_CENTER; step_marks.hide()
+	subtitle_row.add_child(step_marks)
 	layout.add_child(subtitle_row)
 	location_bar=LocationBar.new(); location_bar.hide(); layout.add_child(location_bar)
 	# Messages name controls in braces ("press {R1}"): drawn as the same glyphs as the hints.
@@ -302,13 +376,29 @@ func _ready() -> void:
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation",8)
 	body.add_child(content)
+	# Bar and baseline rule sit flush in one block so a tab's underline can land on
+	# the rule while the tabs themselves live in a clipping scroll strip.
+	section_block = VBoxContainer.new()
+	section_block.add_theme_constant_override("separation",0)
+	content.add_child(section_block)
 	section_bar = HBoxContainer.new()
 	section_bar.add_theme_constant_override("separation",6)
-	content.add_child(section_bar)
+	section_block.add_child(section_bar)
+	# Tabs keep their size; when a category has more than fits, the strip scrolls
+	# sideways to keep the chosen tab in view instead of widening the page.
+	section_scroll = ScrollContainer.new()
+	section_scroll.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	section_scroll.horizontal_scroll_mode=ScrollContainer.SCROLL_MODE_SHOW_NEVER
+	section_scroll.vertical_scroll_mode=ScrollContainer.SCROLL_MODE_DISABLED
+	section_scroll.follow_focus=false
+	section_bar.add_child(section_scroll)
+	var tabs_margin := MarginContainer.new()
+	tabs_margin.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	tabs_margin.add_theme_constant_override("margin_bottom",SECTION_UNDERLINE_REACH)
+	section_scroll.add_child(tabs_margin)
 	section_tabs = HBoxContainer.new()
-	section_tabs.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	section_tabs.add_theme_constant_override("separation",8)
-	section_bar.add_child(section_tabs)
+	tabs_margin.add_child(section_tabs)
 	section_hint=key_hint(); section_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	section_hint.tooltip_text="Previous / next section"
 	section_bar.add_child(section_hint)
@@ -316,7 +406,7 @@ func _ready() -> void:
 	section_bar.add_child(section_pad_hint)
 	# A baseline under the tabs; the chosen tab's underline sits on it.
 	section_rule=ColorRect.new(); section_rule.color=Color("3a3f46"); section_rule.custom_minimum_size.y=1
-	section_rule.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(section_rule)
+	section_rule.mouse_filter=Control.MOUSE_FILTER_IGNORE; section_block.add_child(section_rule)
 	scroll = ScrollContainer.new()
 	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
@@ -352,6 +442,8 @@ func _ready() -> void:
 	compact.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	compact.add_theme_color_override("font_color",MenuSkin.AMBER)
 	layout.add_child(compact); compact.hide()
+	pinned = VBoxContainer.new(); pinned.add_theme_constant_override("separation",6)
+	layout.add_child(pinned); pinned.hide()
 	help_label = GlyphText.new("", 20, Color("09132b"))
 	help_label.controller=input_kind=="controller"
 	help_label.custom_minimum_size.y = 64
@@ -434,6 +526,7 @@ func state_key() -> String:
 		"my_preset": return "my_preset:%d" % pictures.my_preset
 		"my_room": return "my_room:%d" % my_room
 		"states": return "states:%s" % play.states_saving
+		"welcome": return "welcome:"+welcome.step
 	return mode
 
 func remember() -> void:
@@ -446,6 +539,8 @@ func refresh() -> void:
 
 func open_pause() -> void:
 	remember(); clear_input()
+	# Opening the menu starts from a clean slate: no half-finished edit or rename.
+	editing_id = ""; rename_room = -1; rename_preset = -1; entry_initialized = false
 	mode = "pause"; preview = false
 	selected_id = "resume" if host.emulator.loaded or host.video.loaded else ("home.continue" if FileAccess.file_exists(host.last_game_path) else "home.library")
 	memory[state_key()] = {"id":selected_id,"scroll":0}
@@ -469,6 +564,20 @@ func switch_category(delta: int) -> void:
 	subsection = int(sections.get(category,0))
 	render()
 	if category != previous: play_navigation_click()
+
+## Scrolls the tab strip so the chosen tab, plus a little of its neighbours, is in
+## view. Waits a frame because freshly built tabs have no layout yet.
+func reveal_section_tab(tab: Control) -> void:
+	await get_tree().process_frame
+	if not is_instance_valid(tab) or not is_instance_valid(section_scroll): return
+	var view := section_scroll.size.x
+	var slack := 48.0
+	var left := tab.position.x - slack
+	var right := tab.position.x + tab.size.x + slack
+	var scroll_x := float(section_scroll.scroll_horizontal)
+	if left < scroll_x: scroll_x = left
+	elif right > scroll_x + view: scroll_x = right - view
+	section_scroll.scroll_horizontal = int(maxf(scroll_x, 0.0))
 
 func switch_section(delta: int) -> void:
 	if mode!="settings" or preview: return
@@ -496,13 +605,19 @@ func back() -> void:
 		"pause": host.close_settings()
 		"settings", "library": mode="pause"; render()
 		"library_tools": mode="library"; render()
-		"browser", "volumes", "drives": mode="library_tools"; render()
+		"browser", "volumes", "drives":
+			# A folder picker opened by first-run setup returns to it.
+			if welcome.choosing=="library": welcome.resume()
+			else: mode="library_tools"; render()
 		"games", "recent", "favourites": mode="library"; render()
 		"alphabet": mode=games.alphabet_origin; render()
 		"launch": restore(games.launch_origin)
 		"slot": mode="settings"; render()
 		"folder_path": restore(games.folder_path_origin)
-		"rename": mode="my_room" if rename_room>=0 else ("my_preset" if rename_preset>=0 else "slot"); render()
+		"rename":
+			mode="my_room" if rename_room>=0 else ("my_preset" if rename_preset>=0 else "slot")
+			# The targets belong to this rename only; a later rename sets its own.
+			rename_room=-1; rename_preset=-1; render()
 		"my_preset", "my_room": mode="settings"; render()
 		"states": mode="pause"; render()
 		"music_browser": restore(music.music_origin)
@@ -516,6 +631,7 @@ func back() -> void:
 		"radio_url": mode="settings"; render()
 		"help": restore(help_origin)
 		"confirm": restore(return_state)
+		"welcome": welcome.back()
 
 func ask(title: String, detail: String, callback: Callable, preview_path := "") -> void:
 	remember(); return_state = snapshot(); clear_input()
@@ -751,6 +867,7 @@ func get_items() -> Array:
 		"recent", "favourites": return games.history_items()
 		"settings": return catalog.pages(category)[subsection].rows
 		"help": return []
+		"welcome": return welcome.items()
 		"library": return games.library_items()
 		"library_tools": return games.library_tool_items()
 		"games": return games.console_items()
@@ -769,7 +886,7 @@ func get_items() -> Array:
 			var saved := FileAccess.file_exists(h.profile_path()) or FileAccess.file_exists(h.profile_path()+".bak")
 			return [catalog.action("slot.save","Save current setup",save_setup,"Stores current room, view and picture in this slot."),
 				catalog.unavailable(catalog.action("slot.load","Load setup",h.load_profile,"Apply this slot while retaining display mode and tracking provider.",not saved),"Save a setup to this slot first."),
-				catalog.action("slot.rename","Rename slot",func(): rename_preset=-1; mode="rename"; entry_initialized=false; clear_input(); render(); keys.focus_entry(),"Use the on-screen keys or a physical keyboard."),
+				catalog.action("slot.rename","Rename slot",func(): rename_preset=-1; rename_room=-1; mode="rename"; entry_initialized=false; clear_input(); render(); keys.focus_entry(),"Use the on-screen keys or a physical keyboard."),
 				catalog.unavailable(catalog.action("slot.undo","Undo last setup load",h.undo_profile,"Restores the settings from before the last setup load.",h.profile_undo==null),"Available after loading a setup.")]
 		"folder_path": return keys.text_keys()+[catalog.action("folder_path.open","Open folder",games.submit_folder_path,"Opens a local folder or a network share you can access in Windows."),catalog.action("folder_path.cancel","Cancel",back)]
 		"my_preset": return pictures.items()
@@ -782,167 +899,211 @@ func get_items() -> Array:
 	return []
 
 func render() -> void:
-	if not is_instance_valid(column) or not visible: return
+	# Normal page changes keep the existing synchronous API. Background
+	# preparation is the only branch that yields between construction batches.
+	call("_render", false)
+
+func _render(incremental: bool) -> void:
+	if not is_instance_valid(column) or (not visible and not incremental): return
+	var profile_start := Time.get_ticks_usec()
+	var profile_stages := {}
 	exit_selected=false
 	rendering = true
 	layout_revision+=1
+	var build_revision := layout_revision
+	for child in pinned.get_children(): pinned.remove_child(child); child.queue_free()
 	items = get_items()
+	profile_stages["items_us"] = Time.get_ticks_usec() - profile_start
+	var profile_stage := Time.get_ticks_usec()
 	if preview:
-		items = items.filter(func(item): return item.get("quick_preview",false) if mode == "pause" else item.get("visual",false))
+		items = items.filter(func(item): return item.get("quick_preview",false) if mode in ["pause","welcome"] else item.get("visual",false))
 		if mode == "pause":
 			for item in items: item.erase("layout")
 	column.add_theme_constant_override("separation", 4 if mode == "pause" else 6)
 	help_label.custom_minimum_size.y = 32 if mode == "pause" else 64
-	for child in column.get_children(): column.remove_child(child); child.queue_free()
-	rows.clear()
-	var group := ""
-	var section := ""
-	var grid: GridContainer
-	music_heading=null; deck_detail=null
-	var accordion_group := ""
-	var accordion_layout: VBoxContainer
-	var accordion_body: VBoxContainer
-	var music_layout: VBoxContainer
-	var transport_grid: HBoxContainer
-	var group_row := -1
-	var group_index := 0
-	var tiles: GridContainer
-	var tile_group := ""
-	var tile_counts := {}
-	var tile_numbers := {}
-	var game_grid: GridContainer
-	var game_grid_count := items.filter(func(entry): return entry.get("layout", "")=="game" and entry.has("rom_path")).size()
-	var game_grid_index := 0
-	for entry in items:
-		if entry.get("layout","")=="tile":
-			var named := str(entry.get("group","tiles")); tile_counts[named]=int(tile_counts.get(named,0))+1
-	for item in items:
-		var parent: Container=column
-		if item.get("layout","") in ["transport","music_seek","music_link","video_resume","video_seek"]:
-			if music_layout==null:
-				var watching: bool = items.any(func(entry): return str(entry.get("layout","")).begins_with("video_"))
-				var helper = videos if watching else music
-				# The Now playing deck, after the Mega-CD control panel: the LCD
-				# and the title, the timeline, then one row of keys.
-				# The well fills the panel; the deck sits inside it, inset.
-				var panel := PanelContainer.new(); panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
-				panel.add_child(MenuSkin.pixel_panel("music_well"))
-				var inset := MarginContainer.new()
-				for side in ["left","top","right","bottom"]: inset.add_theme_constant_override("margin_"+side,8)
-				panel.add_child(inset); column.add_child(panel)
-				music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",6); inset.add_child(music_layout)
-				var display := HBoxContainer.new(); display.add_theme_constant_override("separation",12); music_layout.add_child(display)
-				var lcd := LcdReadout.new(); lcd.source=helper.deck_state; display.add_child(lcd)
-				var words := VBoxContainer.new(); words.add_theme_constant_override("separation",0)
-				words.size_flags_horizontal=Control.SIZE_EXPAND_FILL; words.alignment=BoxContainer.ALIGNMENT_CENTER; display.add_child(words)
-				music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
-				deck_detail=Label.new(); deck_detail.add_theme_font_size_override("font_size",16); deck_detail.add_theme_color_override("font_color",MenuSkin.MUTED)
-				for line in [music_heading,deck_detail]:
-					line.autowrap_mode=TextServer.AUTOWRAP_OFF; line.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-					MenuSkin.shadow(line); words.add_child(line)
-				deck_text=helper.deck_text
-			if item.layout=="transport":
-				if transport_grid==null:
-					transport_grid=HBoxContainer.new(); transport_grid.add_theme_constant_override("separation",6); music_layout.add_child(transport_grid)
-				parent=transport_grid
-			else: parent=music_layout
-		if item.get("layout","")=="card":
-			if item.group!=group:
-				if grid!=null: group_row+=ceili(float(group_index)/2.0)
-				else: group_row=0
-				group=item.group; group_index=0
-				var label := Label.new(); label.text=group; label.add_theme_font_size_override("font_size",16); MenuSkin.weigh(label,MenuSkin.BOLD); label.add_theme_color_override("font_color",MenuSkin.MUTED); column.add_child(label)
-				grid=GridContainer.new();grid.columns=2;grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);column.add_child(grid)
-			parent=grid
-			item["nav_row"]=group_row+group_index/2; item["nav_col"]=group_index%2; group_index+=1
-		if item.get("layout","")=="tile":
-			var named := str(item.get("group","tiles"))
-			if tiles==null or named!=tile_group:
-				tile_group=named
-				# A group can carry its own heading, above its grid.
-				if item.has("section") and item.section!=section:
-					section=item.section
-					var heading := Label.new(); heading.text=section; heading.add_theme_font_size_override("font_size",16); MenuSkin.weigh(heading,MenuSkin.BOLD); heading.add_theme_color_override("font_color",MenuSkin.MUTED)
-					column.add_child(heading)
-				tiles=GridContainer.new(); tiles.columns=int(item.get("columns",2)); tiles.add_theme_constant_override("h_separation",8); tiles.add_theme_constant_override("v_separation",6); column.add_child(tiles)
-			parent=tiles
-			item["tile_index"]=int(tile_numbers.get(named,0)); item["tile_count"]=int(tile_counts[named]); item["tile_columns"]=tiles.columns
-			tile_numbers[named]=int(item.tile_index)+1
-		if mode in ["games", "recent", "favourites"] and host.game_list_columns > 1 and item.get("layout", "") == "game" and item.has("rom_path"):
-			if game_grid == null:
-				game_grid = GridContainer.new(); game_grid.columns = host.game_list_columns
-				game_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-				game_grid.add_theme_constant_override("h_separation", 8); game_grid.add_theme_constant_override("v_separation", 6)
-				column.add_child(game_grid)
-			parent = game_grid
-			item["game_grid"] = true; item["tile_index"] = game_grid_index
-			item["tile_count"] = game_grid_count; item["tile_columns"] = host.game_list_columns
-			item["min_height"] = 108 if host.game_list_columns == 2 else 124
-			game_grid_index += 1
-		if item.get("layout","") in ["letter","key"]:
-			if grid==null:
-				grid=GridContainer.new(); grid.columns=10 if item.get("layout","")=="key" else 6; grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); column.add_child(grid)
-			parent=grid
-			item["nav_row"]=group_index/grid.columns; item["nav_col"]=group_index%grid.columns; group_index+=1
-		if item.has("section") and item.section!=section and item.get("layout","")!="card":
-			if not section.is_empty():
-				var gap := Control.new(); gap.custom_minimum_size.y=6; column.add_child(gap)
-			section=item.section
-			var header := Label.new(); header.text=section; header.add_theme_font_size_override("font_size",16); MenuSkin.weigh(header,MenuSkin.BOLD); header.add_theme_color_override("font_color",MenuSkin.MUTED)
-			header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			column.add_child(header)
-		if item.has("section_detail"):
-			var detail := Label.new()
-			detail.text = item.section_detail
-			detail.add_theme_font_size_override("font_size",16)
-			detail.add_theme_color_override("font_color",MenuSkin.MUTED)
-			detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-			column.add_child(detail)
-		if item.has("accordion_group"):
-			if accordion_group != item.accordion_group:
-				accordion_group = item.accordion_group
-				accordion_body = null
-				var group_panel := PanelContainer.new()
-				group_panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
-				group_panel.add_child(MenuSkin.pixel_panel("well"))
-				accordion_layout = VBoxContainer.new()
-				accordion_layout.add_theme_constant_override("separation",2)
-				group_panel.add_child(accordion_layout)
-				column.add_child(group_panel)
-			parent = accordion_layout
-			if item.get("accordion_child",false):
-				if accordion_body == null:
+	var pause_key := pause_shape(items) if mode == "pause" and not preview else ""
+	var reuse_pause: bool = not pause_key.is_empty() and pause_cache.get("key", "") == pause_key
+	if reuse_pause:
+		if column.get_children() != pause_cache.children:
+			park_layout()
+			for child in pause_cache.children:
+				child.get_parent().remove_child(child)
+				column.add_child(child)
+		rows = pause_cache.rows.duplicate()
+		music_heading = pause_cache.music_heading
+		deck_detail = pause_cache.deck_detail
+		deck_text = pause_cache.deck_text
+		for i in range(rows.size()):
+			for key in ["nav_row", "nav_col", "tile_index", "tile_count", "tile_columns"]:
+				if rows[i].item.has(key): items[i][key] = rows[i].item[key]
+			rows[i].item = items[i]
+			rows[i].refresh()
+	else:
+		if not pause_key.is_empty(): discard_pause_cache()
+		park_layout()
+		rows.clear()
+		profile_stages["clear_us"] = Time.get_ticks_usec() - profile_stage
+		profile_stage = Time.get_ticks_usec()
+		var group := ""
+		var section := ""
+		var grid: GridContainer
+		music_heading=null; deck_detail=null
+		var accordion_group := ""
+		var accordion_layout: VBoxContainer
+		var accordion_body: VBoxContainer
+		var music_layout: VBoxContainer
+		var transport_grid: HBoxContainer
+		var group_row := -1
+		var group_index := 0
+		var tiles: GridContainer
+		var tile_group := ""
+		var tile_counts := {}
+		var tile_numbers := {}
+		var game_grid: GridContainer
+		var game_grid_count := items.filter(func(entry): return entry.get("layout", "")=="game" and entry.has("rom_path")).size()
+		var game_grid_index := 0
+		for entry in items:
+			if entry.get("layout","")=="tile":
+				var named := str(entry.get("group","tiles")); tile_counts[named]=int(tile_counts.get(named,0))+1
+		var slice_started := Time.get_ticks_usec()
+		for item in items:
+			if incremental and Time.get_ticks_usec() - slice_started >= 3000:
+				await get_tree().process_frame
+				if layout_revision != build_revision: return
+				slice_started = Time.get_ticks_usec()
+			var parent: Container=pinned if item.get("pinned",false) else column
+			if item.get("layout","") in ["transport","music_seek","music_link","video_resume","video_seek"]:
+				if music_layout==null:
+					var watching: bool = items.any(func(entry): return str(entry.get("layout","")).begins_with("video_"))
+					var helper = videos if watching else music
+					# The Now playing deck, after the Mega-CD control panel: the LCD
+					# and the title, the timeline, then one row of keys.
+					# The well fills the panel; the deck sits inside it, inset.
+					var panel := PanelContainer.new(); panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
+					panel.add_child(MenuSkin.pixel_panel("music_well"))
 					var inset := MarginContainer.new()
-					inset.add_theme_constant_override("margin_left",10)
-					inset.add_theme_constant_override("margin_right",10)
-					inset.add_theme_constant_override("margin_top",6)
-					inset.add_theme_constant_override("margin_bottom",10)
-					accordion_layout.add_child(inset)
-					accordion_body = VBoxContainer.new()
-					accordion_body.add_theme_constant_override("separation",2)
-					inset.add_child(accordion_body)
-				parent = accordion_body
-		if item.id in ["exit","home.exit"] and item.get("layout","")!="tile":
-			var divider := HSeparator.new()
-			column.add_child(divider)
-		var row = MusicIcon.new() if item.get("layout","")=="transport" else (MusicTimeline.new() if item.kind=="seek" else (LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))))
-		parent.add_child(row); row.configure(item)
-		if item.get("layout","")=="tile": row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-		row.selected.connect(select)
-		row.adjust_requested.connect(func(id,delta):
-			select(id,false)
-			if selected_id==id: adjust(delta))
-		row.pressed.connect(func(): select(item.id,false); activate())
-		if item.get("layout","") in ["letter","key"]:
-			row.custom_minimum_size=Vector2(58 if item.get("layout","")=="key" else 84,46); row.value_label.hide()
-			if item.get("layout","")=="key":
-				for child in row.get_children(): child.hide()
-				row.text=item.label; row.add_theme_font_size_override("font_size",18)
-		rows.append(row)
+					for side in ["left","top","right","bottom"]: inset.add_theme_constant_override("margin_"+side,8)
+					panel.add_child(inset); column.add_child(panel)
+					music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",6); inset.add_child(music_layout)
+					var display := HBoxContainer.new(); display.add_theme_constant_override("separation",12); music_layout.add_child(display)
+					var lcd := LcdReadout.new(); lcd.source=helper.deck_state; display.add_child(lcd)
+					var words := VBoxContainer.new(); words.add_theme_constant_override("separation",0)
+					words.size_flags_horizontal=Control.SIZE_EXPAND_FILL; words.alignment=BoxContainer.ALIGNMENT_CENTER; display.add_child(words)
+					music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
+					deck_detail=Label.new(); deck_detail.add_theme_font_size_override("font_size",16); deck_detail.add_theme_color_override("font_color",MenuSkin.MUTED)
+					for line in [music_heading,deck_detail]:
+						line.autowrap_mode=TextServer.AUTOWRAP_OFF; line.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+						MenuSkin.shadow(line); words.add_child(line)
+					deck_text=helper.deck_text
+				if item.layout=="transport":
+					if transport_grid==null:
+						transport_grid=HBoxContainer.new(); transport_grid.add_theme_constant_override("separation",6); music_layout.add_child(transport_grid)
+					parent=transport_grid
+				else: parent=music_layout
+			if item.get("layout","")=="card":
+				if item.group!=group:
+					if grid!=null: group_row+=ceili(float(group_index)/2.0)
+					else: group_row=0
+					group=item.group; group_index=0
+					var label := Label.new(); label.text=group; label.add_theme_font_size_override("font_size",16); MenuSkin.weigh(label,MenuSkin.BOLD); label.add_theme_color_override("font_color",MenuSkin.MUTED); column.add_child(label)
+					grid=GridContainer.new();grid.columns=2;grid.add_theme_constant_override("h_separation",10);grid.add_theme_constant_override("v_separation",10);column.add_child(grid)
+				parent=grid
+				item["nav_row"]=group_row+group_index/2; item["nav_col"]=group_index%2; group_index+=1
+			if item.get("layout","")=="tile":
+				var named := str(item.get("group","tiles"))
+				if tiles==null or named!=tile_group:
+					tile_group=named
+					# A group can carry its own heading, above its grid.
+					if item.has("section") and item.section!=section:
+						section=item.section
+						var heading := Label.new(); heading.text=section; heading.add_theme_font_size_override("font_size",16); MenuSkin.weigh(heading,MenuSkin.BOLD); heading.add_theme_color_override("font_color",MenuSkin.MUTED)
+						column.add_child(heading)
+					tiles=GridContainer.new(); tiles.columns=int(item.get("columns",2)); tiles.add_theme_constant_override("h_separation",8); tiles.add_theme_constant_override("v_separation",6); column.add_child(tiles)
+				parent=tiles
+				item["tile_index"]=int(tile_numbers.get(named,0)); item["tile_count"]=int(tile_counts[named]); item["tile_columns"]=tiles.columns
+				tile_numbers[named]=int(item.tile_index)+1
+			if mode in ["games", "recent", "favourites"] and host.game_list_columns > 1 and item.get("layout", "") == "game" and item.has("rom_path"):
+				if game_grid == null:
+					game_grid = GridContainer.new(); game_grid.columns = host.game_list_columns
+					game_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+					game_grid.add_theme_constant_override("h_separation", 8); game_grid.add_theme_constant_override("v_separation", 6)
+					column.add_child(game_grid)
+				parent = game_grid
+				item["game_grid"] = true; item["tile_index"] = game_grid_index
+				item["tile_count"] = game_grid_count; item["tile_columns"] = host.game_list_columns
+				item["min_height"] = 108 if host.game_list_columns == 2 else 124
+				game_grid_index += 1
+			if item.get("layout","") in ["letter","key"]:
+				if grid==null:
+					grid=GridContainer.new(); grid.columns=10 if item.get("layout","")=="key" else 6; grid.add_theme_constant_override("h_separation",8); grid.add_theme_constant_override("v_separation",8); column.add_child(grid)
+				parent=grid
+				item["nav_row"]=group_index/grid.columns; item["nav_col"]=group_index%grid.columns; group_index+=1
+			if item.has("section") and item.section!=section and item.get("layout","")!="card":
+				if not section.is_empty():
+					var gap := Control.new(); gap.custom_minimum_size.y=6; column.add_child(gap)
+				section=item.section
+				var header := Label.new(); header.text=section; header.add_theme_font_size_override("font_size",16); MenuSkin.weigh(header,MenuSkin.BOLD); header.add_theme_color_override("font_color",MenuSkin.MUTED)
+				header.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				column.add_child(header)
+			if item.has("section_detail"):
+				var detail := Label.new()
+				detail.text = item.section_detail
+				detail.add_theme_font_size_override("font_size",16)
+				detail.add_theme_color_override("font_color",MenuSkin.MUTED)
+				detail.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				column.add_child(detail)
+			if item.has("accordion_group"):
+				if accordion_group != item.accordion_group:
+					accordion_group = item.accordion_group
+					accordion_body = null
+					var group_panel := PanelContainer.new()
+					group_panel.add_theme_stylebox_override("panel",StyleBoxEmpty.new())
+					group_panel.add_child(MenuSkin.pixel_panel("well"))
+					accordion_layout = VBoxContainer.new()
+					accordion_layout.add_theme_constant_override("separation",2)
+					group_panel.add_child(accordion_layout)
+					column.add_child(group_panel)
+				parent = accordion_layout
+				if item.get("accordion_child",false):
+					if accordion_body == null:
+						var inset := MarginContainer.new()
+						inset.add_theme_constant_override("margin_left",10)
+						inset.add_theme_constant_override("margin_right",10)
+						inset.add_theme_constant_override("margin_top",6)
+						inset.add_theme_constant_override("margin_bottom",10)
+						accordion_layout.add_child(inset)
+						accordion_body = VBoxContainer.new()
+						accordion_body.add_theme_constant_override("separation",2)
+						inset.add_child(accordion_body)
+					parent = accordion_body
+			if item.id in ["exit","home.exit"] and item.get("layout","")!="tile":
+				var divider := HSeparator.new()
+				column.add_child(divider)
+			var row = MusicIcon.new() if item.get("layout","")=="transport" else (MusicTimeline.new() if item.kind=="seek" else (LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))))
+			# Build the row while detached so each child/theme change does not
+			# repeatedly invalidate the live menu layout. Attach the finished row once.
+			row.configure(item)
+			parent.add_child(row)
+			if item.get("layout","")=="tile": row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+			row.selected.connect(select)
+			row.adjust_requested.connect(func(id,delta):
+				select(id,false)
+				if selected_id==id: adjust(delta))
+			row.pressed.connect(func(): select(item.id,false); activate())
+			if item.get("layout","") in ["letter","key"]:
+				row.custom_minimum_size=Vector2(58 if item.get("layout","")=="key" else 84,46); row.value_label.hide()
+				if item.get("layout","")=="key":
+					for child in row.get_children(): child.hide()
+					row.text=item.label; row.add_theme_font_size_override("font_size",18)
+			rows.append(row)
+		if not pause_key.is_empty():
+			pause_cache = {"key": pause_key, "children": column.get_children(), "rows": rows.duplicate(), "music_heading": music_heading, "deck_detail": deck_detail, "deck_text": deck_text}
+	profile_stages["rows_us"] = Time.get_ticks_usec() - profile_stage
+	profile_stage = Time.get_ticks_usec()
 	sidebar.visible = mode=="settings" and not preview
 	sidebar_panel.visible = sidebar.visible
 	section_bar.visible = mode=="settings" and not preview and catalog.pages(category).size() > 1
-	section_rule.visible = section_bar.visible
+	section_block.visible = section_bar.visible
 	for i in range(sidebar_buttons.size()):
 		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("3b3329") if i==category else Color.TRANSPARENT,i==category))
 		sidebar_buttons[i].add_theme_color_override("icon_normal_color",MenuSkin.TEXT if i==category else MenuSkin.MUTED)
@@ -961,12 +1122,12 @@ func render() -> void:
 			var tab := Button.new()
 			tab.text = str(pages[i].title)
 			tab.focus_mode=Control.FOCUS_NONE
-			tab.add_theme_font_size_override("font_size",18 if pages.size() >= 6 else (20 if host.menu_large_text else 18))
+			tab.add_theme_font_size_override("font_size",20 if host.menu_large_text else 18)
 			MenuSkin.weigh(tab,MenuSkin.SEMIBOLD if i==subsection else MenuSkin.REGULAR)
 			var tab_style := MenuSkin.box(Color.TRANSPARENT,MenuSkin.AMBER,0,6)
 			tab_style.set_corner_radius_all(0)
 			# Reach down to the baseline rule so the underline sits on it.
-			tab_style.expand_margin_bottom=8
+			tab_style.expand_margin_bottom=SECTION_UNDERLINE_REACH
 			if i==subsection: tab_style.border_width_bottom=3
 			tab.add_theme_stylebox_override("normal",tab_style)
 			tab.add_theme_stylebox_override("pressed",tab_style)
@@ -975,10 +1136,13 @@ func render() -> void:
 			tab.add_theme_color_override("font_color",MenuSkin.TEXT if i==subsection else MenuSkin.MUTED)
 			tab.pressed.connect(func(): switch_section(index-subsection))
 			section_tabs.add_child(tab)
+			if i==subsection: reveal_section_tab.call_deferred(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
-	if mode=="confirm": confirm_panel.describe("",confirmation.detail,confirmation.get("preview",""))
+	if mode=="confirm":
+		state_previews.request(confirmation.get("preview", ""))
+		confirm_panel.describe("",confirmation.detail,confirmation.get("preview",""))
 	rename_field.visible = mode in ["rename","radio_url","folder_path","video_search"]
 	rename_field.max_length=2048 if mode in ["radio_url","folder_path"] else (64 if mode=="video_search" else 32)
 	rename_field.placeholder_text="D:/roms or //server/share/roms" if mode=="folder_path" else "Direct MP3 stream URL" if mode=="radio_url" else ("Part of a video's name" if mode=="video_search" else "Name · Use on-screen keys or type")
@@ -998,10 +1162,14 @@ func render() -> void:
 	subtitle.visible = not preview and not location_bar.visible
 	position = Vector2(36,522) if preview else Vector2(36,28)
 	size = Vector2(888,170) if preview else Vector2(888,664)
-	help_label.visible = not preview and not mode in ["help","library","games","launch"] # These pages use the room for content.
+	help_label.visible = not preview and not mode in ["help","library","games","launch"] and not (mode=="welcome" and welcome.step=="welcome") # These pages use the room for content.
+	# The Welcome page is the boot logo's landing place: no title bar above it.
+	heading.get_parent().visible = not (mode=="welcome" and welcome.step=="welcome")
 	help_frame.visible = help_label.visible
 	if preview: heading.add_theme_font_size_override("font_size",22)
 	else: heading.add_theme_font_size_override("font_size",32)
+	profile_stages["chrome_us"] = Time.get_ticks_usec() - profile_stage
+	profile_stage = Time.get_ticks_usec()
 	var saved: Dictionary = memory.get(state_key(),{})
 	var preferred: String = selected_id if preview else str(saved.get("id",""))
 	if mode=="library" and not scan_preferred_id.is_empty(): preferred=scan_preferred_id
@@ -1037,6 +1205,7 @@ func render() -> void:
 		column.add_child(hero)
 		var preview_panel := ResumePreview.new(); hero.add_child(preview_panel)
 		var auto: String=host.emulator.auto_path_for(games.launch_path)
+		state_previews.request(auto)
 		preview_panel.describe(auto,"Saved " + ago(host.emulator.state_stamp(auto)))
 		var actions := VBoxContainer.new(); actions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; actions.alignment=BoxContainer.ALIGNMENT_CENTER
 		actions.add_theme_constant_override("separation",12); hero.add_child(actions)
@@ -1044,12 +1213,19 @@ func render() -> void:
 		select(selected_id,false)
 	if mode=="help":
 		column.add_child(HelpArticle.build(help_copy,host.menu_large_text))
+	if mode=="welcome": welcome.decorate()
+	pinned.visible = pinned.get_child_count()>0 and not preview
 	if mode=="library" and not rom_index.scanning: scan_preferred_id=""
 	if saved.has("scroll") and not preview: restore_scroll.call_deferred(int(saved.scroll),layout_revision)
 	elif not preview: reveal_after_layout.call_deferred(layout_revision)
 	fit_panel.call_deferred()
 	refresh_labels()
 	hold_frames = SETTLE_FRAMES
+	if host.emulator.profile_frames:
+		profile_stages["incremental"] = incremental
+		profile_stages["finish_us"] = Time.get_ticks_usec() - profile_stage
+		profile_stages["total_us"] = Time.get_ticks_usec() - profile_start
+		print("PROFILE_MENU ", mode, " ", JSON.stringify(profile_stages))
 
 func fit_panel() -> void:
 	position = Vector2(36,522) if preview else Vector2(36,28)
@@ -1152,6 +1328,8 @@ func select(id: String, user_action := true) -> void:
 func reveal_selected() -> void:
 	var row = selected_row()
 	if row==null or preview: return
+	# Pinned rows stay in view below the page; nothing to scroll.
+	if not column.is_ancestor_of(row): return
 	# The first row of a section brings its header with it, so the section's
 	# name is never scrolled just out of view; the top row scrolls fully home.
 	# Rows inside a panel (Now playing, the music player) count as the panel:
@@ -1220,6 +1398,7 @@ func refresh_labels() -> void:
 	elif mode=="states": subtitle.text = host.emulator.rom_path.get_file().get_basename()+" · %d slots" % play.STATE_SLOTS
 	elif mode=="my_room": subtitle.text = "Room %d · %s" % [my_room+1,"✓ In use" if host.rooms.active()=="mine.%d" % my_room else ("Saved" if host.rooms.saved(my_room) else "Empty")]
 	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [pictures.my_preset+1,"✓ Active" if pictures.applied_preset()=="mine.%d" % pictures.my_preset else ("Saved" if pictures.my_preset_saved(pictures.my_preset) else "Empty")]
+	elif mode=="welcome": subtitle.text = welcome.subtitle()
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
 	else: subtitle.text = ""
 	# Highlighted when Picture changes belong to one game or to videos, not everything.
@@ -1228,6 +1407,7 @@ func refresh_labels() -> void:
 	# under the title stays for browsing, where it says where you are.
 	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible and not mode in ["pause","settings"]
 	subtitle_row.visible = subtitle.visible
+	show_step_marks(welcome.number() if mode=="welcome" and subtitle.visible else 0)
 	scan_icon.visible = mode=="library" and rom_index.scanning
 	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0 and notification_context==state_key(): help_label.text = notification
@@ -1250,7 +1430,7 @@ func refresh_labels() -> void:
 	refresh_hints(row)
 
 func preview_available() -> bool:
-	if mode=="pause": return items.any(func(item): return item.get("quick_preview",false))
+	if mode in ["pause","welcome"]: return items.any(func(item): return item.get("quick_preview",false))
 	if mode!="settings": return false
 	return items.any(func(item): return item.get("visual",false) and not item.get("disabled",false) and item.kind!="action")
 
@@ -1267,6 +1447,19 @@ func request_exit() -> void:
 	if mode!="pause": return
 	var detail := "Your place in this video and your settings will be saved." if host.video.loaded else ("An automatic resume point, settings and cartridge SRAM will be saved." if host.emulator.loaded else "Your settings will be saved.")
 	ask("Exit CRT XR?",detail,host.request_exit)
+
+## First-run setup's progress: six marks, the steps reached lit amber.
+func show_step_marks(reached: int) -> void:
+	step_marks.visible = reached > 0
+	if reached <= 0: return
+	if step_marks.get_child_count() != 6:
+		for i in range(6):
+			var mark := Panel.new(); mark.custom_minimum_size = Vector2(26, 8)
+			mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			step_marks.add_child(mark)
+	for i in range(6):
+		var lit := i < reached
+		step_marks.get_child(i).add_theme_stylebox_override("panel", MenuSkin.box(MenuSkin.AMBER if lit else Color("152763"), Color("fff0b0") if lit else Color("526fd0"), 2, 0))
 
 func refresh_hints(row) -> void:
 	var pad := input_kind=="controller"
@@ -1323,6 +1516,7 @@ func refresh_hints(row) -> void:
 	elif mode=="launch":
 		parts.append_array(["A Select" if pad else "Enter Select", ("B " if pad else "Backspace ") + games.launch_return_label()])
 	elif mode=="confirm": parts.append_array(["A Choose" if pad else "Enter Choose","B Cancel" if pad else "Backspace Cancel"])
+	elif mode=="welcome": parts=welcome.hints(row,pad)
 	elif mode in ["folder_path","rename","radio_url"]: parts=["D-pad Keys","A Type",go_back] if pad else ["Type or click keys","Enter Submit",go_back]
 	else: parts.append_array([open,go_back])
 	hints.text=" · ".join(parts)
@@ -1334,6 +1528,7 @@ func footer_pressed(action: String) -> void:
 	elif control in ["B","Backspace"]: back()
 	elif control=="X" and action.ends_with("Preview"): toggle_preview()
 	elif control=="Y" and action.ends_with("Reset"): reset_option()
+	elif control=="X" and action.ends_with("Skip setup"): welcome.skip()
 
 func navigate_library(next: Vector2i) -> void:
 	var row=selected_row()
@@ -1411,6 +1606,8 @@ func navigate(next: Vector2i) -> void:
 				else: select(rows[aligned(candidate, from_row)].item.id)
 				return
 			candidate+=next.y
+		# Setup pages with little to select scroll their content instead.
+		if mode=="welcome": scroll.scroll_vertical+=next.y*80; return
 		if mode=="pause" and next.y>0 and exit_footer.visible:
 			finish_editing(); exit_selected=true
 			for row in rows: row.set_selected(false)
@@ -1464,19 +1661,19 @@ func jump_entries(amount: int) -> void:
 
 func adjust(delta: int) -> void:
 	var row = selected_row()
-	if row != null and row.item.get("quick_preview",false) and mode == "pause" and not preview:
+	if row != null and row.item.get("quick_preview",false) and mode in ["pause","welcome"] and not preview:
 		toggle_preview()
 		return
 	if row!=null and row.item.kind=="seek":
 		row.item.setter.call(float(row.item.getter.call())+10*delta); row.refresh(); return
 	if row==null or row.disabled: return
-	if mode!="settings" and not (mode=="pause" and (str(row.item.id).begins_with("video.") or row.item.get("quick",false))): return
+	if mode!="settings" and mode!="welcome" and not (mode=="pause" and (str(row.item.id).begins_with("video.") or row.item.get("quick",false))): return
 	var item: Dictionary = row.item
 	match item.kind:
 		"number": item.setter.call(clampf(snappedf(float(item.getter.call())+delta*float(item.step),float(item.step)),item.min,item.max))
 		"choice": item.setter.call(posmod(int(item.getter.call())+delta,item.choices.size()))
 		"toggle": item.setter.call(delta>0)
-	row.refresh(); notify("Changed · Saved when you close the menu")
+	row.refresh(); notify("Changed · Saved when you finish setup" if mode=="welcome" else "Changed · Saved when you close the menu")
 
 func activate() -> void:
 	if exit_selected: request_exit(); return
@@ -1508,14 +1705,14 @@ func reset_option() -> void:
 	row.refresh(); notify("Selected option restored to its default")
 
 func toggle_preview() -> void:
-	if mode not in ["settings", "pause"]: return
+	if mode not in ["settings", "pause", "welcome"]: return
 	if preview:
 		remember(); preview=false; clear_input(); render(); return
 	if not preview_available(): return
 	var row=selected_row()
-	if row==null or row.disabled or not row.item.get("quick_preview" if mode == "pause" else "visual",false):
+	if row==null or row.disabled or not row.item.get("quick_preview" if mode in ["pause","welcome"] else "visual",false):
 		for candidate in rows:
-			if not candidate.disabled and candidate.item.get("quick_preview" if mode == "pause" else "visual",false):
+			if not candidate.disabled and candidate.item.get("quick_preview" if mode in ["pause","welcome"] else "visual",false):
 				select(candidate.item.id,false); break
 	finish_editing(); remember(); preview=true; clear_input(); render()
 
@@ -1584,7 +1781,8 @@ func handle(event: InputEvent) -> bool:
 				elif mode in ["games","recent","favourites"]: games.game_title_action()
 				else: reset_option()
 			JOY_BUTTON_X:
-				if mode=="browser": games.open_cards()
+				if mode=="welcome": welcome.skip()
+				elif mode=="browser": games.open_cards()
 				elif mode in ["games","recent","favourites"]: games.toggle_favourite()
 				else: toggle_preview()
 			JOY_BUTTON_RIGHT_STICK: host.recenter()
@@ -1639,7 +1837,8 @@ func handle(event: InputEvent) -> bool:
 					if mode in ["games","recent","favourites"]: games.game_title_action()
 					else: reset_option()
 				KEY_X:
-					if mode in ["games","recent","favourites"]: games.toggle_favourite()
+					if mode=="welcome": welcome.skip()
+					elif mode in ["games","recent","favourites"]: games.toggle_favourite()
 					else: toggle_preview()
 				KEY_J:
 					if mode in ["games","recent","favourites"]: games.open_alphabet()
@@ -1669,10 +1868,11 @@ func update_direction() -> void:
 func _process(delta: float) -> void:
 	if is_instance_valid(boot) and boot.active: return
 	scan_refresh_elapsed+=delta
-	if mode=="library" and rom_index.scanning and scan_refresh_elapsed>.25 and scan_revision!=rom_index.revision:
+	var welcome_found := mode=="welcome" and welcome.step=="found"
+	if (mode=="library" or welcome_found) and rom_index.scanning and scan_refresh_elapsed>.25 and scan_revision!=rom_index.revision:
 		scan_refresh_elapsed=0; scan_revision=rom_index.revision; remember(); render()
 	if rom_index.scanning and rom_index.step():
-		if mode in ["library","games"]:
+		if mode in ["library","games"] or welcome_found:
 			remember(); render()
 	if preview and size.y>190: fit_panel()
 	if direction!=Vector2i.ZERO:

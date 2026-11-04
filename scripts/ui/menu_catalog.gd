@@ -68,7 +68,7 @@ func toggle(id: String, label: String, target: Object, key: String, fallback: bo
 
 ## Icons for settings rows that lead somewhere or do something, by row id.
 const ROW_ICONS := {"view.fit":"fit","view.recenter":"view","tracking.fixed":"view",
-	"system.version":"help","system.glasses":"help","system.device":"help","system.controls":"help","system.help":"help","system.credits":"help"}
+	"system.version":"help","system.setup":"refresh","system.glasses":"help","system.device":"help","system.controls":"help","system.help":"help","system.credits":"help"}
 
 func page(title: String, rows: Array) -> Dictionary:
 	for row in rows:
@@ -93,7 +93,7 @@ func core_option_row(system: String, game: String, definition: Array) -> Diction
 		item["detail_getter"] = func(): return "From console" if CoreOptions.choice_index(system, game, definition) == 0 else "Game override"
 	return item
 
-const CORE_SYSTEMS := ["snes", "nes", "megadrive", "mastersystem", "gamegear", "segacd", "gameboy", "gba", "ngpc", "psx", "n64"]
+const CORE_SYSTEMS := ["snes", "nes", "megadrive", "mastersystem", "gamegear", "segacd", "gameboy", "gba", "ngpc", "psx", "n64", "dreamcast"]
 var expanded_core_console := ""
 var core_game_context := ""
 
@@ -103,13 +103,14 @@ func toggle_core_console(system: String) -> void:
 
 func core_option_pages() -> Array:
 	var emulator = host.emulator
-	var playing: String = emulator.system_id if emulator.loaded and emulator.system_id in CORE_SYSTEMS else ""
+	var playing: String = emulator.system_id if emulator.loaded and emulator.Registry.SYSTEMS.has(emulator.system_id) and (emulator.system_id in CORE_SYSTEMS or emulator.system_id == "gamecube") else ""
 	var context: String = playing + ":" + emulator.rom_hash if not playing.is_empty() else ""
 	if context != core_game_context:
 		core_game_context = context
 		expanded_core_console = playing
 		menu.memory["settings:10:0"] = {"id":"core.console." + (playing if not playing.is_empty() else "snes"), "scroll":0}
 	var systems: Array = CORE_SYSTEMS.duplicate()
+	if emulator.Registry.SYSTEMS.has("gamecube"): systems.append("gamecube")
 	if not playing.is_empty():
 		systems.erase(playing)
 		systems.push_front(playing)
@@ -376,7 +377,12 @@ func pages(category: int) -> Array:
 				elif h.emulator.separate_preview: input_delay.disabled_reason="The separate preview core could not start for %s." % console
 				else: input_delay.disabled_reason="%s needs Separate preview core: its sound buzzes with a same-core preview." % console
 			var separate_preview := toggle("controls.separate_preview","Separate preview core",h.emulator,"separate_preview",true,"Runs preview in a second core to keep audio clean. Uses more memory. PS1/N64: unavailable; off: SNES only.",func(): h.emulator.set_separate_preview(h.emulator.separate_preview); menu.refresh(),false)
-			return core_option_pages() + [page("Performance",[input_delay,separate_preview]),page("Info",[
+			var vmu = h.vmu_display
+			var vmu_rows: Array = [toggle("vmu.enabled","Floating VMU display",vmu,"enabled",true,"Shows player one's VMU LCD below the TV during Dreamcast games. Look down to see it. The panel stays anchored in the room.",vmu.apply_layout)]
+			for spec in [["horizontal","Horizontal position",-1.5,1.5,0.05],["vertical","Vertical position",-1.5,-0.1,0.05],["forward","Distance in front of TV",0.2,1.5,0.05],["width","Display width",0.2,0.8,0.02]]:
+				vmu_rows.append(number("vmu."+spec[0],spec[1],vmu,spec[0],spec[2],spec[3],spec[4],vmu.DEFAULTS[spec[0]],"m","Relative to the TV. Changes apply immediately and are saved with your settings.",vmu.apply_layout))
+			var game_fps := toggle("emulation.game_fps","Show game frame rate",h,"game_fps_visible",false,"Shows the game's own frame rate and speed in the top corner while you play. Unlike Steam's counter, it measures the emulator, not the room.",unchanged,false)
+			return core_option_pages() + [page("VMU",vmu_rows),page("Performance",[input_delay,separate_preview,game_fps]),page("Info",[
 				action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate."),
 				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")])]
 
@@ -397,6 +403,7 @@ func pages(category: int) -> Array:
 				action("system.glasses","Using glasses",func(): menu.open_help("Using glasses",menu.play.glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),
 				action("system.device","Device status",func(): menu.open_help("Device status","!! "+menu.status_title+"\n"+menu.status_detail),"Current display and tracking status."),
 				action("system.controls","Controls",func(): menu.open_help("Controls",CONTROLS_GUIDE),"Controller and keyboard shortcuts."),
+				action("system.setup","Run setup again",func(): menu.welcome.open(),"The first-run setup: the menu shortcut, your view, console region, game library, videos and music, and comfort options."),
 				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting",TROUBLESHOOTING_GUIDE),"Help with glasses, games, audio and saving."),
 				action("system.credits","Credits & licences",func(): menu.open_help("Credits & licences",FileAccess.get_file_as_string("res://THIRD_PARTY.md")),"Godot, libretro, and the artists and developers behind CRT XR."),
 				action("system.diagnostics","Copy diagnostics",func():
@@ -413,6 +420,10 @@ func pages(category: int) -> Array:
 				{"id":"access.game_columns","label":"Game list columns","kind":"choice","choices":["1 column", "2 columns", "3 columns"],"default":0,"visual":false,
 					"getter":func(): return h.game_list_columns - 1,"setter":func(value): h.game_list_columns=int(value)+1,
 					"help":"Choose the layout for console, recent and favourite game lists. Left and right move between games in multi-column views."},
+				{"id":"access.region","label":"Console region","kind":"choice","choices":Array(h.emulator.Registry.REGION_LABELS),"default":0,"visual":false,
+					"getter":func(): return maxi(0,h.emulator.Registry.REGIONS.find(h.console_region)),
+					"setter":func(value): h.apply_console_region(h.emulator.Registry.REGIONS[int(value)]); menu.refresh(),
+					"help":"Shows console names and icons as they were sold in your region. Games and saves are not affected."},
 				toggle("access.tv","Menu on the TV",h,"menu_on_tv",true,"Shows the menu on the TV. Adjust with preview keeps it floating over the game.",func(): menu.refresh(),false),
 				toggle("access.depth","Menu depth",h,"menu_depth",true,"When the menu floats, side-by-side 3D places it in front of the TV and dims the room. Off gives a flat menu. Has no effect while the menu is on the TV.",func(): menu.refresh(),false),
 				]),page("Audio & vibration",[

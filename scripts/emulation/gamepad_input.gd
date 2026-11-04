@@ -40,7 +40,9 @@ func handle_event(event: InputEvent) -> bool:
 			state.right.y = event.axis_value
 			state.view_axis = event.axis_value
 			if absf(event.axis_value) <= STICK_DEADZONE: state.view_blocked = false
-		elif TRIGGER_BITS.has(event.axis): state.triggers[event.axis] = event.axis_value
+		elif TRIGGER_BITS.has(event.axis):
+			state.triggers[event.axis] = event.axis_value
+			if event.axis_value > 0.01: active_device = id
 		else: return false
 		if absf(event.axis_value) > STICK_DEADZONE: active_device = id
 	var held := 0
@@ -90,9 +92,9 @@ func mask(stick_dpad := true) -> int:
 	return result
 
 ## The console's input under a controller layout (see controller_layouts.gd):
-## {"mask": Libretro button bits, "analog": left X/Y, right X/Y}.
+## {"mask": Libretro button bits, "analog": left X/Y, right X/Y, "pressure": L2/R2}.
 func read(layout: Dictionary) -> Dictionary:
-	var result := {"mask": 0, "analog": PackedInt32Array([0, 0, 0, 0])}
+	var result := {"mask": 0, "analog": PackedInt32Array([0, 0, 0, 0]), "pressure": PackedInt32Array([0, 0])}
 	if menu_active or not devices.has(active_device): return result
 	var state: Dictionary = devices[active_device]
 	var bindings: Dictionary = layout.buttons
@@ -102,7 +104,11 @@ func read(layout: Dictionary) -> Dictionary:
 		if not bindings.has(input) or not state.buttons.get(button, false) or state.blocked.has(button): continue
 		if state.chord and button in MENU_BUTTONS: continue
 		mask |= 1 << bindings[input]
+	var pressure := PackedInt32Array([32767 if mask & (1 << 12) else 0, 32767 if mask & (1 << 13) else 0])
 	for input in Layouts.TRIGGER_INPUTS:
+		if bindings.get(input, -1) in [12, 13]:
+			var index: int = bindings[input] - 12
+			pressure[index] = maxi(pressure[index], roundi(clampf(float(state.triggers.get(Layouts.TRIGGER_INPUTS[input], 0.0)), 0.0, 1.0) * 32767.0))
 		if bindings.has(input) and float(state.triggers.get(Layouts.TRIGGER_INPUTS[input], 0.0)) > TRIGGER_THRESHOLD: mask |= 1 << bindings[input]
 	var sticks := analog()
 	var analog_out := PackedInt32Array([0, 0, 0, 0])
@@ -119,6 +125,9 @@ func read(layout: Dictionary) -> Dictionary:
 	# Opposite D-pad directions cancel, as on a real pad.
 	if mask & (1 << 4) and mask & (1 << 5): mask &= ~((1 << 4) | (1 << 5))
 	if mask & (1 << 6) and mask & (1 << 7): mask &= ~((1 << 6) | (1 << 7))
+	for index in range(2):
+		if mask & (1 << (index + 12)) and pressure[index] == 0: pressure[index] = 32767
+	result.pressure = pressure
 	result.mask = mask
 	result.analog = analog_out
 	return result

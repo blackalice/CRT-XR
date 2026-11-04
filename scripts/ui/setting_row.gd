@@ -153,24 +153,31 @@ func configure(definition: Dictionary) -> void:
 				if not disabled: adjust_requested.emit(item.id,direction))
 			value_group.add_child(arrow); adjust_buttons.append(arrow)
 			if direction<0: value_group.move_child(arrow,0)
-	meter=HBoxContainer.new(); meter.add_theme_constant_override("separation",10)
-	meter.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(meter)
-	range_min_label=Label.new(); range_max_label=Label.new()
-	for label in [range_min_label,range_max_label]:
-		label.add_theme_font_size_override("font_size",16)
-		label.add_theme_color_override("font_color",MenuSkin.MUTED)
-		label.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	meter.add_child(range_min_label)
-	track=ProgressBar.new(); track.custom_minimum_size.y=16; track.max_value=1
-	track.size_flags_horizontal=Control.SIZE_EXPAND_FILL
-	track.size_flags_vertical=Control.SIZE_SHRINK_CENTER
-	track.show_percentage=false; track.mouse_filter=Control.MOUSE_FILTER_IGNORE
-	track.add_theme_stylebox_override("background",MenuSkin.box(Color("42464c"),Color.TRANSPARENT,0,0))
-	track.add_theme_stylebox_override("fill",MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0))
-	# The bar is drawn as segments; the ProgressBar keeps the value and the fill style.
-	track.self_modulate.a=0.0
-	segments=SegmentBar.new(); track.add_child(segments)
-	meter.add_child(track); meter.add_child(range_max_label)
+	# Actions, toggles and compact quick controls never display a meter.
+	# Retain the public hidden track, but avoid constructing its unused subtree.
+	track = ProgressBar.new()
+	if item.kind == "number" and item.get("meter", true):
+		meter=HBoxContainer.new(); meter.add_theme_constant_override("separation",10)
+		meter.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(meter)
+		range_min_label=Label.new(); range_max_label=Label.new()
+		for label in [range_min_label,range_max_label]:
+			label.add_theme_font_size_override("font_size",16)
+			label.add_theme_color_override("font_color",MenuSkin.MUTED)
+			label.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		meter.add_child(range_min_label)
+		track.custom_minimum_size.y=16; track.max_value=1
+		track.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+		track.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+		track.show_percentage=false; track.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		track.add_theme_stylebox_override("background",MenuSkin.box(Color("42464c"),Color.TRANSPARENT,0,0))
+		track.add_theme_stylebox_override("fill",MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0))
+		# The bar is drawn as segments; the ProgressBar keeps the value and the fill style.
+		track.self_modulate.a=0.0
+		segments=SegmentBar.new(); track.add_child(segments)
+		meter.add_child(track); meter.add_child(range_max_label)
+	else:
+		track.hide()
+		add_child(track)
 	unavailable_label=Label.new(); unavailable_label.add_theme_font_size_override("font_size",16)
 	unavailable_label.add_theme_color_override("font_color",MenuSkin.MUTED)
 	unavailable_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART

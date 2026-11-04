@@ -1,7 +1,7 @@
 extends Control
-## Original small illustrations of each console and library place, drawn
-## locally; no box-art downloads. Each is a 30×30 pixel sprite in
-## assets/icons/consoles, drawn at twice its size on the menus' pixel grid;
+## Console pack icons and original library-place illustrations, kept in
+## assets/icons/consoles. Sprites are drawn at twice their native size
+## on the menus' pixel grid; credits are in third_party/icons/README.md;
 ## a kind without a sprite is drawn as vectors below.
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
 const SPRITES := "res://assets/icons/consoles/%s.png"
@@ -54,6 +54,11 @@ func _draw() -> void:
 		block(Rect2(2,22,56,26),Color("2b2e36"),6); block(Rect2(14,12,32,16),Color("3a3f4a"),4)
 		block(Rect2(19,15,22,5),ink,1); block(Rect2(8,27,7,3),accent,1); block(Rect2(45,27,7,3),Color("8b8f96"),1)
 		for x in [12,23,34,45]: block(Rect2(x,40,5,5),ink,1)
+	elif kind=="dreamcast":
+		block(Rect2(5,12,50,36),Color("dadbd5"),5)
+		draw_circle(Vector2(30,28),13,Color("bfc3c3"))
+		draw_arc(Vector2(30,28),7,0,TAU*1.7,32,accent,2,true)
+		for x in [12,23,34,45]: block(Rect2(x,42,4,3),ink,1)
 	elif kind=="psx":
 		# The grey console seen from above: the round disc lid and its buttons.
 		block(Rect2(3,12,54,36),Color("aeb2b8"),4); block(Rect2(3,40,54,8),Color("8f949b"),0)

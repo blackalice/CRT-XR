@@ -5,6 +5,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <chrono>
+#include <thread>
 
 void check(bool value, const std::string& message) {
     if (!value) throw std::runtime_error(message);
@@ -18,6 +20,10 @@ int main(int argc, char** argv) {
         check(host.load_core(argv[1]), "Fixture core dynamically loads");
         check(host.load_game(argv[3], argv[4]), "Legacy core option default and ROM loading work");
         check(host.step(0) && host.width == 2 && host.height == 2, "Core framebuffer dimensions captured");
+        check(host.save_ram()[6] == 15, "Every advertised controller port is initialized, including disconnected ports");
+        const auto lcd = host.vmu_lcd(0);
+        check(lcd.size() == 48 * 32 && lcd[0] == 255 && lcd[1] == 0 && lcd[48] == 255, "Optional VMU channel returns the separate LCD pixels");
+        check(host.vmu_lcd(8).empty(), "Out-of-range VMU port is rejected");
         const auto expected = host.rgba;
         check(expected.size() == 16 && expected[0] == 255 && expected[1] == 0 && expected[8] == 0 && expected[10] == 255, "RGB565 channel conversion respects row pitch");
         check(host.pcm.size() == 6 && host.pcm[0] == 1000 && host.pcm[3] == -32768 && host.pcm[4] == 250, "Batch and single stereo audio callbacks preserve PCM");
@@ -25,6 +31,7 @@ int main(int argc, char** argv) {
         check(host.step(0) && host.rgba == expected, "0RGB1555 conversion respects row pitch");
         check(host.step(0) && !host.video_changed && host.rgba == expected, "Duplicate video callbacks retain the previous frame");
         check(host.step(1) && host.rgba[0] == 0 && host.rgba[2] == 255, "Joypad B reaches the core");
+        check(host.save_ram()[7] == 0x81, "Core-owned CPU threads receive their host's input and directories");
         const auto state = host.serialize();
         check(!state.empty() && host.step(0) && host.unserialize(state.data(), state.size()) && host.serialize() == state, "Save state round-trip restores core execution state");
         const std::uint8_t invalid = 1;
@@ -38,6 +45,10 @@ int main(int argc, char** argv) {
         {
             host.analog[0] = 0x4000;
             check(host.step(1 << RETRO_DEVICE_ID_JOYPAD_L2) && host.save_ram()[1] == 0x40 && host.save_ram()[2] == 1, "Analog stick and trigger reach the core");
+            host.trigger_pressure[0] = 8192;
+            check(host.step(1 << RETRO_DEVICE_ID_JOYPAD_L2) && host.save_ram()[5] == 32, "Partial trigger pressure survives a digital trigger bit");
+            host.trigger_pressure[0] = 0;
+            check(host.step(0) && host.save_ram()[5] == 0, "Released trigger returns to zero");
             check(host.save_ram()[4] == 0, "Core option default applies without an override");
             host.set_option("fixture_choice", "second");
             check(host.step(0) && host.save_ram()[4] == 1, "A core option override wins over the default");
@@ -67,6 +78,7 @@ int main(int argc, char** argv) {
         }
         host.close();
         check(host.load_core(argv[2]), "Real Snes9x core dynamically loads");
+        check(host.vmu_lcd(0).empty(), "A core without the VMU extension returns no LCD");
         check(host.load_game(argv[3], argv[4]), "Real Snes9x loads original diagnostic ROM");
         bool executed = true;
         for (int i = 0; i < 90; ++i) executed = host.step(0) && executed;
@@ -114,6 +126,28 @@ int main(int argc, char** argv) {
             check(gpu.step(1) && top(5)[0] == 0 && top(5)[2] == 255, "Input reaches the GPU core");
             const auto state = gpu.serialize();
             check(!state.empty() && gpu.unserialize(state.data(), state.size()), "GPU core states round-trip on its thread");
+            // Asynchronous readback: each picture arrives one emulated frame later.
+            gpu.set_async_readback(true);
+            check(gpu.step(1) && !gpu.video_changed, "An asynchronous read is not waited for");
+            check(gpu.step(0) && gpu.video_changed && top(5)[0] == 0 && top(5)[2] == 255, "The previous frame's picture arrives next frame");
+            check(bottom(5)[1] == 255 && bottom(5)[3] == 255, "Asynchronous rows are flipped and made opaque");
+            check(gpu.step(0) && gpu.video_changed && top(5)[0] == 255, "Asynchronous frames keep their order");
+            {
+                // Between frames the picture is collected once the GPU is done.
+                check(gpu.readback_deferred() && gpu.step(1), "A deferred frame runs");
+                int collected = 0;
+                for (int i = 0; i < 2000 && collected == 0; ++i) {
+                    collected = gpu.collect_readback();
+                    if (collected == 0) std::this_thread::sleep_for(std::chrono::microseconds(250));
+                }
+                check(collected == 1 && top(5)[2] == 255, "The frame's picture is collected between frames");
+                check(gpu.collect_readback() == -1, "Nothing is collected twice");
+                check(gpu.step(0) && !gpu.video_changed, "A frame after an early collection repeats nothing");
+                check(gpu.collect_readback() >= 0, "The next picture is pending again");
+                while (gpu.collect_readback() == 0) std::this_thread::sleep_for(std::chrono::microseconds(250));
+            }
+            gpu.set_async_readback(false);
+            check(gpu.step(1) && gpu.video_changed && top(5)[2] == 255, "Synchronous reads resume without a stale frame");
             check(gpu.load_game(argv[3], argv[4]) && gpu.step(0) && top(5)[0] == 255, "A second game reuses the context");
             gpu.close();
             check(!gpu.loaded, "The GPU core closes with its context");

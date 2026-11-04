@@ -1,6 +1,7 @@
 #include "libretro_host.h"
 #include "gl_context.h"
 #include <algorithm>
+#include <chrono>
 #include <condition_variable>
 #include <cstdarg>
 #include <cstdio>
@@ -22,7 +23,7 @@ namespace crt_xr {
 struct CoreThread::State {
     std::mutex mutex;
     std::condition_variable wake, done;
-    const std::function<void()>* pending = nullptr;
+    std::function<void()> pending;
     bool quit = false;
     std::thread thread;
 };
@@ -32,9 +33,11 @@ CoreThread::CoreThread() : state(std::make_unique<State>()) {
         for (;;) {
             state->wake.wait(lock, [state] { return state->quit || state->pending; });
             if (!state->pending) return;
-            const auto* task = state->pending;
+            auto task = std::move(state->pending);
+            // Keep pending set until execution finishes, including while unlocked.
+            state->pending = [] {};
             lock.unlock();
-            (*task)();
+            task();
             lock.lock();
             state->pending = nullptr;
             state->done.notify_all();
@@ -48,13 +51,28 @@ CoreThread::~CoreThread() {
 }
 bool CoreThread::is_current() const { return std::this_thread::get_id() == state->thread.get_id(); }
 void CoreThread::run(const std::function<void()>& task) {
+    post(task);
+    wait();
+}
+void CoreThread::post(std::function<void()> task) {
     std::unique_lock<std::mutex> lock(state->mutex);
-    state->pending = &task;
+    state->done.wait(lock, [this] { return !state->pending; });
+    state->pending = std::move(task);
     state->wake.notify_all();
-    state->done.wait(lock, [this] { return state->pending == nullptr; });
+}
+bool CoreThread::ready() const {
+    std::lock_guard<std::mutex> lock(state->mutex);
+    return !state->pending;
+}
+void CoreThread::wait() const {
+    std::unique_lock<std::mutex> lock(state->mutex);
+    state->done.wait(lock, [this] { return !state->pending; });
 }
 
 thread_local LibretroHost* LibretroHost::active = nullptr;
+std::array<std::atomic<LibretroHost*>, LibretroHost::callback_capacity> LibretroHost::callback_hosts{};
+const std::array<LibretroHost::Callbacks, LibretroHost::callback_capacity> LibretroHost::callbacks =
+    LibretroHost::callback_table(std::make_index_sequence<LibretroHost::callback_capacity>{});
 LibretroHost::~LibretroHost() {
     close();
     worker.reset();
@@ -72,10 +90,15 @@ void LibretroHost::close_game() {
         hw = {};
         loaded = false;
         rom.clear(); rgba.clear(); pcm.clear();
+        { std::lock_guard<std::mutex> lock(audio_mutex); pending_pcm.clear(); audio_overflow = false; }
         width = height = 0;
         video_changed = false;
         insert_countdown = 0;
         std::fill(std::begin(analog), std::end(analog), 0);
+        std::fill(std::begin(trigger_pressure), std::end(trigger_pressure), 0);
+        input_buttons.store(0);
+        for (auto& value : input_analog) value.store(0);
+        for (auto& value : input_triggers) value.store(0);
     });
 }
 void LibretroHost::close() {
@@ -93,6 +116,12 @@ void LibretroHost::close() {
 #endif
         }
         library = nullptr;
+        if (callback_slot >= 0) {
+            callback_hosts[callback_slot].store(nullptr);
+            callback_slot = -1;
+        }
+        fn_vmu_lcd = nullptr;
+        controller_ports = 2;
         options.clear();
         overrides.clear();
         disk = {};
@@ -114,6 +143,7 @@ bool LibretroHost::load_core(const std::string& path) {
         if (!library) { error = "Cannot load native core or one of its dependencies: " + path; return false; }
 #define BIND(method) fn_##method = reinterpret_cast<decltype(fn_##method)>(symbol("retro_" #method)); if (!fn_##method) { error = "Core missing retro_" #method; close(); return false; }
         BIND(api_version); BIND(init); BIND(deinit); BIND(set_environment); BIND(set_video_refresh);
+        fn_vmu_lcd = reinterpret_cast<decltype(fn_vmu_lcd)>(symbol("retro_crt_xr_vmu_lcd"));
         BIND(set_audio_sample); BIND(set_audio_sample_batch); BIND(set_input_poll); BIND(set_input_state);
         BIND(get_system_info); BIND(get_system_av_info); BIND(set_controller_port_device);
         BIND(load_game); BIND(unload_game); BIND(reset); BIND(run); BIND(serialize_size); BIND(serialize); BIND(unserialize);
@@ -122,12 +152,18 @@ bool LibretroHost::load_core(const std::string& path) {
         if (fn_api_version() != RETRO_API_VERSION) { error = "Unsupported Libretro API version"; close(); return false; }
         Use use(this);
         pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
-        fn_set_environment(environment);
-        fn_set_video_refresh(video);
-        fn_set_audio_sample(audio);
-        fn_set_audio_sample_batch(audio_batch);
-        fn_set_input_poll(input_poll);
-        fn_set_input_state(input);
+        for (unsigned slot = 0; slot < callback_capacity; ++slot) {
+            LibretroHost* empty = nullptr;
+            if (callback_hosts[slot].compare_exchange_strong(empty, this)) { callback_slot = static_cast<int>(slot); break; }
+        }
+        if (callback_slot < 0) { error = "Too many simultaneous emulator instances"; close(); return false; }
+        const auto& cb = callbacks[callback_slot];
+        fn_set_environment(cb.environment);
+        fn_set_video_refresh(cb.video);
+        fn_set_audio_sample(cb.audio);
+        fn_set_audio_sample_batch(cb.audio_batch);
+        fn_set_input_poll(cb.input_poll);
+        fn_set_input_state(cb.input);
         retro_system_info info{};
         fn_get_system_info(&info);
         name = info.library_name ? info.library_name : "Libretro";
@@ -175,10 +211,12 @@ bool LibretroHost::load_game(const std::string& path, const std::string& directo
         }
         loaded = true;
         fn_set_controller_port_device(0, port_device);
-        fn_set_controller_port_device(1, RETRO_DEVICE_NONE);
+        for (unsigned port = 1; port < controller_ports; ++port) fn_set_controller_port_device(port, RETRO_DEVICE_NONE);
         retro_system_av_info av{};
         fn_get_system_av_info(&av);
-        if (!av_info(av)) { close_game(); return false; }
+        // context_destroy answers a context_reset that has not happened yet on
+        // these two failure paths, so the core must not be told to destroy.
+        if (!av_info(av)) { hw.context_destroy = nullptr; close_game(); return false; }
         if (hw_active) {
             // The core draws into a framebuffer as large as its largest frame,
             // then sets up its GL state (Libretro's context_reset).
@@ -186,7 +224,7 @@ bool LibretroHost::load_game(const std::string& path, const std::string& directo
             const unsigned h = std::max(av.geometry.max_height, av.geometry.base_height);
             if (w == 0 || h == 0 || w > 4096 || h > 4096 || !gl->resize(w, h, hw.depth, hw.stencil, error)) {
                 if (error.empty()) error = "Core reported an unsupported frame size";
-                close_game(); return false;
+                hw.context_destroy = nullptr; close_game(); return false;
             }
             if (hw.context_reset) hw.context_reset();
         }
@@ -207,12 +245,52 @@ bool LibretroHost::step(std::uint16_t mask) {
     return on_core([&] {
         Use use(this);
         buttons = mask;
+        input_buttons.store(mask, std::memory_order_relaxed);
+        for (unsigned i = 0; i < 4; ++i) input_analog[i].store(analog[i], std::memory_order_relaxed);
+        for (unsigned i = 0; i < 2; ++i) input_triggers[i].store(trigger_pressure[i], std::memory_order_relaxed);
         pcm.clear();
         video_changed = false;
         error.clear();
+        readback_usec = 0;
+        const auto started = std::chrono::steady_clock::now();
         fn_run();
+        {
+            // Dolphin delivers audio on its CPU thread. Presentation only reads
+            // pcm; callbacks queue the next batch under their own short lock.
+            std::lock_guard<std::mutex> lock(audio_mutex);
+            pcm.swap(pending_pcm);
+            if (audio_overflow) error = "Core audio batch exceeds safety limit";
+            audio_overflow = false;
+        }
+        step_usec = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
         if (insert_countdown > 0 && --insert_countdown == 0 && disk.set_eject_state) disk.set_eject_state(false);
         return error.empty();
+    });
+}
+void LibretroHost::set_async_readback(bool enabled) {
+    on_core([&] {
+        if (async_readback == enabled) return;
+        async_readback = enabled;
+        if (!enabled && gl) gl->discard_async();
+    });
+}
+int LibretroHost::collect_readback() {
+    if (!loaded) return -1;
+    return on_core([&] {
+        if (!async_readback || !hw_active || !gl) return -1;
+        unsigned w = 0, h = 0;
+        const int result = gl->poll_async(rgba, w, h);
+        if (result == 1) { width = w; height = h; }
+        return result;
+    });
+}
+std::vector<std::uint8_t> LibretroHost::vmu_lcd(unsigned index) const {
+    if (!loaded || !fn_vmu_lcd || index >= 8) return {};
+    return on_core([&] {
+        Use use(this);
+        std::vector<std::uint8_t> pixels(48 * 32);
+        if (!fn_vmu_lcd(index, pixels.data(), pixels.size())) pixels.clear();
+        return pixels;
     });
 }
 bool LibretroHost::reset() {
@@ -221,6 +299,7 @@ bool LibretroHost::reset() {
         Use use(this);
         error.clear();
         fn_reset(); // The console's reset button; cartridge SRAM is kept.
+        if (async_readback && gl) gl->discard_async();
         return error.empty();
     });
 }
@@ -238,7 +317,7 @@ bool LibretroHost::set_hw_render(retro_hw_render_callback& callback) {
         log(RETRO_LOG_ERROR, "%s\n", error.c_str());
         return false;
     }
-    callback.get_current_framebuffer = current_framebuffer;
+    callback.get_current_framebuffer = callbacks[callback_slot].framebuffer;
     callback.get_proc_address = proc_address;
     hw = callback;
     hw_active = true;
@@ -306,8 +385,15 @@ bool LibretroHost::environment(unsigned command, void* data) {
     case RETRO_ENVIRONMENT_SET_DISK_CONTROL_EXT_INTERFACE:
         active->disk = data ? *static_cast<const retro_disk_control_ext_callback*>(data) : retro_disk_control_ext_callback{};
         return true;
+    case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO: {
+        if (!data) return false;
+        const auto* ports = static_cast<const retro_controller_info*>(data);
+        unsigned count = 0;
+        while (count < 16 && ports[count].types) ++count;
+        active->controller_ports = std::max(2u, count);
+        return true;
+    }
     case RETRO_ENVIRONMENT_SET_INPUT_DESCRIPTORS:
-    case RETRO_ENVIRONMENT_SET_CONTROLLER_INFO:
     case RETRO_ENVIRONMENT_SET_SUPPORT_NO_GAME:
     case RETRO_ENVIRONMENT_SET_SUBSYSTEM_INFO: return true;
     default: return false;
@@ -332,14 +418,29 @@ const std::vector<std::uint32_t>& lookup(bool rgb565) {
 }
 }
 void LibretroHost::video(const void* data, unsigned w, unsigned h, std::size_t pitch) {
-    if (!active || !data) return; // null is a duplicate frame
+    if (!active) return;
     LibretroHost& host = *active;
+    const bool async = host.async_readback && host.hw_active && host.gl && host.gl->async_available();
+    if (!data) { // a duplicate frame
+        // A read still in flight would otherwise stay unseen until the next new frame.
+        unsigned rw = 0, rh = 0;
+        if (async && host.gl->finish_async(host.rgba, rw, rh) == 1) { host.width = rw; host.height = rh; host.video_changed = true; }
+        return;
+    }
     if (data == RETRO_HW_FRAME_BUFFER_VALID) {
         // The core drew into the hidden framebuffer: read it back for the TV.
-        if (!host.hw_active || w == 0 || h == 0 || w > 1024 || h > 1024 || !host.gl->read(w, h, host.hw.bottom_left_origin, host.rgba)) {
-            host.error = "Unsupported core video buffer"; return;
+        const auto started = std::chrono::steady_clock::now();
+        if (!host.hw_active || w == 0 || h == 0 || w > 4096 || h > 4096) { host.error = "Unsupported core video buffer"; return; }
+        if (async) {
+            unsigned rw = 0, rh = 0;
+            const int result = host.gl->read_async(w, h, host.hw.bottom_left_origin, host.rgba, rw, rh);
+            if (result < 0) { host.error = "Unsupported core video buffer"; return; }
+            if (result == 1) { host.width = rw; host.height = rh; host.video_changed = true; }
+        } else {
+            if (!host.gl->read(w, h, host.hw.bottom_left_origin, host.rgba)) { host.error = "Unsupported core video buffer"; return; }
+            host.width = w; host.height = h; host.video_changed = true;
         }
-        host.width = w; host.height = h; host.video_changed = true;
+        host.readback_usec += std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - started).count();
         return;
     }
     const unsigned bytes = host.pixel_format == RETRO_PIXEL_FORMAT_XRGB8888 ? 4 : 2;
@@ -375,22 +476,28 @@ void LibretroHost::audio(std::int16_t left, std::int16_t right) {
 std::size_t LibretroHost::audio_batch(const std::int16_t* data, std::size_t frames) {
     if (!active || !data) return 0;
     if (!active->want_audio) return frames;
-    if (frames > 32768 || active->pcm.size() + frames * 2 > 65536) {
-        active->error = "Core audio batch exceeds safety limit"; return 0;
+    std::lock_guard<std::mutex> lock(active->audio_mutex);
+    if (frames > 32768 || active->pending_pcm.size() + frames * 2 > 65536) {
+        active->audio_overflow = true; return 0;
     }
-    active->pcm.insert(active->pcm.end(), data, data + frames * 2);
+    active->pending_pcm.insert(active->pending_pcm.end(), data, data + frames * 2);
     return frames;
 }
 void LibretroHost::input_poll() {}
 std::int16_t LibretroHost::input(unsigned port, unsigned device, unsigned index, unsigned id) {
     if (!active || port != 0) return 0;
+    const auto mask = active->input_buttons.load(std::memory_order_relaxed);
     if ((device & RETRO_DEVICE_MASK) == RETRO_DEVICE_ANALOG) {
-        if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON) return id < 16 && (active->buttons >> id) & 1 ? 0x7FFF : 0;
-        return index < 2 && id < 2 ? active->analog[index * 2 + id] : 0;
+        if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON && id >= RETRO_DEVICE_ID_JOYPAD_L2 && id <= RETRO_DEVICE_ID_JOYPAD_R2) {
+            const auto pressure = active->input_triggers[id - RETRO_DEVICE_ID_JOYPAD_L2].load(std::memory_order_relaxed);
+            return pressure > 0 ? pressure : ((mask >> id) & 1 ? 0x7FFF : 0);
+        }
+        if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON) return id < 16 && (mask >> id) & 1 ? 0x7FFF : 0;
+        return index < 2 && id < 2 ? active->input_analog[index * 2 + id].load(std::memory_order_relaxed) : 0;
     }
     if (index != 0 || (device & RETRO_DEVICE_MASK) != RETRO_DEVICE_JOYPAD) return 0;
-    if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return static_cast<std::int16_t>(active->buttons);
-    return id < 16 ? (active->buttons >> id) & 1 : 0;
+    if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return static_cast<std::int16_t>(mask);
+    return id < 16 ? (mask >> id) & 1 : 0;
 }
 void LibretroHost::log(retro_log_level, const char* format, ...) {
     std::fputs("[Libretro] ", stderr);
@@ -406,7 +513,8 @@ bool LibretroHost::serialize_into(std::vector<std::uint8_t>& state) {
     return on_core([&] {
         Use use(this);
         const auto size = fn_serialize_size();
-        if (size == 0 || size > 64 * 1024 * 1024) { error = "Core returned unsupported state size"; return false; }
+        // GameCube states include RAM, ARAM, GPU state and memory cards.
+        if (size == 0 || size > 256 * 1024 * 1024) { error = "Core returned unsupported state size: " + std::to_string(size); return false; }
         state.resize(size);
         if (!fn_serialize(state.data(), state.size())) { error = "Core failed to save state"; return false; }
         return true;
@@ -415,7 +523,9 @@ bool LibretroHost::serialize_into(std::vector<std::uint8_t>& state) {
 bool LibretroHost::unserialize(const std::uint8_t* data, std::size_t size) {
     return on_core([&] {
         Use use(this);
-        if (!loaded || size == 0 || size > 64 * 1024 * 1024 || !fn_unserialize(data, size)) { error = "Core rejected save state"; return false; }
+        if (!loaded || size == 0 || size > 256 * 1024 * 1024 || !fn_unserialize(data, size)) { error = "Core rejected save state"; return false; }
+        // A read started before the restore shows the old moment: drop it.
+        if (async_readback && gl) gl->discard_async();
         return true;
     });
 }

@@ -132,5 +132,5 @@ func items() -> Array:
 	var saved := my_preset_saved(index)
 	return [menu.catalog.unavailable(menu.catalog.action("mine.apply","Apply this preset",func(): apply_my_preset(index),"Changes CRT, colour and signal settings. This game's screen fit stays as it is.",not saved),"Nothing is saved here yet."),
 		menu.catalog.action("mine.save","Save current picture here",func(): save_my_preset(index),"Stores the current CRT, colour and signal settings in this preset."),
-		menu.catalog.unavailable(menu.catalog.action("mine.rename","Rename",func(): menu.rename_preset=index; menu.mode="rename"; menu.entry_initialized=false; menu.clear_input(); menu.render(); menu.keys.focus_entry(),"Use the on-screen keys or a physical keyboard.",not saved),"Save a picture here first."),
+		menu.catalog.unavailable(menu.catalog.action("mine.rename","Rename",func(): menu.rename_preset=index; menu.rename_room=-1; menu.mode="rename"; menu.entry_initialized=false; menu.clear_input(); menu.render(); menu.keys.focus_entry(),"Use the on-screen keys or a physical keyboard.",not saved),"Save a picture here first."),
 		menu.catalog.unavailable(menu.catalog.action("mine.delete","Delete",func(): delete_my_preset(index),"Removes this preset. Your current picture does not change.",not saved),"Nothing is saved here yet.")]

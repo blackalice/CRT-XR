@@ -648,8 +648,98 @@
       "source_date_epoch": "1789168878",
       "build_log_sha256": "3c246a32fe73c244cdbf44e814901e607d420030ed4322cb131f70280070eb01",
       "patches": []
+    },
+    {
+      "core": "flycast",
+      "platform": "linux",
+      "source_commit": "7adbf3caef251b153e348df3f469a0f35878339d",
+      "origin": "Local source build",
+      "binary_sha256": "dca18e54206eceecdc0129c7d3a79dda3c89132190b791d81683777d7a2a40cc",
+      "source_archive": "sources/flycast-7adbf3caef251b153e348df3f469a0f35878339d.tar.gz",
+      "source_sha256": "24ab24c4dd4eb650f7e189b13a33046451c4e5fa5f8d6296dec17f39919bb3c1",
+      "compiler": "gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+      "cxx_compiler": "g++ (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0",
+      "make_version": "cmake version 3.22.1",
+      "make_arguments": [
+        "-S",
+        "<extracted-source>",
+        "-B",
+        "<work>/cmake-build",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DLIBMGBA_ONLY=ON",
+        "-DBUILD_LIBRETRO=ON",
+        "-DLIBRETRO=ON",
+        "-DUSE_VULKAN=OFF",
+        "-DUSE_DX9=OFF",
+        "-DUSE_DX11=OFF",
+        "-DUSE_OPENMP=OFF",
+        "-DUSE_LUA=OFF",
+        "-DUSE_HOST_LIBZIP=OFF",
+        "-DUSE_BREAKPAD=OFF",
+        "&&",
+        "cmake",
+        "--build",
+        "<work>/cmake-build",
+        "--target",
+        "flycast_libretro",
+        "-j6"
+      ],
+      "source_date_epoch": "1793410415",
+      "build_log_sha256": "4e904e4bf821dc2c297481f0a6bb2cfd1288540061865e69b13442b15dec05a1",
+      "patches": [
+        {
+          "path": "sources/flycast-vmu-lcd.patch",
+          "sha256": "e057516b016a2cc74212a8ecc3465194122593e05686e607cfd98bdc7f7e943c"
+        }
+      ]
+    },
+    {
+      "core": "flycast",
+      "platform": "windows",
+      "source_commit": "7adbf3caef251b153e348df3f469a0f35878339d",
+      "origin": "Local source build",
+      "binary_sha256": "d7e011eaf1ad7bbb7d248c1d3672496e2362f30546416868597235801aeaaf39",
+      "source_archive": "sources/flycast-7adbf3caef251b153e348df3f469a0f35878339d.tar.gz",
+      "source_sha256": "24ab24c4dd4eb650f7e189b13a33046451c4e5fa5f8d6296dec17f39919bb3c1",
+      "compiler": "x86_64-w64-mingw32-gcc-posix (GCC) 10-posix 20220113",
+      "cxx_compiler": "x86_64-w64-mingw32-g++-posix (GCC) 10-posix 20220113",
+      "make_version": "cmake version 3.22.1",
+      "make_arguments": [
+        "-S",
+        "<extracted-source>",
+        "-B",
+        "<work>/cmake-build",
+        "-DCMAKE_BUILD_TYPE=Release",
+        "-DLIBMGBA_ONLY=ON",
+        "-DBUILD_LIBRETRO=ON",
+        "-DLIBRETRO=ON",
+        "-DUSE_VULKAN=OFF",
+        "-DUSE_DX9=OFF",
+        "-DUSE_DX11=OFF",
+        "-DUSE_OPENMP=OFF",
+        "-DUSE_LUA=OFF",
+        "-DUSE_HOST_LIBZIP=OFF",
+        "-DUSE_BREAKPAD=OFF",
+        "-DCMAKE_TOOLCHAIN_FILE=/work/native/emulation/mingw.cmake",
+        "-DCMAKE_SHARED_LINKER_FLAGS=-static -static-libgcc -static-libstdc++",
+        "&&",
+        "cmake",
+        "--build",
+        "<work>/cmake-build",
+        "--target",
+        "flycast_libretro",
+        "-j6"
+      ],
+      "source_date_epoch": "1793410415",
+      "build_log_sha256": "3438ead3e10826b7aeb62959d98df170b903822665acaf8e93a415b38d79d9e2",
+      "patches": [
+        {
+          "path": "sources/flycast-vmu-lcd.patch",
+          "sha256": "e057516b016a2cc74212a8ecc3465194122593e05686e607cfd98bdc7f7e943c"
+        }
+      ]
     }
   ],
-  "build_environment": "PRETTY_NAME=\"Ubuntu 24.04.1 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.1 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\n",
-  "built_utc": "2026-10-29T20:53:37.769186+00:00"
+  "build_environment": "PRETTY_NAME=\"Ubuntu 22.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"22.04\"\nVERSION=\"22.04.5 LTS (Jammy Jellyfish)\"\nVERSION_CODENAME=jammy\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=jammy\n",
+  "built_utc": "2026-11-03T11:27:55.617541+00:00"
 }

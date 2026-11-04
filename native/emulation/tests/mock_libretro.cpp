@@ -2,6 +2,9 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <thread>
+#include <chrono>
+#include <cstdlib>
 
 namespace {
 retro_environment_t environment;
@@ -15,6 +18,7 @@ std::uint8_t ram[16];
 // A two-disc tray: the host must open it, choose and close it again.
 bool tray_open;
 unsigned disc;
+unsigned initialized_ports = 0;
 bool set_eject(bool open) { tray_open = open; return true; }
 bool get_eject() { return tray_open; }
 unsigned get_index() { return disc; }
@@ -69,6 +73,9 @@ RETRO_API void retro_set_input_poll(retro_input_poll_t cb) { poll = cb; }
 RETRO_API void retro_set_input_state(retro_input_state_t cb) { input = cb; }
 RETRO_API unsigned retro_api_version() { return RETRO_API_VERSION; }
 RETRO_API void retro_init() {
+    const retro_controller_description type[] = {{"Pad", RETRO_DEVICE_JOYPAD}};
+    const retro_controller_info ports[] = {{type,1},{type,1},{type,1},{type,1},{nullptr,0}};
+    environment(RETRO_ENVIRONMENT_SET_CONTROLLER_INFO, const_cast<retro_controller_info*>(ports));
     retro_variable options[] = {{"fixture_option", "Fixture; default|other"}, {"fixture_choice", "Choice; first|second"}, {nullptr, nullptr}};
     environment(RETRO_ENVIRONMENT_SET_VARIABLES, options);
     retro_disk_control_ext_callback tray{set_eject, get_eject, get_index, set_index, get_count, no_replace, no_add, nullptr, nullptr, get_label};
@@ -87,9 +94,9 @@ RETRO_API void retro_get_system_av_info(retro_system_av_info* info) { *info = {{
 #else
 RETRO_API void retro_get_system_av_info(retro_system_av_info* info) { *info = {{2, 2, 2, 2, 1}, {60, 32000}}; }
 #endif
-RETRO_API void retro_set_controller_port_device(unsigned, unsigned) {}
+RETRO_API void retro_set_controller_port_device(unsigned port, unsigned) { if (port < 4) initialized_ports |= 1u << port; }
 RETRO_API bool retro_load_game(const retro_game_info* game) {
-    counter = 0;
+    counter = 0; initialized_ports = 0;
     tray_open = false; disc = 0;
 #ifdef MOCK_HW_RENDER
     hw = {};
@@ -110,9 +117,20 @@ RETRO_API bool retro_load_game(const retro_game_info* game) {
 RETRO_API void retro_unload_game() {}
 RETRO_API void retro_reset() { counter = 0; }
 RETRO_API void retro_run() {
+    if (const char* delay = std::getenv("CRT_XR_TEST_FRAME_DELAY_MS"))
+        std::this_thread::sleep_for(std::chrono::milliseconds(std::atoi(delay)));
     ++counter;
     poll();
     const bool pressed = input(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B);
+    // Dolphin polls input on its emulated CPU thread. Exercise the same C
+    // callbacks without any calling-thread host scope, then join before video.
+    std::thread cpu([&] {
+        const char* saves = nullptr;
+        const bool directory = environment(RETRO_ENVIRONMENT_GET_SAVE_DIRECTORY, &saves) && saves && *saves;
+        ram[7] = static_cast<std::uint8_t>((directory ? 0x80 : 0) |
+            (input(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B) ? 1 : 0));
+    });
+    cpu.join();
 #ifdef MOCK_HW_RENDER
     draw(pressed);
 #else
@@ -135,11 +153,14 @@ RETRO_API void retro_run() {
 #endif
     const std::int16_t samples[] = {1000, -1000, 32767, -32768};
     audio_batch(samples, 2);
-    audio(250, -250);
+    std::thread mixer([] { audio(250, -250); });
+    mixer.join();
     ram[0] = static_cast<std::uint8_t>(counter);
     // Exposed for the host test: the left stick, an analog trigger, the disc and an option.
     ram[1] = static_cast<std::uint8_t>(input(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_LEFT, RETRO_DEVICE_ID_ANALOG_X) >> 8);
     ram[2] = input(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_L2) == 0x7FFF;
+    ram[6] = static_cast<std::uint8_t>(initialized_ports);
+    ram[5] = static_cast<std::uint8_t>(input(0, RETRO_DEVICE_ANALOG, RETRO_DEVICE_INDEX_ANALOG_BUTTON, RETRO_DEVICE_ID_JOYPAD_L2) >> 8);
     ram[3] = static_cast<std::uint8_t>(disc | (tray_open ? 0x80 : 0));
     retro_variable choice{"fixture_choice", nullptr};
     ram[4] = environment(RETRO_ENVIRONMENT_GET_VARIABLE, &choice) && std::strcmp(choice.value, "second") == 0;
@@ -149,4 +170,10 @@ RETRO_API bool retro_serialize(void* data, std::size_t size) { if (size != sizeo
 RETRO_API bool retro_unserialize(const void* data, std::size_t size) { if (size != sizeof(counter)) return false; std::memcpy(&counter, data, size); return true; }
 RETRO_API void* retro_get_memory_data(unsigned id) { return id == RETRO_MEMORY_SAVE_RAM ? ram : nullptr; }
 RETRO_API std::size_t retro_get_memory_size(unsigned id) { return id == RETRO_MEMORY_SAVE_RAM ? sizeof(ram) : 0; }
+RETRO_API bool retro_crt_xr_vmu_lcd(unsigned index, std::uint8_t* pixels, std::size_t size) {
+    if (index != 0 || !pixels || size != 48 * 32 || counter == 0) return false;
+    for (std::size_t i = 0; i < size; ++i) pixels[i] = i % 48 == 0 ? 255 : 0;
+    return true;
+}
+
 }

@@ -3,40 +3,57 @@
 #include "libretro.h"
 #include "gl_context.h"
 #include <cstdint>
+#include <array>
+#include <atomic>
 #include <functional>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace crt_xr {
 
-// Runs tasks one at a time on a thread of its own; run() waits for each.
+// Single caller, owned tasks on a persistent thread. run() waits; post() lets
+// the caller poll ready() or wait() before accessing the task's output.
 class CoreThread {
 public:
     CoreThread();
     ~CoreThread();
     bool is_current() const;
     void run(const std::function<void()>& task);
+    void post(std::function<void()> task);
+    bool ready() const;
+    void wait() const;
 private:
     struct State;
     std::unique_ptr<State> state;
 };
 // One Libretro instance, driven from the Godot main thread. Several hosts may
-// coexist when each loads its own copy of a core library; the C callbacks reach
-// whichever host is currently calling into its core.
+// coexist when each loads its own copy of a core library. Per-instance callback
+// functions also reach the correct host from threads owned by the core.
 class LibretroHost {
 public:
     ~LibretroHost();
-    // Cores that draw with the GPU (the Nintendo 64): set before load_core. Every
+    // Cores that draw with the GPU: set before load_core. Every
     // call into the core then runs on a thread of its own, where the core's hidden
     // OpenGL context lives, so Godot's context on the main thread is never touched.
     bool hardware_rendering = false;
     bool load_core(const std::string& path);
     bool load_game(const std::string& path, const std::string& save_directory);
     bool step(std::uint16_t buttons);
+    // Hardware cores: read each frame back without waiting for the GPU, showing
+    // it one emulated frame later. Off returns to synchronous reads.
+    void set_async_readback(bool enabled);
+    // Between frames: collects the last frame's asynchronous read if the GPU has
+    // finished it, into rgba/width/height. 1 collected, 0 not yet, -1 none pending.
+    int collect_readback();
+    // True when pictures really arrive late: a GPU core with asynchronous reads.
+    bool readback_deferred() const { return async_readback && hw_active && gl && gl->async_available(); }
     bool reset();
+    std::vector<std::uint8_t> vmu_lcd(unsigned index) const;
     void close_game();
     void close();
     std::vector<std::uint8_t> serialize();
@@ -59,8 +76,10 @@ public:
     unsigned port_device = RETRO_DEVICE_JOYPAD;
     // Left X/Y, right X/Y in Libretro's -32768..32767 range, held for the next step().
     std::int16_t analog[4] = {0, 0, 0, 0};
+    std::int16_t trigger_pressure[2] = {0, 0};
     unsigned width = 0, height = 0;
     bool video_changed = false;
+    std::uint64_t step_usec = 0, readback_usec = 0; // last frame, for profiling
     // False tells the core its audio is unused (input preview) and drops samples.
     bool want_audio = true;
     double fps = 60.0, sample_rate = 32040.0;
@@ -68,15 +87,52 @@ public:
     std::vector<std::uint8_t> rgba;
     std::vector<std::int16_t> pcm;
 private:
-    // Per thread: a hardware core's callbacks arrive on its own thread.
+    // Libretro callbacks have no userdata. A distinct function set per loaded
+    // host routes callbacks from core-owned CPU threads without a global owner.
+    static constexpr unsigned callback_capacity = 16;
+    static std::array<std::atomic<LibretroHost*>, callback_capacity> callback_hosts;
+    int callback_slot = -1;
+    struct Callbacks {
+        retro_environment_t environment;
+        retro_video_refresh_t video;
+        retro_audio_sample_t audio;
+        retro_audio_sample_batch_t audio_batch;
+        retro_input_poll_t input_poll;
+        retro_input_state_t input;
+        retro_hw_get_current_framebuffer_t framebuffer;
+    };
+    // Set by callback routing as well as direct calls into the core.
     static thread_local LibretroHost* active;
     struct Use {
         LibretroHost* previous;
         explicit Use(const LibretroHost* host) : previous(active) { active = const_cast<LibretroHost*>(host); }
         ~Use() { active = previous; }
     };
+    template <std::size_t Slot> static Callbacks callbacks_for() {
+        return {
+            [](unsigned cmd, void* data) { Use use(callback_hosts[Slot].load()); return environment(cmd, data); },
+            [](const void* data, unsigned w, unsigned h, std::size_t pitch) { Use use(callback_hosts[Slot].load()); video(data, w, h, pitch); },
+            [](std::int16_t l, std::int16_t r) { Use use(callback_hosts[Slot].load()); audio(l, r); },
+            [](const std::int16_t* data, std::size_t frames) { Use use(callback_hosts[Slot].load()); return audio_batch(data, frames); },
+            [] { Use use(callback_hosts[Slot].load()); input_poll(); },
+            [](unsigned port, unsigned device, unsigned index, unsigned id) { Use use(callback_hosts[Slot].load()); return input(port, device, index, id); },
+            [] { Use use(callback_hosts[Slot].load()); return current_framebuffer(); }
+        };
+    }
+    template <std::size_t... Slots> static auto callback_table(std::index_sequence<Slots...>) {
+        return std::array<Callbacks, sizeof...(Slots)>{callbacks_for<Slots>()...};
+    }
+    static const std::array<Callbacks, callback_capacity> callbacks;
+    std::atomic<std::uint16_t> input_buttons{0};
+    std::atomic<std::int16_t> input_analog[4]{};
+    std::atomic<std::int16_t> input_triggers[2]{};
+    std::mutex audio_mutex;
+    std::vector<std::int16_t> pending_pcm;
+    bool audio_overflow = false;
     void* library = nullptr;
     bool initialized = false;
+    unsigned controller_ports = 2;
+    bool (*fn_vmu_lcd)(unsigned, std::uint8_t*, std::size_t) = nullptr;
     retro_pixel_format pixel_format = RETRO_PIXEL_FORMAT_0RGB1555;
     std::uint16_t buttons = 0;
     std::string system_dir, save_dir;
@@ -88,6 +144,7 @@ private:
     std::unique_ptr<GlContext> gl;
     retro_hw_render_callback hw{};
     bool hw_active = false;
+    bool async_readback = false; // only touched on the core's thread
     // Runs f on the core's thread when it has one (and is not already there).
     template <class F> auto on_core(F&& f) const -> decltype(f()) {
         if (!worker || worker->is_current()) return f();

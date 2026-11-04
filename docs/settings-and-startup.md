@@ -21,6 +21,20 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 | Menu | Accessibility; Layout & placement; Audio & vibration |
 | About & Help | About, controls, device status, troubleshooting, credits and diagnostics; Settings management |
 
+**Console region** (Menu → Layout & placement) chooses PAL (Europe, the default), NTSC (Americas) or Japan. It changes only how consoles are named and pictured in the menus; games, saves and folder recognition are unaffected. Consoles that differ by region:
+
+| Console | PAL | NTSC | Japan |
+|---|---|---|---|
+| SNES | SNES | SNES (US icon) | Super Famicom (SFC) |
+| NES | NES | NES | Famicom (FC) |
+| Mega Drive | Mega Drive | Genesis (GEN) | Mega Drive |
+| Master System | Master System | Master System | Mark III |
+| PC Engine | PC Engine | TurboGrafx-16 (TG-16) | PC Engine |
+| Sega CD | Mega-CD | Sega CD | Mega-CD |
+| Dreamcast | blue swirl icon | blue swirl icon | red swirl icon |
+
+Every other console keeps one name and icon in all regions. The setting is saved with the Menu settings and returns to PAL under Reset all settings. Names, short names and icon files are defined in `scripts/emulation/core_registry.gd` (`REGIONAL`); add an entry there to give another console a regional variant.
+
 Core settings offer console-wide defaults under Consoles and per-game overrides under This game. The playing console moves to the top, is marked Playing, and expands when the game changes. Console options sit inside the expanded group; selecting the header hides them. Other consoles remain accessible. This game identifies the loaded game and shows effective inherited values with From console or Game override beneath each setting. Y returns an option to its console setting. Changes apply when the game next loads. Sega consoles have separate preferences even where they share a core.
 
 Up/down selects, left/right adjusts immediately, A toggles switches or opens actions,
@@ -183,6 +197,50 @@ boot unless `--boot-preview` is supplied after `--`. `tests/menu_boot.gd` checks
 completion, skip, interruption and accessibility, and captures the 2D sequence when
 rendered. `tests/menu_boot_sound.gd` checks sound preference persistence, handover,
 skipping, the complete audio tail and independence from visual accessibility.
+
+### First-run setup
+
+A new user (no saved settings) gets first-run setup straight after the boot
+sequence: instead of flipping away, the boot logo stays face-on and glides down
+onto the Welcome page's logo while the planet settles, and the page builds in
+around it. **Let's get set up** runs six steps; **Skip setup** (or X on any step)
+goes to the last page, which still shows the menu shortcut.
+
+1. **Controls**: the menu shortcut (L1 + R1 + Start, or Escape) drawn as the
+   menu's own glyphs. Pressing it lights them and turns "Can't press it right
+   now? Continue" into Continue; it does not close setup or move on by itself. On other steps the shortcut and Escape say how to leave instead.
+   Recentre, Back and moving the TV are shown below.
+2. **Your view**: tracking status (with Connect glasses / Use fixed view when
+   tracking is not running), recentring, TV distance and screen height (which
+   open the same compact preview as the pause menu's, floating over the room
+   whichever menu position is chosen), and
+   **Menu position** (On the TV or Floating, the same `menu_on_tv` setting).
+3. **Console region**: PAL, NTSC or Japan, first suggested from the system
+   locale; five consoles, Dreamcast included, show their names and pictures live.
+4. **Game library**: folders found automatically (EmuDeck, RetroDECK and plain
+   `roms` layouts at home and on SD cards), or Browse folders, SD card / Computer
+   drives and Type a path, which borrow the menu's own pickers and return here.
+   The results page lists every console found, in a grid that widens from two
+   to four columns as the library grows, with BIOS needs and skipped folders.
+5. **Videos & music** (optional): the video folder picker (or FFmpeg setup where
+   needed) and a music folder. The music folder is saved in `recent.cfg`
+   (`[music] folder`) and is where the music browser opens.
+6. **Comfort**: picture style and the larger text, reduced animation, menu
+   music and vibration switches.
+
+Every step's Next (or Finish) is pinned below the page, outside its scrolling
+area, so it stays on screen with larger text or a long list. Pages with little
+to select scroll with up and down. Finishing saves `[welcome] done=true` in
+`settings.cfg`; leaving part-way keeps it false and shows setup again next time,
+and reopening the menu during setup returns to it. Settings saved before setup
+existed have no `[welcome]` entry and count as done, so existing users are not
+shown it. Reset all settings leaves it alone; **About & Help → Run setup again**
+opens it any time. It comes before the last-game chooser that the Steam
+launcher's `--last-game` asks for. Launches with `--rom`, `--capture` or a test
+`--script` skip it; `--welcome-preview` (after `--`) forces it.
+`tests/welcome_flow.gd` covers who sees it, the logo's landing, every page,
+the pickers, the pinned rows and saving, and captures each page to
+`build/welcome-review/` when rendered.
 
 Without a game to autostart, launch selects Continue when the last cartridge is available, otherwise library setup. A missing
 last-game path or SD folder keeps its saved location and explains how to reconnect

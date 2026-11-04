@@ -15,6 +15,7 @@ const VideoLibrary = preload("res://scripts/video/video_library.gd")
 const VideoBar = preload("res://scripts/ui/video_bar.gd")
 const FfmpegInstaller = preload("res://scripts/video/ffmpeg_installer.gd")
 const Menu = preload("res://scripts/ui/menu_controller.gd")
+var vmu_display := preload("res://scripts/rendering/vmu_display.gd").new()
 var menu: PanelContainer
 const Showcase = preload("res://scripts/presets/showcase.gd")
 const SettingsDefaults = preload("res://scripts/ui/settings_defaults.gd")
@@ -55,6 +56,8 @@ var rooms = preload("res://scripts/ui/room_presets.gd").new()
 var box_art: Node
 var menu_large_text := false
 var game_list_columns := 1
+## Console collection (pal, ntsc, japan): console names and icons follow it.
+var console_region := "pal"
 var menu_high_contrast := false
 var menu_reduced_motion := false
 var menu_sounds := false
@@ -84,6 +87,10 @@ func play_boot_sound() -> void:
 func stop_boot_sound() -> void:
 	if is_instance_valid(boot_audio): boot_audio.stop()
 
+func apply_console_region(region: String) -> void:
+	console_region = region if region in CoreRegistry.REGIONS else "pal"
+	CoreRegistry.apply_region(console_region)
+
 func apply_boot_sound() -> void:
 	if not menu_boot_sound: stop_boot_sound()
 
@@ -93,6 +100,10 @@ var menu_depth := true
 var menu_curve := false
 ## The menu on the TV itself (menu_on_tv.gd), or floating in front of it.
 var menu_on_tv := true
+## First-run setup (scripts/ui/menu_welcome.gd) has been finished or skipped.
+var welcome_done := true
+## The folder the music browser opens first, chosen in first-run setup.
+var music_folder := ""
 ## Accessibility: use the separate reading picture instead of the current CRT settings.
 var menu_clean_feed := false
 var tv_menu: Node
@@ -119,7 +130,9 @@ var signal_view: SubViewport
 var card_view: SubViewport
 var card_words: Node2D
 var pattern_words: Node2D
-var was_paused_before_menu := false
+var was_paused_before_menu := false # the game's, restored when the menu closes
+## The video's own: a game and a video never share one pause-restore value.
+var video_was_paused_before_menu := false
 var provider: TrackingProvider = Simulated.new()
 ## "glasses" (XR Gaming on Linux, VITURE SDK on Windows) or "opentrack" (UDP 4242).
 var tracking_source := "glasses"
@@ -175,6 +188,15 @@ var loading_path := ""
 var loading_started := 0
 ## A game still black after this long is shown anyway, whatever it draws.
 const LOADING_TIMEOUT_MSEC := 30000
+## Systems whose boot takes seconds of black or a hitching start: the loading card
+## covers them, and for those in LOADING_HOLD_MSEC it stays up that long after the
+## game has booted, so shader compiles and cache warm-up happen behind it.
+const LOADING_CARD_SYSTEMS := ["psx", "segacd", "gamecube", "dreamcast"]
+const LOADING_HOLD_MSEC := {"gamecube": 3000}
+var loading_hold := 0
+## Set once Continue has restored the resume point: the game is mid-play, so its
+## next picture takes the card down, dark or not, with no boot hold.
+var loading_resumed := false
 ## True while load_game swaps games behind the card, which must stay up.
 var loading_game := false
 var eyes: Array[Camera3D] = []
@@ -185,6 +207,13 @@ var metrics_visible := false:
 	set(value):
 		metrics_visible=value
 		for label in diagnostics: label.visible=value
+## The game's own frame rate in each eye's top-right corner while a game plays.
+var game_fps_labels: Array[Label] = []
+var game_fps_visible := false:
+	set(value):
+		game_fps_visible=value
+		if not value:
+			for label in game_fps_labels: label.visible=false
 var settings_panel: PanelContainer
 var row: HBoxContainer
 var screenshot_pending := false
@@ -228,6 +257,8 @@ var view_diagnosed := false
 var sbs_prompt: Control
 var sbs_startup := false
 var sbs_starting := false
+## start_application builds the whole scene; three startup paths reach it.
+var application_started := false
 var startup_loading := false
 var menu_boot_pending := false
 var windows_sbs_size := Vector2i.ZERO
@@ -315,9 +346,12 @@ func start_sbs_session() -> void:
 	if not settings_panel.visible: power_on.begin()
 	if resume_game: emulator.set_paused(false)
 	get_window().grab_focus()
+	sbs_starting = false
 	print("SBS startup: same-window handover complete")
 
 func start_application() -> void:
+	if application_started: return
+	application_started = true
 	fade_material.shader = load("res://shaders/eye_fade.gdshader")
 	if not windows_fixed_start and OS.get_name() in ["Linux", "Windows"] and not "--simulate" in OS.get_cmdline_user_args():
 		use_tracking(true)
@@ -391,6 +425,15 @@ func start_application() -> void:
 		hud.add_theme_constant_override("shadow_offset_y", 1)
 		panel.add_child(hud)
 		diagnostics.append(hud)
+		var game_rate := Label.new()
+		game_rate.visible=false
+		game_rate.add_theme_font_size_override("font_size", 16)
+		game_rate.add_theme_color_override("font_shadow_color", Color.BLACK)
+		game_rate.add_theme_constant_override("shadow_offset_x", 1)
+		game_rate.add_theme_constant_override("shadow_offset_y", 1)
+		game_rate.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		panel.add_child(game_rate)
+		game_fps_labels.append(game_rate)
 		# Each eye fades at its own edges, including at the SBS join.
 		panel.material = fade_material
 		var notice := Label.new()
@@ -413,8 +456,14 @@ func start_application() -> void:
 		visual_bar.use_visualizer()
 		panel.add_child(visual_bar)
 		visualizer_bars.append(visual_bar)
+	world.television.add_child(vmu_display)
 	emulator = Emulation.new()
 	add_child(emulator)
+	var LiveTrace = preload("res://scripts/diagnostics/live_trace.gd")
+	if LiveTrace.requested():
+		var trace = LiveTrace.new()
+		add_child(trace)
+		trace.start(self)
 	music=preload("res://scripts/audio/music_player.gd").new()
 	menu_ambience = preload("res://scripts/audio/menu_ambience.gd").new()
 	menu_ambience.name = "MenuAmbience"
@@ -442,21 +491,25 @@ func start_application() -> void:
 		if is_instance_valid(visualizer) and visualizer.active: return
 		# The loading card stays up through a disc's black boot frames.
 		if not loading_path.is_empty():
+			if emulator.rom_path != loading_path: return
 			if not picture_started(image): return
 			end_loading()
 		if tv_menu == null or tv_menu.lights_room(): world.screen_light.set_image(image)
 		world.picture.frame_presented(image))
 	emulator.game_changed.connect(func(active):
+		vmu_display.clear()
 		if active: stop_boot_sound()
 		# A game stopped from the menu takes its loading card with it.
 		if not active and not loading_game: end_loading()
-		show_game_cover(emulator.rom_path if active else "")
-		change_game_preferences(active)
-		show_programme(active, emulator.fps, emulator.display_aspect)
+		profile_boot_action("cover", func(): show_game_cover(emulator.rom_path if active else ""))
+		profile_boot_action("preferences", func(): change_game_preferences(active))
+		profile_boot_action("programme", func(): show_programme(active, emulator.fps, emulator.display_aspect))
 		if active:
 			last_game_path = emulator.rom_path
-			if not play_history.played(last_game_path): show_notice("Could not save recently played games")
-			if save_library() != OK: show_notice("Could not save the recent game location"))
+			profile_boot_action("history", func():
+				if not play_history.played(last_game_path): show_notice("Could not save recently played games"))
+			profile_boot_action("library", func():
+				if save_library() != OK: show_notice("Could not save the recent game location")))
 	video = VideoSession.new()
 	add_child(video)
 	ffmpeg_installer = FfmpegInstaller.new()
@@ -488,12 +541,17 @@ func start_application() -> void:
 	var showcase_defaults := Showcase.config()
 	SettingsStore.copy_sections(showcase_defaults,defaults,showcase_defaults.get_sections())
 	apply_settings(settings_store.read("user://settings.cfg", defaults))
+	# New users see first-run setup. Settings saved before it existed, with no
+	# [welcome] entry, belong to someone already set up.
+	var stored: ConfigFile = settings_store.read("user://settings.cfg")
+	welcome_done = bool(stored.get_value("welcome", "done", not stored.get_sections().is_empty()))
 	picture_baseline = capture_settings()
 	var recent := settings_store.read("user://recent.cfg")
 	if recent.has_section("library"):
 		last_game_path = str(recent.get_value("library", "last_game", ""))
 		default_rom_dir = str(recent.get_value("library", "default_rom_dir", ""))
 	video_dir = str(recent.get_value("video", "folder", ""))
+	music_folder = str(recent.get_value("music", "folder", ""))
 	video_style = clampi(int(recent.get_value("video", "style", 0)), 0, VideoSession.STYLES.size() - 1)
 	# "line_count" replaces "lines": the old key held the earlier 480 default,
 	# which hid the scanlines, so it is not carried over.
@@ -526,7 +584,7 @@ func start_application() -> void:
 	visualizer.host=self
 	add_child(visualizer)
 	build_settings()
-	music.restore_resume()
+	music.restore_resume_async()
 	for panel in panels:
 		var overlay := TextureRect.new()
 		overlay.texture = menu_view.get_texture()
@@ -563,6 +621,12 @@ func start_application() -> void:
 	startup_message = settings_store.warning if startup_message.is_empty() else startup_message
 	if not emulator.loaded and not video.loaded and not settings_panel.visible and not "--capture" in arguments:
 		toggle_settings()
+	# First-run setup follows the boot animation on a plain start, ahead of the
+	# last-game chooser the Steam launcher asks for. Test scripts and launches
+	# straight into a game skip it; --welcome-preview forces it.
+	var welcome_forced := "--welcome-preview" in arguments
+	if (not welcome_done or welcome_forced) and settings_panel.visible and not emulator.loaded and not video.loaded and not "--capture" in arguments and (welcome_forced or not "--script" in OS.get_cmdline_args()):
+		menu.welcome.open()
 	refresh_startup_status()
 	if "--capture" in arguments:
 		power_on.started=true; power_on.set_progress(1.0)
@@ -574,6 +638,12 @@ func start_application() -> void:
 		if is_instance_valid(menu.boot): menu.boot.set_process(false)
 
 func apply_settings(config: ConfigFile) -> void:
+	for key in vmu_display.DEFAULTS: vmu_display.set(key,config.get_value("vmu",key,vmu_display.DEFAULTS[key]))
+	vmu_display.horizontal = clampf(vmu_display.horizontal,-1.5,1.5)
+	vmu_display.vertical = clampf(vmu_display.vertical,-1.5,-0.1)
+	vmu_display.forward = clampf(vmu_display.forward,0.2,1.5)
+	vmu_display.width = clampf(vmu_display.width,0.2,0.8)
+	vmu_display.apply_layout()
 	SettingsStore.migrate_view_fov(config)
 	SettingsStore.migrate_screen_glow(config)
 	picture_preset_id=str(config.get_value("menu","picture_preset_id",""))
@@ -588,12 +658,14 @@ func apply_settings(config: ConfigFile) -> void:
 	menu_music_volume = float(menu_level) if typeof(menu_level) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(menu_level)) else 0.10
 	apply_menu_music()
 	game_list_columns = clampi(int(config.get_value("accessibility", "game_list_columns", 1)), 1, 3)
+	apply_console_region(str(config.get_value("accessibility", "console_region", "pal")))
 	menu_depth = bool(config.get_value("accessibility","menu_depth",true))
 	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
 	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
 	for key in music.DEFAULTS: music.set(key,config.get_value("music",key,music.DEFAULTS[key]))
 	music.apply()
 	metrics_visible=bool(config.get_value("preferences","metrics_visible",false))
+	game_fps_visible=bool(config.get_value("preferences","game_fps_visible",false))
 	power_on.enabled=bool(config.get_value("atmosphere","power_on",true))
 	power_on.sound_level=float(config.get_value("atmosphere","power_sound",0.60))
 	power_on.reduced_motion=menu_reduced_motion
@@ -675,6 +747,8 @@ func _process(delta: float) -> void:
 		bar.track(video.path.get_file().get_basename(), video.clock, float(video.info.get("duration", 0.0)), video.paused, delta, bar_allowed)
 	for notice in notices: notice.visible = notice_time > 0.0
 	var menu_open := settings_panel.visible
+	# A core that never shows a frame must not keep the card up for ever.
+	if not loading_path.is_empty() and emulator.loaded and Time.get_ticks_msec() - loading_started > LOADING_TIMEOUT_MSEC: end_loading()
 	# Warm up the physical tube first. The live space shader keeps moving while
 	# the logo timeline and its audio remain held at their first frame.
 	tv_menu.update(delta)
@@ -749,6 +823,7 @@ func _process(delta: float) -> void:
 	var tv_position: Vector3 = tv_menu.lean_position(Vector3(0, 1.25 + height_offset, -distance))
 	if world.television.position != tv_position: world.television.position = tv_position
 	if world.television.scale != Vector3.ONE * tv_scale: world.television.scale = Vector3.ONE * tv_scale
+	vmu_display.tick(delta,emulator)
 	emulator.tv_audio.update_pose(displayed,Vector3(0,1.25,0),world.television.position,delta)
 	music.update_pose(displayed,Vector3(0,1.25,0),world.television.position,delta)
 	diagnostics_elapsed += delta
@@ -760,6 +835,7 @@ func _process(delta: float) -> void:
 		# Parallel axes, asymmetric frusta; no toe-in. Convergence is zero disparity distance.
 		var near_plane := 0.05
 		eyes[i].set_frustum(2.0 * near_plane * tan(deg_to_rad(vertical_fov) / 2.0), Vector2(-offset * near_plane / convergence, 0), near_plane, 50.0)
+		if refresh_diagnostics: update_game_fps(i)
 		if refresh_diagnostics and diagnostics[i].visible and not menu_open:
 			var a := displayed.get_euler() * 180.0 / PI
 			diagnostics[i].text = "CRT XR   /   %s\n%s\nYaw %+.1f   Pitch %+.1f   Roll %+.1f\n%.2fm  /  IPD %.0fmm  /  %.0f fps\nL + R + Start / Esc: menu   R3 / R: recenter" % ["LEFT" if stereo and i == 0 else ("RIGHT" if stereo else "DESKTOP"), provider.status, a.y, a.x, a.z, distance, ipd * 1000, Engine.get_frames_per_second()]
@@ -808,12 +884,15 @@ func _input(event: InputEvent) -> void:
 		get_viewport().set_input_as_handled()
 		return
 	if emulator.gamepad.handle_event(event):
-		toggle_settings()
+		# First-run setup teaches the shortcut rather than closing on it.
+		if settings_panel.visible and menu.mode == "welcome": menu.welcome.menu_shortcut()
+		else: toggle_settings()
 		get_viewport().set_input_as_handled()
 		return
 	if settings_panel.visible:
 		if event is InputEventKey and event.pressed and not event.echo and event.physical_keycode == KEY_ESCAPE:
-			close_settings()
+			if menu.mode == "welcome": menu.welcome.menu_shortcut()
+			else: close_settings()
 		elif menu.handle(event): pass
 		elif event is InputEventMouse:
 			for panel in panels:
@@ -961,6 +1040,7 @@ func set_stereo(value: bool) -> void:
 		DisplayServer.window_set_size(Vector2i(1280, 360) if value else (Vector2i(1280,800) if "--deck-mono" in OS.get_cmdline_user_args() else Vector2i(1280,720)))
 
 func toggle_settings() -> void:
+	var profile_start := Time.get_ticks_usec()
 	if settings_panel.visible:
 		close_settings()
 		return
@@ -968,22 +1048,27 @@ func toggle_settings() -> void:
 	was_paused_before_menu = emulator.paused
 	if emulator.loaded: emulator.set_paused(true)
 	if video.loaded:
-		was_paused_before_menu = video.paused
+		video_was_paused_before_menu = video.paused
 		video.set_paused(true, true)
 		remember_video_position()
 	emulator.gamepad.set_menu_active(true)
 	settings_on_open = capture_settings().encode_to_text()
 	settings_panel.show()
 	menu.open_pause()
+	# Setup left part-way (the menu was closed for it) carries on where it was.
+	if menu.welcome.active: menu.welcome.resume()
 	refresh_startup_status()
+	if emulator.profile_frames: print("PROFILE_BOOT menu_open at=", profile_start, " us=", Time.get_ticks_usec() - profile_start)
 
-func close_settings() -> void:
-	if not is_instance_valid(settings_panel) or not settings_panel.visible: return
+## Returns true when the menu is closed afterwards (false: saving failed and it stays open).
+func close_settings() -> bool:
+	var profile_start := Time.get_ticks_usec()
+	if not is_instance_valid(settings_panel) or not settings_panel.visible: return true
 	stop_boot_sound()
 	if is_instance_valid(menu.boot): menu.boot.finish()
 	if not save_settings():
 		menu.show_error("Settings could not be saved. Check free space and user-folder permissions. Your changes are still here.")
-		return
+		return false
 	menu.error_label.hide()
 	if not settings_on_open.is_empty() and capture_settings().encode_to_text() != settings_on_open: show_notice("Settings saved")
 	settings_on_open = ""
@@ -992,8 +1077,12 @@ func close_settings() -> void:
 	menu_ambience.silence()
 	emulator.gamepad.set_menu_active(false)
 	if emulator.loaded: emulator.set_paused(true if visualizer.active else was_paused_before_menu)
-	if video.loaded and not video.ended: video.set_paused(true if visualizer.active else was_paused_before_menu, true)
+	if video.loaded and not video.ended: video.set_paused(true if visualizer.active else video_was_paused_before_menu, true)
 	if not is_instance_valid(sbs_prompt): power_on.begin()
+	# Nothing is left to wait for once the menu is gone.
+	menu_boot_pending = false
+	if emulator.profile_frames: print("PROFILE_BOOT menu_close at=", profile_start, " us=", Time.get_ticks_usec() - profile_start)
+	return true
 
 ## Degauss: closes the menu so the wobble and colour swirl show on the picture.
 func degauss() -> void:
@@ -1023,8 +1112,8 @@ func show_programme(active: bool, rate: float, aspect: float) -> void:
 	var loading := not loading_path.is_empty()
 	pattern.visible = not active and not loading
 	pattern.set_process(pattern.visible)
-	signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active and not loading else SubViewport.UPDATE_ALWAYS
-	card_view.render_target_update_mode = SubViewport.UPDATE_DISABLED if active and not loading else SubViewport.UPDATE_ALWAYS
+	signal_view.render_target_update_mode = SubViewport.UPDATE_ONCE if active and not loading else SubViewport.UPDATE_ALWAYS
+	card_view.render_target_update_mode = SubViewport.UPDATE_ONCE if active and not loading else SubViewport.UPDATE_ALWAYS
 	pattern_words.visible = not active and not loading
 	card_words.visible = loading
 	# Switching programmes is a channel change; the first is the power-on instead.
@@ -1049,7 +1138,12 @@ func show_loading(path: String, progress := -1.0) -> void:
 	loading_started = Time.get_ticks_msec()
 	loading_screen.title = path.get_file().get_basename()
 	loading_screen.progress = progress
-	if starting: loading_screen.elapsed = 0.0
+	if starting:
+		loading_screen.elapsed = 0.0
+		loading_hold = 0
+		loading_resumed = false
+	loading_screen.queue_redraw()
+	card_words.queue_redraw()
 	loading_screen.visible = true
 	loading_screen.set_process(true)
 	pattern_words.visible = false
@@ -1064,6 +1158,13 @@ func show_loading(path: String, progress := -1.0) -> void:
 	world.picture.set_source(card_view.get_texture(), false, Vector2(Pattern.SIZE))
 	if starting and power_on.progress >= 1.0: tv_effects.play("channel")
 
+## Continue restored the game behind the card: show it from its next picture.
+## (The fresh-boot hold exists for shader compiles during a disc's boot.)
+func resume_ready(path: String) -> void:
+	if loading_path != path: return
+	loading_hold = 0
+	loading_resumed = true
+
 func update_loading(path: String, progress: float) -> void:
 	if loading_path == path: loading_screen.progress = progress
 
@@ -1071,10 +1172,15 @@ func update_loading(path: String, progress: float) -> void:
 func end_loading() -> void:
 	if loading_path.is_empty(): return
 	loading_path = ""
+	loading_hold = 0
+	loading_resumed = false
 	loading_screen.visible = false
 	loading_screen.set_process(false)
 	card_words.visible = false
-	card_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	# Clear the cached card after hiding its nodes, even before the new game
+	# has produced a texture. Otherwise the next launch can reuse its old title.
+	card_view.render_target_update_mode = SubViewport.UPDATE_ONCE
+	signal_view.render_target_update_mode = SubViewport.UPDATE_ONCE
 	if emulator.loaded and emulator.texture != null:
 		signal_view.render_target_update_mode = SubViewport.UPDATE_DISABLED
 		world.picture.source_rate = emulator.fps
@@ -1085,7 +1191,10 @@ func end_loading() -> void:
 ## A game's picture has started once a frame shows something other than black,
 ## sampled on a coarse grid; after the timeout any frame counts.
 func picture_started(image: Image) -> bool:
-	if Time.get_ticks_msec() - loading_started > LOADING_TIMEOUT_MSEC: return true
+	var waited := Time.get_ticks_msec() - loading_started
+	if waited > LOADING_TIMEOUT_MSEC: return true
+	if loading_resumed: return image != null and not image.is_empty()
+	if waited < loading_hold: return false
 	if image == null or image.is_empty(): return false
 	var lit := 0
 	for row in range(12):
@@ -1096,14 +1205,23 @@ func picture_started(image: Image) -> bool:
 
 ## Before a zipped disc unpacks: the playing game is saved and stopped (it would
 ## play on behind the card), any video too, and the card goes up.
-func stop_for_disc(path: String) -> bool:
+func stop_for_disc(path: String, background := false) -> bool:
 	if video.loaded: stop_video()
-	if not emulator.save_auto(): return false
-	emulator.stop()
-	show_loading(path, 0.0)
+	loading_game = true
+	var stopped := true
+	if background: stopped = await emulator.stop_for_launch()
+	else:
+		stopped = emulator.save_auto()
+		if stopped: emulator.stop()
+	loading_game = false
+	if not stopped: return false
+	if loading_path.is_empty() or loading_path == path: show_loading(path, 0.0)
 	return true
 
 func play_video(path: String, from_seconds := 0.0) -> bool:
+	if loading_game or emulator.transition_busy:
+		startup_message = "A game operation is still running. Please wait for it to finish."
+		return false
 	if visualizer.active: visualizer.leave()
 	startup_message = ""
 	end_loading()
@@ -1195,18 +1313,39 @@ func video_input(event: InputEvent) -> bool:
 		_: return false
 	return true
 
+func profile_boot_action(label: String, action: Callable) -> void:
+	var started := Time.get_ticks_usec()
+	action.call()
+	if emulator.profile_frames:
+		print("PROFILE_BOOT ", label, " at=", started, " us=", Time.get_ticks_usec() - started)
+
+func shows_loading_card(path: String) -> bool:
+	return CoreRegistry.identify(path) in LOADING_CARD_SYSTEMS
+
 func load_game(path: String) -> bool:
+	return call("_load_game", path, false)
+
+func load_game_async(path: String, background := true) -> bool:
+	return await _load_game(path, background)
+
+func _load_game(path: String, background: bool) -> bool:
 	if visualizer.active: visualizer.leave()
 	startup_message = ""
 	var restore_paused := was_paused_before_menu
 	if video.loaded: stop_video()
 	# Discs boot through seconds of black: the loading card covers them.
-	if CoreRegistry.identify(path) in ["psx", "segacd"]: show_loading(path)
+	var carded := shows_loading_card(path)
+	if carded: show_loading(path)
 	else: end_loading()
 	loading_game = true
-	var opened: bool = emulator.load_rom(path)
+	var opened: bool = await emulator.load_rom_async(path) if background else emulator.load_rom(path)
 	loading_game = false
+	if opened and carded and loading_path == path:
+		# The hold counts from when the game has booted, not from the click.
+		loading_started = Time.get_ticks_msec()
+		loading_hold = int(LOADING_HOLD_MSEC.get(CoreRegistry.identify(path), 0))
 	if not opened:
+		if not loading_path.is_empty() and loading_path != path: return false
 		end_loading()
 		startup_message = "Could not open the game. Check the ROM location and emulator files. " + emulator.status
 		if not settings_panel.visible: toggle_settings()
@@ -1217,6 +1356,7 @@ func load_game(path: String) -> bool:
 		was_paused_before_menu = false
 		menu.refresh()
 	refresh_startup_status()
+	if opened and background and not settings_panel.visible: menu.prepare_pause.call_deferred()
 	return opened
 
 func save_library() -> Error:
@@ -1224,6 +1364,7 @@ func save_library() -> Error:
 	recent.set_value("library", "last_game", last_game_path)
 	recent.set_value("library", "default_rom_dir", default_rom_dir)
 	recent.set_value("video", "folder", video_dir)
+	recent.set_value("music", "folder", music_folder)
 	recent.set_value("video", "style", video_style)
 	recent.set_value("video", "line_count", video_lines)
 	recent.set_value("video", "hardware", video_hardware)
@@ -1409,6 +1550,7 @@ func reset_all_options() -> void:
 	menu_music_volume = 0.10
 	apply_menu_music()
 	game_list_columns = 1
+	apply_console_region("pal")
 	menu_depth = true
 	menu_on_tv = true
 	haptic_strength = 0.8
@@ -1426,6 +1568,7 @@ func load_showcase_setup() -> void:
 	var merged := capture_settings()
 	SettingsStore.copy_sections(Showcase.config(),merged,PackedStringArray(["view","room","crt","picture","audio","atmosphere","emulation"]))
 	merged.set_value("preferences","metrics_visible",false)
+	merged.set_value("preferences","game_fps_visible",false)
 	apply_settings(merged)
 	if active_game_key.is_empty(): picture_baseline=capture_settings()
 	rebuild_settings()
@@ -1463,6 +1606,20 @@ func fit_tv_to_view() -> void:
 	recenter()
 	rebuild_settings.call_deferred()
 	show_notice("TV fitted to neutral view")
+
+## "GameCube  59.9 fps  100%": emulated frames per second and the speed against
+## the game's own rate. Hidden in menus, while paused and behind a loading card.
+func update_game_fps(eye: int) -> void:
+	var label := game_fps_labels[eye]
+	var show: bool = game_fps_visible and emulator.loaded and not emulator.paused and loading_path.is_empty() and not settings_panel.visible
+	if label.visible != show: label.visible = show
+	if not show: return
+	var target: float = maxf(emulator.fps, 1.0)
+	var console: String = emulator.Registry.SYSTEMS[emulator.system_id].name
+	label.text = "%s   %.1f fps   %d%%" % [console, emulator.game_fps, roundi(emulator.game_fps / target * 100.0)]
+	label.add_theme_color_override("font_color", Color.WHITE if emulator.game_fps >= target * 0.97 else Color("ffd060"))
+	label.reset_size()
+	label.position = Vector2(panels[eye].size.x - label.size.x - 22.0, 18.0)
 
 func show_notice(message: String) -> void:
 	for notice in notices: notice.text = message
@@ -1527,6 +1684,7 @@ func capture_settings() -> ConfigFile:
 	if provider.real: xr_fov=vertical_fov
 	else: desktop_fov=vertical_fov
 	var config := ConfigFile.new()
+	for key in vmu_display.DEFAULTS: config.set_value("vmu",key,vmu_display.get(key))
 	config.set_value("tracking", "source", tracking_source)
 	config.set_value("menu","picture_preset_id",picture_preset_id)
 	config.set_value("menu","picture_preset_signature",picture_preset_signature)
@@ -1542,9 +1700,11 @@ func capture_settings() -> ConfigFile:
 	for key in emulator.tv_audio.DEFAULTS: config.set_value("audio",key,emulator.tv_audio.get(key))
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns"]: config.set_value("accessibility",key,get(key))
+	config.set_value("preferences","game_fps_visible",game_fps_visible)
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region"]: config.set_value("accessibility",key,get(key))
 	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
 	config.set_value("accessibility","menu_music_volume",menu_music_volume)
+	config.set_value("welcome","done",welcome_done)
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
 	config.set_value("emulation", "separate_preview", emulator.separate_preview)
 	config.set_value("view", "right_stick_distance", right_stick_distance)

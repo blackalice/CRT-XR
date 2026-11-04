@@ -12,28 +12,39 @@ extends RefCounted
 ## context; "options" are core option values that replace the core's defaults.
 const Archive = preload("res://scripts/content/rom_archive.gd")
 const Folders = preload("res://scripts/content/console_folders.gd")
-const SYSTEMS := {
+const DEFINITIONS := {
+	"gamecube": {"name":"GameCube", "short":"GC", "core":"dolphin", "extensions":[], "aspect":4.0/3.0,
+		"analog":true, "triggers":true, "preview":false, "hardware":true,
+		"options":{"dolphin_efb_scale":"1", "dolphin_cpu_core":"1", "dolphin_dsp_hle":"enabled",
+			"dolphin_main_cpu_thread":"enabled", "dolphin_aspect_ratio":"2", "dolphin_call_back_audio_method":"1",
+			# Dolphin's own messages draw into the game picture; the room has its own.
+			"dolphin_osd_enabled":"disabled"}},
 	"snes": {"name":"SNES", "core":"snes9x", "extensions":["sfc","smc","swc","fig"], "aspect":4.0/3.0},
 	"nes": {"name":"NES", "core":"nestopia", "extensions":["nes","unf","unif"], "aspect":4.0/3.0},
-	"megadrive": {"name":"Mega Drive", "core":"genesis_plus_gx", "extensions":["md","gen","smd"], "aspect":4.0/3.0},
-	"mastersystem": {"name":"Master System", "core":"genesis_plus_gx", "extensions":["sms"], "aspect":4.0/3.0},
-	"gamegear": {"name":"Game Gear", "core":"genesis_plus_gx", "extensions":["gg"], "aspect":10.0/9.0},
-	"gameboy": {"name":"Game Boy / Color", "core":"gambatte", "extensions":["gb","gbc"], "aspect":10.0/9.0},
-	"gba": {"name":"Game Boy Advance", "core":"mgba", "extensions":["gba"], "aspect":240.0/160.0},
+	"megadrive": {"name":"Mega Drive", "short":"MD", "core":"genesis_plus_gx", "extensions":["md","gen","smd"], "aspect":4.0/3.0},
+	"mastersystem": {"name":"Master System", "short":"SMS", "core":"genesis_plus_gx", "extensions":["sms"], "aspect":4.0/3.0},
+	"gamegear": {"name":"Game Gear", "short":"GG", "core":"genesis_plus_gx", "extensions":["gg"], "aspect":10.0/9.0},
+	"gameboy": {"name":"Game Boy / Color", "short":"GB/GBC", "core":"gambatte", "extensions":["gb","gbc"], "aspect":10.0/9.0},
+	"gba": {"name":"Game Boy Advance", "short":"GBA", "core":"mgba", "extensions":["gba"], "aspect":240.0/160.0},
 	"pcengine": {"name":"PC Engine / TurboGrafx-16", "short":"PC Engine", "core":"mednafen_pce_fast", "extensions":["pce"], "aspect":4.0/3.0},
-	"segacd": {"name":"Sega CD / Mega-CD", "core":"genesis_plus_gx", "extensions":[], "aspect":4.0/3.0,
+	"segacd": {"name":"Sega CD / Mega-CD", "short":"Sega CD", "core":"genesis_plus_gx", "extensions":[], "aspect":4.0/3.0,
 		"bios_any":["bios_CD_U.bin","bios_CD_E.bin","bios_CD_J.bin"]},
-	"atari2600": {"name":"Atari 2600", "core":"stella", "extensions":["a26"], "aspect":4.0/3.0},
-	"atarilynx": {"name":"Atari Lynx", "core":"mednafen_lynx", "extensions":["lynx"], "aspect":160.0/102.0,
+	"atari2600": {"name":"Atari 2600", "short":"2600", "core":"stella", "extensions":["a26"], "aspect":4.0/3.0},
+	"atarilynx": {"name":"Atari Lynx", "short":"Lynx", "core":"mednafen_lynx", "extensions":["lynx"], "aspect":160.0/102.0,
 		"bios_any":["lynxboot.img"]},
-	"ngpc": {"name":"Neo Geo Pocket / Color", "short":"Neo Geo Pocket", "core":"mednafen_ngp", "extensions":["ngp","ngpc","ngc"], "aspect":16.0/15.0},
+	"ngpc": {"name":"Neo Geo Pocket / Color", "short":"NGPC", "core":"mednafen_ngp", "extensions":["ngp","ngpc","ngc"], "aspect":16.0/15.0},
 	"vectrex": {"name":"Vectrex", "core":"vecx", "extensions":["vec"], "aspect":4.0/3.0},
 	# A DualShock (RETRO_DEVICE_SUBCLASS(ANALOG, 1)) stays digital until a game asks
 	# for analog, so pad-only games behave as with the original controller. The core
 	# has a built-in BIOS replacement; a real BIOS improves compatibility.
-	"psx": {"name":"PlayStation", "core":"pcsx_rearmed", "extensions":[], "aspect":4.0/3.0,
+	"psx": {"name":"PlayStation", "short":"PS1", "core":"pcsx_rearmed", "extensions":[], "aspect":4.0/3.0,
 		"controller":(2 << 8) | 5, "analog":true, "triggers":true, "preview":false,
 		"bios_optional":["scph5501.bin","scph5500.bin","scph5502.bin","scph1001.bin","scph7001.bin","scph101.bin","psxonpsp660.bin","ps1_rom.bin"]},
+	"dreamcast": {"name":"Dreamcast", "short":"DC", "core":"flycast", "extensions":["gdi","cdi"], "aspect":4.0/3.0,
+		"analog":true, "triggers":true, "preview":false, "hardware":true,
+		"bios_optional":["dc_boot.bin"],
+		"options":{"reicast_internal_resolution":"640x480", "reicast_alpha_sorting":"per-triangle (normal)",
+			"reicast_threaded_rendering":"disabled", "reicast_vblank_pacing":"enabled"}},
 	# GLideN64 at the console's own 320x240, so the CRT draws native lines. The
 	# host applies the stick deadzone, so the core's is off. Independent C-buttons
 	# (alt-map) give every N64 button its own input, so controller layouts decide
@@ -45,8 +56,47 @@ const SYSTEMS := {
 			"mupen64plus-astick-deadzone":"0", "mupen64plus-cpucore":"dynamic_recompiler", "mupen64plus-alt-map":"True"}}
 }
 
+## Where the console collection comes from: names and icons follow it. PAL is the base
+## in DEFINITIONS; each region overrides only what differs (name, short, icon file).
+const REGIONS := ["pal", "ntsc", "japan"]
+const REGION_LABELS := ["PAL (Europe)", "NTSC (Americas)", "Japan"]
+const REGIONAL := {
+	"snes": {"ntsc":{"icon":"snes_ntsc"}, "japan":{"name":"Super Famicom", "short":"SFC"}},
+	"nes": {"japan":{"name":"Famicom", "short":"FC", "icon":"famicom"}},
+	"megadrive": {"pal":{"icon":"megadrive_eu"}, "japan":{"icon":"megadrive_eu"},
+		"ntsc":{"name":"Genesis", "short":"GEN", "icon":"megadrive"}},
+	"mastersystem": {"japan":{"name":"Mark III", "short":"Mark III", "icon":"mastersystem_jp"}},
+	"pcengine": {"pal":{"name":"PC Engine"}, "japan":{"name":"PC Engine"},
+		"ntsc":{"name":"TurboGrafx-16", "short":"TG-16", "icon":"turbografx"}},
+	"segacd": {"pal":{"name":"Mega-CD", "short":"Mega-CD", "icon":"megacd"}, "japan":{"name":"Mega-CD", "short":"Mega-CD", "icon":"megacd"},
+		"ntsc":{"name":"Sega CD", "short":"Sega CD"}},
+	"dreamcast": {"pal":{"icon":"dreamcast_blue"}, "ntsc":{"icon":"dreamcast_blue"}}
+}
+static var region := "pal"
+
+static var SYSTEMS: Dictionary = available_systems()
+
+## Names and icons for a region; run again to switch. Mutates SYSTEMS in place so
+## everything reading a console's name, short or icon follows.
+static func apply_region(id: String) -> void:
+	region = id if id in REGIONS else "pal"
+	for system in SYSTEMS:
+		var spec: Dictionary = SYSTEMS[system]
+		var base: Dictionary = DEFINITIONS[system]
+		spec["name"] = base.name
+		if base.has("short"): spec["short"] = base.short
+		else: spec.erase("short")
+		spec["icon"] = base.get("icon", system)
+		for key in REGIONAL.get(system, {}).get(region, {}): spec[key] = REGIONAL[system][region][key]
+
+static func available_systems() -> Dictionary:
+	var systems := DEFINITIONS.duplicate(true)
+	if not Folders.gamecube_enabled(): systems.erase("gamecube")
+	return systems
+
 static func identify(path: String) -> String:
 	var extension := path.get_extension().to_lower()
+	if SYSTEMS.has("gamecube") and extension in ["iso", "gcm", "rvz", "wia"] and gamecube_disc(path): return "gamecube"
 	if extension == "cue": return disc_identify(path)
 	if extension == "m3u": return playlist_identify(path)
 	if extension == "pbp": return "psx" if psx_eboot(path) else ""
@@ -54,7 +104,7 @@ static func identify(path: String) -> String:
 	# A CHD's sectors are compressed, so its console folder says what it holds.
 	if extension == "chd":
 		var folder := folder_system(path)
-		return folder if folder in ["segacd", "psx"] else ""
+		return folder if folder in ["segacd", "psx", "dreamcast"] else ""
 	var system := extension_system(extension)
 	if not system.is_empty(): return system
 	# .md also means Markdown, so do not list arbitrary documentation as ROMs.
@@ -152,7 +202,7 @@ static func content_hash(path: String) -> String:
 		return hashing.finish().hex_encode()
 	# PlayStation images run to hundreds of megabytes: their opening megabyte holds
 	# the volume and boot data that tell discs apart, and the size goes in too.
-	if extension in ["pbp", "iso"] or (extension == "bin" and FileAccess.get_size(path) > LARGE_IMAGE and identify(path) == "psx"):
+	if extension in ["pbp", "iso", "cdi", "gcm", "rvz", "wia"] or (extension == "bin" and FileAccess.get_size(path) > LARGE_IMAGE and identify(path) == "psx"):
 		var image := FileAccess.open(path, FileAccess.READ)
 		if image == null: return ""
 		var sampled := HashingContext.new()
@@ -236,27 +286,63 @@ static func playlist_files(m3u_path: String) -> Array[String]:
 		files.append(name if name.is_absolute_path() else m3u_path.get_base_dir().path_join(name).simplify_path())
 	return files
 
-## A playlist of PlayStation discs (multi-disc games); its first disc decides.
+## A playlist of matching PlayStation or Dreamcast discs; reject mixed systems.
 static func playlist_identify(m3u_path: String) -> String:
 	var files := playlist_files(m3u_path)
 	if files.is_empty() or files[0].get_extension().to_lower() in ["m3u", "zip"]: return ""
-	return "psx" if identify(files[0]) == "psx" else ""
+	var system := identify(files[0])
+	for file in files:
+		if file.get_extension().to_lower() in ["m3u", "zip"] or identify(file) != system: return ""
+	return system if system in ["psx", "dreamcast", "gamecube"] else ""
 
 ## Files a cue sheet or playlist among paths already stands for, so a game appears
 ## once rather than as its cue, its tracks and each disc of its playlist.
+static func gdi_files(path: String) -> Array[String]:
+	var files: Array[String] = []
+	var pattern := RegEx.new()
+	pattern.compile('^[0-9]+\\s+[0-9]+\\s+[0-9]+\\s+[0-9]+\\s+(?:"([^"\\r\\n]+)"|([^\\s]+))\\s+[0-9]+\\s*$')
+	for line in FileAccess.get_file_as_string(path).split("\n"):
+		var found := pattern.search(line.strip_edges())
+		if found != null:
+			var name := found.get_string(1) if not found.get_string(1).is_empty() else found.get_string(2)
+			files.append(path.get_base_dir().path_join(name).simplify_path())
+	return files
+
 static func playlist_members(paths: Array) -> Dictionary:
 	var members := {}
 	for path in paths:
 		var extension: String = path.get_extension().to_lower()
 		if extension == "cue":
 			for file in cue_files(path): members[file] = true
-		elif extension == "m3u":
-			for file in playlist_files(path): members[file] = true
+		elif extension == "gdi":
+			for file in gdi_files(path): members[file] = true
+		elif extension == "m3u" and not playlist_identify(path).is_empty():
+			for file in playlist_files(path):
+				members[file] = true
+				if file.get_extension().to_lower() == "gdi":
+					for track in gdi_files(file): members[track] = true
 	return members
 
 ## Sector layouts of disc images: raw 2352-byte sectors (Mode 2, then Mode 1),
 ## then plain 2048-byte ISO sectors, each as [sector size, data offset].
 const DISC_LAYOUTS := [[2352, 24], [2352, 16], [2048, 0]]
+
+## ISO/GCM carry a big-endian GameCube magic at 0x1c. WIA/RVZ retain the disc
+## header uncompressed at 0x58 (Dolphin docs/WiaAndRvz.md). Wii uses the same
+## extensions; neither a folder name nor the extension establishes the console.
+static func gamecube_disc(path: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.READ)
+	if file == null: return false
+	var header := file.get_buffer(0xd8)
+	var offset := 0
+	if path.get_extension().to_lower() in ["rvz", "wia"]:
+		var expected := PackedByteArray([0x52, 0x56, 0x5a, 1]) if path.get_extension().to_lower() == "rvz" else PackedByteArray([0x57, 0x49, 0x41, 1])
+		if header.size() < 0xd8 or header.slice(0, 4) != expected: return false
+		# Both the declared disc type and the embedded disc magic must agree.
+		if header.slice(0x48, 0x4c) != PackedByteArray([0, 0, 0, 1]): return false
+		offset = 0x58
+	if header.size() < offset + 0x20: return false
+	return header.slice(offset + 0x1c, offset + 0x20) == PackedByteArray([0xc2, 0x33, 0x9f, 0x3d]) and header.slice(offset + 0x18, offset + 0x1c) != PackedByteArray([0x5d, 0x1c, 0x9e, 0xa3])
 
 static func disc_sector(file: FileAccess, layout: Array, sector: int) -> PackedByteArray:
 	var offset: int = sector * layout[0] + layout[1]
@@ -350,13 +436,15 @@ static func preferred_bios_folder() -> String:
 	return base.path_join("bios")
 
 static func bios_file(name: String) -> String:
-	for folder in bios_sources():
-		if FileAccess.file_exists(folder.path_join(name)): return folder.path_join(name)
+	for source_folder in bios_sources():
+		var folder: String = source_folder.path_join(name.get_base_dir())
+		var filename := name.get_file()
+		if FileAccess.file_exists(folder.path_join(filename)): return folder.path_join(filename)
 		# Dumps are named SCPH5501.BIN as often as scph5501.bin, and the Steam
 		# Deck's file system tells the two apart.
 		if not DirAccess.dir_exists_absolute(folder): continue
 		for file in DirAccess.get_files_at(folder):
-			if file.to_lower() == name.to_lower(): return folder.path_join(file)
+			if file.to_lower() == filename.to_lower(): return folder.path_join(file)
 	return ""
 
 static func bios_satisfied(system: String) -> bool:
@@ -367,8 +455,12 @@ static func bios_satisfied(system: String) -> bool:
 	return false
 
 static func stage_bios(system: String, destination: String) -> void:
+	if system == "dreamcast":
+		destination = destination.path_join("dc")
+		DirAccess.make_dir_recursive_absolute(destination)
 	for name in SYSTEMS[system].get("bios_any", []) + SYSTEMS[system].get("bios_optional", []):
 		var source := bios_file(name)
+		if source.is_empty() and system == "dreamcast": source = bios_file("dc/" + name)
 		if source.is_empty(): continue
 		var target := destination.path_join(name)
 		# Refresh a staged copy the user has since replaced.

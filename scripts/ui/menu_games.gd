@@ -11,6 +11,8 @@ const JUMP_MINIMUM := 20
 const GAMES_PER_PAGE := 50
 var launch_path := ""
 var launch_origin: Dictionary = {}
+## A newer choice supersedes any launch still waiting for the channel animation.
+var launch_generation := 0
 var library_system := "snes"
 var game_page := 0
 var system_pages: Dictionary = {}
@@ -40,12 +42,12 @@ func library_items() -> Array:
 		menu.card(menu.catalog.action("library.recent","Recently played",func(): open_history("recent"),"Return to your latest games. Unplugged-card entries are kept.",h.play_history.recent.is_empty(),"%d game%s" % [h.play_history.recent.size(),"" if h.play_history.recent.size()==1 else "s"]),"PICK UP & PLAY","recent",menu.MenuSkin.AMBER,"QUICK ACCESS"))
 	if not h.play_history.favourites.is_empty(): result.append(
 		menu.card(menu.catalog.action("library.favourites","Favourites",func(): open_history("favourites"),"Your favourites across every supported console. Press {X} on a game to add it.",h.play_history.favourites.is_empty(),"%d game%s" % [h.play_history.favourites.size(),"" if h.play_history.favourites.size()==1 else "s"]),"YOUR PERSONAL SHELF","favourites",Color("dfb984"),"QUICK ACCESS"))
-	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"],"psx":["SONY · 32-BIT CD","a9b6cf"],"n64":["NINTENDO · 64-BIT","8fcf9a"]}
+	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"],"psx":["SONY · 32-BIT CD","a9b6cf"],"n64":["NINTENDO · 64-BIT","8fcf9a"],"dreamcast":["SEGA · 128-BIT","c3cbd9"],"gamecube":["NINTENDO · GAMECUBE","b0a6e8"]}
 	for system in menu.library.Registry.SYSTEMS:
 		var id: String=system
 		var count: int=menu.rom_index.games.get(id,[]).size()
 		if count==0: continue
-		result.append(menu.card(menu.catalog.action("library.system."+id,menu.library.Registry.SYSTEMS[id].get("short",menu.library.Registry.SYSTEMS[id].name),func(): open_system(id),"",false,"%d game%s" % [count,"" if count==1 else "s"]),identity[id][0],id,Color(identity[id][1]),"YOUR CONSOLES"))
+		result.append(menu.card(menu.catalog.action("library.system."+id,menu.library.Registry.SYSTEMS[id].name,func(): open_system(id),"",false,"%d game%s" % [count,"" if count==1 else "s"]),identity.get(id,["CONSOLE","c3cbd9"])[0],menu.library.Registry.SYSTEMS[id].get("icon",id),Color(identity.get(id,["CONSOLE","c3cbd9"])[1]),"YOUR CONSOLES"))
 	if h.default_rom_dir.is_empty():
 		result.push_front(menu.card(menu.catalog.action("library.setup","Set up your ROM library",open_library_tools,"Choose the folder containing snes, nes, megadrive and your other systems. Subfolders are included automatically."),"START HERE","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP"))
 	var detail := "Choose your main ROM folder" if h.default_rom_dir.is_empty() else "Folders · SD cards · Refresh"
@@ -76,8 +78,10 @@ func library_tool_items() -> Array:
 func browser_items() -> Array:
 	var here: String = menu.library.current_dir
 	var result: Array=[menu.entry(menu.catalog.action("folder.remember","Use this folder for my library",func():
-		set_default(here)
-		if host.default_rom_dir==here: open_library(),"Every supported console in this folder and its subfolders becomes your library. Choose the parent ROM folder, not one console's folder.",false,""),menu.SECTION_HERE,"check","primary","Finds games for every console in here and its subfolders")]
+		var for_setup: bool = menu.welcome.choosing=="library"
+		if not set_default(here): return
+		if for_setup: menu.welcome.library_chosen()
+		elif host.default_rom_dir==here: open_library(),"Every supported console in this folder and its subfolders becomes your library. Choose the parent ROM folder, not one console's folder.",false,""),menu.SECTION_HERE,"check","primary","Finds games for every console in here and its subfolders")]
 	result.append_array(menu.up_entry("folder.up",here,open_folder))
 	for item in menu.library.entries:
 		var path: String=item.path
@@ -179,14 +183,50 @@ func select_file(path: String) -> void:
 	else: launch_game(path,false)
 
 func launch_game(path: String, continuing: bool) -> void:
+	launch_generation += 1
+	var generation := launch_generation
 	# A zipped disc is hundreds of megabytes: unpack it in the background while
 	# the room keeps tracking, then start it.
 	if host.emulator.needs_unpacking(path): unpack_then_launch(path, continuing); return
-	if not host.load_game(path): menu.show_error(host.startup_message); return
-	if continuing and not host.emulator.load_auto():
-		if not menu.visible: host.toggle_settings() # after an unpack the menu is closed
-		menu.show_error(host.emulator.status+" Choose Start from a fresh boot to play without this resume point.")
-		return
+	# Draw one loading card before the background save/unload/boot sequence.
+	# The same card owns the complete transition to the selected game.
+	if host.shows_loading_card(path):
+		# Card first, drawn, and only then the old game's resume save and stop (a
+		# disc game's state is large): the playing game stays paused behind the menu.
+		host.show_loading(path, 0.0)
+		host.was_paused_before_menu = true
+		host.video_was_paused_before_menu = true
+		if not host.close_settings(): host.end_loading(); return
+		for i in range(3): await host.get_tree().process_frame
+		if DisplayServer.get_name() != "headless": await RenderingServer.frame_post_draw
+		# Keep the short channel cue before changing consoles; the work below
+		# runs in the background while the room continues to update.
+		await host.get_tree().create_timer(0.55).timeout
+		if generation != launch_generation or host.loading_path != path: return
+		while host.loading_game or host.emulator.get("transition_busy") == true: await host.get_tree().process_frame
+		if generation != launch_generation or host.loading_path != path: return
+		var stopped: bool = await host.stop_for_disc(path, true)
+		if generation != launch_generation: return
+		if not stopped:
+			host.end_loading()
+			if not menu.visible: host.toggle_settings()
+			menu.show_error(host.emulator.status); return
+	while host.loading_game or host.emulator.get("transition_busy") == true: await host.get_tree().process_frame
+	if generation != launch_generation: return
+	var opened: bool = await host.load_game_async(path, host.shows_loading_card(path))
+	if generation != launch_generation: return
+	if not opened: menu.show_error(host.startup_message); return
+	if continuing:
+		host.loading_game = true
+		var resumed: bool = await host.emulator.load_auto_async()
+		host.loading_game = false
+		if generation != launch_generation: return
+		if not resumed:
+			host.end_loading()
+			if not menu.visible: host.toggle_settings()
+			menu.show_error(host.emulator.status + " Choose Start from a fresh boot to play without this resume point.")
+			return
+		host.resume_ready(path)
 	var feedback: String = host.emulator.status
 	host.was_paused_before_menu=false
 	host.close_settings()
@@ -198,7 +238,11 @@ func unpack_then_launch(path: String, continuing: bool) -> void:
 	var emulator: Node = host.emulator
 	if not emulator.unpacking.is_empty() and emulator.unpacking != path:
 		menu.show_error("Another disc is still being unpacked. Try again when it is ready."); return
-	if not host.stop_for_disc(path): menu.show_error(emulator.status); return
+	host.show_loading(path, 0.0)
+	host.was_paused_before_menu = true
+	if not host.close_settings(): host.end_loading(); return
+	if not await host.stop_for_disc(path, true): menu.show_error(emulator.status); return
+	if host.loading_path != path: return
 	emulator.unpack_disc(path)
 	if not emulator.unpack_progress.is_connected(show_unpack_progress): emulator.unpack_progress.connect(show_unpack_progress)
 	# One launch per unpack: a second choice of the same game replaces the first.

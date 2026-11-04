@@ -37,11 +37,19 @@ func run() -> void:
 	app.use_tracking(false)
 	await process_frame
 	await process_frame
+	app.show_loading("Pending.iso")
+	app.loading_game = true
+	check(not app.play_video("Missing.mp4") and app.loading_path == "Pending.iso", "A video choice cannot interrupt an active native boot")
+	app.loading_game = false
+	app.end_loading()
 	app.menu_on_tv = false # the card and game take the tube; the menu floats over them
 	if not app.menu.visible: app.toggle_settings()
 	var progress := []
 	app.emulator.unpack_progress.connect(func(_path, done, total): progress.append(float(done) / total))
 	app.menu.games.launch_game(zipped, false)
+	for i in range(600):
+		if app.loading_path == zipped and not app.menu.visible: break
+		await create_timer(.005).timeout
 	check(not app.menu.visible, "Choosing a zipped disc goes back to the room")
 	check(app.loading_path == zipped and app.loading_screen.visible and not app.pattern.visible, "The TV shows the loading card, not the test signal")
 	check(app.world.picture.source_texture == app.card_view.get_texture(), "The card is the picture on the tube")
@@ -55,11 +63,18 @@ func run() -> void:
 	check(not app.emulator.loaded and app.loading_path.is_empty() and not app.loading_screen.visible, "A disc that fails to load takes the card down")
 	# Holding and handing over do not depend on the console: a cartridge stands in
 	# for a booting disc behind the card.
-	app.show_loading(zipped)
+	var probe := ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")
+	app.show_loading(probe)
 	app.loading_game = true
-	var started: bool = app.emulator.load_rom(ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc"))
+	var started: bool = app.emulator.load_rom(probe)
 	app.loading_game = false
-	check(started and app.loading_path == zipped and app.loading_screen.progress < 0.0, "A game starts behind the card")
+	check(started and app.loading_path == probe and app.loading_screen.progress < 0.0, "A game starts behind the card")
+	var old_picture := Image.create(256, 224, false, Image.FORMAT_RGBA8)
+	old_picture.fill(Color("4060c0"))
+	app.show_loading(zipped)
+	app.emulator.frame_presented.emit(old_picture)
+	check(app.loading_path == zipped, "The previous game's frame cannot dismiss the next game's card")
+	app.show_loading(probe)
 	var black := Image.create(256, 224, false, Image.FORMAT_RGBA8)
 	app.emulator.frame_presented.emit(black)
 	check(app.loading_screen.visible and app.world.picture.source_texture == app.card_view.get_texture(), "Black boot frames keep the card up")
@@ -70,8 +85,13 @@ func run() -> void:
 	app.emulator.frame_presented.emit(lit)
 	check(app.loading_path.is_empty() and not app.loading_screen.visible, "A frame with picture takes the card down")
 	check(app.world.picture.source_texture == app.emulator.texture, "The game's picture replaces the card")
+	check(app.card_view.render_target_update_mode == SubViewport.UPDATE_ONCE, "Leaving the card redraws its hidden contents instead of retaining the old game title")
 	check(app.world.picture.raster_size == app.world.picture.source_size, "Game handover restores the console's own raster")
 	app.show_loading(zipped)
+	app.loading_screen.elapsed = 1.25
+	app.tv_effects.elapsed = 0.2
+	app.stop_for_disc(zipped)
+	check(app.loading_path == zipped and app.loading_screen.elapsed == 1.25 and app.tv_effects.elapsed == 0.2, "Stopping the previous game preserves the selected card and does not restart static")
 	app.emulator.stop()
 	check(app.loading_path.is_empty() and app.pattern.visible, "Stopping the game takes the card down for the test signal")
 	check(app.pattern_words.visible and not app.card_words.visible and app.card_view.render_target_update_mode == SubViewport.UPDATE_ALWAYS and app.world.picture.source_texture == app.card_view.get_texture(), "Idle signal uses the sharp text overlay and keeps updating")
@@ -79,6 +99,20 @@ func run() -> void:
 	app.show_loading(zipped)
 	app.loading_started -= app.LOADING_TIMEOUT_MSEC + 1
 	check(app.picture_started(black), "A game still black after the timeout is shown anyway")
+	app.end_loading()
+	# Continue: once the resume point is restored the game is mid-play. Its next
+	# picture takes the card down, dark or not, without the fresh-boot hold.
+	app.show_loading(zipped)
+	app.loading_hold = 3000
+	check(not app.picture_started(black), "A fresh boot keeps the card up through its hold")
+	app.resume_ready(zipped)
+	check(app.loading_hold == 0 and app.picture_started(black), "A restored game's next picture shows at once, even a dark one")
+	app.resume_ready("Another.iso")
+	app.end_loading()
+	check(not app.loading_resumed, "Taking the card down clears the resume state")
+	app.show_loading(zipped)
+	app.resume_ready("Another.iso")
+	check(not app.loading_resumed, "Another game's resume cannot release this card")
 	app.end_loading()
 	check(app.loading_screen.short_title("Final Fantasy VII (USA) (Disc 1)") == "Final Fantasy VII (Disc 1)", "The card keeps the disc number and drops the region")
 	app.queue_free()

@@ -91,9 +91,12 @@ func run():
  app._input(motion);app._process(0.2)
  check(is_equal_approx(app.distance,3.6),"Right stick adjusts visualiser distance even when the loaded console reserves it")
  motion.axis_value=0.0;app._input(motion)
- app.visualizer.leave()
+ app.toggle_settings()
+ app.menu.open_pause()
+ app.menu.select("resume");app.menu.activate()
+ check(not app.settings_panel.visible and not app.visualizer.active,"Resume leaves the visualiser and closes the menu")
  for i in range(6):await process_frame
- check(not app.emulator.paused and app.world.picture.source_texture==app.emulator.texture,"Leaving restores game picture and running state")
+ check(not app.emulator.paused and app.world.picture.source_texture==app.emulator.texture,"Resume restores game picture and running state")
  app.free()
  for i in range(3):await process_frame
  quit(failures)

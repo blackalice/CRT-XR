@@ -11,7 +11,7 @@ func press(menu, button: int):
 	var event := InputEventJoypadButton.new(); event.device=7; event.button_index=button; event.pressed=true; menu.handle(event)
 	event.pressed=false; menu.handle(event); await settle()
 func run():
-	var path := ProjectSettings.globalize_path("user://many-consoles")
+	var path := ProjectSettings.globalize_path("user://library-cards-flycast-timing")
 	for folder in ["snes/Europe","snes/Ports","Nintendo Entertainment System","Genesis","Master System","Game Gear","PS2/deep","n64/collection","saturn","arcade","Handpicked classics"]:
 		DirAccess.make_dir_recursive_absolute(path.path_join(folder))
 	for file in ["snes/Europe/Adventure.sfc","snes/Ports/Legitimate folder.sfc","Nintendo Entertainment System/Quest.nes","Master System/Runner.sms","Game Gear/Pocket.gg","Handpicked classics/Custom.sfc","PS2/deep/Unrelated.sfc","saturn/Unrelated.sfc","arcade/Unrelated.sms"]:
@@ -27,6 +27,8 @@ func run():
 	index.start(path.path_join("PS2"))
 	check(not index.scanning and index.message.contains("not supported"),"An unsupported console root offers recovery instead of scanning it")
 	var app=load("res://scenes/main.tscn").instantiate(); root.add_child(app); app.use_tracking(false)
+	app.play_history.recent.clear(); app.play_history.favourites.clear()
+	if is_instance_valid(app.menu.boot): app.menu.boot.finish()
 	app.default_rom_dir=path; app.choose_rom(); var menu=app.menu
 	while menu.rom_index.scanning: await process_frame
 	await settle()
@@ -61,6 +63,13 @@ func run():
 		await process_frame
 		if not menu.rom_index.scanning: break
 	check(menu.selected_id=="library.system.snes","Rescan restores focus once cards reappear")
+	# Every registered console must have a usable card, even when newly added.
+	for system in menu.library.Registry.SYSTEMS:
+		menu.rom_index.games[system] = [{"path": path.path_join("fixture." + system), "label":"Fixture"}]
+	var all_cards: Array = menu.games.library_items()
+	check(all_cards.filter(func(item): return str(item.id).begins_with("library.system.")).size() == menu.library.Registry.SYSTEMS.size(), "Every registered console has a library card")
+	var dreamcast: Array = all_cards.filter(func(item): return item.id == "library.system.dreamcast")
+	check(dreamcast.size() == 1 and dreamcast[0].label == "Dreamcast" and dreamcast[0].layout == "card", "Dreamcast appears in the main library with the existing card layout")
 	app.free()
 	print("LIBRARY CARD CHECKS COMPLETE: ",failures," failures")
 	quit(1 if failures else 0)
