@@ -1,0 +1,54 @@
+diff --git a/Core/System.cpp b/Core/System.cpp
+index 98818875ba..6e51faf370 100644
+--- a/Core/System.cpp
++++ b/Core/System.cpp
+@@ -739,6 +739,18 @@ BootState PSP_Init(const CoreParameter &coreParam, std::string *error_string) {
+ 	}
+ }
+ 
++// CRT XR: a frontend unloading while the loader thread still boots waits for
++// that thread (it needs nothing from the frontend), without the main-thread
++// GPU setup PSP_InitUpdate would do, so PSP_Shutdown then runs on a settled state.
++void PSP_CancelBoot() {
++	if (g_loadingThread.joinable())
++		g_loadingThread.join();
++	if (g_bootState == BootState::Failed) {
++		// The loader thread already shut down after its failure.
++		g_bootState = BootState::Off;
++	}
++}
++
+ BootState PollBootState() {
+ 	return g_bootState;
+ }
+diff --git a/Core/System.h b/Core/System.h
+index a5dd39489d..ee770efdaa 100644
+--- a/Core/System.h
++++ b/Core/System.h
+@@ -69,6 +69,8 @@ bool PSP_InitStart(const CoreParameter &coreParam);
+ // Check the return value of this - if Booting, keep calling.
+ // If Complete or Failed, handle as appropriate, and stop calling.
+ BootState PSP_InitUpdate(std::string *error_string);
++// Waits for an unfinished boot's loader thread, for an unload during boot.
++void PSP_CancelBoot();
+ 
+ // Blocking wrapper around the two above functions, used for convenience in a couple of places.
+ // Should be avoided/removed eventually.
+diff --git a/libretro/libretro.cpp b/libretro/libretro.cpp
+index 3b2f10317e..cb4b28ef70 100644
+--- a/libretro/libretro.cpp
++++ b/libretro/libretro.cpp
+@@ -1582,6 +1582,13 @@ bool retro_load_game(const struct retro_game_info *game)
+ 
+ void retro_unload_game(void)
+ {
++	// CRT XR: unloaded mid-boot, the loader thread would carry on into a shut
++	// down kernel; let it finish first.
++	if (g_pendingBoot)
++	{
++		PSP_CancelBoot();
++		g_pendingBoot = false;
++	}
+ 	if (Libretro::useEmuThread)
+ 		Libretro::EmuThreadStop();
+ 

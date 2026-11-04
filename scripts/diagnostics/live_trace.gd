@@ -48,7 +48,7 @@ func _process(delta: float) -> void:
 			"system": emulator.system_id if emulator.loaded else "", "paused": emulator.paused,
 			"menu": app.settings_panel != null and app.settings_panel.visible, "card": not app.loading_path.is_empty(),
 			"stereo": app.stereo, "room_fps": Engine.get_frames_per_second(), "game_fps": emulator.game_fps,
-			"target_fps": emulator.fps})
+			"target_fps": emulator.fps, "refresh": DisplayServer.screen_get_refresh_rate()})
 	flush_elapsed += delta
 	if flush_elapsed >= FLUSH_SECONDS:
 		flush_elapsed = 0.0

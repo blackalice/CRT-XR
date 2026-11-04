@@ -28,6 +28,9 @@ FLAGS=['-DCMAKE_BUILD_TYPE=Release','-DLIBRETRO=ON','-DUSE_SYSTEM_LIBPNG=OFF','-
  # Export only the Libretro API: the app preloads the system libstdc++, which
  # would otherwise interpose on the copy linked in here and crash the core.
  '-DCMAKE_SHARED_LINKER_FLAGS=-static-libstdc++ -static-libgcc -Wl,--exclude-libs,ALL -Wl,--version-script='+(SOURCE/'libretro/link.T').as_posix()]
+# ppsspp-unload-during-boot: retro_unload_game while the loader thread still
+# boots waits for it (PSP_CancelBoot) instead of shutting down under it.
+PATCHES=['ppsspp-unload-during-boot.patch']
 ASSET_SKIP={'debugger'} # web debugger UI, unused by the libretro core
 # The repository is bind-mounted from Windows, so its owner differs.
 ENV=dict(os.environ,GIT_CONFIG_COUNT='1',GIT_CONFIG_KEY_0='safe.directory',GIT_CONFIG_VALUE_0='*')
@@ -61,7 +64,14 @@ def checkout():
  if not (SOURCE/'.git').exists():
   run('git','-c','core.autocrlf=false','clone','--branch',TAG,'--recurse-submodules','--shallow-submodules',URL,str(SOURCE))
  assert git(SOURCE,'rev-parse','HEAD')==REVISION,'tools/ppsspp is not at '+TAG
- assert not git(SOURCE,'status','--porcelain','--untracked-files=no','--ignore-submodules=all'),'Unexpected PPSSPP source changes'
+ patches=[ROOT/'scripts/core-patches'/name for name in PATCHES]
+ expected='\n'.join(patch.read_text().strip() for patch in patches)
+ changes=git(SOURCE,'diff','--ignore-submodules=all',REVISION)
+ assert not changes or changes==expected,'Unexpected PPSSPP source changes'
+ if not changes:
+  for patch in patches: git(SOURCE,'apply',str(patch))
+ assert git(SOURCE,'diff','--ignore-submodules=all',REVISION)==expected,'PPSSPP patch mismatch'
+ return patches
 
 def build_ffmpeg(ffmpeg_commit):
  source=FFMPEG/'src'
@@ -89,7 +99,7 @@ def elf_report(binary):
   'retro_exports':sorted(set(re.findall(r'\b(retro_[a-z_]+)$',symbols,re.M)))}
 
 def main():
- checkout()
+ patches=checkout()
  inputs=submodules(SOURCE,REVISION)
  ffmpeg_commit=next(commit for prefix,commit,_ in inputs if prefix=='ffmpeg/')
  if '--package-only' not in sys.argv:
@@ -117,7 +127,9 @@ def main():
  (ROOT/'core-data/.gdignore').touch()
  shutil.copy2(SOURCE/'LICENSE.TXT',cores/'PPSSPP-LICENSE.txt')
  shutil.copy2(SOURCE/'ffmpeg/COPYING.LGPLv2.1',cores/'PPSSPP-FFmpeg-LICENSE.txt')
+ for patch in patches: shutil.copy2(patch,cores/'sources'/patch.name)
  record={'core':'ppsspp','platform':'linux','status':'Experimental Deck test build',
+  'patches':[{'path':'sources/'+patch.name,'sha256':digest(patch)} for patch in patches],
   'source_url':URL,'source_tag':TAG,'source_commit':REVISION,
   'source_archive':archive.relative_to(cores).as_posix(),'source_sha256':digest(archive),
   'source_archive_excludes':ARCHIVE_SKIP+['ffmpeg/'+name for name in FFMPEG_PREBUILT],

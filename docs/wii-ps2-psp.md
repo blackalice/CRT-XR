@@ -49,5 +49,18 @@ in `cores/sources/` and records binary, source and patch hashes in
 an isolated folder (several games with `;`, `CRT_XR_TEST_PACE=1` for real-time
 pacing). Deck results, 4 November 2026, room at 1080p SBS: Brawl, Gran Turismo PSP,
 GT4, Burnout 2 and Burnout 3 all play at full speed. Step time p50 is 4 ms (Brawl),
-1.5 ms (PSP) and 6-9 ms (PS2). PS2 still shows uneven frame pacing and occasional
-audio dropouts.
+1.5 ms (PSP) and 6-9 ms (PS2).
+
+PS2 pacing: LRPS2 runs one emulated frame per `retro_run` in lockstep (its frame
+gate), so a frame over 16.7 ms leaves the room without a new picture and the stream
+then catches up with two steps in one room frame. Two causes, measured from in-race
+resume saves (`CRT_XR_TEST_RESUME`): first-time shader compiles (25-77 ms, gone once
+Mesa's shader cache is warm) and genuinely heavy frames. Burnout 3 runs 8.5% of
+frames over budget at the normal EE speed and 1.8% at a 75% EE cycle rate; Burnout 2
+and GT4 stay within budget. EE cycle rate and internal resolution are therefore
+console and per-game core options for PS2 (default 100%, native). A 75% EE rate can
+slow a game that needs every cycle. Hardware download mode made no difference.
+
+PSP: unloading while PPSSPP's loader thread still booted crashed the app.
+`ppsspp-unload-during-boot.patch` waits for that thread in `retro_unload_game`;
+`CRT_XR_TEST_CLOSE_AFTER=N` covers quitting after 0-60 frames.

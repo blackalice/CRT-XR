@@ -2,11 +2,17 @@
   "core": "ppsspp",
   "platform": "linux",
   "status": "Experimental Deck test build",
+  "patches": [
+    {
+      "path": "sources/ppsspp-unload-during-boot.patch",
+      "sha256": "7a95b2ff0b21dd31643b03bc6f4f8e0a1c1a6c3df56778ad1e4b420d2cfa052f"
+    }
+  ],
   "source_url": "https://github.com/hrydgard/ppsspp.git",
   "source_tag": "v1.20.4",
   "source_commit": "fa50bb1976065c4f8b1b47af227d367fe9771555",
   "source_archive": "sources/ppsspp-fa50bb1976065c4f8b1b47af227d367fe9771555.tar.gz",
-  "source_sha256": "d3bd8c408c40d35bf920feaad324dcfd958a9231af32ac43b42b0bb70faf302a",
+  "source_sha256": "7a42c9ef4bf8c84814ebea1c4ff6bbd6aa4b24443e235afed1bea1a4a921cdbe",
   "source_archive_excludes": [
     "pspautotests",
     "ios/MoltenVK",
@@ -22,7 +28,7 @@
     "ffmpeg/Windows10",
     "ffmpeg/wiiu"
   ],
-  "binary_sha256": "20fd16df6c443235d552a0af829fd0d3da0c9027677f6f0f7f0b3cc4178793e6",
+  "binary_sha256": "9063b828f0781b7f47fc703092a91402ca69f95ce674462696af9d93352e5108",
   "compiler": "g++-12 (Ubuntu 12.3.0-1ubuntu1~22.04.3) 12.3.0",
   "ffmpeg": "built from the ffmpeg submodule source by ffmpeg/linux_x86-64.sh (static, LGPL)",
   "cmake_flags": [

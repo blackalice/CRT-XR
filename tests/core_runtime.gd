@@ -7,6 +7,7 @@ extends SceneTree
 const Registry = preload("res://scripts/emulation/core_registry.gd")
 const DolphinSupport = preload("res://scripts/emulation/dolphin_support.gd")
 const CoreData = preload("res://scripts/emulation/core_data.gd")
+const StateStore = preload("res://scripts/emulation/state_store.gd")
 func _initialize(): call_deferred("run")
 func fail(message: String):
 	printerr("FAIL: ", message)
@@ -48,6 +49,27 @@ func run_one(rom: String, saves: String) -> bool:
 	var started := Time.get_ticks_msec()
 	if not core.load_game(rom, saves): fail(str(core.last_error())); return false
 	print("PASS: Real ", spec.core, " core loads ", rom.get_file(), " in ", Time.get_ticks_msec() - started, " ms")
+	# CRT_XR_TEST_CLOSE_AFTER=N closes the game after N frames, as quitting during a
+	# boot does (PPSSPP is still loading for its first second or so).
+	var close_after := OS.get_environment("CRT_XR_TEST_CLOSE_AFTER")
+	if not close_after.is_empty():
+		for frame in range(int(close_after)):
+			if not core.run_frame(0): fail(str(core.last_error())); return false
+		core.close_game()
+		core.close()
+		print("PASS: Closed ", rom.get_file(), " after ", close_after, " frames")
+		return true
+	# CRT_XR_TEST_RESUME: a resume save (.rst) to restore after 120 frames, so the
+	# measurement covers that scene (an in-race save, say) rather than the intro.
+	var resume := OS.get_environment("CRT_XR_TEST_RESUME")
+	if not resume.is_empty():
+		var envelope := StateStore.read_state(resume)
+		if envelope.is_empty(): fail("Resume save unreadable: " + resume); return false
+		for frame in range(120):
+			if not core.run_frame(0): fail(str(core.last_error())); return false
+			if OS.get_environment("CRT_XR_TEST_PACE") == "1": OS.delay_usec(16600)
+		if not core.load_state(envelope.state): fail("Resume save did not restore: " + str(core.last_error())); return false
+		print("RESUMED ", resume.get_file())
 	var pictures := 0
 	var audio_frames := 0
 	var changed := 0
@@ -85,6 +107,6 @@ func run_one(rom: String, saves: String) -> bool:
 	var total := 0
 	for value in timings: total += value
 	print("CORE_CLOSED")
-	print("CORE_RESULT ",JSON.stringify({"system":system,"rom":rom.get_file(),"pictures":pictures,"changes":changed,"audio_frames":audio_frames,"mean_usec":float(total)/maxi(1, timings.size()),"p50_usec":timings[timings.size()/2] if timings.size() > 0 else 0,"p95_usec":timings[int(timings.size()*0.95)] if timings.size() > 0 else 0,"max_usec":timings[-1] if timings.size() > 0 else 0,"state_bytes":state_bytes}))
+	print("CORE_RESULT ",JSON.stringify({"system":system,"rom":rom.get_file(),"pictures":pictures,"changes":changed,"audio_frames":audio_frames,"mean_usec":float(total)/maxi(1, timings.size()),"p50_usec":timings[timings.size()/2] if timings.size() > 0 else 0,"p95_usec":timings[int(timings.size()*0.95)] if timings.size() > 0 else 0,"over_16ms":timings.filter(func(t): return t > 16700).size(),"over_25ms":timings.filter(func(t): return t > 25000).size(),"max_usec":timings[-1] if timings.size() > 0 else 0,"state_bytes":state_bytes}))
 	print("PASS: Real core video, audio, state restore, reset and unload")
 	return true

@@ -12,6 +12,8 @@ const OPTIONS := {
  "gba": [["mgba_color_correction", "Colour correction", ["Default", "Off", "GBA", "Game Boy Color", "Automatic"], ["", "OFF", "GBA", "GBC", "Auto"], "Approximates handheld screen colours."]],
  "ngpc": [["ngp_language", "Language", ["Default", "English", "Japanese"], ["", "english", "japanese"], "Selects the console language."]],
  "psx": [["pcsx_rearmed_dithering", "Dithering", ["Default", "Off", "On", "Force"], ["", "disabled", "enabled", "force"], "Controls the PlayStation colour dithering pattern."]],
+ "ps2": [["pcsx2_ee_cycle_rate", "EE cycle rate", ["Default", "75% (underclock)", "60% (underclock)"], ["", "75% (Underclock)", "60% (Underclock)"], "Underclocking the Emotion Engine smooths heavy games such as Burnout 3. A game that needs every cycle can slow down instead."], ["pcsx2_upscale_multiplier", "Internal resolution", ["Default", "2× native"], ["", "2x"], "Default is native resolution. Higher resolutions cost more performance and change the CRT appearance."]],
+ "psp": [["ppsspp_internal_resolution", "Internal resolution", ["Default", "960×544"], ["", "960x544"], "Default is the PSP's 480×272. Higher resolutions cost more performance."]],
  "n64": [["mupen64plus-43screensize", "Internal resolution", ["Default", "640×480", "960×720"], ["", "640x480", "960x720"], "Higher resolutions cost more performance and change the CRT appearance."]]
 }
 static func group(system: String) -> String:
@@ -49,7 +51,8 @@ const DEFAULT_LABELS := {
  "nestopia_nospritelimit":"Off", "genesis_plus_gx_region_detect":"Automatic",
  "genesis_plus_gx_no_sprite_limit":"Off", "gambatte_gbc_color_correction":"Game Boy Color",
  "mgba_color_correction":"Off", "ngp_language":"English", "pcsx_rearmed_dithering":"On",
- "mupen64plus-43screensize":"Default"
+ "mupen64plus-43screensize":"Default", "pcsx2_ee_cycle_rate":"100%", "pcsx2_upscale_multiplier":"Native",
+ "ppsspp_internal_resolution":"480×272"
 }
 static func choice_index(system: String, game: String, definition: Array) -> int:
  return maxi(0, definition[3].find(read_value(system, game, definition[0])))
