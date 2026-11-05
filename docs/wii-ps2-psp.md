@@ -7,8 +7,8 @@ discovery, its folder names stay unsupported, and its settings do not appear.
 | Console | Opt-in | Core | Pinned source |
 |---|---|---|---|
 | Wii | `CRT_XR_EXPERIMENTAL_GAMECUBE=1` (shared) | Dolphin, the GameCube build | libretro/dolphin `b93001e` |
-| PlayStation 2 | `CRT_XR_EXPERIMENTAL_PS2=1` | LRPS2 (`pcsx2_libretro.so`) | libretro/ps2 `88098c4` + `lrps2-image-maps.patch` |
-| PSP | `CRT_XR_EXPERIMENTAL_PSP=1` | PPSSPP (`ppsspp_libretro.so`) | hrydgard/ppsspp `v1.20.4` |
+| PlayStation 2 | `CRT_XR_EXPERIMENTAL_PS2=1` | LRPS2 (`pcsx2_libretro.so`) | libretro/ps2 `88098c4` + `lrps2-image-maps.patch`, `lrps2-vtlb-moved-map.patch` |
+| PSP | `CRT_XR_EXPERIMENTAL_PSP=1` | PPSSPP (`ppsspp_libretro.so`) | hrydgard/ppsspp `v1.20.4` + `ppsspp-unload-during-boot.patch` |
 
 Builds: `scripts/build-lrps2-deck.py` (in the Dolphin image) and
 `scripts/build-ppsspp-deck.py` (in `Dockerfile.ppsspp`). Each archives its source
@@ -38,9 +38,13 @@ in `cores/sources/` and records binary, source and patch hashes in
   (registry `context_first`, as RetroArch orders it); LRPS2 otherwise hangs on close.
 - PPSSPP links libstdc++ statically and exports only `retro_*`: the launcher's
   `LD_PRELOAD` of the system libstdc++ otherwise breaks it.
-- LRPS2's recompilers need their memory within 2 GB of the core. When no hole near
-  the core is free, the local patch maps it inside the core's own `.bss` and logs
-  a warning; `CRT_XR_LRPS2_IMAGE_MAPS=1` forces that path for testing.
+- LRPS2's recompilers need their memory within 2 GB of the core. On Linux the local
+  patch always maps its main and code memory inside the core's own `.bss`: always in
+  reach, and at one address for every game while the core stays loaded. Upstream's
+  near search (now the fallback) found different holes after other cores had run,
+  so the memory moved between games; the recompiler then aborted when nothing was
+  near, and VTLB tables cached across games pointed into unmapped memory.
+  `CRT_XR_LRPS2_IMAGE_MAPS=0` tries the near search first, for testing.
 - Cores' warnings and errors also go to `~/.local/state/crt_xr/core.log`.
 
 ## Testing
@@ -64,3 +68,26 @@ slow a game that needs every cycle. Hardware download mode made no difference.
 PSP: unloading while PPSSPP's loader thread still booted crashed the app.
 `ppsspp-unload-during-boot.patch` waits for that thread in `retro_unload_game`;
 `CRT_XR_TEST_CLOSE_AFTER=N` covers quitting after 0-60 frames.
+
+Switching games: a seven-game run in one process (GT PSP, Brawl, GT4, Burnout 2,
+Brawl, Burnout 3, GT4) passes boot, video, audio and save-state round trips on the
+Deck. `CRT_XR_TEST_ALTERNATE_IMAGE_MAPS=1` moves LRPS2's memory between games, the
+condition behind the 4 November crashes.
+
+## Status (5 November 2026)
+
+- **Deck:** `releases/consoles-20261104` is `current` (previous: `screensaver-2-20261104`).
+  Its launcher sets all three opt-ins. The play-session trace is on.
+- **Played by the owner:** Brawl felt great; GT4 held 60 fps apart from transition
+  hitches; Burnout 3 and 2 played, with occasional audio crackle in Burnout 2; PS2
+  judged better than the standalone emulator. GT PSP played well after a slow first load.
+- **Fixed after play:** PS2 controls (port device), Burnout 3 recompiler abort and
+  the later `vtlb_Init` crash (memory placement), quitting PSP during boot, a Steam
+  launch starting a last game that had no resume point.
+- **Open:**
+  - Burnout 2 showed unusually bright lighting on cars the first time it was played;
+    not yet investigated (a save state at that moment would help).
+  - PS2 pacing: over-budget frames show as repeats. A frame of run-ahead in LRPS2's
+    frame gate would absorb them at about 16 ms of latency; not attempted.
+  - Windows builds of the three cores.
+  - Opt-ins stay until runtime and packaging checks pass, as for GameCube.
