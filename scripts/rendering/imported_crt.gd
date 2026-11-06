@@ -3,11 +3,12 @@ extends RefCounted
 const SCREEN_ANCHOR := Vector3(0.0, 0.035, 0.06)
 const Plastic = preload("res://scripts/rendering/cabinet_plastic.gd")
 const Brand = preload("res://scripts/rendering/cabinet_brand.gd")
+const WideFinish = preload("res://scripts/rendering/wide_cabinet_finish.gd")
 
 # Load a user-supplied GLB locally; no model data is embedded in source control.
 const WIDE_MODEL = preload("res://assets/models/widescreen-crt/crt-xr-26-wide.glb")
 
-static func load_cabinet(parent: Node3D, widescreen := false) -> Dictionary:
+static func load_cabinet(parent: Node3D, widescreen := false, wide_finish := 0) -> Dictionary:
 	var path := ProjectSettings.globalize_path("res://build/crt-model/crt_tv.glb")
 	if not OS.has_feature("editor"):
 		path = OS.get_executable_path().get_base_dir().path_join("assets/crt_tv.glb")
@@ -30,6 +31,7 @@ static func load_cabinet(parent: Node3D, widescreen := false) -> Dictionary:
 	if scene == null:
 		return {}
 	filter_cabinet_materials(scene)
+	if widescreen: WideFinish.apply(scene, wide_finish)
 	if not widescreen:
 		Brand.apply(scene)
 		Plastic.apply(scene)

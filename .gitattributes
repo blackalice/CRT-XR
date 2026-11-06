@@ -17,6 +17,9 @@ LICENSE text eol=lf
 *.jpg binary
 *.wav binary
 *.glb binary
+*.ai binary
+*.blend binary
+*.blend1 binary
 .gitignore text eol=lf
 *.desktop text eol=lf
 *.godot text eol=lf

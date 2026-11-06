@@ -708,6 +708,7 @@ func apply_settings(config: ConfigFile) -> void:
 	distance_speed = clampf(config.get_value("view", "distance_speed", Showcase.VIEW.distance_speed), 0.2, 2.0)
 	for setting in ROOM_FIELDS:
 		world.set(setting[0], clampf(config.get_value("room", setting[0], world.get(setting[0])), setting[2], setting[3]))
+	world.set_wide_finish(clampi(int(config.get_value("room", "wide_finish", 0)), 0, 1))
 	world.set_widescreen(bool(config.get_value("room", "widescreen", false)))
 	world.shadows = bool(config.get_value("room", "shadows", true))
 	world.floor_style = clampi(int(config.get_value("room", "floor_style", Showcase.ROOM.floor_style)), 0, world.FLOOR_STYLES.size() - 1)
@@ -1765,6 +1766,7 @@ func capture_settings() -> ConfigFile:
 	for setting in ROOM_FIELDS: config.set_value("room", setting[0], world.get(setting[0]))
 	config.set_value("room", "shadows", world.shadows)
 	config.set_value("room", "floor_style", world.floor_style)
+	config.set_value("room", "wide_finish", world.wide_finish)
 	config.set_value("room", "lighting_version", SettingsStore.LIGHTING_VERSION)
 	config.set_value("room", "ambience", world.ambience)
 	config.set_value("room", "ambience_level", world.ambience_level)

@@ -8,6 +8,7 @@ var glass_material := ShaderMaterial.new()
 var curvature := 0.066
 var imported_screen: Dictionary = {}
 var widescreen := false
+var wide_finish := 0
 var cabinet_nodes: Array[Node] = []
 var distance_fade := ShaderMaterial.new()
 var spill_strength: float = Showcase.ROOM.spill_strength
@@ -111,7 +112,7 @@ func build(signal_texture: Texture2D) -> void:
 
 func _build_geometry() -> void:
 	var existing := television.get_children()
-	imported_screen = ImportedCRT.load_cabinet(television, widescreen)
+	imported_screen = ImportedCRT.load_cabinet(television, widescreen, wide_finish)
 	if imported_screen.is_empty():
 		_build_procedural_cabinet()
 	var support := BedroomSet.build_stand(television,
@@ -164,6 +165,11 @@ func _build_surfaces() -> void:
 	for child in television.get_children():
 		if child not in existing: cabinet_nodes.append(child)
 
+
+func set_wide_finish(value: int) -> void:
+	wide_finish = clampi(value, 0, 1)
+	var cabinet := television.get_node_or_null("ImportedCabinet")
+	if widescreen and cabinet != null: ImportedCRT.WideFinish.apply(cabinet, wide_finish)
 
 func set_widescreen(value: bool) -> void:
 	if widescreen == value: return

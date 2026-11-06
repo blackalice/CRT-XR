@@ -51,6 +51,7 @@ static func apply(app: Node, tab: int) -> void:
 			app.world.picture.refresh()
 		3:
 			for key in ROOM: app.world.set(key, ROOM[key])
+			app.world.set_wide_finish(0)
 			app.world.apply_room_settings()
 		4:
 			for axis in ["yaw", "pitch", "roll"]: app.provider.set("invert_" + axis, false)

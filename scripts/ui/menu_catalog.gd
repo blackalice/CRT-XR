@@ -388,6 +388,9 @@ func pages(category: int) -> Array:
 			groups.Materials.push_front({"id":"room.floor_style","label":"Floor","kind":"choice","choices":w.FLOOR_STYLES,"default":h.Showcase.ROOM.floor_style,"visual":true,
 				"getter":func(): return w.floor_style,"setter":func(value): w.floor_style=value; w.apply_room_settings(),
 				"help":"90s confetti carpet, a plain wool carpet with natural wear, or wooden floorboards."})
+			groups.Materials.push_front({"id":"room.wide_finish","label":"Wide TV finish","kind":"choice","choices":["Silver","Black"],"default":0,"visual":true,
+				"getter":func(): return w.wide_finish,"setter":func(value): w.set_wide_finish(value),
+				"help":"Silver with dark graphics, or black with off-white graphics. Remembered for the wide TV across games and videos."})
 			var props: Array = [
 				toggle("room.clock_radio","Clock radio",w,"show_clock_radio",true,"A clock radio beside the TV showing the time on a dim red display. Music plays from its side of the room.",w.apply_room_settings),
 				toggle("room.clock_24_hour","24-hour clock",w,"clock_24_hour",false,"Shows the clock radio and VCR time in 24-hour format.",w.apply_room_settings),
