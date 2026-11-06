@@ -1,5 +1,5 @@
 """Export the artist-edited open .blend; never regenerate or save its geometry."""
-import bpy, json
+import bpy, json, runpy
 from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 asset=next(c for c in bpy.context.scene.collection.children if c.name.startswith('CRT XR'))
@@ -11,6 +11,9 @@ for ob in asset.all_objects:
     cp=ob.copy(); cp.data=ob.data.copy(); cp.parent=None; cp.matrix_world=ob.matrix_world.copy()
     temp.objects.link(cp); copies.append(cp)
     if ob==picture: cp.name='LivePictureExport'; exported_picture=cp
+# Decorate copies, leaving the artist's source and its geometry untouched.
+decoration=runpy.run_path(str(root/'scripts/decorate-widescreen-cabinet.py'))
+decoration['decorate'](copies)
 for ob in copies:
     if len(ob.data.materials)<2: continue
     bpy.ops.object.select_all(action='DESELECT'); ob.select_set(True); bpy.context.view_layer.objects.active=ob
@@ -36,6 +39,8 @@ for ob in temp.objects:
     if ob.type=='MESH': ob.data.calc_loop_triangles(); triangles+=len(ob.data.loop_triangles)
 info={'triangles':triangles,'mesh_objects':sum(o.type=='MESH' for o in temp.objects),
       'source':str(Path(bpy.data.filepath).relative_to(root)).replace('\\','/'),'export':out.relative_to(root).as_posix(),
-      'front_axis_gltf':'+Z','source_preserved':True}
+      'front_axis_gltf':'+Z','source_preserved':True,
+      'graphics_source':'artwork/TV.ai','finishes':['silver','black'],
+      'printing':'opaque albedo, no additional triangles or material batches'}
 (out.parent/'model-info.json').write_text(json.dumps(info,indent=2)+'\n')
 print(json.dumps(info))
