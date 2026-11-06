@@ -6,12 +6,12 @@ manufacturer reconstruction. No reference photographs, Toshiba logos, commercial
 model geometry or third-party texture assets are included. Original mesh, texture
 and generator are covered by the repository's MIT licence.
 
-Editable source: `artwork/widescreen-crt/crt-xr-26-wide.blend`.
+Editable source: `artwork/widescreen-crt/crt-xr-26-wide-new.blend`.
 Game export: `assets/models/widescreen-crt/crt-xr-26-wide.glb`.
 Export the edited source with Blender 5.2:
 
 ```powershell
-& 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe' --background artwork/widescreen-crt/crt-xr-26-wide.blend --python scripts/export-widescreen-cabinet.py
+& 'C:/Program Files/Blender Foundation/Blender 5.2/blender.exe' --background artwork/widescreen-crt/crt-xr-26-wide-new.blend --python scripts/export-widescreen-cabinet.py
 ```
 
 The exporter preserves the edited source. The original procedural generator
@@ -48,23 +48,34 @@ references, not measured manufacturer dimensions. Replace/hide it when attaching
 the live picture and glass. The rear is a simple closed tapered housing with no
 connector bank, vent geometry or labels, since this asset targets front viewing.
 
-See `model-info.json` for measured export counts. Six mesh/material batches,
+See `model-info.json` for measured export counts. The current artist-edited export has 4,914 triangles in eight mesh/material batches,
 opaque materials only; no runtime procedural shading. Rendering cost still needs
 measurement in Godot on the target hardware. There is no branding or lettering
 on the model.
 
-In the app, open Picture and its Screen fit section, then enable **Widescreen CRT**.
-The section title identifies the active cabinet and game/video context. Fit whole
-picture preserves proportions, Fill screen crops, and Stretch changes proportions.
-Automatic aspect uses the programme's reported shape; 4:3/16:9 overrides handle
-anamorphic games. Width/height limits, position and the safe border remain available.
+In the app, open Picture → TV & defaults to choose the TV and the level to edit.
+Each platform has a preferred TV under Emulation → Consoles, and individual games
+can override it. PSP and Wii start wide; other platforms, including Dreamcast,
+start on the standard TV. Videos default to wide and can override this per file.
+Selecting a cabinet does not enable a game's widescreen mode or emulator hack.
 
-Each cabinet keeps its own CRT, colour and fitting baseline in settings.cfg.
-Videos retain their separate picture profile for each cabinet (the existing
-"own picture" preference can explicitly opt out). Per-game pictures also use
-separate standard/wide files. Existing standard profiles retain their paths;
-widescreen profiles use the `-wide.cfg` suffix. Switching cabinets saves the old
-profile and restores the new one without replacing the live playback pipeline.
+CRT, colour and fitting adjustments are independent for games and videos on each
+TV. Games inherit TV defaults, then platform defaults, then individual game
+changes. Videos inherit video TV defaults, then individual video changes. Resetting
+an option removes that level's override. Fit preserves proportions, Fill crops,
+and Stretch changes proportions. Automatic aspect follows the core or video;
+4:3/16:9 overrides handle anamorphic games. Menus retain their own full-picture fit.
+
+The versioned `display_profiles/data` settings contain these preferences and sparse
+picture overrides. Existing cabinet baselines and enabled legacy game/video files
+are imported without rewriting the original files. Distance, height and physical
+scale are saved separately for each TV and for fixed/XR viewing. The first wide
+view sits farther back when no wide profile exists. Room presets do not switch TVs.
+
+The CRT shader smooths the picture boundary over approximately one final-screen
+pixel while retaining the interior reconstruction. Geometry MSAA is optional under
+View → Display, applies to both eyes, and defaults off. Deck performance with MSAA
+still needs measurement; no post-process blur or higher emulator resolution is added.
 
 The widescreen picture is 1.76 m wide in the virtual room, retaining the standard
 picture height. Its table is fitted to the footprint; clock radio and game boxes

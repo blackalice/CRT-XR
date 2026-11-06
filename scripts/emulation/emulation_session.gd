@@ -9,6 +9,7 @@ const CoreData = preload("res://scripts/emulation/core_data.gd")
 ## Godot owns presentation; the native Libretro host owns frame execution/callbacks.
 signal content_changed(texture: Texture2D)
 signal frame_presented(image: Image)
+signal aspect_changed(aspect: float)
 ## Opt-in diagnostic trace. Includes every emulated frame in a catch-up batch,
 ## rather than just the last frame left in core.info(). Disabled during play.
 signal frame_profiled(metrics: Dictionary)
@@ -343,6 +344,7 @@ func _load_rom(path: String, background: bool) -> bool:
 	else: rom_hash = Registry.content_hash(path)
 	var info: Dictionary = core.info()
 	disc_snapshot = core.disc_info()
+	update_display_aspect(info)
 	reload_controls()
 	core_identity = str(info.name)
 	fps = float(info.fps)
@@ -635,6 +637,7 @@ func process_stream(delta: float) -> void:
 		set_stream_reserve(stream_reserve - 1)
 	sram_timer += delta
 	var info: Dictionary = core.stream_info()
+	update_display_aspect(info)
 	count_game_frames(info.steps.size(), delta)
 	if async_pending and not core.stream_running():
 		async_pending = false # the loop ended: requested, or a failed frame
@@ -774,8 +777,16 @@ func preview_frame(buttons: int, frames := 1) -> Dictionary:
 		return {}
 	return {"bytes": bytes, "width": info.width, "height": info.height}
 
+func update_display_aspect(info: Dictionary) -> void:
+	var reported := float(info.get("display_aspect",0.0))
+	var aspect: float = reported if is_finite(reported) and reported>=.2 and reported<=8.0 else Registry.SYSTEMS.get(system_id,{"aspect":4.0/3.0}).aspect
+	if not is_equal_approx(display_aspect,aspect):
+		display_aspect=aspect
+		aspect_changed.emit(aspect)
+
 func update_texture(force := false, preview: Dictionary = {}) -> void:
 	var info: Dictionary = preview if not preview.is_empty() else core.info()
+	update_display_aspect(info)
 	# GPU cores can revise their refresh rate after boot or a state restore.
 	# Follow the live core clock rather than accumulating drift at the load rate.
 	if preview.is_empty(): fps = float(info.fps)

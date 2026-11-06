@@ -35,6 +35,7 @@ func name(index: int) -> String:
 func room_only() -> ConfigFile:
 	var config := ConfigFile.new()
 	host.SettingsStore.copy_sections(host.capture_settings(), config, PackedStringArray(["room"]))
+	config.erase_section_key("room","widescreen")
 	return config
 
 func signature() -> String:
@@ -73,6 +74,7 @@ func remember_custom() -> void:
 func apply_file(file: String, id: String) -> void:
 	var merged: ConfigFile = host.capture_settings()
 	host.SettingsStore.copy_sections(host.SettingsStore.new().read(file), merged, PackedStringArray(["room"]))
+	merged.set_value("room","widescreen",host.world.widescreen)
 	var validator := ConfigFile.new(); validator.parse(merged.encode_to_text())
 	host.apply_settings(host.validated_settings(validator, host.capture_settings()))
 	mark(id)

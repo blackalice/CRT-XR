@@ -73,8 +73,13 @@ void fragment() {
  vec2 raster = raster_size.x>0.0 ? raster_size : signal_size;
  vec2 pixel = uv*raster;
  vec2 footprint = fwidth(pixel);
+ // Filter only the picture/border transition, in final-screen pixel units.
+ // Geometry MSAA cannot smooth this shader-generated edge. Interior pixels
+ // retain exactly the same reconstruction, mask and scanlines.
+ vec2 edge_pixel = max(fwidth(uv), vec2(0.000001));
+ vec2 edge_coverage = clamp(min(uv, vec2(1.0)-uv)/edge_pixel+vec2(0.5), vec2(0), vec2(1));
  vec3 color = vec3(0);
- if(all(greaterThanEqual(uv,vec2(0))) && all(lessThanEqual(uv,vec2(1)))) {
+ if(all(greaterThanEqual(uv,-edge_pixel*0.5)) && all(lessThanEqual(uv,vec2(1)+edge_pixel*0.5))) {
   float resolved = 1.0-smoothstep(.35,.95,footprint.y);
   color = linear_signal(uv);
   if(scanlines*resolved>.001) {
@@ -114,6 +119,7 @@ void fragment() {
    float circle = length((uv-.5)*vec2(4.0/3.0,1.0));
    if(abs(circle-.3)<max(fwidth(circle),.002)) color = vec3(.8);
   }
+  color *= edge_coverage.x*edge_coverage.y;
  }
  if(picture_roll>0.0) {
   // The vertical blanking interval rolls past as a dark bar.

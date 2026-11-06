@@ -78,7 +78,7 @@ func run():
     var release:=InputEventJoypadMotion.new();release.device=7;release.axis=JOY_AXIS_TRIGGER_RIGHT;release.axis_value=0;Input.parse_input_event(release);Input.flush_buffered_events()
     page(4,1);m.select("controls.distance",false);var before:bool=app.right_stick_distance;await button(JOY_BUTTON_A)
     check(app.right_stick_distance!=before,"A toggles immediately")
-    page(1,4);app.world.picture.mode=0;m.render();await settle();m.select("picture.connection",false)
+    page(1,5);app.world.picture.mode=0;m.render();await settle();m.select("picture.connection",false)
     var disabled=row("picture.composite_strength")
     check(disabled.disabled and disabled.adjust_buttons.all(func(b):return b.disabled),"Composite controls and their arrows are disabled in RGB")
     check(disabled.unavailable_label.visible and not disabled.unavailable_label.text.is_empty(),"Disabled reason is visible")

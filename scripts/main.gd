@@ -28,9 +28,9 @@ const VIDEO_PROFILE := "video"
 const VIDEO_CHECKPOINT_SECONDS := 30.0
 const PROFILE_NAMES := ["Everyday", "Evening", "Bright room"]
 var settings_store := SettingsStore.new()
-var picture_baseline := ConfigFile.new()
 var screen_picture_profiles: Dictionary = {}
-var active_game_key := ""
+var display_settings := preload("res://scripts/ui/display_preferences.gd").new()
+var scene_msaa := 0
 var remember_game_picture := Showcase.PER_GAME_PICTURE
 var selected_profile := 0
 var profile_undo: ConfigFile
@@ -242,7 +242,7 @@ var video_tape := 0
 ## The VCR's mechanism sounds while videos play.
 var video_vcr_sounds := true
 var vcr_sounds: Node
-## Videos share one picture of their own (true), or use the global picture.
+## Retained solely to migrate the former shared video picture preference.
 var video_own_picture := true
 var ffmpeg_installer: Node
 var video_library := VideoLibrary.new()
@@ -270,6 +270,7 @@ var windows_sbs_size := Vector2i.ZERO
 var windows_fixed_start := false
 
 func _ready() -> void:
+	display_settings.host=self
 	# A previously downloaded FFmpeg (Windows) is found before anything asks
 	# whether video playback is available.
 	FfmpegInstaller.finish_removal()
@@ -515,6 +516,7 @@ func start_application() -> void:
 				if not play_history.played(last_game_path): show_notice("Could not save recently played games"))
 			profile_boot_action("library", func():
 				if save_library() != OK: show_notice("Could not save the recent game location")))
+	emulator.aspect_changed.connect(update_programme_aspect)
 	video = VideoSession.new()
 	add_child(video)
 	ffmpeg_installer = FfmpegInstaller.new()
@@ -532,25 +534,25 @@ func start_application() -> void:
 	video.frame_presented.connect(func(image: Image):
 		if tv_menu == null or tv_menu.lights_room(): world.screen_light.set_image(image))
 	video.frame_presented.connect(world.picture.frame_presented)
-	# The decoder always delivers a 4:3 frame; display styles are applied inside it.
+	video.aspect_changed.connect(update_programme_aspect)
 	video.active_changed.connect(func(active):
 		if active: stop_boot_sound()
 		change_game_preferences(active, VIDEO_PROFILE)
-		show_programme(active, video.field_rate(), 4.0 / 3.0))
+		show_programme(active, video.field_rate(), video.display_aspect()))
 	video.finished.connect(func():
 		# Watched to the end: the next play starts from the beginning.
 		video_library.remember(video.path, float(video.info.duration), float(video.info.duration), video.style)
 		flash_video_bar("Finished · A plays it again · B opens the menu"))
 	emulator.status_changed.connect(func(_message): refresh_startup_status())
+	display_settings.read(settings_store.read("user://settings.cfg"))
 	var defaults := capture_settings()
 	var showcase_defaults := Showcase.config()
 	SettingsStore.copy_sections(showcase_defaults,defaults,showcase_defaults.get_sections())
-	apply_settings(settings_store.read("user://settings.cfg", defaults))
+	restore_settings(settings_store.read("user://settings.cfg", defaults))
 	# New users see first-run setup. Settings saved before it existed, with no
 	# [welcome] entry, belong to someone already set up.
 	var stored: ConfigFile = settings_store.read("user://settings.cfg")
 	welcome_done = bool(stored.get_value("welcome", "done", not stored.get_sections().is_empty()))
-	picture_baseline = capture_settings()
 	var recent := settings_store.read("user://recent.cfg")
 	if recent.has_section("library"):
 		last_game_path = str(recent.get_value("library", "last_game", ""))
@@ -645,7 +647,20 @@ func start_application() -> void:
 		menu.begin_boot()
 		if is_instance_valid(menu.boot): menu.boot.set_process(false)
 
+## A complete persisted configuration, as opposed to applying a preset's fields.
+func restore_settings(config: ConfigFile) -> void:
+	display_settings.leave_context()
+	apply_settings(config)
+	display_settings.applied.clear()
+	display_settings.base=display_settings.live_picture()
+	if display_settings.data.views.is_empty(): display_settings.save_view()
+	display_settings.restore_view()
+	display_settings.refresh_screen()
+
 func apply_settings(config: ConfigFile) -> void:
+	display_settings.read(config)
+	scene_msaa=clampi(int(config.get_value("display_profiles","msaa",0)),0,2)
+	apply_scene_msaa()
 	var profiles = config.get_value("screen_profiles", "pictures", screen_picture_profiles)
 	if profiles is Dictionary: screen_picture_profiles = profiles.duplicate(true)
 	for key in vmu_display.DEFAULTS: vmu_display.set(key,config.get_value("vmu",key,vmu_display.DEFAULTS[key]))
@@ -810,8 +825,7 @@ func _process(delta: float) -> void:
 		if not report_path.is_empty():
 			var report := FileAccess.open(report_path, FileAccess.WRITE)
 			if report:
-				report.store_string(JSON.stringify({"stereo": stereo, "width": get_window().size.x,
-					"height": get_window().size.y, "frames": Engine.get_process_frames()}))
+				report.store_string(JSON.stringify(display_runtime_report()))
 				report.close()
 	var previously_valid := tracking_was_valid
 	provider.update(delta)
@@ -826,7 +840,7 @@ func _process(delta: float) -> void:
 		needs_center = false
 	tracking_was_valid = provider.valid
 	if provider.status != previous_tracking_status:
-		print("Tracking: ", provider.status)
+		print("Tracking: ", provider.status, " at=", Time.get_datetime_string_from_system(true), " utc elapsed_us=", Time.get_ticks_usec())
 		previous_tracking_status = provider.status
 	var target: Quaternion = center.inverse() * provider.orientation if provider.valid else displayed
 	# Extrapolate the recent head rotation toward the frame that will reach
@@ -861,6 +875,17 @@ func _process(delta: float) -> void:
 	if diagnose_requested and Engine.get_process_frames() >= 180 and not view_diagnosed:
 		view_diagnosed = true
 		diagnose_view.call_deferred()
+
+## No GPU readback: correlate room health with the independent display watcher.
+func display_runtime_report() -> Dictionary:
+	var screen:=DisplayServer.screen_get_size(get_window().current_screen)
+	var angles:=displayed.get_euler()*180.0/PI
+	return {"timestamp":Time.get_unix_time_from_system(),"stereo":stereo,
+		"width":get_window().size.x,"height":get_window().size.y,"screen":[screen.x,screen.y],
+		"frames":Engine.get_process_frames(),"draws":Engine.get_frames_drawn(),
+		"room_fps":Engine.get_frames_per_second(),"msaa":scene_msaa,"widescreen":world.widescreen,
+		"tracking_valid":provider.valid,"tracking_status":provider.status,"camera_degrees":[angles.x,angles.y,angles.z],
+		"system":emulator.system_id if emulator.loaded else "","source_aspect":world.picture.source_aspect}
 
 func diagnose_view() -> void:
 	print("View diagnostic requested: frame=", Engine.get_process_frames(), " pose=", displayed,
@@ -985,6 +1010,7 @@ func set_tracking_source(source: String) -> void:
 func use_tracking(real_tracking: bool) -> void:
 	var inversion := Vector3(float(provider.invert_pitch), float(provider.invert_yaw), float(provider.invert_roll))
 	var changed := real_tracking != provider.real
+	if changed and display_settings.initialized: display_settings.save_view()
 	if changed:
 		if provider.real: xr_fov=vertical_fov
 		else: desktop_fov=vertical_fov
@@ -1000,6 +1026,7 @@ func use_tracking(real_tracking: bool) -> void:
 	needs_center = real_tracking
 	tracking_was_valid = false
 	if changed: vertical_fov = xr_fov if real_tracking else desktop_fov
+	if changed and display_settings.initialized: display_settings.restore_view()
 
 func request_exit() -> void:
 	remember_video_position()
@@ -1093,6 +1120,7 @@ func close_settings() -> bool:
 	if not settings_on_open.is_empty() and capture_settings().encode_to_text() != settings_on_open: show_notice("Settings saved")
 	settings_on_open = ""
 	clear_menu_gamepad()
+	display_settings.finish_edit()
 	settings_panel.hide()
 	menu_ambience.silence()
 	emulator.gamepad.set_menu_active(false)
@@ -1149,6 +1177,12 @@ func show_programme(active: bool, rate: float, aspect: float) -> void:
 		world.screen_light.set_image(null)
 		# A disc's card has its own picture (card_view); the test signal is underneath it.
 		world.picture.set_source(card_view.get_texture(), false, Vector2(Pattern.SIZE))
+
+func update_programme_aspect(aspect: float) -> void:
+	if tv_menu != null and tv_menu.active: tv_menu.saved.aspect=aspect
+	elif loading_path.is_empty():
+		world.picture.source_aspect=aspect
+		world.picture.refresh()
 
 ## Puts the loading card for a disc game on the TV, with progress 0..1 while it
 ## unpacks or negative while it boots (which restarts the black-screen timeout).
@@ -1436,11 +1470,11 @@ func load_profile() -> void:
 	profile_undo = capture_settings()
 	var merged := capture_settings()
 	SettingsStore.copy_sections(saved,merged,PackedStringArray(["view","room","crt","picture","emulation"]))
+	merged.set_value("room","widescreen",world.widescreen)
 	# Validate against live types before applying user-editable files.
 	var validator := ConfigFile.new()
 	validator.parse(merged.encode_to_text())
 	apply_settings(validated_settings(validator,profile_undo))
-	if active_game_key.is_empty(): picture_baseline = capture_settings()
 	rebuild_settings()
 	show_notice("Setup loaded. Undo is available in Saved setups." + (" " + reader.warning if not reader.warning.is_empty() else ""))
 
@@ -1460,44 +1494,28 @@ func undo_profile() -> void:
 		return
 	apply_settings(profile_undo)
 	profile_undo = null
-	if active_game_key.is_empty(): picture_baseline = capture_settings()
 	rebuild_settings()
 	show_notice("Previous setup restored")
-
-func save_game_preferences() -> bool:
-	if active_game_key.is_empty(): return true
-	var config := ConfigFile.new()
-	SettingsStore.copy_sections(capture_settings(),config,PICTURE_SECTIONS)
-	var path := game_picture_path(active_game_key)
-	var baseline := ConfigFile.new()
-	SettingsStore.copy_sections(picture_baseline,baseline,PICTURE_SECTIONS)
-	# The video profile is always kept: removing it would bring back its composite default.
-	if config.encode_to_text() == baseline.encode_to_text() and active_game_key != VIDEO_PROFILE:
-		# No override means future global changes also apply to this game.
-		for suffix in ["", ".bak"]:
-			if FileAccess.file_exists(path+suffix) and DirAccess.remove_absolute(ProjectSettings.globalize_path(path+suffix)) != OK:
-				show_notice("Could not clear the game's picture override. Check user-folder permissions.")
-				return false
-		return true
-	var error := SettingsStore.write(path,config)
-	if error != OK: show_notice("Game picture settings could not be saved. Check free space.")
-	return error == OK
 
 func game_picture_path(key: String) -> String:
 	return "user://games/" + key + ("-wide" if world.widescreen else "") + ".cfg"
 
 func remember_screen_baseline() -> void:
 	var config := ConfigFile.new()
-	SettingsStore.copy_sections(picture_baseline if not active_game_key.is_empty() else capture_settings(), config, PICTURE_SECTIONS)
+	SettingsStore.copy_sections(capture_settings(), config, PICTURE_SECTIONS)
+	display_settings.base_into(config)
 	screen_picture_profiles["wide" if world.widescreen else "standard"] = config.encode_to_text()
 
+func apply_scene_msaa() -> void:
+	for view in views: view.msaa_3d=[Viewport.MSAA_DISABLED,Viewport.MSAA_2X,Viewport.MSAA_4X][scene_msaa]
+
 func set_widescreen(enabled: bool) -> void:
+	display_settings.choose_screen(enabled)
+
+func _switch_cabinet(enabled: bool) -> void:
 	if world.widescreen == enabled: return
-	if not save_game_preferences(): return
 	remember_screen_baseline()
-	var was_profile := not active_game_key.is_empty()
-	var was_video := active_game_key == VIDEO_PROFILE
-	active_game_key = ""
+	display_settings.save_view()
 	world.set_widescreen(enabled)
 	var target := Showcase.config()
 	var id := "wide" if enabled else "standard"
@@ -1505,68 +1523,38 @@ func set_widescreen(enabled: bool) -> void:
 	var merged := capture_settings()
 	SettingsStore.copy_sections(target, merged, PICTURE_SECTIONS)
 	apply_settings(merged)
-	picture_baseline = capture_settings()
-	if was_profile: change_game_preferences(true, VIDEO_PROFILE if was_video else "")
+	display_settings.restore_view()
 	settings_dirty = true
 
 func change_game_preferences(active: bool, key := "") -> void:
-	if not active_game_key.is_empty():
-		save_game_preferences()
-		var restore := capture_settings()
-		SettingsStore.copy_sections(picture_baseline,restore,PICTURE_SECTIONS)
-		apply_settings(restore)
-	if key == VIDEO_PROFILE: active_game_key = VIDEO_PROFILE if active and video_own_picture else ""
-	else: active_game_key = emulator.rom_hash if active and remember_game_picture else ""
-	if not active_game_key.is_empty():
-		var path := game_picture_path(active_game_key)
-		var defaults := capture_settings()
-		# Video looks like a broadcast or tape feed until the user says otherwise.
-		if active_game_key == VIDEO_PROFILE and not FileAccess.file_exists(path):
-			defaults.set_value("picture", "connection", 3)
-		var reader := SettingsStore.new()
-		var saved := reader.read(path,defaults)
-		var merged := capture_settings()
-		SettingsStore.copy_sections(saved,merged,PICTURE_SECTIONS)
-		apply_settings(merged)
-		if not reader.warning.is_empty(): startup_message = reader.warning
+	display_settings.leave_context()
+	display_settings.begin_context(active,key)
+	display_settings.base=display_settings.live_picture()
+	display_settings.migrate_picture()
+	display_settings.resolve_picture()
 	settings_dirty = true
 
-## Switches videos between their own picture and the global one, at once if one plays.
-func set_video_own_picture(enabled: bool) -> void:
-	if enabled == video_own_picture: return
-	if video.loaded: change_game_preferences(false)
-	video_own_picture = enabled
-	if video.loaded: change_game_preferences(true, VIDEO_PROFILE)
-	save_library()
-	settings_dirty = true
-
-## Starts the video picture again: the global picture with Auto composite.
+## Resets this TV's video defaults and the current video override.
 func reset_video_picture() -> void:
-	var playing: bool = video.loaded and active_game_key == VIDEO_PROFILE
-	if playing: change_game_preferences(false)
-	for suffix in ["", ".bak"]:
-		var path: String = game_picture_path(VIDEO_PROFILE) + str(suffix)
-		if FileAccess.file_exists(path): DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
-	if playing: change_game_preferences(true, VIDEO_PROFILE)
+	if display_settings.kind!="video": return
+	display_settings.commit()
+	display_settings.data.pictures["video."+display_settings.screen_id()+".screen"]={"picture.mode":3}
+	if not display_settings.content.is_empty(): display_settings.data.pictures.erase("video."+display_settings.screen_id()+".content."+display_settings.content)
+	display_settings.resolve_picture()
 	show_notice("Video picture reset to Auto composite")
 
 func set_remember_game_picture(enabled: bool) -> void:
-	if enabled == remember_game_picture: return
-	if not enabled: change_game_preferences(false)
 	remember_game_picture = enabled
-	if enabled and emulator.loaded: change_game_preferences(true)
 	settings_dirty = true
 
 func forget_game_picture() -> void:
-	if active_game_key.is_empty():
-		show_notice("Load a game with per-game picture enabled first.")
+	if display_settings.content.is_empty():
+		show_notice("Load a game first.")
 		return
-	var merged := capture_settings()
-	SettingsStore.copy_sections(picture_baseline,merged,PICTURE_SECTIONS)
-	apply_settings(merged)
-	save_game_preferences()
+	display_settings.set_scope(0)
+	display_settings.inherit_picture()
 	rebuild_settings()
-	show_notice("This game now uses the global picture settings")
+	show_notice("This game now inherits its platform picture")
 
 func refresh_startup_status() -> void:
 	if not is_instance_valid(menu): return
@@ -1587,7 +1575,17 @@ func reset_all_options() -> void:
 	visualizer.preset_index=0;visualizer.brightness=1.0;visualizer.automatic=true
 	visualizer.save_preferences()
 	if not settings_panel.visible: return
+	display_settings.leave_context()
+	display_settings.data=display_settings.get_script().new().data.duplicate(true)
+	display_settings.data.legacy_import=false
+	display_settings.data.platforms={"psp":{"screen":"wide"},"wii":{"screen":"wide"}}
+	screen_picture_profiles.clear()
+	world.set_widescreen(false)
 	for index in range(5): SettingsDefaults.apply(self,index)
+	scene_msaa=0;apply_scene_msaa()
+	display_settings.scope=0
+	display_settings.base=display_settings.live_picture()
+	display_settings.refresh_screen()
 	emulator.tv_audio.reset_defaults()
 	music.reset_defaults()
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve","menu_clean_feed"]: set(key,false)
@@ -1615,10 +1613,10 @@ func load_showcase_setup() -> void:
 	profile_undo=capture_settings()
 	var merged := capture_settings()
 	SettingsStore.copy_sections(Showcase.config(),merged,PackedStringArray(["view","room","crt","picture","audio","atmosphere","emulation"]))
+	merged.set_value("room","widescreen",world.widescreen)
 	merged.set_value("preferences","metrics_visible",false)
 	merged.set_value("preferences","game_fps_visible",false)
 	apply_settings(merged)
-	if active_game_key.is_empty(): picture_baseline=capture_settings()
 	rebuild_settings()
 	show_notice("Deck Showcase loaded. Undo is available in Saved setups.")
 
@@ -1784,6 +1782,8 @@ func capture_settings() -> ConfigFile:
 	config.set_value("picture", "keep_aspect", world.picture.keep_aspect)
 	config.set_value("picture", "fit_mode", world.picture.fit_mode)
 	config.set_value("picture", "aspect_override", world.picture.aspect_override)
+	config.set_value("display_profiles","data",display_settings.data.duplicate(true))
+	config.set_value("display_profiles","msaa",scene_msaa)
 	config.set_value("room", "widescreen", world.widescreen)
 	config.set_value("screen_profiles", "pictures", screen_picture_profiles.duplicate(true))
 	config.set_value("crt", "glass", glass_reflections)
@@ -1791,16 +1791,12 @@ func capture_settings() -> ConfigFile:
 	return config
 
 func save_settings() -> bool:
+	display_settings.commit()
+	display_settings.save_view()
 	remember_screen_baseline()
 	if is_instance_valid(music) and music.save_resume()!=OK: return false
 	var config := capture_settings()
-	# A key is only set while a picture profile is active: a game's (when
-	# per-game picture is on) or the video profile (always). Its picture is
-	# saved to the profile, never into the global settings.
-	if not active_game_key.is_empty():
-		if not save_game_preferences(): return false
-		SettingsStore.copy_sections(picture_baseline, config, PICTURE_SECTIONS)
-	else: picture_baseline = config
+	display_settings.base_into(config)
 	var error := SettingsStore.write("user://settings.cfg", config)
 	if error != OK:
 		show_notice("Settings could not be saved. Check free space and user-folder permissions.")

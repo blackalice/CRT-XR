@@ -80,6 +80,7 @@ bool RetroCore::start_stream(int reserve_frames, bool async_readback) {
         Stream& s = *stream;
         s.stop = false; s.failed = false; s.error.clear();
         s.fps = host.fps > 1.0 ? host.fps : 60.0;
+        s.display_aspect = host.display_aspect.load();
         s.sample_rate = host.sample_rate > 1.0 ? host.sample_rate : 48000.0;
         s.reserve_frames = std::clamp(reserve_frames, 1, 32);
         s.started = std::chrono::steady_clock::now();
@@ -181,6 +182,7 @@ void RetroCore::stream_loop() {
         }
         if (!vmu.empty()) s.vmu = std::move(vmu);
         if (host.fps > 1.0) s.fps = host.fps;
+        s.display_aspect = host.display_aspect.load();
         if (host.sample_rate > 1.0) s.sample_rate = host.sample_rate;
         if (s.timings.size() < 256)
             s.timings.push_back({static_cast<std::uint64_t>(wall), host.step_usec, host.readback_usec, host.pcm.size() / 2, host.video_changed,
@@ -292,6 +294,7 @@ Dictionary RetroCore::stream_info() {
     result["dropped"] = static_cast<int64_t>(s.dropped);
     result["width"] = s.width; result["height"] = s.height;
     result["fps"] = s.fps; result["sample_rate"] = s.sample_rate;
+    result["display_aspect"] = s.display_aspect;
     result["failed"] = s.failed;
     result["error"] = String::utf8(s.error.c_str());
     result["frames"] = static_cast<int64_t>(s.frames_run);
@@ -417,6 +420,7 @@ Dictionary RetroCore::info() const { wait_frame();
     result["name"] = String::utf8(host.name.c_str());
     result["width"] = host.width; result["height"] = host.height;
     result["fps"] = host.fps; result["sample_rate"] = host.sample_rate;
+    result["display_aspect"] = host.display_aspect.load();
     result["step_usec"] = static_cast<int64_t>(host.step_usec);
     result["readback_usec"] = static_cast<int64_t>(host.readback_usec);
     result["video_changed"] = host.video_changed;

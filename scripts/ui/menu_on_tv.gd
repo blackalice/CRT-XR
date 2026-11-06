@@ -53,7 +53,9 @@ func menu_texture() -> Texture2D:
 func lean_position(base: Vector3) -> Vector3:
 	if lean <= 0.0: return base
 	var vertical := tan(deg_to_rad(float(host.vertical_fov)) * 0.5)
-	var near := clampf(TUBE_HALF_HEIGHT * float(host.tv_scale) / (vertical * FILL), 0.8, -base.z)
+	var aspect:=float(host.views[0].size.x)/maxf(float(host.views[0].size.y),1.0)
+	var half_width: float=.88 if host.world.widescreen else .66
+	var near := clampf(maxf(TUBE_HALF_HEIGHT,half_width/aspect) * float(host.tv_scale) / (vertical * FILL), 0.8, -base.z)
 	return base.lerp(Vector3(0.0, 1.25, -near), lean * lean * (3.0 - 2.0 * lean))
 
 func enter() -> void:

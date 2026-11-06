@@ -88,6 +88,7 @@ public:
     // False tells the core its audio is unused (input preview) and drops samples.
     bool want_audio = true;
     double fps = 60.0, sample_rate = 32040.0;
+    std::atomic<double> display_aspect{0.0}; // zero: frontend/platform fallback
     std::string error, name;
     std::vector<std::uint8_t> rgba;
     std::vector<std::int16_t> pcm;

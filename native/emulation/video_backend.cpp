@@ -69,8 +69,8 @@ double VideoBackend::probe_duration(const std::string& path) {
 
 VideoBackend::Layout VideoBackend::layout(int source_width, int source_height, double aspect, int width, int height, Style style) {
     Layout result{0, 0, source_width, source_height, 0, 0, width, height};
-    // The frame always fills a 4:3 tube, whatever its pixel grid (640x240 has
-    // tall pixels), so shapes are compared against the tube, not the grid.
+    // Legacy broadcast styles target 4:3 regardless of the pixel grid.
+    // NATIVE leaves fitting to the frontend, using the source display aspect.
     const double tube = 4.0 / 3.0;
     // Fit a picture of `shape` inside the frame; the remainder becomes bars.
     auto fit = [&](double shape) {
@@ -84,6 +84,7 @@ VideoBackend::Layout VideoBackend::layout(int source_width, int source_height, d
     };
     const double fourteen_nine = 14.0 / 9.0;
     switch (style) {
+    case NATIVE: break; // unletterboxed source; frontend preserves display aspect
     case LETTERBOX: fit(aspect); break;
     case FOURTEEN_NINE:
         // The broadcast compromise: wider sources lose their sides down to 14:9

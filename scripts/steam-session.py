@@ -139,12 +139,14 @@ def main():
         return
     # Unique files prevent a previous launch from authorising this handoff.
     run = Path(tempfile.mkdtemp(prefix="display-probe-", dir=state))
-    env = dict(os.environ, CRT_XR_DISPLAY_PROBE=str(run / "display.json"), CRT_XR_SBS_SIZE=args.sbs_resolution)
+    env = dict(os.environ, CRT_XR_DISPLAY_PROBE=str(run / "display.json"), CRT_XR_SBS_SIZE=args.sbs_resolution,
+               CRT_XR_DISPLAY_STATUS=str(run / "runtime.json"))
     auto = AutoSBS(driver, run / "auto-sbs.json") if driver is not None else None
     if auto is not None: env["CRT_XR_AUTO_SBS"] = str(auto.status)
     with tracking_session(state):
         watcher = subprocess.Popen([sys.executable, str(here / "display-probe.py"), "--output", env["CRT_XR_DISPLAY_PROBE"],
-                                    "--size", args.sbs_resolution, "--connector", args.xr_connector])
+                                    "--size", args.sbs_resolution, "--connector", args.xr_connector,
+                                    "--app-status", env["CRT_XR_DISPLAY_STATUS"]])
         child = None
         old_handler = signal.signal(signal.SIGTERM, lambda number, frame: sys.exit(128+number))
         try:

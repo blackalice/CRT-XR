@@ -35,7 +35,7 @@ triangles=0
 for ob in temp.objects:
     if ob.type=='MESH': ob.data.calc_loop_triangles(); triangles+=len(ob.data.loop_triangles)
 info={'triangles':triangles,'mesh_objects':sum(o.type=='MESH' for o in temp.objects),
-      'source':'artwork/widescreen-crt/crt-xr-26-wide.blend','export':str(out.relative_to(root)),
+      'source':str(Path(bpy.data.filepath).relative_to(root)).replace('\\','/'),'export':out.relative_to(root).as_posix(),
       'front_axis_gltf':'+Z','source_preserved':True}
 (out.parent/'model-info.json').write_text(json.dumps(info,indent=2)+'\n')
 print(json.dumps(info))

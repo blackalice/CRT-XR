@@ -73,7 +73,45 @@ const ROW_ICONS := {"view.fit":"fit","view.recenter":"view","tracking.fixed":"vi
 func page(title: String, rows: Array) -> Dictionary:
 	for row in rows:
 		if row is Dictionary and ROW_ICONS.has(row.get("id","")) and not row.has("row_icon"): row["row_icon"]=ROW_ICONS[row.id]
+		if not row is Dictionary: continue
+		var id: String=row.get("id","")
+		var field: String={"picture.source_aspect":"picture.aspect_override","picture.connection":"picture.mode"}.get(id,id)
+		if id.begins_with("crt.") and id.trim_prefix("crt.") in host.SettingsDefaults.PICTURE or id.begins_with("picture.") and field in host.display_settings.live_picture():
+			row["reset"]=func(): host.display_settings.reset_field(field); menu.refresh()
+			row["default"]=host.display_settings.inherited_value(field,row.get("default",0))
+			row["help"] += " Y restores the inherited value at this level."
+		if id=="picture.fitting":
+			row["reset"]=func(): host.display_settings.reset_fields(["picture.keep_aspect","picture.fit_mode"]); menu.refresh()
 	return {"title":title,"rows":rows}
+
+func display_rows() -> Array:
+	var prefs=host.display_settings
+	var scopes: Array=[0,1,2] if prefs.kind=="game" and not prefs.system.is_empty() else ([0,2] if not prefs.content.is_empty() else [2])
+	var labels: Array=[]
+	for value in scopes: labels.append(["This video" if prefs.kind=="video" else "This game","Platform defaults","TV defaults"][value])
+	var rows: Array=[{"id":"picture.scope","label":"Apply picture changes to","kind":"choice","choices":labels,"default":0,
+		"getter":func(): return maxi(0,scopes.find(prefs.scope)),"setter":func(value): prefs.set_scope(scopes[int(value)]); menu.refresh(),
+		"help":"%s. Picture and fitting are separate for each TV and for games and videos. Game changes follow platform defaults until overridden. Closing settings returns to this programme's overrides." % prefs.context_label()}]
+	var inheritable: bool=prefs.scope!=2 and (not prefs.content.is_empty() or not prefs.system.is_empty())
+	rows.append({"id":"picture.cabinet","label":"TV for this " + ("platform" if prefs.scope==1 else ("video" if prefs.kind=="video" else "game")) if inheritable else "Default TV for " + ("videos" if prefs.kind=="video" else "games"),"kind":"choice","choices":["Use video default" if prefs.kind=="video" else ("Use games default" if prefs.scope==1 else "Use platform TV"),"Standard · 4:3","Wide · 16:9"] if inheritable else ["Standard · 4:3","Wide · 16:9"],"default":0 if inheritable or prefs.kind=="game" else 1,"visual":true,
+		"getter":func():
+			if not inheritable: return 1 if prefs.data.defaults[prefs.kind]=="wide" else 0
+			var group: String="platforms" if prefs.scope==1 else ("videos" if prefs.kind=="video" else "games")
+			var selected: String=prefs.entry(group,prefs.system if prefs.scope==1 else prefs.content).get("screen","")
+			return ["","standard","wide"].find(selected),
+		"setter":func(value):
+			if inheritable and int(value)==0:
+				if prefs.scope==1: prefs.set_platform_screen(prefs.system,0)
+				else: prefs.inherit_screen()
+			else: host.set_widescreen(int(value)==(2 if inheritable else 1))
+			menu.refresh(),
+		"help":"Videos keep their own TV and fitting. Wide hides the clock and game boxes. Original aspect preserves the video; choose Fit whole picture to keep every edge visible." if prefs.kind=="video" else "TV selection changes the cabinet, not the game's rendering. Wide hides the clock and game boxes. Use emulator options for widescreen hacks, and 16:9 aspect for anamorphic games."})
+	rows.append(action("picture.inherit","Clear picture changes at this level",func(): prefs.inherit_picture(); menu.refresh(),"Removes this level's picture and fitting changes for the current TV. Inherited settings take effect immediately."))
+	if not host.emulator.loaded and not host.video.loaded:
+		rows.push_front({"id":"picture.activity","label":"Picture defaults for","kind":"choice","choices":["Games","Videos"],"default":0,"getter":func(): return 1 if prefs.kind=="video" else 0,
+			"setter":func(value): prefs.leave_context(); prefs.kind="video" if int(value)==1 else "game"; prefs.scope=2; prefs.content=""; prefs.system=""; prefs.refresh_screen(); menu.refresh(),
+			"help":"Choose which activity's TV defaults to adjust. Games and videos keep independent pictures on each TV."})
+	return rows
 
 const CoreOptions = preload("res://scripts/emulation/core_options.gd")
 
@@ -128,6 +166,11 @@ func core_option_pages() -> Array:
 		header["compact"] = true
 		rows.append(header)
 		if is_open:
+			var tv_row := {"id":"core.tv."+system,"label":"Preferred TV","kind":"choice","choices":["Use games default","Standard · 4:3","Wide · 16:9"],"default":0,"visual":true,
+				"getter":func(): return ["","standard","wide"].find(host.display_settings.entry("platforms",system).get("screen","")),
+				"setter":func(value): host.display_settings.set_platform_screen(system,int(value)); menu.refresh(),
+				"help":"Applies immediately. Individual games can choose another TV under Picture. This does not enable widescreen rendering in the emulator.","accordion_group":system,"accordion_child":true,"skin":"inset"}
+			rows.append(tv_row)
 			for definition in CoreOptions.definitions(system):
 				var child := core_option_row(system, "", definition)
 				child["accordion_group"] = system
@@ -140,8 +183,9 @@ func core_option_pages() -> Array:
 	var game_rows: Array = []
 	if not playing.is_empty():
 		for definition in CoreOptions.definitions(playing): game_rows.append(core_option_row(playing, emulator.rom_hash, definition))
-		game_rows[0]["section"] = emulator.rom_path.get_file().get_basename() + " · " + emulator.Registry.SYSTEMS[playing].name
-		game_rows[0]["section_detail"] = "Changes apply next load. Y restores the console setting."
+		if not game_rows.is_empty():
+			game_rows[0]["section"] = emulator.rom_path.get_file().get_basename() + " · " + emulator.Registry.SYSTEMS[playing].name
+			game_rows[0]["section_detail"] = "Changes apply next load. Y restores the console setting."
 	else:
 		game_rows.append(unavailable(action("core.no_game", "Game settings", func(): pass, "", true, ""), "Start a game to adjust its settings. Each option follows its console unless you give this game an override."))
 	return [page("Consoles", rows), page("This game", game_rows)]
@@ -180,14 +224,13 @@ func picture_fields(fields: Array) -> Array:
 ## Videos → Picture: which picture videos use, and how a video fills the tube.
 func video_picture_rows() -> Array:
 	var h = host
-	return [{"id":"video.own_picture","label":"Video picture","kind":"choice","choices":["Own settings","Same as games"],"default":0,
-			"getter":func(): return 0 if h.video_own_picture else 1,"setter":func(value): h.set_video_own_picture(int(value)==0); menu.refresh(),
-			"help":"Own settings gives videos a shared picture. Same as games uses the global picture."},
-		unavailable(action("video.reset_picture","Reset video picture",func(): menu.ask("Reset the video picture?","Videos go back to your global picture with Auto composite. Games are not affected.",h.reset_video_picture),
-			"Starts the video picture again from your global picture, with Auto composite.",not h.video_own_picture,""),"Videos use your global picture."),
+	return [{"id":"video.default_tv","label":"Default TV for videos","kind":"choice","choices":["Standard · 4:3","Wide · 16:9"],"default":1,
+		"getter":func(): return 1 if h.display_settings.data.defaults.video=="wide" else 0,
+		"setter":func(value): h.display_settings.data.defaults.video="wide" if int(value)==1 else "standard"; h.display_settings.refresh_screen() if h.video.loaded else null; menu.refresh(),
+		"help":"New videos follow this TV choice; each video can override it under Picture. Picture and fitting are independent of games."},
 		{"id":"video.default_style","label":"Picture shape for new videos","kind":"choice","choices":VideoSession.STYLES,"default":0,
 			"getter":func(): return h.video_style,"setter":func(value): h.video_style=int(value); h.save_library(),
-			"help":"Letterbox shows the whole widescreen picture; 14:9 trims the sides a little; Fill 4:3 crops to the tube; Stretch squeezes. Each video remembers its own choice."},
+			"help":"Original aspect preserves the video for either TV, including cinema ratios. The other choices simulate a 4:3 broadcast. Each video remembers its own choice."},
 		{"id":"video.lines","label":"Picture lines","kind":"choice","choices":["240 · CRT look","480 · sharper"],"default":0,
 			"getter":func(): return 1 if h.video_lines==480 else 0,"setter":func(value): h.video_lines=480 if int(value)==1 else 240; h.save_library(),
 			"help":"240 lines is one broadcast field, the line structure a CRT shows, so scanlines and the phosphor mask are visible. 480 is sharper, but its lines are too fine to show on the virtual tube. Applies from the next video you open."},
@@ -267,13 +310,16 @@ func pages(category: int) -> Array:
 	var unchanged := func(): pass
 	match category:
 		0:
-			return [page("Placement",[
-				property_row("distance","TV distance (m)",1.2,5,.1,"m","Moves the entire TV and stand closer or farther."),
+			return [page(("Wide" if w.widescreen else "Standard")+" TV placement",[
+				property_row("distance","TV distance (m)",1.2,5,.1,"m","Saved separately for this TV and for fixed view or XR tracking. Moves the TV and stand closer or farther."),
 				property_row("height_offset","Screen height offset (m)",-1.5,1.5,.05,"m","Moves the TV, furniture and floor together vertically."),
 				property_row("tv_scale","TV scale",.5,1.6,.05,"percent","Scales the whole set; this is independent of picture fitting."),
 				action("view.fit","Fit TV to view",h.fit_tv_to_view,"Fits the physical TV inside your neutral view."),
 				action("view.recenter","Recenter head",h.recenter,"Also available on {R3}, without opening the menu.")]),
 				page("Display",[
+				{"id":"view.scene_msaa","label":"Room edge smoothing","kind":"choice","choices":["Off","2× MSAA","4× MSAA"],"default":0,"visual":true,
+					"getter":func(): return h.scene_msaa,"setter":func(value): h.scene_msaa=int(value); h.apply_scene_msaa(),
+					"help":"Smooths the TV and display surface edges in both eyes. Try 2× first; 4× costs more GPU time. Off uses the least GPU time. Does not change emulator resolution or blur the game picture."},
 				toggle("view.stereo","Side-by-side stereo",h,"stereo",false,"Use with the glasses' physical SBS mode. This does not switch the glasses themselves.",func(): h.set_stereo(h.stereo)),
 				action("view.fullscreen","Toggle fullscreen",h.toggle_fullscreen,"Switch the local application window between fullscreen and windowed mode."),
 				property_row("edge_fade","Soft view edges",0,.2,.005,"percent","Fades the edges of the glasses' viewing window into black.")]),
@@ -300,7 +346,7 @@ func pages(category: int) -> Array:
 			crt.append_array(picture_fields(w.picture.BEAM_FIELDS))
 			crt.append(action("crt.degauss","Degauss",h.degauss,"Like the button on an old set: closes the menu, then the picture wobbles and swirls with colour as the tube's field clears.",false,""))
 			var fitting := picture_fields(w.picture.FIT_FIELDS)
-			fitting.push_front({"id":"picture.cabinet","label":"Widescreen CRT","kind":"toggle","default":false,"visual":true,"getter":func(): return w.widescreen,"setter":func(value): h.set_widescreen(value); menu.refresh(),"help":"Use the wide 16:9 cabinet. Clock radio and game boxes are hidden to make room on the table."})
+
 			fitting.append({"id":"picture.fitting","label":"Picture fitting","kind":"choice","choices":["Fit whole picture","Fill screen (crop)","Stretch to screen"],"default":0,"visual":true,"getter":func(): return w.picture.fit_mode if w.picture.keep_aspect else 2,"setter":func(value): w.picture.keep_aspect=value!=2; w.picture.fit_mode=mini(value,1); refresh.call(); menu.refresh(),"help":"Fit preserves the full image with borders. Fill crops the edges. Stretch fills the screen by changing the picture shape."})
 			fitting.append({"id":"picture.source_aspect","label":"Picture aspect ratio","kind":"choice","choices":["Automatic","4:3","16:9"],"default":0,"visual":true,"getter":func(): return w.picture.aspect_override,"setter":func(value): w.picture.aspect_override=value; refresh.call(); menu.refresh(),"help":"Automatic follows the game or video. Choose 16:9 for a game rendering anamorphic widescreen."})
 			fitting.append(toggle("picture.guides","Picture-edge guides",w.picture,"guides",false,"Highlights the game frame edges to check that the full picture is visible.",refresh))
@@ -319,7 +365,7 @@ func pages(category: int) -> Array:
 			if menu.pictures.picture_undo!=null: presets.append(action("preset.undo","Undo picture preset",menu.pictures.undo_picture_preset,"Restore the picture from before the last preset."))
 			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference. Auto picks PAL or NTSC from the game's or video's frame rate."}]
 			signal_rows.append_array(picture_fields(w.picture.COLOR_FIELDS.slice(6)))
-			var picture_pages := [page("Presets",presets),page("CRT",crt),page(("Wide" if w.widescreen else "Standard") + (" video fit" if h.video.loaded else " game fit"),fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
+			var picture_pages := [page("TV & defaults",display_rows()),page("Presets",presets),page("CRT",crt),page(("Wide" if w.widescreen else "Standard") + (" video fit" if h.display_settings.kind=="video" else " game fit"),fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
 			return picture_pages
 		3:
 			var groups := {"Lighting":[],"Materials":[],"Placement":[]}
@@ -402,9 +448,9 @@ func pages(category: int) -> Array:
 				var saved: bool = config.has_section("view")
 				slots.append(action("slot.%d" % i,str(config.get_value("meta","name",h.PROFILE_NAMES[i])),func(): menu.open_slot(slot),"Stores view, room and picture settings; does not switch display mode or tracking.",false,"Saved" if saved else "Empty"))
 			if h.profile_undo!=null: slots.append(action("setups.undo","Undo last setup load",h.undo_profile,"Restore the setup from before loading Deck Showcase or a saved slot."))
-			return [page("Setup slots",slots),page("Per-game picture",[
-				{"id":"setups.pergame","label":"Remember picture per game","kind":"toggle","default":h.Showcase.PER_GAME_PICTURE,"visual":false,"getter":func(): return h.remember_game_picture,"setter":h.set_remember_game_picture,"help":"Each game keeps its own fitting, CRT and colour; room and view stay global. Off: games use the global picture. Videos have their own setting under Videos → Picture."},
-				unavailable(action("setups.global","Use global picture for this game",h.forget_game_picture,"Removes this game's picture override; future global picture changes apply.",h.active_game_key.is_empty() or h.active_game_key==h.VIDEO_PROFILE),"Start a game with its own picture first.")])]
+			return [page("Setup slots",slots),page("Picture inheritance",[
+				action("setups.picture","TV, platform and game pictures",func(): menu.category=1; menu.subsection=0; menu.refresh(),"Picture → TV & defaults selects the TV and the level you edit. Each game inherits platform and TV defaults; each video inherits its TV's video defaults.")])]
+
 		6:
 			return [page("About & Help",[
 				action("system.version","CRT XR",func(): menu.open_help("About CRT XR",about_page()),"A little CRT room for your XR glasses. About CRT XR, its maker and website.",false,str(ProjectSettings.get_setting("application/config/version"))),

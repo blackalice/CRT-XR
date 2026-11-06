@@ -123,7 +123,7 @@ func run() -> void:
 	var tabs: Dictionary = {}
 	for page in menu.catalog.pages(8): tabs[page.title] = page.rows.map(func(row): return row.id)
 	check(tabs.keys() == ["Picture", "VCR", "Playback"]
-		and tabs.Picture == ["video.own_picture", "video.reset_picture", "video.default_style", "video.lines", "video.interlace"]
+		and tabs.Picture == ["video.default_tv", "video.default_style", "video.lines", "video.interlace"]
 		and tabs.VCR == ["video.tape", "video.osd", "video.vcr_sounds"]
 		and tabs.Playback == ["video.subtitles_default", "video.hardware", "video.folder"], "Videos settings: %s" % [tabs])
 	check(menu.sidebar_buttons[8].get_index() == menu.sidebar_buttons[3].get_index() + 1, "Videos sits after Room in the sidebar")
@@ -171,7 +171,7 @@ func run() -> void:
 	menu.videos.open_videos()
 	activate("video:" + long)
 	check(app.video.loaded and not app.settings_panel.visible and app.video.path == long, "Choosing a video plays it with the menu closed (loaded %s, menu %s, mode %s, path %s, error %s)" % [app.video.loaded, app.settings_panel.visible, menu.mode, app.video.path, menu.error_label.text])
-	check(app.world.picture.mode == 3 and app.active_game_key == app.VIDEO_PROFILE, "Videos start with the auto composite picture")
+	check(app.world.picture.mode == 3 and app.display_settings.kind == "video", "Videos start with the auto composite picture")
 
 	press(JOY_BUTTON_DPAD_RIGHT)
 	check(absf(app.video.clock - 10.0) < 0.2, "D-pad right skips forward 10 seconds (%.2f)" % app.video.clock)
@@ -243,20 +243,17 @@ func run() -> void:
 	check(app.video.paused and app.video.osd_text() != "PAUSE" and clunks.is_empty(), "Opening the menu pauses the video without the VCR's pause (%s, %s)" % [app.video.osd_text(), clunks])
 	# Picture pages say plainly which picture they change.
 	menu.category = 1; menu.subsection = 0; menu.open_settings()
-	check(menu.subtitle.text.begins_with("Editing the video picture · all videos"), "Picture settings say they are editing the video picture (%s)" % menu.subtitle.text)
-	# Same as games: the video switches to the global picture at once, and back.
-	app.set_video_own_picture(false)
-	check(app.active_game_key == "" and app.world.picture.mode == global_mode, "Same as games puts videos on the global picture")
-	menu.open_settings()
-	check(menu.subtitle.text.begins_with("Editing the global picture · games, videos and test signal"), "And the Picture pages say so")
-	app.set_video_own_picture(true)
-	check(app.active_game_key == app.VIDEO_PROFILE and app.world.picture.mode == 3, "Own settings brings the video picture back")
+	check(menu.subtitle.text.begins_with("Editing Wide TV · This video"), "Picture settings say they are editing the video picture (%s)" % menu.subtitle.text)
+	# Picture editing can target video TV defaults without altering game defaults.
+	app.display_settings.set_scope(2); menu.open_settings()
+	check(menu.subtitle.text.begins_with("Editing Wide TV · video defaults"), "Picture pages identify the video defaults scope")
+	app.display_settings.set_scope(0)
 	menu.open_pause()
 	# Choosing the same picture as the global one must still be remembered for videos.
 	app.world.picture.mode = global_mode
 	activate("video.stop")
 	check(not app.video.loaded and app.pattern.visible and menu.mode == "pause", "Stop returns the TV to the test signal")
-	check(app.world.picture.mode == global_mode and FileAccess.file_exists(PROFILE), "The video picture is kept even when it matches the global one (mode %d, global %d, profile %s, games dir %s)" % [app.world.picture.mode, global_mode, FileAccess.file_exists(PROFILE), DirAccess.dir_exists_absolute(ProjectSettings.globalize_path("user://games"))])
+	check(app.world.picture.mode == global_mode and app.display_settings.data.pictures.has("video.wide.content."+long.sha256_text()), "Video picture is remembered independently of the global picture")
 
 	menu.videos.open_videos()
 	check(item("video:" + long).detail == "1:00 · Resume at 0:25", "The list shows where you stopped")
@@ -270,7 +267,7 @@ func run() -> void:
 	check(app.video.loaded and absf(app.video.clock - 25.0) < 0.2 and app.video.style == 1, "Continue resumes at the saved place in the saved shape")
 	check(app.world.picture.mode == global_mode, "The remembered video picture applies")
 	app.reset_video_picture()
-	check(app.world.picture.mode == 3 and app.active_game_key == app.VIDEO_PROFILE, "Reset video picture starts again from Auto composite")
+	check(app.world.picture.mode == 3 and app.display_settings.kind == "video", "Reset video picture starts again from Auto composite")
 	app.toggle_settings()
 	activate("video.restart")
 	check(not app.settings_panel.visible and app.video.clock < 0.2, "Start from the beginning plays from the start")

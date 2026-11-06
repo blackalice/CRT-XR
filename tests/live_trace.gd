@@ -39,6 +39,11 @@ func run() -> void:
 		var valid := true
 		for line in text.split("\n", false): valid = valid and JSON.parse_string(line) != null
 		check(valid, "Every line is JSON")
+		var contexts: Array=[]
+		for line in text.split("\n",false):
+			var entry=JSON.parse_string(line)
+			if entry is Dictionary and entry.get("k","")=="context":contexts.append(entry)
+		check(contexts.any(func(entry):return entry.has("timestamp") and entry.has("draws") and entry.has("camera_degrees") and entry.has("tracking_status") and entry.has("msaa")),"Trace correlates drawing, tracking and AA with wall-clock time")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(LiveTrace.FLAG))
 	print("LIVE TRACE COMPLETE: ", failures, " failures")
 	quit(1 if failures else 0)

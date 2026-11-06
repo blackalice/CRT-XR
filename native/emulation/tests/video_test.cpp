@@ -135,6 +135,9 @@ int main(int argc, char** argv) {
         // Display styles: measured bars and side crops against the layout rules.
         struct Expect { const char* name; VideoEngine::Style style; int rows, columns; bool green; };
         const Expect styles[] = {
+            {"h264_aac_25.mp4", VideoEngine::NATIVE, 480, 640, true},
+            {"anamorphic_169_25.mkv", VideoEngine::NATIVE, 480, 640, true},
+            {"scope_239_24.mp4", VideoEngine::NATIVE, 480, 640, true},
             {"h264_aac_25.mp4", VideoEngine::LETTERBOX, 360, 640, true},
             {"h264_aac_25.mp4", VideoEngine::FOURTEEN_NINE, 412, 640, false},
             {"h264_aac_25.mp4", VideoEngine::FILL, 480, 640, false},
@@ -145,7 +148,7 @@ int main(int argc, char** argv) {
             {"classic_43_30.mp4", VideoEngine::LETTERBOX, 480, 640, true},
             {"classic_43_30.mp4", VideoEngine::FILL, 480, 640, true},
         };
-        const char* names[] = {"letterbox", "14:9", "fill 4:3", "stretch"};
+        const char* names[] = {"letterbox", "14:9", "fill 4:3", "stretch", "native aspect"};
         for (const Expect& expect : styles) {
             auto video_owner = VideoEngine::create();
             VideoEngine& video = *video_owner;

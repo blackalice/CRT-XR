@@ -97,6 +97,7 @@ void LibretroHost::close_game() {
         { std::lock_guard<std::mutex> lock(audio_mutex); pending_pcm.clear(); audio_overflow = false; }
         width = height = 0;
         video_changed = false;
+        display_aspect.store(0.0);
         insert_countdown = 0;
         std::fill(std::begin(analog), std::end(analog), 0);
         std::fill(std::begin(trigger_pressure), std::end(trigger_pressure), 0);
@@ -243,6 +244,8 @@ bool LibretroHost::av_info(const retro_system_av_info& info) {
     }
     fps = info.timing.fps;
     sample_rate = info.timing.sample_rate;
+    const double aspect = info.geometry.aspect_ratio;
+    display_aspect.store(std::isfinite(aspect) && aspect > 0.0 && aspect <= 8.0 ? aspect : 0.0);
     return true;
 }
 bool LibretroHost::step(std::uint16_t mask) {
@@ -365,7 +368,13 @@ bool LibretroHost::environment(unsigned command, void* data) {
         if (format != RETRO_PIXEL_FORMAT_XRGB8888 && format != RETRO_PIXEL_FORMAT_RGB565 && format != RETRO_PIXEL_FORMAT_0RGB1555) return false;
         active->pixel_format = format; return true;
     }
-    case RETRO_ENVIRONMENT_SET_GEOMETRY: return true; // actual callback dimensions are authoritative
+    case RETRO_ENVIRONMENT_SET_GEOMETRY: {
+        if (!data) return false;
+        const double aspect = static_cast<retro_game_geometry*>(data)->aspect_ratio;
+        if (!std::isfinite(aspect) || aspect > 8.0) return false;
+        active->display_aspect.store(std::max(aspect, 0.0));
+        return true; // callback dimensions still determine the uploaded raster
+    }
     case RETRO_ENVIRONMENT_SET_SYSTEM_AV_INFO: return active->av_info(*static_cast<retro_system_av_info*>(data));
     case RETRO_ENVIRONMENT_GET_INPUT_BITMASKS: return true;
     // Bit 0 video, bit 1 audio. Preview instances skip audio synthesis.

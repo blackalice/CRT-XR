@@ -1407,10 +1407,7 @@ func refresh_labels() -> void:
 	var row = selected_row()
 	# Picture pages change whichever picture is in use; say which, plainly.
 	var context: String
-	if host.active_game_key==host.VIDEO_PROFILE: context="Editing the video picture · all videos"
-	elif not host.active_game_key.is_empty(): context="Editing %s's picture · this game only" % host.emulator.rom_path.get_file().get_basename()
-	elif host.video.loaded: context="Editing the global picture · games, videos and test signal"
-	else: context="Editing the global picture · games and test signal"
+	context="Editing " + host.display_settings.context_label()
 	if mode=="pause":
 		if host.video.loaded: subtitle.text = "Video · paused" if host.video.paused else "Video"
 		elif host.emulator.loaded: subtitle.text = library.Registry.SYSTEMS.get(host.emulator.system_id, {}).get("name", "Game") + " · paused"
@@ -1443,7 +1440,7 @@ func refresh_labels() -> void:
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
 	else: subtitle.text = ""
 	# Highlighted when Picture changes belong to one game or to videos, not everything.
-	subtitle.add_theme_color_override("font_color",MenuSkin.AMBER if mode=="settings" and category==1 and not host.active_game_key.is_empty() else MenuSkin.MUTED)
+	subtitle.add_theme_color_override("font_color",MenuSkin.AMBER if mode=="settings" and category==1 and not host.display_settings.content.is_empty() else MenuSkin.MUTED)
 	# The pause menu and settings keep their words for the help window; the line
 	# under the title stays for browsing, where it says where you are.
 	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible and not mode in ["pause","settings"]
@@ -1742,7 +1739,8 @@ func activate() -> void:
 func reset_option() -> void:
 	var row = selected_row()
 	if row==null or row.disabled or not row.item.has("default"): return
-	row.item.setter.call(row.item.default)
+	if row.item.has("reset"): row.item.reset.call()
+	else: row.item.setter.call(row.item.default)
 	row.refresh(); notify("Selected option restored to its default")
 
 func toggle_preview() -> void:

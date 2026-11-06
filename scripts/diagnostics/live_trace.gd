@@ -44,11 +44,13 @@ func _process(delta: float) -> void:
 	if context_elapsed >= 1.0:
 		context_elapsed = 0.0
 		var emulator: Node = app.emulator
-		add("context", {"game": emulator.rom_path.get_file() if emulator.loaded else "",
+		var context: Dictionary={"game": emulator.rom_path.get_file() if emulator.loaded else "",
 			"system": emulator.system_id if emulator.loaded else "", "paused": emulator.paused,
 			"menu": app.settings_panel != null and app.settings_panel.visible, "card": not app.loading_path.is_empty(),
 			"stereo": app.stereo, "room_fps": Engine.get_frames_per_second(), "game_fps": emulator.game_fps,
-			"target_fps": emulator.fps, "refresh": DisplayServer.screen_get_refresh_rate()})
+			"target_fps": emulator.fps, "refresh": DisplayServer.screen_get_refresh_rate()}
+		context.merge(app.display_runtime_report(),true)
+		add("context",context)
 	flush_elapsed += delta
 	if flush_elapsed >= FLUSH_SECONDS:
 		flush_elapsed = 0.0

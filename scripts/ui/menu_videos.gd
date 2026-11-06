@@ -165,8 +165,8 @@ func video_pause_items() -> Array:
 	var tracks: PackedStringArray=video.track_names()
 	var style_row := {"id":"video.style","label":"Picture shape","kind":"choice","choices":VideoSession.STYLES,"default":h.video_style,
 		"getter":func(): return video.style,"setter":func(value):
-			video.style=int(value); video.decoder.set_style(video.style); h.remember_video_position(),
-		"help":"How a widescreen video fills the 4:3 tube. Y changes it while watching; each video remembers its own."}
+			video.set_style(int(value)); h.remember_video_position(),
+		"help":"Original aspect keeps the source picture for either TV. The other choices simulate a 4:3 broadcast. Each video remembers its choice. TV fitting is under Picture."}
 	var resume: Dictionary=menu.catalog.action("resume","Resume",h.close_settings,"Return to the video with your settings saved.",false,"▶")
 	resume=menu.entry(resume,"","play")
 	resume.merge({"hero":true,"min_height":56,"value":""})
