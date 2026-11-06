@@ -29,9 +29,11 @@ func wanted() -> bool:
 ## up full size for one frame as the menu opened.
 func update(delta: float) -> void:
 	var want := wanted()
+	var canvas_changed := sync_canvas(want)
 	if want and not active: enter()
 	elif active and not want: leave()
 	elif active and host.world.picture.source_texture != menu_texture(): adopt()
+	elif active and canvas_changed: show_menu()
 	if active:
 		if clean_feed != host.menu_clean_feed: apply_picture()
 		apply_tube()
@@ -48,6 +50,15 @@ func update(delta: float) -> void:
 
 func menu_texture() -> Texture2D:
 	return host.menu_view.get_texture()
+
+func sync_canvas(on_tv: bool) -> bool:
+	var dimensions:=Vector2i(1280 if on_tv and host.world.widescreen else 960,720)
+	if host.menu_view.size==dimensions: return false
+	host.menu_view.size=dimensions
+	host.menu.fit_panel()
+	if is_instance_valid(host.menu_depth_view):
+		for material in host.menu_depth_view.materials: material.set_shader_parameter("tex_size",Vector2(dimensions))
+	return true
 
 ## Where the TV sits: at `base`, or eased in and centred while the menu is on it.
 func lean_position(base: Vector3) -> Vector3:
@@ -99,7 +110,7 @@ func show_menu() -> void:
 	var picture: Node = host.world.picture
 	# Auto composite keeps the programme's PAL/NTSC standard while the menu is shown.
 	picture.source_rate = saved.rate
-	picture.source_aspect = 4.0 / 3.0
+	picture.source_aspect = float(host.menu_view.size.x)/float(host.menu_view.size.y)
 	picture.set_source(menu_texture())
 
 func leave() -> void:

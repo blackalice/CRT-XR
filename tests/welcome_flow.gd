@@ -43,6 +43,7 @@ func key(code: int) -> void:
 func launch() -> void:
 	app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	if "--wide" in OS.get_cmdline_user_args(): app.set_widescreen(true)
 	await settle()
 	app.use_tracking(false)
 
@@ -106,13 +107,13 @@ func run() -> void:
 	check(row_ids().has("welcome.view.connect") and row_ids().has("welcome.view.fixed"), "Without tracking, Connect glasses and Use fixed view are offered")
 	key(KEY_ESCAPE); await settle()
 	check(app.settings_panel.visible and menu.mode == "welcome" and menu.help_label.text.contains("skip"), "Escape outside Controls says how to leave instead of closing setup")
-	var distance: float = app.distance
 	for floating in [false, true]:
 		app.menu_on_tv = not floating
 		menu.select("welcome.view.distance", false); menu.activate(); await settle()
 		check(menu.preview and not app.tv_menu.active and menu.items.size() == 2, "TV distance opens the preview with the menu " + ("floating" if floating else "on the TV"))
+		var before:float=app.distance
 		menu.navigate(Vector2i.RIGHT)
-		check(app.distance > distance, "Right moves the TV farther in the preview")
+		check(app.distance > before, "Right moves the TV farther in the preview")
 		menu.reset_option(); menu.back(); await settle()
 		check(not menu.preview and menu.mode == "welcome" and welcome.step == "view", "B leaves the preview back on Your view")
 	app.menu_on_tv = true
@@ -139,6 +140,9 @@ func run() -> void:
 	check(app.console_region == "pal", "PAL is chosen again")
 
 	# Library: the folder browser returns here; choosing a folder scans it.
+	var roms := ProjectSettings.globalize_path("user://welcome-roms")
+	DirAccess.make_dir_recursive_absolute(roms)
+	app.default_rom_dir=roms
 	welcome.go("library"); await settle()
 	await shot("04-library")
 	check(row_ids().has("welcome.library.browse") and row_ids().has("welcome.library.later"), "Library offers Browse folders and Not now")
@@ -146,7 +150,6 @@ func run() -> void:
 	check(menu.mode == "browser" and welcome.choosing == "library", "Browse folders opens the folder browser for setup")
 	menu.back(); await settle()
 	check(menu.mode == "welcome" and welcome.step == "library" and welcome.choosing == "", "Back from the browser returns to setup")
-	var roms := ProjectSettings.globalize_path("user://welcome-roms")
 	for folder in ["snes", "megadrive", "saturn"]: DirAccess.make_dir_recursive_absolute(roms.path_join(folder))
 	for file in ["snes/One.sfc", "snes/Two.sfc", "megadrive/Three.gen", "saturn/Four.cue"]:
 		var handle := FileAccess.open(roms.path_join(file), FileAccess.WRITE); handle.store_buffer(PackedByteArray([0, 0, 0, 0])); handle.close()
@@ -163,6 +166,8 @@ func run() -> void:
 	check(menu.hints.text.contains("Choose another folder"), "B offers another folder")
 
 	# Videos & music: the music browser chooses a folder and returns.
+	app.music_folder=ProjectSettings.globalize_path("user://welcome-music")
+	DirAccess.make_dir_recursive_absolute(app.music_folder)
 	welcome.go("media"); await settle()
 	await shot("06-media")
 	menu.select("welcome.media.music", false); menu.activate(); await settle()

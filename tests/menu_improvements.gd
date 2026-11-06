@@ -31,7 +31,7 @@ func run():
 	m.switch_category(1); check(m.category==0,"Next category from the everyday page follows sidebar order")
 	m.switch_category(-1); check(m.category==6,"Previous category from View wraps to About & Help")
 	page(7); await settle()
-	check(m.items.map(func(i):return i.id)==["quick.view.distance","quick.view.height_offset","quick.view.recenter","quick.preset","quick.room","quick.game_volume","quick.music_volume"],"Quick settings exposes all seven everyday controls")
+	check(m.items.map(func(i):return i.id)==["quick.view.distance","quick.view.height_offset","quick.view.recenter","quick.preset","quick.room","quick.game_volume","quick.display"],"Quick settings exposes all seven everyday controls")
 	m.select("quick.view.distance",false); await settle()
 	var distance=m.selected_row(); var track_width: float=distance.track.size.x
 	m.select("quick.view.height_offset",false); await settle()

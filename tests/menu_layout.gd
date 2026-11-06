@@ -18,6 +18,7 @@ func page(cat: int, section := 0):
 	app.menu.mode="settings"; app.menu.category=cat; app.menu.subsection=section; app.menu.preview=false; app.menu.render()
 func run():
 	app=load("res://scenes/main.tscn").instantiate(); root.add_child(app); app.use_tracking(false)
+	if "--wide" in OS.get_cmdline_user_args(): app.set_widescreen(true)
 	await settle()
 	var m=app.menu
 	for large in [false,true]:
@@ -43,7 +44,7 @@ func run():
 						tabs_ok=tabs_ok and is_equal_approx(tab.position.y,0)
 					var chosen: Control = m.section_tabs.get_child(section) if section < m.section_tabs.get_child_count() else null
 					tabs_ok=tabs_ok and chosen!=null and inside(m.section_scroll,chosen)
-					check(tabs_ok and m.get_rect().end.x<=960 and m.get_rect().end.y<=720,"Section tabs stay on one line with the chosen tab in view: "+context)
+					check(tabs_ok and m.get_rect().end.x<=app.menu_view.size.x and m.get_rect().end.y<=app.menu_view.size.y,"Section tabs stay on one line with the chosen tab in view: "+context)
 					var contents_ok := true
 					for row in m.rows:
 						contents_ok=contents_ok and inside(row,row.title_label) and inside(row,row.value_label)

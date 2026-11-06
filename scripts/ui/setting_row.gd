@@ -102,7 +102,7 @@ func configure(definition: Dictionary) -> void:
 		setting_detail_label.add_theme_color_override("font_color",MenuSkin.MUTED)
 		setting_detail_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		words.add_child(setting_detail_label)
-	value_group=HBoxContainer.new(); value_group.add_theme_constant_override("separation",8)
+	value_group=HBoxContainer.new(); value_group.add_theme_constant_override("separation",int(item.get("value_gap",8)))
 	value_group.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	value_group.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(value_group)
 	value_label=Label.new(); value_label.add_theme_font_size_override("font_size",22)
@@ -142,7 +142,7 @@ func configure(definition: Dictionary) -> void:
 		# ‹ value › reads as a selector and fills the row's edge like toggle values.
 		for direction in [-1,1]:
 			var arrow := Button.new(); arrow.text="‹" if direction<0 else "›"
-			arrow.custom_minimum_size=Vector2(30,30)
+			arrow.custom_minimum_size=Vector2(float(item.get("arrow_width",30)),30)
 			# The dot font's taller lines would push a 22 px arrow past the row's bounds.
 			arrow.add_theme_font_size_override("font_size",18)
 			arrow.size_flags_vertical=Control.SIZE_SHRINK_CENTER

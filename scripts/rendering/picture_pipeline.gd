@@ -125,6 +125,14 @@ func shown_values() -> Dictionary:
 	return result
 
 func picture_rect() -> Rect2:
+	if menu_fitting:
+		# Menus fill the tube independently of game overscan, crop and offset.
+		# Their reading area already has safe margins inside the menu canvas.
+		var menu_size:=Vector2.ONE
+		var aspect:=source_aspect/tube_aspect
+		if aspect<1.0:menu_size.x=aspect
+		else:menu_size.y=1.0/aspect
+		return Rect2((Vector2.ONE-menu_size)*.5,menu_size)
 	var shown := shown_values()
 	var fit_aspect: bool = override.get("keep_aspect", keep_aspect)
 	if menu_fitting: fit_aspect = true

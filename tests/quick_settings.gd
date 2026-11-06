@@ -57,11 +57,12 @@ func run() -> void:
 	menu.navigate(Vector2i.DOWN)
 	check(menu.selected_id == "pause.view.height_offset" and menu.preview, "Preview up/down switches between the two placement controls")
 	menu.back(); await settle()
-	menu.select("pause.music_volume", false); menu.activate()
-	var level: float = app.music.volume
-	var ambience: float = app.menu_music_volume
-	menu.navigate(Vector2i.LEFT)
-	check(app.music.volume < level and app.menu_music_volume == ambience and not menu.preview, "Music volume adjusts albums/radio independently of the menu bed")
+	check(not menu.items.any(func(item):return item.id=="pause.music_volume"), "Quick settings no longer duplicates music volume")
+	menu.select("pause.display", false); menu.activate()
+	var previous: int=app.display_settings.display_choice()
+	menu.navigate(Vector2i.RIGHT)
+	check(app.display_settings.display_choice()==(previous+1)%6 and not menu.preview, "Quick Display switches the current game's TV and fitting in place")
+	check(menu.selected_id=="pause.display" and menu.editing_id=="pause.display", "Display switch preserves controller focus and adjustment mode")
 	menu.back()
 	app.free()
 	print("QUICK SETTINGS: ", failures, " failures")

@@ -27,7 +27,7 @@ func run():
             if e is InputEventJoypadButton or e is InputEventJoypadMotion:InputMap.action_erase_event(action,e)
     app=load("res://scenes/main.tscn").instantiate();root.add_child(app);app.use_tracking(false);await settle()
     var m=app.menu
-    check(m.items.map(func(i):return i.id)==["home.library","home.videos","transport.choose","pause.room","pause.preset","pause.game_volume","pause.view.distance","pause.view.height_offset","pause.music_volume","home.glasses","home.settings"],"Startup offers both libraries, music, six quick settings and help/settings actions")
+    check(m.items.map(func(i):return i.id)==["home.library","home.videos","transport.choose","pause.room","pause.preset","pause.game_volume","pause.view.distance","pause.view.height_offset","pause.display","home.glasses","home.settings"],"Startup offers both libraries, music, six quick settings and help/settings actions")
     check(m.selected_id=="home.library","No-game startup hides Continue and selects Library")
     # Two rows of quick settings precede the first-run help/settings actions.
     var tiled=m.items.filter(func(i):return i.get("layout","")=="tile" and not i.get("quick",false)).map(func(i):return i.id)
@@ -39,7 +39,7 @@ func run():
     m.navigate(Vector2i(1,0));m.navigate(Vector2i(1,0))
     check(m.selected_id=="pause.game_volume","Right stops at the edge of the grid")
     m.navigate(Vector2i(0,1))
-    check(m.selected_id=="pause.music_volume","Down into the next grid keeps to the same column (%s)"%m.selected_id)
+    check(m.selected_id=="pause.display","Down into the next grid keeps to the same column (%s)"%m.selected_id)
     m.navigate(Vector2i(-1,0));m.navigate(Vector2i(0,-1))
     check(m.selected_id=="pause.preset","Up from a middle tile lands on the middle tile above (%s)"%m.selected_id)
     m.navigate(Vector2i(0,-1))

@@ -77,7 +77,9 @@ func discard_pause_cache() -> void:
 	pause_cache = {}
 
 var backdrop: ColorRect
+var reading_frame: MarginContainer
 var help_frame: PanelContainer
+var help_slot: Control
 var subtitle_row: HBoxContainer
 var scan_icon: Control
 ## Each category's icon in the sidebar, by CATEGORIES order.
@@ -285,10 +287,14 @@ func _ready() -> void:
 	# The space backdrop fills the whole panel; the page sits inside its frame.
 	backdrop=MenuSkin.space_backdrop(); add_child(backdrop)
 	var frame := MarginContainer.new()
+	reading_frame=frame
+	var centred := CenterContainer.new()
+	add_child(centred)
+	frame.custom_minimum_size=Vector2(888,664)
 	# The page gets the height: slim margins top and bottom, wider at the sides.
 	for side in ["left","right"]: frame.add_theme_constant_override("margin_"+side,18)
 	for side in ["top","bottom"]: frame.add_theme_constant_override("margin_"+side,12)
-	add_child(frame)
+	centred.add_child(frame)
 	var layout := VBoxContainer.new()
 	layout.add_theme_constant_override("separation",6)
 	frame.add_child(layout)
@@ -487,13 +493,16 @@ func _ready() -> void:
 	layout.add_child(pinned); pinned.hide()
 	help_label = GlyphText.new("", 20, Color("09132b"))
 	help_label.controller=input_kind=="controller"
-	help_label.custom_minimum_size.y = 64
+	help_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	# Help sits in a framed message window, as console menus put their text.
 	help_frame = PanelContainer.new()
 	var window := MenuSkin.box(Color("c5d7ff"),Color("3858a0"),2,0)
 	window.content_margin_left=14; window.content_margin_right=14; window.content_margin_top=6; window.content_margin_bottom=6
 	help_frame.add_theme_stylebox_override("panel",window)
-	help_frame.add_child(help_label)
+	# A minimum on the text itself still grows when a long explanation wraps.
+	# Keep text inside a fixed slot so selection cannot resize the page.
+	help_slot=Control.new();help_slot.custom_minimum_size.y=64;help_slot.clip_contents=true
+	help_slot.add_child(help_label);help_frame.add_child(help_slot)
 	layout.add_child(help_frame)
 	hints = preload("res://scripts/ui/shortcut_footer.gd").new()
 	hints.pressed.connect(footer_pressed)
@@ -708,16 +717,14 @@ func quick_controls(video_view := false) -> Array:
 	result[2].help = "Adjust video audio." if video_view else "Adjust game audio independently of music."
 	if video_view:result[2].label="Video volume"
 	for source in catalog.pages(EVERYDAY)[0].rows:
-		if source.id=="quick.music_volume" and video_view:continue
-		if source.id in ["quick.view.distance", "quick.view.height_offset", "quick.music_volume"]:
+		if source.id in ["quick.view.distance", "quick.view.height_offset", "quick.display"]:
 			var control: Dictionary = source.duplicate()
 			control.id = str(source.id).replace("quick.", "pause.")
-			control["row_icon"] = "view" if source.id == "quick.view.distance" else ("up" if source.id == "quick.view.height_offset" else "music")
-			if source.id != "quick.music_volume":
+			control["row_icon"] = "view" if source.id == "quick.view.distance" else ("up" if source.id == "quick.view.height_offset" else "tv")
+			if source.id != "quick.display":
 				control["quick_preview"] = true
 				control["title_size"] = 18
 				control.help = "Open preview to move the TV nearer or farther." if source.id == "quick.view.distance" else "Open preview to move the screen, stand and room vertically."
-			else: control.help = "Adjust album and radio volume. Menu music has its own level."
 			result.append(control)
 	for row in result:
 		row.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"stacked":true,"compact":true,"meter":false}, true)
@@ -961,7 +968,7 @@ func _render(incremental: bool) -> void:
 		if mode == "pause":
 			for item in items: item.erase("layout")
 	column.add_theme_constant_override("separation", 4 if mode == "pause" else 6)
-	help_label.custom_minimum_size.y = 32 if mode == "pause" else 64
+	help_slot.custom_minimum_size.y = 32 if mode == "pause" else 64
 	var pause_key := pause_shape(items) if mode == "pause" and not preview else ""
 	var reuse_pause: bool = not pause_key.is_empty() and pause_cache.get("key", "") == pause_key
 	if reuse_pause:
@@ -1026,16 +1033,17 @@ func _render(incremental: bool) -> void:
 					for side in ["left","top","right","bottom"]: inset.add_theme_constant_override("margin_"+side,8)
 					panel.add_child(inset); column.add_child(panel)
 					music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",6); inset.add_child(music_layout)
-					var display := HBoxContainer.new(); display.add_theme_constant_override("separation",12); music_layout.add_child(display)
-					var lcd := LcdReadout.new(); lcd.source=helper.deck_state; display.add_child(lcd)
-					var words := VBoxContainer.new(); words.add_theme_constant_override("separation",0)
-					words.size_flags_horizontal=Control.SIZE_EXPAND_FILL; words.alignment=BoxContainer.ALIGNMENT_CENTER; display.add_child(words)
-					music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
-					deck_detail=Label.new(); deck_detail.add_theme_font_size_override("font_size",16); deck_detail.add_theme_color_override("font_color",MenuSkin.MUTED)
-					for line in [music_heading,deck_detail]:
-						line.autowrap_mode=TextServer.AUTOWRAP_OFF; line.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-						MenuSkin.shadow(line); words.add_child(line)
-					deck_text=helper.deck_text
+					if item.get("deck_header",true):
+						var display := HBoxContainer.new(); display.add_theme_constant_override("separation",12); music_layout.add_child(display)
+						var lcd := LcdReadout.new(); lcd.source=helper.deck_state; display.add_child(lcd)
+						var words := VBoxContainer.new(); words.add_theme_constant_override("separation",0)
+						words.size_flags_horizontal=Control.SIZE_EXPAND_FILL; words.alignment=BoxContainer.ALIGNMENT_CENTER; display.add_child(words)
+						music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
+						deck_detail=Label.new(); deck_detail.add_theme_font_size_override("font_size",16); deck_detail.add_theme_color_override("font_color",MenuSkin.MUTED)
+						for line in [music_heading,deck_detail]:
+							line.autowrap_mode=TextServer.AUTOWRAP_OFF; line.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+							MenuSkin.shadow(line); words.add_child(line)
+						deck_text=helper.deck_text
 				if item.layout=="transport":
 					if transport_grid==null:
 						transport_grid=HBoxContainer.new(); transport_grid.add_theme_constant_override("separation",6); music_layout.add_child(transport_grid)
@@ -1201,8 +1209,7 @@ func _render(incremental: bool) -> void:
 	location_bar.visible = not place.is_empty() and not preview
 	if location_bar.visible: location_bar.show_path(place,library.home_folder(),library.cards())
 	subtitle.visible = not preview and not location_bar.visible
-	position = Vector2(36,522) if preview else Vector2(36,28)
-	size = Vector2(888,170) if preview else Vector2(888,664)
+	fit_panel()
 	help_label.visible = not preview and not mode in ["help","library","games","launch"] and not (mode=="welcome" and welcome.step=="welcome") # These pages use the room for content.
 	# The Welcome page is the boot logo's landing place: no title bar above it.
 	heading.get_parent().visible = not (mode=="welcome" and welcome.step=="welcome")
@@ -1269,8 +1276,11 @@ func _render(incremental: bool) -> void:
 		print("PROFILE_MENU ", mode, " ", JSON.stringify(profile_stages))
 
 func fit_panel() -> void:
-	position = Vector2(36,522) if preview else Vector2(36,28)
-	size = Vector2(888,170) if preview else Vector2(888,664)
+	# The reading area stays 4:3. Only the backdrop/frame grows with a wide feed.
+	if reading_frame!=null: reading_frame.custom_minimum_size=Vector2(888,170 if preview else 664)
+	var wide: bool=not preview and host.menu_view.size.x>960
+	position = Vector2.ZERO if wide else (Vector2(36,522) if preview else Vector2(36,28))
+	size = Vector2(host.menu_view.size) if wide else Vector2(888,170 if preview else 664)
 
 func restore_scroll(value: int, revision: int) -> void:
 	# Let wrapped text establish row heights before restoring the saved viewport.
@@ -1606,6 +1616,9 @@ func navigate(next: Vector2i) -> void:
 		if rows[i].item.id==selected_id: index=i
 	if index<0: return
 	var from_row = rows[index]
+	if rows[index].item.get("layout","")=="transport" and editing_id==selected_id:
+		if next.x!=0: adjust(next.x); return
+		finish_editing()
 	if rows[index].item.get("layout","")=="tile" or rows[index].item.get("game_grid",false):
 		var position: int=rows[index].item.tile_index
 		var count: int=rows[index].item.tile_count

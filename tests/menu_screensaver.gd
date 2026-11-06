@@ -27,6 +27,7 @@ func run() -> void:
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(name))
 	app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)
+	if "--wide" in OS.get_cmdline_user_args(): app.set_widescreen(true)
 	await settle()
 	app.use_tracking(false)
 	var menu = app.menu

@@ -166,16 +166,16 @@ func video_pause_items() -> Array:
 	var style_row := {"id":"video.style","label":"Picture shape","kind":"choice","choices":VideoSession.STYLES,"default":h.video_style,
 		"getter":func(): return video.style,"setter":func(value):
 			video.set_style(int(value)); h.remember_video_position(),
-		"help":"Original aspect keeps the source picture for either TV. The other choices simulate a 4:3 broadcast. Each video remembers its choice. TV fitting is under Picture."}
+		"help":"Original keeps the source shape; other modes simulate 4:3 TV."}
 	var resume: Dictionary=menu.catalog.action("resume","Resume",h.close_settings,"Return to the video with your settings saved.",false,"▶")
 	resume=menu.entry(resume,"","play")
 	resume.merge({"hero":true,"min_height":56,"value":""})
 	var timeline := {"id":"video.seek","label":"Position","kind":"seek","layout":"video_seek","getter":func(): return video.clock,"setter":func(value): video.seek_to(float(value)),
 		"duration":func(): return length,"progress":func(): return VideoLibrary.clock(video.clock)+" / "+VideoLibrary.clock(length),
-		"help":"Left/right moves 10 seconds and repeats while held; drag or click the timeline to jump. The TV follows as you scrub."}
+		"help":"Left/right seeks 10 seconds; click or drag to jump."}
 	var tape_row := {"id":"video.tape","label":"Tape look","kind":"choice","choices":VideoSession.TAPES,"default":0,
 		"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); video.set_tape(h.video_tape); h.save_library(),
-		"help":"Plays videos as if from a VHS tape, with noise bars when you fast-forward or rewind. Applies to every video; also in Videos → VCR."}
+		"help":"VHS wear and noise bars while seeking. Shared by all videos."}
 	# Resume leads as it does for games; playback controls stay in the deck.
 	var restart: Dictionary = menu.catalog.action("video.restart","Start over",func(): video.seek_to(0.0); h.video_was_paused_before_menu=false; h.close_settings(),"")
 	restart.merge({"layout":"transport","icon":"refresh","caption":"Start over"})

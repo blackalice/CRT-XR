@@ -91,7 +91,7 @@ func display_rows() -> Array:
 	for value in scopes: labels.append(["This video" if prefs.kind=="video" else "This game","Platform defaults","TV defaults"][value])
 	var rows: Array=[{"id":"picture.scope","label":"Apply picture changes to","kind":"choice","choices":labels,"default":0,
 		"getter":func(): return maxi(0,scopes.find(prefs.scope)),"setter":func(value): prefs.set_scope(scopes[int(value)]); menu.refresh(),
-		"help":"%s. Picture and fitting are separate for each TV and for games and videos. Game changes follow platform defaults until overridden. Closing settings returns to this programme's overrides." % prefs.context_label()}]
+		"help":"Edit this programme, its platform, or TV defaults. Each TV keeps separate game and video pictures."}]
 	var inheritable: bool=prefs.scope!=2 and (not prefs.content.is_empty() or not prefs.system.is_empty())
 	rows.append({"id":"picture.cabinet","label":"TV for this " + ("platform" if prefs.scope==1 else ("video" if prefs.kind=="video" else "game")) if inheritable else "Default TV for " + ("videos" if prefs.kind=="video" else "games"),"kind":"choice","choices":["Use video default" if prefs.kind=="video" else ("Use games default" if prefs.scope==1 else "Use platform TV"),"Standard · 4:3","Wide · 16:9"] if inheritable else ["Standard · 4:3","Wide · 16:9"],"default":0 if inheritable or prefs.kind=="game" else 1,"visual":true,
 		"getter":func():
@@ -105,7 +105,7 @@ func display_rows() -> Array:
 				else: prefs.inherit_screen()
 			else: host.set_widescreen(int(value)==(2 if inheritable else 1))
 			menu.refresh(),
-		"help":"Videos keep their own TV and fitting. Wide hides the clock and game boxes. Original aspect preserves the video; choose Fit whole picture to keep every edge visible." if prefs.kind=="video" else "TV selection changes the cabinet, not the game's rendering. Wide hides the clock and game boxes. Use emulator options for widescreen hacks, and 16:9 aspect for anamorphic games."})
+		"help":"Videos keep their own TV and fit. Wide hides table props. Original aspect preserves proportions; Fit keeps the whole picture." if prefs.kind=="video" else "Switch TV cabinets. Wide hides table props. For widescreen rendering, use the game's mode or emulator options."})
 	rows.append(action("picture.inherit","Clear picture changes at this level",func(): prefs.inherit_picture(); menu.refresh(),"Removes this level's picture and fitting changes for the current TV. Inherited settings take effect immediately."))
 	if not host.emulator.loaded and not host.video.loaded:
 		rows.push_front({"id":"picture.activity","label":"Picture defaults for","kind":"choice","choices":["Games","Videos"],"default":0,"getter":func(): return 1 if prefs.kind=="video" else 0,
@@ -233,10 +233,10 @@ func video_picture_rows() -> Array:
 			"help":"Original aspect preserves the video for either TV, including cinema ratios. The other choices simulate a 4:3 broadcast. Each video remembers its own choice."},
 		{"id":"video.lines","label":"Picture lines","kind":"choice","choices":["240 · CRT look","480 · sharper"],"default":0,
 			"getter":func(): return 1 if h.video_lines==480 else 0,"setter":func(value): h.video_lines=480 if int(value)==1 else 240; h.save_library(),
-			"help":"240 lines is one broadcast field, the line structure a CRT shows, so scanlines and the phosphor mask are visible. 480 is sharper, but its lines are too fine to show on the virtual tube. Applies from the next video you open."},
+			"help":"240 lines shows the CRT's scanline and phosphor texture. 480 is sharper and finer. Applies to the next video."},
 		{"id":"video.interlace","label":"Interlaced video","kind":"choice","choices":["Field motion · TV","Blend"],"default":0,
 			"getter":func(): return h.video_interlace,"setter":func(value): h.video_interlace=int(value); h.video.set_interlace(h.video_interlace); h.save_library(),
-			"help":"For interlaced recordings such as DVDs and TV captures. Field motion shows each field in turn, 50 or 60 a second, for the smooth motion of broadcast TV. Blend mixes the two fields into one picture."}]
+			"help":"Field motion shows 50/60 fields per second for smooth interlaced video. Blend combines the two fields into one picture."}]
 
 ## Videos → VCR: the recorder the videos play from.
 func vcr_rows() -> Array:
@@ -259,7 +259,7 @@ func playback_rows() -> Array:
 			"help":"Turns on a video's first subtitles when you open it. A choice you make for a video is remembered for that video."},
 		{"id":"video.hardware","label":"Hardware video decoding","kind":"toggle","default":true,
 			"getter":func(): return h.video_hardware,"setter":func(value): h.video_hardware=bool(value); h.save_library(),
-			"help":"Decodes on the GPU (VA-API on Steam Deck), leaving the CPU for the room and tracking. Falls back to software by itself when a file or GPU cannot use it. Applies from the next video."},
+			"help":"Uses GPU decoding (VA-API on Deck), with automatic software fallback. Applies to the next video."},
 		action("video.folder","Video folder",func(): menu.videos.open_video_folder_picker(),"Choose where CRT XR looks for videos. Subfolders are included.",false,h.video_dir)]
 
 ## Read-only information uses the same live game and BIOS detection as the emulator.
@@ -294,7 +294,7 @@ func tracking_rows() -> Array:
 	var tracking: Array = [
 		{"id":"tracking.source","label":"Tracking source","kind":"choice","choices":[glasses_source,"OpenTrack"],"default":0,
 			"getter":func(): return 1 if h.tracking_source == "opentrack" else 0,"setter":func(value): h.set_tracking_source("opentrack" if int(value) == 1 else "glasses"); menu.refresh(),
-			"help":"OpenTrack lets other glasses track: run a tool that sends OpenTrack UDP to 127.0.0.1 port 4242, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo). If a direction is reversed, invert that axis below."},
+			"help":"Other glasses can use OpenTrack UDP on 127.0.0.1:4242. Run opentrack, PhoenixHeadTracker or VertoXR; invert axes below if needed."},
 		action("tracking.real","Connect glasses",func(): h.use_tracking(true); menu.refresh(),"Connects or retries the glasses' tracking driver."),
 		action("tracking.fixed","Use fixed view",func(): h.use_tracking(false); h.recenter(); menu.refresh(),"Uses a steady view. On desktop, mouse/keyboard simulation remains available."),
 		toggle("tracking.diagnostics","Metrics overlay",h,"metrics_visible",false,"Shows frame rate, pose and tracking details. Off by default for a clean view. F1 also toggles it.",unchanged,false)]
@@ -319,7 +319,7 @@ func pages(category: int) -> Array:
 				page("Display",[
 				{"id":"view.scene_msaa","label":"Room edge smoothing","kind":"choice","choices":["Off","2× MSAA","4× MSAA"],"default":0,"visual":true,
 					"getter":func(): return h.scene_msaa,"setter":func(value): h.scene_msaa=int(value); h.apply_scene_msaa(),
-					"help":"Smooths the TV and display surface edges in both eyes. Try 2× first; 4× costs more GPU time. Off uses the least GPU time. Does not change emulator resolution or blur the game picture."},
+					"help":"Smooths edges in both eyes. Try 2×; 4× costs more GPU time. Off is fastest. Game pixels and emulator resolution stay unchanged."},
 				toggle("view.stereo","Side-by-side stereo",h,"stereo",false,"Use with the glasses' physical SBS mode. This does not switch the glasses themselves.",func(): h.set_stereo(h.stereo)),
 				action("view.fullscreen","Toggle fullscreen",h.toggle_fullscreen,"Switch the local application window between fullscreen and windowed mode."),
 				property_row("edge_fade","Soft view edges",0,.2,.005,"percent","Fades the edges of the glasses' viewing window into black.")]),
@@ -363,7 +363,7 @@ func pages(category: int) -> Array:
 				var state := "✓ Active" if menu.pictures.applied_preset()=="mine.%d" % index else ("Saved" if menu.pictures.my_preset_saved(index) else "Empty")
 				presets.append(action("preset.mine.%d" % index,menu.pictures.my_preset_name(index),func(): menu.pictures.open_my_preset(index),"Your own saved picture: apply, save the current picture here, rename or delete.",false,state))
 			if menu.pictures.picture_undo!=null: presets.append(action("preset.undo","Undo picture preset",menu.pictures.undo_picture_preset,"Restore the picture from before the last preset."))
-			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference. Auto picks PAL or NTSC from the game's or video's frame rate."}]
+			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean; Composite adds colour decoding. Auto follows the source frame rate."}]
 			signal_rows.append_array(picture_fields(w.picture.COLOR_FIELDS.slice(6)))
 			var picture_pages := [page("TV & defaults",display_rows()),page("Presets",presets),page("CRT",crt),page(("Wide" if w.widescreen else "Standard") + (" video fit" if h.display_settings.kind=="video" else " game fit"),fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
 			return picture_pages
@@ -516,7 +516,10 @@ func pages(category: int) -> Array:
 				else: menu.pictures.apply_preset(id),"help":"Choose a look. Custom brings back your own tuned picture; save your own on Picture → Presets.","visual":true})
 			quick.append(menu.room_choice("quick.room"))
 			quick.append(number("quick.game_volume","Game volume",h.music,"game_volume",0,1,.05,1,"percent","",h.music.apply,false))
-			quick.append(number("quick.music_volume","Music volume",h.music,"volume",0,1,.05,.45,"percent","",h.music.apply,false))
+			quick.append({"id":"quick.display","label":"Display","kind":"choice","choices":h.display_settings.DISPLAY_CHOICES,"visual":false,"arrow_width":20,"value_gap":4,
+				"getter":h.display_settings.display_choice,
+				"setter":func(value): h.display_settings.choose_display(int(value)); menu.refresh(),
+				"help":"Fit keeps all; Crop fills; Stretch changes shape. Saved per game or video."})
 			return [page("Everyday",quick)]
 		2:
 			var audio = h.emulator.tv_audio
