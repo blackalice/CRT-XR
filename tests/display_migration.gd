@@ -42,7 +42,7 @@ func run():
 	var original:=FileAccess.get_file_as_string("user://games/legacy-game.cfg")
 	app.queue_free();await process_frame
 	app=await make_app();prefs=app.display_settings
-	check(not app.world.widescreen and is_equal_approx(app.world.picture.values.width,.83),"Restart restores game defaults rather than the last programme's picture")
+	check(app.world.widescreen and is_equal_approx(app.world.picture.values.width,.96),"Restart keeps the last TV and its game defaults without the video's crop")
 	app.emulator.system_id="dreamcast";app.emulator.rom_hash="legacy-game";app.change_game_preferences(true)
 	check(app.world.widescreen and is_equal_approx(app.world.picture.values.width,.79),"Migrated game TV and picture survive a real restart")
 	check(FileAccess.get_file_as_string("user://games/legacy-game.cfg")==original,"Migration preserves the original game settings file")

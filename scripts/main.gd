@@ -655,7 +655,7 @@ func restore_settings(config: ConfigFile) -> void:
 	display_settings.base=display_settings.live_picture()
 	if display_settings.data.views.is_empty(): display_settings.save_view()
 	display_settings.restore_view()
-	display_settings.refresh_screen()
+	display_settings.restore_last_screen()
 
 func apply_settings(config: ConfigFile) -> void:
 	display_settings.read(config)
@@ -943,8 +943,9 @@ func _input(event: InputEvent) -> void:
 		elif event is InputEventMouse:
 			for panel in panels:
 				if panel.visible and panel.get_global_rect().has_point(event.position):
-					var factor := minf(panel.size.x / 960.0, panel.size.y / 720.0)
-					var origin := panel.global_position + (panel.size - Vector2(960,720)*factor)*.5
+					var canvas:=Vector2(menu_view.size)
+					var factor := minf(panel.size.x / canvas.x, panel.size.y / canvas.y)
+					var origin := panel.global_position + (panel.size - canvas*factor)*.5
 					var forwarded: InputEventMouse = event.duplicate()
 					forwarded.position = (event.position-origin)/factor
 					forwarded.global_position = forwarded.position
@@ -1579,7 +1580,7 @@ func reset_all_options() -> void:
 	display_settings.leave_context()
 	display_settings.data=display_settings.get_script().new().data.duplicate(true)
 	display_settings.data.legacy_import=false
-	display_settings.data.platforms={"psp":{"screen":"wide"},"wii":{"screen":"wide"}}
+	display_settings.reset_platform_display_defaults()
 	screen_picture_profiles.clear()
 	world.set_widescreen(false)
 	for index in range(5): SettingsDefaults.apply(self,index)

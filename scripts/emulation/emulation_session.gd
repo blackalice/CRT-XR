@@ -778,6 +778,9 @@ func preview_frame(buttons: int, frames := 1) -> Dictionary:
 	return {"bytes": bytes, "width": info.width, "height": info.height}
 
 func update_display_aspect(info: Dictionary) -> void:
+	# Image-only packets (streamed frames and input preview) carry no geometry.
+	# They must not undo the aspect just received in the core's metadata packet.
+	if not info.has("display_aspect"): return
 	var reported := float(info.get("display_aspect",0.0))
 	var aspect: float = reported if is_finite(reported) and reported>=.2 and reported<=8.0 else Registry.SYSTEMS.get(system_id,{"aspect":4.0/3.0}).aspect
 	if not is_equal_approx(display_aspect,aspect):

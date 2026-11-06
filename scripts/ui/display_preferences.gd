@@ -2,7 +2,7 @@ extends RefCounted
 ## Display policy and sparse picture overrides. Runtime menu previews never
 ## become hardware calibration or another programme's inherited defaults.
 var host: Node
-var data: Dictionary = {"version":1,"defaults":{"game":"standard","video":"wide"},"platforms":{},"games":{},"videos":{},"views":{},"pictures":{}}
+var data: Dictionary = {"version":1,"last_screen":"standard","defaults":{"game":"standard","video":"wide"},"platforms":{},"games":{},"videos":{},"views":{},"pictures":{}}
 var initialized := false
 var kind := "game"
 var system := ""
@@ -11,17 +11,33 @@ var scope := 0 # This programme, platform, TV default
 var base: Dictionary = {}
 var applied: Dictionary = {}
 var busy := false
+const DISPLAY_CHOICES := ["4:3 TV (Fit)","4:3 TV (Crop)","4:3 TV (Stretch)","Wide TV (Fit)","Wide TV (Crop)","Wide TV (Stretch)"]
+const WIDE_STRETCH_PLATFORMS := ["ps2","gamecube","psp"]
+const PLATFORM_DEFAULTS_VERSION := 1
+
+func reset_platform_display_defaults() -> void:
+	data.defaults.game="standard"
+	for platform in preload("res://scripts/emulation/core_registry.gd").DEFINITIONS:
+		var stretch:bool=platform in WIDE_STRETCH_PLATFORMS
+		data.platforms[platform]={"screen":"wide" if stretch else "standard"}
+		var key:="game."+("wide" if stretch else "standard")+".platform."+str(platform)
+		var stored=data.pictures.get(key,{})
+		var patch:Dictionary=stored.duplicate(true) if stored is Dictionary else {}
+		patch["picture.keep_aspect"]=not stretch
+		patch["picture.fit_mode"]=0
+		data.pictures[key]=patch
+	data.platform_defaults_version=PLATFORM_DEFAULTS_VERSION
 
 func read(config: ConfigFile) -> void:
 	var saved = config.get_value("display_profiles","data",{})
+	var last = saved.get("last_screen", "") if saved is Dictionary else ""
+	data.last_screen = last if last in ["standard","wide"] else ("wide" if bool(config.get_value("room","widescreen",false)) else "standard")
 	if saved is Dictionary and int(saved.get("version",0)) == 1:
 		data["legacy_import"]=saved.get("legacy_import",true) if saved.get("legacy_import",true) is bool else true
 		for key in ["defaults","platforms","games","videos","views","pictures","migrated"]:
 			if saved.get(key) is Dictionary: data[key]=saved[key].duplicate(true)
 	elif not initialized:
 		data.defaults.game="wide" if bool(config.get_value("room","widescreen",false)) else "standard"
-		data.platforms.psp={"screen":"wide"}
-		data.platforms.wii={"screen":"wide"}
 	for activity in ["game","video"]:
 		if data.defaults.get(activity,"") not in ["standard","wide"]: data.defaults[activity]="wide" if activity=="video" else "standard"
 	for group in ["platforms","games","videos"]:
@@ -29,6 +45,8 @@ func read(config: ConfigFile) -> void:
 			var item = data[group][id]
 			if not item is Dictionary: data[group].erase(id)
 			elif item.get("screen","") not in ["standard","wide"]: item.erase("screen")
+	data.platform_defaults_version=saved.get("platform_defaults_version",0) if saved is Dictionary else 0
+	if data.platform_defaults_version!=PLATFORM_DEFAULTS_VERSION: reset_platform_display_defaults()
 	initialized=true
 
 func screen_id() -> String:
@@ -186,6 +204,7 @@ func begin_context(active: bool, key: String) -> void:
 	busy=true
 	host._switch_cabinet(desired)
 	busy=false
+	if active: data.last_screen=screen_id()
 
 func choose_screen(enabled: bool) -> void:
 	leave_context()
@@ -196,9 +215,33 @@ func choose_screen(enabled: bool) -> void:
 	busy=true
 	host._switch_cabinet(enabled)
 	busy=false
+	if scope==0 and (not content.is_empty() or kind=="game"): data.last_screen=screen_id()
 	base=live_picture();applied.clear()
 	migrate_picture()
 	resolve_picture()
+
+func display_choice() -> int:
+	var picture=host.world.picture
+	return (3 if host.world.widescreen else 0)+(picture.fit_mode if picture.keep_aspect else 2)
+
+func choose_display(value: int) -> void:
+	value=clampi(value,0,DISPLAY_CHOICES.size()-1)
+	# Quick Display always edits the current programme, even after previewing a
+	# platform's settings. Restore the selected TV before applying its fitting.
+	set_scope(0)
+	choose_screen(value>=3)
+	var fitting:=value%3
+	host.world.picture.keep_aspect=fitting!=2
+	host.world.picture.fit_mode=1 if fitting==1 else 0
+	host.world.picture.refresh()
+	commit()
+	# Selecting a combined mode is an explicit fitting choice, including when
+	# it currently matches an inherited default that may change in the future.
+	var stored=data.pictures.get(target_key(),{})
+	var patch:Dictionary=stored.duplicate(true) if stored is Dictionary else {}
+	patch["picture.keep_aspect"]=fitting!=2
+	patch["picture.fit_mode"]=1 if fitting==1 else 0
+	data.pictures[target_key()]=patch
 
 func set_platform_screen(platform: String, value: int) -> void:
 	set_preference("platforms",platform,["","standard","wide"][clampi(value,0,2)])
@@ -208,10 +251,19 @@ func inherit_screen() -> void:
 	if not content.is_empty(): set_preference("games" if kind=="game" else "videos",content,"")
 	refresh_screen()
 
+func restore_last_screen() -> void:
+	# Startup is not a new game's launch. Keep the previous cabinet and its view,
+	# independently of the default TV that the next game/video will inherit.
+	leave_context();busy=true
+	host._switch_cabinet(data.last_screen=="wide")
+	busy=false
+	base=live_picture();applied.clear();migrate_picture();resolve_picture()
+
 func refresh_screen() -> void:
 	leave_context();busy=true
 	host._switch_cabinet(preferred_screen(kind,system,content)=="wide")
 	busy=false
+	if scope==0 and not content.is_empty(): data.last_screen=screen_id()
 	base=live_picture();applied.clear();migrate_picture();resolve_picture()
 
 func finish_edit() -> void:
