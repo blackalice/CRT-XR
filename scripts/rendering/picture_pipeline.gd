@@ -24,6 +24,9 @@ const BEAM_FIELDS := [
 const MODES := ["RGB / component", "NTSC composite", "PAL composite", "Auto composite (game rate)"]
 var values: Dictionary = {}
 var keep_aspect := true
+var fit_mode := 0 # 0 Fit, 1 Fill; keep_aspect=false is Stretch
+var aspect_override := 0 # Auto, 4:3, 16:9
+var menu_fitting := false # Menu text always uses a complete, undistorted frame.
 ## Drawn instead of the settings while set: {"mode", "keep_aspect", "values"}
 ## (the menu on the TV). The settings stay as they are, for the menus to read
 ## and change, and show again when it clears.
@@ -124,13 +127,16 @@ func shown_values() -> Dictionary:
 func picture_rect() -> Rect2:
 	var shown := shown_values()
 	var fit_aspect: bool = override.get("keep_aspect", keep_aspect)
+	if menu_fitting: fit_aspect = true
 	var border := Vector2.ONE * float(shown.safe_border)
 	var area := Rect2(safe_rect.position + border, safe_rect.size - 2.0 * border)
 	var size := area.size * Vector2(shown.width, shown.height)
 	if fit_aspect:
+		var aspect := source_aspect if aspect_override == 0 or not override.is_empty() or menu_fitting else (4.0/3.0 if aspect_override == 1 else 16.0/9.0)
+		var crop := fit_mode == 1 and override.is_empty() and not menu_fitting
 		var available_aspect := tube_aspect * size.x / size.y
-		if available_aspect > source_aspect: size.x *= source_aspect/available_aspect
-		else: size.y *= available_aspect/source_aspect
+		if (available_aspect > aspect) != crop: size.x *= aspect/available_aspect
+		else: size.y *= available_aspect/aspect
 	var slack := area.size - size
 	var offset := Vector2(shown.shift_x, shown.shift_y).clamp(Vector2(-1,-1), Vector2.ONE)
 	return Rect2(area.position + slack * (Vector2.ONE + offset) * 0.5, size)

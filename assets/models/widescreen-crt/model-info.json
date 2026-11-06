@@ -1,0 +1,8 @@
+{
+  "triangles": 5244,
+  "mesh_objects": 6,
+  "source": "artwork/widescreen-crt/crt-xr-26-wide.blend",
+  "export": "assets\\models\\widescreen-crt\\crt-xr-26-wide.glb",
+  "front_axis_gltf": "+Z",
+  "source_preserved": true
+}

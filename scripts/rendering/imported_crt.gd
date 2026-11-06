@@ -5,15 +5,19 @@ const Plastic = preload("res://scripts/rendering/cabinet_plastic.gd")
 const Brand = preload("res://scripts/rendering/cabinet_brand.gd")
 
 # Load a user-supplied GLB locally; no model data is embedded in source control.
-static func load_cabinet(parent: Node3D) -> Dictionary:
+const WIDE_MODEL = preload("res://assets/models/widescreen-crt/crt-xr-26-wide.glb")
+
+static func load_cabinet(parent: Node3D, widescreen := false) -> Dictionary:
 	var path := ProjectSettings.globalize_path("res://build/crt-model/crt_tv.glb")
 	if not OS.has_feature("editor"):
 		path = OS.get_executable_path().get_base_dir().path_join("assets/crt_tv.glb")
 	var prepared := ProjectSettings.globalize_path("res://build/crt-model/optimised/cabinet.scn") if OS.has_feature("editor") else OS.get_executable_path().get_base_dir().path_join("assets/optimised/cabinet.scn")
-	if not FileAccess.file_exists(path) and not FileAccess.file_exists(prepared):
+	if not widescreen and not FileAccess.file_exists(path) and not FileAccess.file_exists(prepared):
 		return {}
 	var scene: Node
-	if FileAccess.file_exists(prepared):
+	if widescreen:
+		scene = WIDE_MODEL.instantiate()
+	elif FileAccess.file_exists(prepared):
 		var packed := load(prepared) as PackedScene
 		if packed != null: scene = packed.instantiate()
 	if scene == null and FileAccess.file_exists(path):
@@ -26,13 +30,14 @@ static func load_cabinet(parent: Node3D) -> Dictionary:
 	if scene == null:
 		return {}
 	filter_cabinet_materials(scene)
-	Brand.apply(scene)
-	Plastic.apply(scene)
+	if not widescreen:
+		Brand.apply(scene)
+		Plastic.apply(scene)
 	var holder := Node3D.new()
 	holder.name = "ImportedCabinet"
 	parent.add_child(holder)
 	holder.add_child(scene)
-	holder.rotation.y = PI
+	holder.rotation.y = 0.0 if widescreen else PI
 	var source: MeshInstance3D
 	for node in scene.find_children("*", "MeshInstance3D", true, false):
 		if node.get_parent().name == "Screen":
@@ -47,7 +52,7 @@ static func load_cabinet(parent: Node3D) -> Dictionary:
 	if bounds.size.x <= 0.0 or bounds.size.y <= 0.0:
 		holder.free()
 		return {}
-	holder.scale = Vector3.ONE * (1.32 / bounds.size.x)
+	holder.scale = Vector3.ONE * ((1.76 if widescreen else 1.32) / bounds.size.x)
 	transform = parent.global_transform.affine_inverse() * source.global_transform
 	bounds = transform * source.get_aabb()
 	var anchor := SCREEN_ANCHOR
@@ -70,7 +75,7 @@ static func load_cabinet(parent: Node3D) -> Dictionary:
 		cabinet_bounds = part if first else cabinet_bounds.merge(part)
 		first = false
 	return {"arrays": arrays, "width": bounds.size.x, "height": bounds.size.y,
-		"depth": bounds.size.z, "bottom": bottom, "cabinet_bounds": cabinet_bounds}
+		"widescreen": widescreen, "depth": bounds.size.z, "bottom": bottom, "cabinet_bounds": cabinet_bounds}
 
 static func filter_cabinet_materials(scene: Node) -> void:
 	# Embedded images from the runtime GLB loader do not have mipmaps. Merely
@@ -111,13 +116,15 @@ static func screen_mesh(template: Dictionary, curvature: float) -> ArrayMesh:
 	for i in (indices.size() if not indices.is_empty() else vertices.size()):
 		var p := vertices[indices[i] if not indices.is_empty() else i]
 		var uv := Vector2(p.x / float(template.width) + 0.5, 0.5 - p.y / float(template.height))
-		p.z *= curvature / maxf(float(template.depth), 0.00001)
+		var amount := minf(curvature, float(template.depth)) if template.get("widescreen", false) else curvature
+		p.z *= amount / maxf(float(template.depth), 0.00001)
 		surface.set_uv(uv)
 		surface.add_vertex(p)
 	surface.generate_normals()
 	return surface.commit()
 
 static func safe_picture_rect(template: Dictionary) -> Rect2:
+	if template.get("widescreen", false): return Rect2(.005, .005, .99, .99)
 	# The rounded aperture does not cover every corner of its bounding box.
 	# Find an inscribed rectangle in its convex outline, then allow bezel margin.
 	var points := PackedVector2Array()

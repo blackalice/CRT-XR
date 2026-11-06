@@ -300,10 +300,12 @@ func pages(category: int) -> Array:
 			crt.append_array(picture_fields(w.picture.BEAM_FIELDS))
 			crt.append(action("crt.degauss","Degauss",h.degauss,"Like the button on an old set: closes the menu, then the picture wobbles and swirls with colour as the tube's field clears.",false,""))
 			var fitting := picture_fields(w.picture.FIT_FIELDS)
-			fitting.append(toggle("picture.aspect","Preserve picture shape",w.picture,"keep_aspect",true,"Keeps the whole game or video picture at its intended shape, including handheld proportions. A video's widescreen shape is set by Picture shape.",refresh))
+			fitting.push_front({"id":"picture.cabinet","label":"Widescreen CRT","kind":"toggle","default":false,"visual":true,"getter":func(): return w.widescreen,"setter":func(value): h.set_widescreen(value); menu.refresh(),"help":"Use the wide 16:9 cabinet. Clock radio and game boxes are hidden to make room on the table."})
+			fitting.append({"id":"picture.fitting","label":"Picture fitting","kind":"choice","choices":["Fit whole picture","Fill screen (crop)","Stretch to screen"],"default":0,"visual":true,"getter":func(): return w.picture.fit_mode if w.picture.keep_aspect else 2,"setter":func(value): w.picture.keep_aspect=value!=2; w.picture.fit_mode=mini(value,1); refresh.call(); menu.refresh(),"help":"Fit preserves the full image with borders. Fill crops the edges. Stretch fills the screen by changing the picture shape."})
+			fitting.append({"id":"picture.source_aspect","label":"Picture aspect ratio","kind":"choice","choices":["Automatic","4:3","16:9"],"default":0,"visual":true,"getter":func(): return w.picture.aspect_override,"setter":func(value): w.picture.aspect_override=value; refresh.call(); menu.refresh(),"help":"Automatic follows the game or video. Choose 16:9 for a game rendering anamorphic widescreen."})
 			fitting.append(toggle("picture.guides","Picture-edge guides",w.picture,"guides",false,"Highlights the game frame edges to check that the full picture is visible.",refresh))
 			fitting.append(action("picture.restore_fit","Restore full-picture fit",func():
-				w.picture.reset_fields(w.picture.FIT_FIELDS); w.picture.keep_aspect=true; refresh.call(); menu.refresh(),"Resets all fitting controls; leaves CRT and colour settings alone."))
+				w.picture.reset_fields(w.picture.FIT_FIELDS); w.picture.keep_aspect=true; w.picture.fit_mode=0; w.picture.aspect_override=0; refresh.call(); menu.refresh(),"Resets all fitting controls; leaves CRT and colour settings alone."))
 			var presets: Array = []
 			for pair in [["showcase","Deck Showcase (PAL)","Warm PAL colour and pronounced scanlines."],["clean","Clean source","Crisp source pixels; scanlines and phosphor effects off."],["rgb","RGB CRT","Clean RGB colour with a defined CRT beam."],["auto","Auto composite","Composite character matched to the game’s frame rate."],["pal","PAL composite","Soft PAL colour blending and analog texture."],["ntsc","NTSC composite","NTSC colour bleed and classic composite artifacts."]]:
 				var preset: String = pair[0]
@@ -317,7 +319,7 @@ func pages(category: int) -> Array:
 			if menu.pictures.picture_undo!=null: presets.append(action("preset.undo","Undo picture preset",menu.pictures.undo_picture_preset,"Restore the picture from before the last preset."))
 			var signal_rows: Array = [{"id":"picture.connection","label":"Signal connection","kind":"choice","choices":["RGB","NTSC","PAL","Auto"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite modes add colour decoding and interference. Auto picks PAL or NTSC from the game's or video's frame rate."}]
 			signal_rows.append_array(picture_fields(w.picture.COLOR_FIELDS.slice(6)))
-			var picture_pages := [page("Presets",presets),page("CRT",crt),page("Screen fit",fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
+			var picture_pages := [page("Presets",presets),page("CRT",crt),page(("Wide" if w.widescreen else "Standard") + (" video fit" if h.video.loaded else " game fit"),fitting),page("Colour",picture_fields(w.picture.COLOR_FIELDS.slice(0,6))),page("Signal",signal_rows)]
 			return picture_pages
 		3:
 			var groups := {"Lighting":[],"Materials":[],"Placement":[]}
@@ -346,6 +348,9 @@ func pages(category: int) -> Array:
 				toggle("room.vcr","VCR",w,"show_vcr",true,"A video recorder on the shelf under the TV. Its display shows the time, or the tape counter while a video plays.",w.apply_room_settings),
 				toggle("room.game_boxes","Game boxes",w,"show_game_boxes",true,"",func(): w.apply_room_settings(); menu.refresh()),
 				toggle("room.game_cover","Your game on the box",w,"show_game_cover",true,"The top box shows the playing game's cover, from your existing scrapes (covers or box2dfront).",w.apply_room_settings)]
+			if w.widescreen:
+				for index in [0,3,4]:
+					props[index].disabled=true; props[index].disabled_reason="Hidden while the widescreen CRT fills the table."; props[index].help += " " + props[index].disabled_reason
 			if not w.show_game_boxes:
 				props[-1].disabled=true; props[-1].disabled_reason="Show the game boxes first."; props[-1].help += " " + props[-1].disabled_reason
 			groups.Lighting.append(toggle("room.follow_clock","Follow the time of day",w,"follow_clock",false,"Brighter and cooler by day, warmer in the evening and dimmer late at night, around your own lighting.",w.apply_room_settings))

@@ -29,6 +29,7 @@ const VIDEO_CHECKPOINT_SECONDS := 30.0
 const PROFILE_NAMES := ["Everyday", "Evening", "Bright room"]
 var settings_store := SettingsStore.new()
 var picture_baseline := ConfigFile.new()
+var screen_picture_profiles: Dictionary = {}
 var active_game_key := ""
 var remember_game_picture := Showcase.PER_GAME_PICTURE
 var selected_profile := 0
@@ -645,6 +646,8 @@ func start_application() -> void:
 		if is_instance_valid(menu.boot): menu.boot.set_process(false)
 
 func apply_settings(config: ConfigFile) -> void:
+	var profiles = config.get_value("screen_profiles", "pictures", screen_picture_profiles)
+	if profiles is Dictionary: screen_picture_profiles = profiles.duplicate(true)
 	for key in vmu_display.DEFAULTS: vmu_display.set(key,config.get_value("vmu",key,vmu_display.DEFAULTS[key]))
 	vmu_display.horizontal = clampf(vmu_display.horizontal,-1.5,1.5)
 	vmu_display.vertical = clampf(vmu_display.vertical,-1.5,-0.1)
@@ -690,6 +693,7 @@ func apply_settings(config: ConfigFile) -> void:
 	distance_speed = clampf(config.get_value("view", "distance_speed", Showcase.VIEW.distance_speed), 0.2, 2.0)
 	for setting in ROOM_FIELDS:
 		world.set(setting[0], clampf(config.get_value("room", setting[0], world.get(setting[0])), setting[2], setting[3]))
+	world.set_widescreen(bool(config.get_value("room", "widescreen", false)))
 	world.shadows = bool(config.get_value("room", "shadows", true))
 	world.floor_style = clampi(int(config.get_value("room", "floor_style", Showcase.ROOM.floor_style)), 0, world.FLOOR_STYLES.size() - 1)
 	for key in ROOM_SWITCHES:
@@ -727,6 +731,8 @@ func apply_settings(config: ConfigFile) -> void:
 		world.picture.values[field[0]] = clampf(config.get_value("picture", field[0], field[5]), field[2], field[3])
 	world.picture.mode = clampi(config.get_value("picture", "connection", Showcase.CONNECTION), 0, 3)
 	world.picture.keep_aspect = bool(config.get_value("picture", "keep_aspect", true))
+	world.picture.fit_mode = clampi(int(config.get_value("picture", "fit_mode", 0)),0,1)
+	world.picture.aspect_override = clampi(int(config.get_value("picture", "aspect_override", 0)),0,2)
 	remember_game_picture = bool(config.get_value("preferences", "per_game_picture", Showcase.PER_GAME_PICTURE))
 	world.picture.refresh()
 	world.apply_room_settings()
@@ -1462,7 +1468,7 @@ func save_game_preferences() -> bool:
 	if active_game_key.is_empty(): return true
 	var config := ConfigFile.new()
 	SettingsStore.copy_sections(capture_settings(),config,PICTURE_SECTIONS)
-	var path := "user://games/"+active_game_key+".cfg"
+	var path := game_picture_path(active_game_key)
 	var baseline := ConfigFile.new()
 	SettingsStore.copy_sections(picture_baseline,baseline,PICTURE_SECTIONS)
 	# The video profile is always kept: removing it would bring back its composite default.
@@ -1477,6 +1483,32 @@ func save_game_preferences() -> bool:
 	if error != OK: show_notice("Game picture settings could not be saved. Check free space.")
 	return error == OK
 
+func game_picture_path(key: String) -> String:
+	return "user://games/" + key + ("-wide" if world.widescreen else "") + ".cfg"
+
+func remember_screen_baseline() -> void:
+	var config := ConfigFile.new()
+	SettingsStore.copy_sections(picture_baseline if not active_game_key.is_empty() else capture_settings(), config, PICTURE_SECTIONS)
+	screen_picture_profiles["wide" if world.widescreen else "standard"] = config.encode_to_text()
+
+func set_widescreen(enabled: bool) -> void:
+	if world.widescreen == enabled: return
+	if not save_game_preferences(): return
+	remember_screen_baseline()
+	var was_profile := not active_game_key.is_empty()
+	var was_video := active_game_key == VIDEO_PROFILE
+	active_game_key = ""
+	world.set_widescreen(enabled)
+	var target := Showcase.config()
+	var id := "wide" if enabled else "standard"
+	if screen_picture_profiles.has(id): target.parse(str(screen_picture_profiles[id]))
+	var merged := capture_settings()
+	SettingsStore.copy_sections(target, merged, PICTURE_SECTIONS)
+	apply_settings(merged)
+	picture_baseline = capture_settings()
+	if was_profile: change_game_preferences(true, VIDEO_PROFILE if was_video else "")
+	settings_dirty = true
+
 func change_game_preferences(active: bool, key := "") -> void:
 	if not active_game_key.is_empty():
 		save_game_preferences()
@@ -1486,7 +1518,7 @@ func change_game_preferences(active: bool, key := "") -> void:
 	if key == VIDEO_PROFILE: active_game_key = VIDEO_PROFILE if active and video_own_picture else ""
 	else: active_game_key = emulator.rom_hash if active and remember_game_picture else ""
 	if not active_game_key.is_empty():
-		var path := "user://games/"+active_game_key+".cfg"
+		var path := game_picture_path(active_game_key)
 		var defaults := capture_settings()
 		# Video looks like a broadcast or tape feed until the user says otherwise.
 		if active_game_key == VIDEO_PROFILE and not FileAccess.file_exists(path):
@@ -1513,7 +1545,7 @@ func reset_video_picture() -> void:
 	var playing: bool = video.loaded and active_game_key == VIDEO_PROFILE
 	if playing: change_game_preferences(false)
 	for suffix in ["", ".bak"]:
-		var path: String = "user://games/" + VIDEO_PROFILE + ".cfg" + str(suffix)
+		var path: String = game_picture_path(VIDEO_PROFILE) + str(suffix)
 		if FileAccess.file_exists(path): DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
 	if playing: change_game_preferences(true, VIDEO_PROFILE)
 	show_notice("Video picture reset to Auto composite")
@@ -1596,6 +1628,7 @@ func apply_picture_preset(name: String) -> void:
 		SettingsStore.copy_sections(Showcase.config(),merged,PICTURE_SECTIONS)
 		# Picture presets retain this game's carefully adjusted fitting.
 		for field in world.picture.FIT_FIELDS: merged.set_value("picture",field[0],world.picture.values[field[0]])
+		for key in ["keep_aspect", "fit_mode", "aspect_override"]: merged.set_value("picture",key,world.picture.get(key))
 		apply_settings(merged)
 		rebuild_settings(); show_notice("Deck Showcase (PAL) picture preset"); return
 	world.picture.preset(name)
@@ -1613,12 +1646,18 @@ func fit_tv_to_view() -> void:
 	var vertical := tan(deg_to_rad(vertical_fov)*0.5)*0.85
 	var horizontal := vertical*aspect
 	var eye_margin := ipd*0.5*(1.0+5.0/convergence)
-	var scale_limit := minf((4.8*vertical-absf(height_offset))/0.65, (4.8*horizontal-eye_margin)/0.9)
+	var half_width := .9
+	var half_height := .65
+	if not world.imported_screen.is_empty():
+		var bounds: AABB = world.imported_screen.cabinet_bounds
+		half_width = maxf(half_width, maxf(absf(bounds.position.x), absf(bounds.end.x)))
+		half_height = maxf(half_height, maxf(absf(bounds.position.y), absf(bounds.end.y)))
+	var scale_limit := minf((4.8*vertical-absf(height_offset))/half_height, (4.8*horizontal-eye_margin)/half_width)
 	if scale_limit < 0.5:
 		height_offset = 0.0
-		scale_limit = minf(4.8*vertical/0.65, (4.8*horizontal-eye_margin)/0.9)
+		scale_limit = minf(4.8*vertical/half_height, (4.8*horizontal-eye_margin)/half_width)
 	tv_scale = clampf(minf(tv_scale, scale_limit), 0.5, 1.6)
-	distance = clampf(maxf((0.65*tv_scale+absf(height_offset))/vertical, (0.9*tv_scale+eye_margin)/horizontal)+0.2, 1.2, 5.0)
+	distance = clampf(maxf((half_height*tv_scale+absf(height_offset))/vertical, (half_width*tv_scale+eye_margin)/horizontal)+0.2, 1.2, 5.0)
 	recenter()
 	rebuild_settings.call_deferred()
 	show_notice("TV fitted to neutral view")
@@ -1743,11 +1782,16 @@ func capture_settings() -> ConfigFile:
 	for field in world.picture.all_fields(): config.set_value("picture", field[0], world.picture.values[field[0]])
 	config.set_value("picture", "connection", world.picture.mode)
 	config.set_value("picture", "keep_aspect", world.picture.keep_aspect)
+	config.set_value("picture", "fit_mode", world.picture.fit_mode)
+	config.set_value("picture", "aspect_override", world.picture.aspect_override)
+	config.set_value("room", "widescreen", world.widescreen)
+	config.set_value("screen_profiles", "pictures", screen_picture_profiles.duplicate(true))
 	config.set_value("crt", "glass", glass_reflections)
 	config.set_value("crt", "curvature", screen_curvature)
 	return config
 
 func save_settings() -> bool:
+	remember_screen_baseline()
 	if is_instance_valid(music) and music.save_resume()!=OK: return false
 	var config := capture_settings()
 	# A key is only set while a picture profile is active: a game's (when

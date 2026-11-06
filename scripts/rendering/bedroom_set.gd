@@ -42,12 +42,12 @@ static func matte(color: Color) -> StandardMaterial3D:
 	material.roughness = 0.88
 	return material
 
-static func build_stand(parent: Node3D, top: float, cabinet_bounds := AABB()) -> Node3D:
-	var imported := preload("res://scripts/rendering/imported_table.gd").build(parent,top,cabinet_bounds)
+static func build_stand(parent: Node3D, top: float, cabinet_bounds := AABB(), compact := false) -> Node3D:
+	var imported := preload("res://scripts/rendering/imported_table.gd").build(parent,top,cabinet_bounds,compact)
 	if imported!=null: return imported
-	return build_procedural_stand(parent,top,cabinet_bounds)
+	return build_procedural_stand(parent,top,cabinet_bounds,compact)
 
-static func build_procedural_stand(parent: Node3D, top: float, cabinet_bounds := AABB()) -> Node3D:
+static func build_procedural_stand(parent: Node3D, top: float, cabinet_bounds := AABB(), compact := false) -> Node3D:
 	var stand := Node3D.new()
 	stand.name = "TelevisionSupport"
 	parent.add_child(stand)
@@ -65,7 +65,8 @@ static func build_procedural_stand(parent: Node3D, top: float, cabinet_bounds :=
 	var bottom := floor_y + 0.10
 	var inside_top := top - 0.075
 	var height := maxf(inside_top - bottom, 0.12)
-	var shelf := soft_box(stand, Vector3(2.02, 0.075, depth), Vector3(0, top - 0.0375, 0), oak, 0.02)
+	var shelf_width := maxf(2.02, cabinet_bounds.size.x + .08)
+	var shelf := soft_box(stand, Vector3(shelf_width, 0.075, depth), Vector3(0, top - 0.0375, 0), oak, 0.02)
 	shelf.name = "TopShelf"
 	soft_box(stand, Vector3(1.88, 0.055, depth - 0.12), Vector3(0, bottom + 0.0275, 0), oak)
 	for side in [-1, 1]:

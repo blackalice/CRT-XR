@@ -68,6 +68,7 @@ func enter() -> void:
 func apply_picture() -> void:
 	clean_feed = host.menu_clean_feed
 	var picture: Node = host.world.picture
+	picture.menu_fitting = true
 	if clean_feed:
 		var drawn := BEAM.duplicate()
 		drawn.merge({"width": 1.0, "height": 1.0, "shift_x": 0.0, "shift_y": 0.0})
@@ -102,6 +103,7 @@ func show_menu() -> void:
 func leave() -> void:
 	active = false
 	var picture: Node = host.world.picture
+	picture.menu_fitting = false
 	picture.override = {}
 	# Choosing a game loads it (the loading card or its picture takes the tube)
 	# and closes the menu in the same frame, before update() can adopt it. Put

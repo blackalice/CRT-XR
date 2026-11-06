@@ -7,6 +7,8 @@ var screen_material := ShaderMaterial.new()
 var glass_material := ShaderMaterial.new()
 var curvature := 0.066
 var imported_screen: Dictionary = {}
+var widescreen := false
+var cabinet_nodes: Array[Node] = []
 var distance_fade := ShaderMaterial.new()
 var spill_strength: float = Showcase.ROOM.spill_strength
 var screen_light := preload("res://scripts/rendering/screen_light.gd").new()
@@ -96,16 +98,29 @@ func build(signal_texture: Texture2D) -> void:
 	add_child(television)
 	add_child(room_sound)
 	television.name = "StationaryTelevision"
-	imported_screen = ImportedCRT.load_cabinet(television)
+	_build_geometry()
+	_build_lighting()
+
+	screen_material.shader = load("res://shaders/crt.gdshader")
+	add_child(picture)
+	picture.configure(screen_material, signal_texture,
+		ImportedCRT.safe_picture_rect(imported_screen) if not imported_screen.is_empty() else Rect2(0.03, 0.03, 0.94, 0.94),
+		float(imported_screen.width)/float(imported_screen.height) if not imported_screen.is_empty() else 4.0/3.0)
+	_build_surfaces()
+	apply_room_settings()
+
+func _build_geometry() -> void:
+	var existing := television.get_children()
+	imported_screen = ImportedCRT.load_cabinet(television, widescreen)
 	if imported_screen.is_empty():
 		_build_procedural_cabinet()
 	var support := BedroomSet.build_stand(television,
 		float(imported_screen.bottom) if not imported_screen.is_empty() else -0.635,
 		imported_screen.cabinet_bounds if not imported_screen.is_empty()
-		else AABB(Vector3(-0.85, -0.635, -0.78), Vector3(1.70, 1.27, 0.8325)))
+		else AABB(Vector3(-0.85, -0.635, -0.78), Vector3(1.70, 1.27, 0.8325)), widescreen)
 	# Console prop is parked for launch; keep its source/preparation tools for later.
 	support_floor_y=float(support.get_meta("floor_y",-1.25))
-	preload("res://scripts/rendering/room_contacts.gd").apply(self,support)
+	if not widescreen: preload("res://scripts/rendering/room_contacts.gd").apply(self,support)
 	_build_props(support)
 	_build_table_occluder(support)
 	# A black overlay fades the cabinet and furniture without changing their PBR maps.
@@ -124,13 +139,11 @@ func build(signal_texture: Texture2D) -> void:
 		if not part.has_meta("contact_patch") and part.name not in ["LowerShelf", "VideoRecorder"]: part.layers |= screen_light.RECEIVER_LAYER
 	floor_node.layers |= screen_light.RECEIVER_LAYER
 	screen_light.set_strength(spill_strength)
-	_build_lighting()
+	for child in television.get_children():
+		if child not in existing and child != screen_light: cabinet_nodes.append(child)
 
-	screen_material.shader = load("res://shaders/crt.gdshader")
-	add_child(picture)
-	picture.configure(screen_material, signal_texture,
-		ImportedCRT.safe_picture_rect(imported_screen) if not imported_screen.is_empty() else Rect2(0.03, 0.03, 0.94, 0.94),
-		float(imported_screen.width)/float(imported_screen.height) if not imported_screen.is_empty() else 4.0/3.0)
+func _build_surfaces() -> void:
+	var existing := television.get_children()
 	var screen := MeshInstance3D.new()
 	screen.name = "PhosphorSurface"
 	screen.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -148,7 +161,33 @@ func build(signal_texture: Texture2D) -> void:
 	glass.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	television.add_child(glass)
 	_build_halo()
+	for child in television.get_children():
+		if child not in existing: cabinet_nodes.append(child)
+
+
+func set_widescreen(value: bool) -> void:
+	if widescreen == value: return
+	widescreen = value
+	if picture.screen == null: return
+	# Keep the live pipeline, playback, materials and TV transform intact.
+	television.remove_child(screen_light)
+	television.remove_child(key_light)
+	television.remove_child(fill_light)
+	screen_light.halo = null
+	for child in cabinet_nodes:
+		if is_instance_valid(child): child.free()
+	cabinet_nodes.clear()
+	fade_parts.clear()
+	clock_radio = null; game_boxes = null; video_recorder = null
+	_build_geometry()
+	television.add_child(key_light)
+	television.add_child(fill_light)
+	picture.safe_rect = ImportedCRT.safe_picture_rect(imported_screen) if not imported_screen.is_empty() else Rect2(.03,.03,.94,.94)
+	picture.tube_aspect = float(imported_screen.width)/float(imported_screen.height) if not imported_screen.is_empty() else 4.0/3.0
+	_build_surfaces()
+	picture.refresh()
 	apply_room_settings()
+	last_tv_transform = Transform3D() # refresh floor placement and fading
 
 func _build_halo() -> void:
 	var size := Vector2(float(imported_screen.width), float(imported_screen.height)) if not imported_screen.is_empty() else Vector2(1.32, 0.99)
@@ -306,9 +345,9 @@ func apply_room_settings() -> void:
 	key_light.shadow_opacity = shadow_strength
 	floor_material.set_shader_parameter("style", clampi(floor_style, 0, FLOOR_STYLES.size() - 1))
 	if clock_radio != null:
-		clock_radio.visible = show_clock_radio
+		clock_radio.visible = show_clock_radio and not widescreen
 		video_recorder.visible = show_vcr
-		game_boxes.visible = show_game_boxes
+		game_boxes.visible = show_game_boxes and not widescreen
 		_show_game_cover()
 		shown_minute = -1; clock_elapsed = 1.0 # apply a 12/24-hour change at once
 	for material in [distance_fade, floor_material]:

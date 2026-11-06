@@ -74,7 +74,7 @@ func apply_saved_picture(saved: ConfigFile, id: String) -> void:
 	host.SettingsStore.copy_sections(saved,merged,host.PICTURE_SECTIONS)
 	# Like the built-in presets, saved pictures keep this game's screen fitting.
 	for field in host.world.picture.FIT_FIELDS: merged.set_value("picture",field[0],host.world.picture.values[field[0]])
-	merged.set_value("picture","keep_aspect",host.world.picture.keep_aspect)
+	for key in ["keep_aspect", "fit_mode", "aspect_override"]: merged.set_value("picture",key,host.world.picture.get(key))
 	# Validate user-editable files against live types before applying them.
 	var validator := ConfigFile.new(); validator.parse(merged.encode_to_text())
 	host.apply_settings(host.validated_settings(validator,host.capture_settings()))

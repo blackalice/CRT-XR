@@ -44,6 +44,8 @@ static func apply(app: Node, tab: int) -> void:
 			app.world.picture.reset_fields(app.world.picture.FIT_FIELDS)
 			app.world.picture.reset_fields(app.world.picture.COLOR_FIELDS)
 			app.world.picture.keep_aspect = true
+			app.world.picture.fit_mode = 0
+			app.world.picture.aspect_override = 0
 			app.world.picture.guides = false
 			app.world.picture.mode = Showcase.CONNECTION
 			app.world.picture.refresh()
