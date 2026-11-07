@@ -1611,26 +1611,7 @@ func rebuild_settings() -> void:
 	settings_dirty = false
 	if is_instance_valid(menu): menu.refresh()
 
-func load_showcase_setup() -> void:
-	profile_undo=capture_settings()
-	var merged := capture_settings()
-	SettingsStore.copy_sections(Showcase.config(),merged,PackedStringArray(["view","room","crt","picture","audio","atmosphere","emulation"]))
-	merged.set_value("room","widescreen",world.widescreen)
-	merged.set_value("preferences","metrics_visible",false)
-	merged.set_value("preferences","game_fps_visible",false)
-	apply_settings(merged)
-	rebuild_settings()
-	show_notice("Deck Showcase loaded. Undo is available in Saved setups.")
-
 func apply_picture_preset(name: String) -> void:
-	if name=="showcase":
-		var merged := capture_settings()
-		SettingsStore.copy_sections(Showcase.config(),merged,PICTURE_SECTIONS)
-		# Picture presets retain this game's carefully adjusted fitting.
-		for field in world.picture.FIT_FIELDS: merged.set_value("picture",field[0],world.picture.values[field[0]])
-		for key in ["keep_aspect", "fit_mode", "aspect_override"]: merged.set_value("picture",key,world.picture.get(key))
-		apply_settings(merged)
-		rebuild_settings(); show_notice("Deck Showcase (PAL) picture preset"); return
 	world.picture.preset(name)
 	scanlines = 0.0 if name == "clean" else 0.70
 	phosphor_mask = 0.0 if name == "clean" else (0.50 if name == "rgb" else 0.40)

@@ -12,7 +12,7 @@ func run():
 	var prefs=app.display_settings
 	for system in app.emulator.Registry.DEFINITIONS:
 		game(app,system,"default-"+system)
-		var expected:=5 if system in ["ps2","gamecube","psp"] else 0
+		var expected:=0
 		check(prefs.display_choice()==expected,system+" launches with "+prefs.DISPLAY_CHOICES[expected])
 	var legacy:=ConfigFile.new()
 	legacy.set_value("display_profiles","data",{"version":1,"defaults":{"game":"wide","video":"wide"},
@@ -22,7 +22,7 @@ func run():
 		"pictures":{"game.wide.platform.ps2":{"picture.width":.8,"picture.keep_aspect":true},
 			"game.standard.content.kept-game":{"picture.keep_aspect":true,"picture.fit_mode":1}}})
 	app.restore_settings(legacy)
-	check(prefs.preferred_screen("game","wii","")=="standard" and prefs.preferred_screen("game","gamecube","")=="wide","Existing settings receive the updated platform TV defaults")
+	check(prefs.preferred_screen("game","wii","")=="wide" and prefs.preferred_screen("game","ps2","")=="standard","Loading existing settings preserves console preferences")
 	check(prefs.data.pictures["game.wide.platform.ps2"]["picture.width"]==.8,"Migration preserves other platform picture adjustments")
 	check(prefs.data.views["desktop.standard"].distance==2.1 and prefs.data.defaults.video=="wide","Viewing profiles and separate video default survive")
 	game(app,"psp","kept-game")
@@ -36,7 +36,7 @@ func run():
 	app.settings_panel.show();app.reset_all_options()
 	for system in app.emulator.Registry.DEFINITIONS:
 		game(app,system,"reset-"+system)
-		check(prefs.display_choice()==(5 if system in ["ps2","gamecube","psp"] else 0),"Factory reset restores display defaults for "+system)
+		check(prefs.display_choice()==0,"Factory reset restores display defaults for "+system)
 	app.queue_free();await process_frame
 	print("PLATFORM DISPLAY DEFAULTS: ",failures," failures")
 	quit(1 if failures else 0)

@@ -118,20 +118,13 @@ func run() -> void:
 	check(app.video_dir == folder and menu.mode == "videos", "Choosing a folder opens Videos")
 	menu.games.open_library()
 	check(not "library.videos" in ids(), "Videos stays separate from game library")
-	# Videos has its own category, after Room: Picture, VCR and Playback tabs.
-	check(not menu.catalog.pages(1).any(func(page): return page.title == "Video"), "Picture no longer carries the video settings")
-	var tabs: Dictionary = {}
-	for page in menu.catalog.pages(8): tabs[page.title] = page.rows.map(func(row): return row.id)
-	check(tabs.keys() == ["Picture", "VCR", "Playback"]
-		and tabs.Picture == ["video.default_tv", "video.default_style", "video.lines", "video.interlace"]
-		and tabs.VCR == ["video.tape", "video.osd", "video.vcr_sounds"]
-		and tabs.Playback == ["video.subtitles_default", "video.hardware", "video.folder"], "Videos settings: %s" % [tabs])
-	check(menu.sidebar_buttons[8].get_index() == menu.sidebar_buttons[3].get_index() + 1, "Videos sits after Room in the sidebar")
-	menu.open_settings(); menu.category = 3; menu.render()
-	menu.switch_category(1)
-	check(menu.category == 8, "Next category from Room is Videos")
-	menu.switch_category(1)
-	check(menu.category == 4, "and then Controls")
+	# One settings page, reachable directly from the library, with no duplicate TV selector.
+	menu.videos.open_videos()
+	activate("videos.settings")
+	check(menu.mode == "settings" and menu.category == 1 and menu.catalog.pages(1)[menu.subsection].title == "Videos", "Video Library opens its settings in TV & picture")
+	check(ids() == ["video.default_style", "video.lines", "video.interlace", "video.tape", "video.osd", "video.vcr_sounds", "video.subtitles_default", "video.hardware", "video.folder"], "Video preferences are grouped on one page")
+	menu.back()
+	check(menu.mode == "videos" and menu.selected_id == "videos.settings", "Back returns to the Video Library shortcut")
 	menu.games.open_library()
 	if OS.get_name() == "Windows":
 		var setup: Array = menu.videos.video_setup_items("VIDEOS · OPTIONAL")
@@ -242,7 +235,7 @@ func run() -> void:
 	app.toggle_settings()
 	check(app.video.paused and app.video.osd_text() != "PAUSE" and clunks.is_empty(), "Opening the menu pauses the video without the VCR's pause (%s, %s)" % [app.video.osd_text(), clunks])
 	# Picture pages say plainly which picture they change.
-	menu.category = 1; menu.subsection = 0; menu.open_settings()
+	menu.open_settings_section(1, "TV & defaults")
 	check(menu.subtitle.text.begins_with("Editing Wide TV · This video"), "Picture settings say they are editing the video picture (%s)" % menu.subtitle.text)
 	# Picture editing can target video TV defaults without altering game defaults.
 	app.display_settings.set_scope(2); menu.open_settings()

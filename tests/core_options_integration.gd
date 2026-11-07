@@ -18,7 +18,7 @@ func run() -> void:
  app.emulator.set_paused(true)
  var catalog = app.menu.catalog
  var pages: Array = catalog.pages(10)
- check(pages.map(func(p): return p.title) == ["Consoles", "This game", "VMU", "Performance", "Info"], "Console settings lead the navigation")
+ check(pages.map(func(p): return p.title) == ["Consoles", "This game", "Advanced", "Info", "Game controls", "View controls"], "Console settings lead the navigation")
  var headers: Array = pages[0].rows.filter(func(r): return r.has("disclosure"))
  # Experimental consoles (behind their opt-ins) follow the standard ones.
  var listed: int = catalog.CORE_SYSTEMS.size() + catalog.EXPERIMENTAL_SYSTEMS.filter(func(system): return app.emulator.Registry.SYSTEMS.has(system)).size()

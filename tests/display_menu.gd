@@ -17,10 +17,17 @@ func run():
 	check(app.load_game(ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")),"Original diagnostic game opens")
 	UI.set_value(app,"picture.cabinet",2)
 	check(app.world.widescreen,"TV menu creates a wide override for this game")
+	check(not app.menu.items.any(func(row): return row.id == "picture.tv_policy" or row.id == "picture.video_policy"), "Editing one game does not mix in global TV policies")
 	await shot(app,"game")
 	UI.set_value(app,"picture.gamma",1.75)
 	UI.set_value(app,"picture.scope",1)
 	check(app.display_settings.scope==1,"Scope selector edits platform defaults")
+	for section in range(1,6):
+		UI.page(app,1,section)
+		for i in range(6): await process_frame
+		check(app.menu.subtitle.visible and app.menu.subtitle.text.contains("SNES defaults"), "Picture scope remains visible on page %d" % section)
+		check(app.menu.items.any(func(row): return row.id == "picture.scope.page.%d" % section), "Scope can be changed on picture page %d" % section)
+	await shot(app,"scope")
 	UI.set_value(app,"picture.gamma",2.1)
 	UI.set_value(app,"picture.scope",0)
 	check(is_equal_approx(app.world.picture.values.gamma,1.75),"Scope changes restore the game's existing override")

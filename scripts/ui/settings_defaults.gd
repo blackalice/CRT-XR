@@ -5,7 +5,7 @@ const Showcase = preload("res://scripts/presets/showcase.gd")
 const VIEW := Showcase.VIEW
 const PICTURE := Showcase.CRT
 const ROOM := Showcase.ROOM
-const SLIDERS := {"TV distance (m)": "distance", "Screen height offset (m)": "height_offset",
+const SLIDERS := {"TV distance (m)": "distance", "Screen height offset (m)": "height_offset", "TV height (m)": "height_offset",
 	"Distance adjustment speed": "distance_speed", "TV scale": "tv_scale", "IPD (m)": "ipd",
 	"Convergence (m)": "convergence", "Soft view edges": "edge_fade", "Smoothing (seconds)": "smoothing",
 	"Motion prediction (seconds)": "motion_predict",

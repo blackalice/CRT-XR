@@ -16,10 +16,26 @@ func capture(title: String):
 	app.menu_view.get_texture().get_image().save_png("res://build/layout-review/"+title+".png")
 func page(cat: int, section := 0):
 	app.menu.mode="settings"; app.menu.category=cat; app.menu.subsection=section; app.menu.preview=false; app.menu.render()
+func check_choice_wrapping():
+	var row := preload("res://scripts/ui/setting_row.gd").new()
+	row.configure({"id":"test.long_choice", "label":"Mode", "kind":"choice", "choices":["Stretch to 4:3 broadcast"], "getter":func(): return 0})
+	root.add_child(row)
+	row.size.x = 560
+	await settle()
+	var wide_height: float = row.custom_minimum_size.y
+	check(row.title_label.get_line_count() == 1 and row.value_label.get_line_count() == 1, "A long value uses spare space beside the title")
+	row.size.x = 290
+	await settle()
+	check(row.value_label.get_line_count() > 1 and row.custom_minimum_size.y > wide_height, "A value wraps when the row genuinely runs out of space")
+	row.size.x = 560
+	await settle()
+	check(row.value_label.get_line_count() == 1 and row.custom_minimum_size.y == wide_height, "A wider row returns to one line")
+	row.free()
 func run():
 	app=load("res://scenes/main.tscn").instantiate(); root.add_child(app); app.use_tracking(false)
 	if "--wide" in OS.get_cmdline_user_args(): app.set_widescreen(true)
 	await settle()
+	await check_choice_wrapping()
 	var m=app.menu
 	for large in [false,true]:
 		app.menu_large_text=large

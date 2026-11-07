@@ -9,7 +9,7 @@ const WELL := Color("000818")
 const LO := Color("000418")
 const HI := Color("3858a0")
 const UNLIT := Color("0c1c48")
-const LIT := Color("f8c048")
+const LIT := Color("61749c")
 const BRIGHT := Color("f8d860")
 ## The focused slider glows; the others stay quiet.
 var bright := false:

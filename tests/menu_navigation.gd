@@ -120,7 +120,7 @@ func run():
     check(m.mode=="games" and m.games.game_page==2 and m.selected_id=="game:/test/Zelda.sfc","Letter jump reaches games beyond the first page")
     await button(JOY_BUTTON_B);m.open_settings()
     var unique:Dictionary={};var count:=0
-    for cat_index in range(m.CATEGORIES.size()):
+    for cat_index in m.SETTINGS_ORDER:
         var pages:Array=m.catalog.pages(cat_index)
         for section in range(pages.size()):
             page(cat_index,section);await settle()

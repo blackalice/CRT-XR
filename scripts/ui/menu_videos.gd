@@ -109,6 +109,7 @@ func video_items() -> Array:
 		if FfmpegInstaller.installed():
 			result.append(menu.entry(menu.catalog.action("library.ffmpeg_remove","Remove downloaded video libraries",func(): menu.ask("Remove the video libraries?","Videos stop playing until set up again. The files go when CRT XR next starts.",func(): FfmpegInstaller.remove(); menu.notify("Video libraries will be removed when CRT XR restarts.")),"Your videos are not touched.",false,""),"VIDEO FOLDER","clear","danger"))
 
+		result.append(menu.entry(menu.catalog.action("videos.settings", "Video settings", func(): menu.open_settings_section(1, "Videos"), "Playback, subtitles and VCR appearance."), "PREFERENCES", "gear"))
 	return result
 
 ## Search with the on-screen keys (controller) or a keyboard.
@@ -163,10 +164,10 @@ func video_pause_items() -> Array:
 	var video=h.video
 	var length := float(video.info.get("duration",0.0))
 	var tracks: PackedStringArray=video.track_names()
-	var style_row := {"id":"video.style","label":"Picture shape","kind":"choice","choices":VideoSession.STYLES,"default":h.video_style,
+	var style_row := {"id":"video.style","label":"Broadcast framing","kind":"choice","choices":VideoSession.STYLES,"default":h.video_style,
 		"getter":func(): return video.style,"setter":func(value):
 			video.set_style(int(value)); h.remember_video_position(),
-		"help":"Original keeps the source shape; other modes simulate 4:3 TV."}
+		"help":"Original aspect keeps the video shape. Other options simulate a 4:3 broadcast before TV & fit."}
 	var resume: Dictionary=menu.catalog.action("resume","Resume",h.close_settings,"Return to the video with your settings saved.",false,"▶")
 	resume=menu.entry(resume,"","play")
 	resume.merge({"hero":true,"min_height":56,"value":""})

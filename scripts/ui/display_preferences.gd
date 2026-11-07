@@ -2,7 +2,7 @@ extends RefCounted
 ## Display policy and sparse picture overrides. Runtime menu previews never
 ## become hardware calibration or another programme's inherited defaults.
 var host: Node
-var data: Dictionary = {"version":1,"last_screen":"standard","defaults":{"game":"standard","video":"wide"},"platforms":{},"games":{},"videos":{},"views":{},"pictures":{}}
+var data: Dictionary = {"version":1,"last_screen":"standard","game_tv_policy":"standard","defaults":{"game":"standard","video":"wide"},"platforms":{},"games":{},"videos":{},"views":{},"pictures":{}}
 var initialized := false
 var kind := "game"
 var system := ""
@@ -12,32 +12,83 @@ var base: Dictionary = {}
 var applied: Dictionary = {}
 var busy := false
 const DISPLAY_CHOICES := ["4:3 TV (Fit)","4:3 TV (Crop)","4:3 TV (Stretch)","Wide TV (Fit)","Wide TV (Crop)","Wide TV (Stretch)"]
-const WIDE_STRETCH_PLATFORMS := ["ps2","gamecube","psp"]
+const WIDE_TV_PLATFORMS := ["ps2","gamecube","psp"]
 const PLATFORM_DEFAULTS_VERSION := 1
+const TV_POLICIES := ["standard", "wide", "console"]
+const TV_POLICY_NAMES := ["Standard TV (4:3) for all consoles", "Wide TV (16:9) for all consoles", "TV model chosen by console"]
+const TV_POLICY_CHOICES := ["Standard TV (4:3)", "Wide TV (16:9)", "Choose by console"]
+const TV_POLICY_HELP := ["Uses the standard 4:3 TV cabinet for all consoles. Fits the game's original shape inside it, adding borders when needed. Individual overrides still apply.",
+	"Uses the wide 16:9 TV cabinet for all consoles. A 4:3 game has side borders; it is not stretched. Does not enable widescreen emulation.",
+	"Chooses the TV cabinet by console: wide for PS2, GameCube and PSP, standard for others. Each game keeps its original shape."]
 
 func reset_platform_display_defaults() -> void:
 	data.defaults.game="standard"
-	for platform in preload("res://scripts/emulation/core_registry.gd").DEFINITIONS:
-		var stretch:bool=platform in WIDE_STRETCH_PLATFORMS
-		data.platforms[platform]={"screen":"wide" if stretch else "standard"}
-		var key:="game."+("wide" if stretch else "standard")+".platform."+str(platform)
-		var stored=data.pictures.get(key,{})
-		var patch:Dictionary=stored.duplicate(true) if stored is Dictionary else {}
-		patch["picture.keep_aspect"]=not stretch
-		patch["picture.fit_mode"]=0
-		data.pictures[key]=patch
+	data.game_tv_policy="standard"
 	data.platform_defaults_version=PLATFORM_DEFAULTS_VERSION
+
+func set_tv_policy(policy: String) -> void:
+	if not policy in TV_POLICIES: return
+	commit()
+	# Old releases wrote their automatic choices as explicit console overrides.
+	# Remove only matching seed fields when the user explicitly chooses a policy.
+	if data.get("legacy_tv_seeds", false):
+		for platform in preload("res://scripts/emulation/core_registry.gd").DEFINITIONS:
+			var wide: bool = platform in WIDE_TV_PLATFORMS
+			var screen: String = "wide" if wide else "standard"
+			if entry("platforms", platform).get("screen", "") == screen: set_preference("platforms", platform, "")
+			var key: String = "game." + screen + ".platform." + str(platform)
+			var patch: Dictionary = data.pictures.get(key, {}).duplicate()
+			if patch.get("picture.keep_aspect") == not wide: patch.erase("picture.keep_aspect")
+			if patch.get("picture.fit_mode") == 0: patch.erase("picture.fit_mode")
+			if patch.is_empty(): data.pictures.erase(key)
+			else: data.pictures[key] = patch
+		data.legacy_tv_seeds = false
+	data.game_tv_policy = policy
+	data.defaults.game = "wide" if policy == "wide" else "standard"
+	for screen in ["standard", "wide"]:
+		var key: String = "game." + screen + ".screen"
+		var patch: Dictionary = data.pictures.get(key, {}).duplicate()
+		patch["picture.keep_aspect"] = true
+		patch["picture.fit_mode"] = 0
+		data.pictures[key] = patch
+	refresh_screen()
+
+func policy_row(id: String, keep_current := false) -> Dictionary:
+	var current: bool = keep_current or not data.get("game_tv_policy", "custom") in TV_POLICIES
+	var offset: int = 1 if current else 0
+	return {"id":id,"label":"TV for games","kind":"choice","visual":false,"value_width":260,
+		"choices":(["Keep current"] if current else []) + TV_POLICY_CHOICES,
+		"getter":func(): return 0 if current else TV_POLICIES.find(data.game_tv_policy),
+		"setter":func(value):
+			if int(value) >= offset:
+				set_tv_policy(TV_POLICIES[int(value) - offset])
+				if host.menu.mode == "welcome": host.menu.welcome.keep_display_preferences = false
+				host.menu.refresh(),
+		"help":"Keeps existing console and game preferences. Choose another option to change the starting TV for consoles." if current else TV_POLICY_HELP[TV_POLICIES.find(data.game_tv_policy)]}
+
+func video_tv_row(id: String) -> Dictionary:
+	return {"id":id,"label":"TV for videos","kind":"choice","choices":["Wide TV (16:9)", "Standard TV (4:3)"],"visual":false,"value_width":260,
+		"getter":func(): return 0 if data.defaults.video == "wide" else 1,
+		"setter":func(value):
+			data.defaults.video = "wide" if int(value) == 0 else "standard"
+			if kind == "video": refresh_screen()
+			host.menu.refresh(),
+		"help":"Chooses the video TV cabinet independently of games. Its ratio describes the TV screen; each video keeps its own shape and fitting."}
 
 func read(config: ConfigFile) -> void:
 	var saved = config.get_value("display_profiles","data",{})
 	var last = saved.get("last_screen", "") if saved is Dictionary else ""
 	data.last_screen = last if last in ["standard","wide"] else ("wide" if bool(config.get_value("room","widescreen",false)) else "standard")
 	if saved is Dictionary and int(saved.get("version",0)) == 1:
+		var policy: String = str(saved.get("game_tv_policy", "custom"))
+		data.game_tv_policy = policy if policy in TV_POLICIES else "custom"
+		data.legacy_tv_seeds = saved.get("legacy_tv_seeds", not saved.has("game_tv_policy")) == true
 		data["legacy_import"]=saved.get("legacy_import",true) if saved.get("legacy_import",true) is bool else true
 		for key in ["defaults","platforms","games","videos","views","pictures","migrated"]:
 			if saved.get(key) is Dictionary: data[key]=saved[key].duplicate(true)
 	elif not initialized:
 		data.defaults.game="wide" if bool(config.get_value("room","widescreen",false)) else "standard"
+		if not config.get_sections().is_empty(): data.game_tv_policy = "custom"
 	for activity in ["game","video"]:
 		if data.defaults.get(activity,"") not in ["standard","wide"]: data.defaults[activity]="wide" if activity=="video" else "standard"
 	for group in ["platforms","games","videos"]:
@@ -46,7 +97,7 @@ func read(config: ConfigFile) -> void:
 			if not item is Dictionary: data[group].erase(id)
 			elif item.get("screen","") not in ["standard","wide"]: item.erase("screen")
 	data.platform_defaults_version=saved.get("platform_defaults_version",0) if saved is Dictionary else 0
-	if data.platform_defaults_version!=PLATFORM_DEFAULTS_VERSION: reset_platform_display_defaults()
+	# Never re-seed console overrides on load: a chosen policy also covers future consoles.
 	initialized=true
 
 func screen_id() -> String:
@@ -61,6 +112,7 @@ func entry(group: String, id: String) -> Dictionary:
 
 func preferred_screen(for_kind: String, platform: String, id: String) -> String:
 	var result: String = str(data.defaults.get(for_kind,"standard"))
+	if for_kind == "game" and data.get("game_tv_policy", "custom") == "console": result = "wide" if platform in WIDE_TV_PLATFORMS else "standard"
 	if for_kind == "game": result=str(entry("platforms",platform).get("screen",result))
 	result=str(entry("games" if for_kind=="game" else "videos",id).get("screen",result))
 	return result if result in ["standard","wide"] else "standard"
@@ -169,6 +221,20 @@ func context_label() -> String:
 	if scope==1: return "%s · %s defaults" % [screen,system.to_upper()]
 	return "%s TV · %s" % [screen,"This video" if kind=="video" else "This game"]
 
+func field_source(field: String) -> String:
+	var current := live_picture()
+	if current.get(field) != applied.get(field): return "Custom at this scope"
+	var patch = data.pictures.get(target_key(), {})
+	if patch is Dictionary and patch.has(field): return "Custom at this scope"
+	var keys := picture_keys()
+	keys.pop_back()
+	keys.reverse()
+	for key in keys:
+		var parent = data.pictures.get(key, {})
+		if parent is Dictionary and parent.has(field):
+			return "Using console default" if ".platform." in key else "Using TV default"
+	return "Using TV default" if scope != 2 and not content.is_empty() else "Using app default"
+
 func save_view() -> void:
 	data.views[device_id()+"."+screen_id()]={"distance":host.distance,"height_offset":host.height_offset,"tv_scale":host.tv_scale}
 
@@ -211,7 +277,9 @@ func choose_screen(enabled: bool) -> void:
 	var selected: String="wide" if enabled else "standard"
 	if scope==0 and not content.is_empty(): set_preference("games" if kind=="game" else "videos",content,selected)
 	elif scope==1 and kind=="game" and not system.is_empty(): set_preference("platforms",system,selected)
-	else: data.defaults[kind]=selected
+	else:
+		data.defaults[kind]=selected
+		if kind == "game": data.game_tv_policy = selected
 	busy=true
 	host._switch_cabinet(enabled)
 	busy=false

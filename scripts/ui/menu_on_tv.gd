@@ -22,6 +22,10 @@ var saved := {}
 var light_countdown := -1
 
 func wanted() -> bool:
+	# TV selection is previewed behind a stationary floating setup page, rather
+	# than resizing the interface between the two cabinets' menu canvases.
+	var setup_view: bool = host.menu.mode == "welcome" or (host.menu.mode == "help" and host.menu.help_origin.get("mode", "") == "welcome")
+	if setup_view and host.menu.welcome.step == "view": return false
 	return host.menu_on_tv and host.settings_panel.visible and not host.menu.preview and is_instance_valid(host.world)
 
 ## Called by main at the start of its frame, before it decides what floats:

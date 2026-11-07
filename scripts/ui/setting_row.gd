@@ -183,16 +183,47 @@ func configure(definition: Dictionary) -> void:
 	unavailable_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	unavailable_label.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(unavailable_label)
 	content_margin.minimum_size_changed.connect(sync_content_height)
+	if item.kind == "choice" and not item.get("stacked", false):
+		resized.connect(sync_content_height)
 	pressed.connect(func(): selected.emit(item.id))
 	focus_entered.connect(func(): selected.emit(item.id))
 	refresh()
 
 func sync_content_height() -> void:
 	if content_margin==null or not content_margin.visible: return
+	if item.kind == "choice" and not item.get("stacked", false):
+		sync_choice_width()
 	# Read the containers' natural minimum, never their allocated height.
 	# This lets wrapped titles and descriptions grow the row without a size loop.
 	# A hero row (Resume) stands taller than the rows around it.
 	custom_minimum_size.y=maxf(float(item.get("min_height", 44 if item.get("compact",false) else (72 if item.get("hero",false) else 56))),content_margin.get_combined_minimum_size().y)
+
+func single_line_width(label: Label) -> float:
+	var font := label.get_theme_font("font")
+	return ceilf(font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size("font_size")).x) + 4.0
+
+func sync_choice_width() -> void:
+	var line := words.get_parent() as HBoxContainer
+	var available := size.x - content_margin.get_theme_constant("margin_left") - content_margin.get_theme_constant("margin_right")
+	available -= line.get_theme_constant("separation") * (line.get_child_count() - 1)
+	available -= value_group.get_theme_constant("separation") * (value_group.get_child_count() - 1)
+	for child in line.get_children():
+		if child != words and child != value_group: available -= child.get_combined_minimum_size().x
+	for child in value_group.get_children():
+		if child != value_label: available -= child.get_combined_minimum_size().x
+	# Rows are initially built off-screen and receive their real width at layout.
+	if available <= 0: return
+	var value_width := single_line_width(value_label)
+	var title_width := maxf(single_line_width(title_label), words.get_combined_minimum_size().x)
+	var room_beside_title := available - title_width
+	if value_width <= room_beside_title:
+		# Some selectors reserve extra space so the arrows stay fixed as values change.
+		value_width = minf(maxf(value_width, float(item.get("value_width", 0))), room_beside_title)
+	else:
+		# Share the available width when the two strings genuinely cannot fit.
+		value_width = minf(value_width, maxf(room_beside_title, floorf(available * 0.45)))
+		value_width = minf(value_width, maxf(0.0, available - words.get_combined_minimum_size().x))
+	value_label.custom_minimum_size.x = value_width
 
 # Shared: refresh() runs ten times a second per row while the menu is open.
 static var FILL_SELECTED := MenuSkin.box(MenuSkin.AMBER,Color.TRANSPARENT,0,0)
@@ -202,11 +233,8 @@ func refresh() -> void:
 	disabled=item.get("disabled",false)
 	value_label.text=formatted_value()
 	if setting_detail_label != null: setting_detail_label.text = item.detail_getter.call()
-	if item.kind in ["number", "choice"] and not item.get("stacked",false):
-		# Keep both arrows close to the actual value, while allowing long choices to wrap.
-		var font := value_label.get_theme_font("font")
-		var text_width := font.get_string_size(value_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, value_label.get_theme_font_size("font_size")).x
-		value_label.custom_minimum_size.x = minf(180.0, ceilf(text_width) + 4.0)
+	if item.kind == "number" and not item.get("stacked",false):
+		value_label.custom_minimum_size.x = single_line_width(value_label)
 	title_label.text=str(item.label)
 	for button in adjust_buttons:
 		button.visible=true; button.disabled=disabled

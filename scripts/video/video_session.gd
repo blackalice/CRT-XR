@@ -12,7 +12,7 @@ signal finished
 ## The VCR's mechanism at work: "play", "resume", "pause", "search" or "stop".
 signal mechanism(event: String)
 
-const STYLES := ["Original aspect · fit on TV", "14:9 broadcast crop", "Fill 4:3 broadcast", "Stretch to 4:3 broadcast"]
+const STYLES := ["Original aspect", "14:9 broadcast crop", "Fill 4:3 broadcast", "Stretch to 4:3 broadcast"]
 const INTERLACE_MODES := ["Field motion", "Blend"]
 const VideoLibrary = preload("res://scripts/video/video_library.gd")
 const SubtitleLayer = preload("res://scripts/video/subtitle_layer.gd")

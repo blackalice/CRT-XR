@@ -3,8 +3,8 @@ extends RefCounted
 ## Custom picture that is kept whenever a preset replaces it.
 var host: Node
 var menu: Control
-const PRESET_IDS := ["showcase","clean","rgb","auto","pal","ntsc"]
-const PRESET_NAMES := ["Deck Showcase (PAL)","Clean source","RGB CRT","Auto composite","PAL composite","NTSC composite"]
+const PRESET_IDS := ["clean","rgb","auto","pal","ntsc"]
+const PRESET_NAMES := ["Clean source","RGB CRT","Auto composite","PAL composite","NTSC composite"]
 const MY_PRESET_COUNT := 3
 var picture_undo: ConfigFile
 var my_preset := 0
@@ -15,7 +15,7 @@ func picture_signature() -> String:
 	return config.encode_to_text()
 
 func applied_preset() -> String:
-	return host.picture_preset_id if not host.picture_preset_signature.is_empty() and host.picture_preset_signature==picture_signature() else ""
+	return host.picture_preset_id if (host.picture_preset_id in PRESET_IDS or host.picture_preset_id.begins_with("mine.")) and not host.picture_preset_signature.is_empty() and host.picture_preset_signature==picture_signature() else ""
 
 func preset_caption() -> String:
 	var id := applied_preset()
@@ -28,7 +28,7 @@ func apply_preset(id: String) -> void:
 	picture_undo=host.capture_settings()
 	host.apply_picture_preset(id)
 	host.picture_preset_id=id; host.picture_preset_signature=picture_signature()
-	menu.refresh(); menu.notify("Picture preset applied · Undo available on Picture → Presets")
+	menu.refresh(); menu.notify("Picture preset applied · Undo available on TV & picture → Presets")
 
 func undo_picture_preset() -> void:
 	if picture_undo==null: return
@@ -40,7 +40,7 @@ func undo_picture_preset() -> void:
 	menu.refresh(); menu.notify("Previous picture restored")
 
 ## Choosing any preset first keeps a hand-tuned ("Custom") picture on disk, so
-## Custom in Quick settings or Picture → Presets can always bring it back.
+## Custom in Quick settings or TV & picture → Presets can always bring it back.
 func custom_picture_path() -> String:
 	return "user://presets/picture-custom.cfg"
 
@@ -92,7 +92,7 @@ func apply_my_preset(index: int) -> void:
 	if not my_preset_saved(index): return
 	remember_custom_picture()
 	apply_saved_picture(host.SettingsStore.new().read(my_preset_path(index)),"mine.%d" % index)
-	menu.refresh(); menu.notify(my_preset_name(index)+" applied · Undo available on Picture → Presets")
+	menu.refresh(); menu.notify(my_preset_name(index)+" applied · Undo available on TV & picture → Presets")
 
 func save_my_preset(index: int) -> void:
 	var title := my_preset_name(index)

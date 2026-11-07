@@ -20,7 +20,9 @@ func run():
 	app.scene_msaa=1;app.apply_scene_msaa()
 	check(app.views.all(func(view): return view.msaa_3d==Viewport.MSAA_2X),"Optional MSAA changes both eyes")
 	app.scene_msaa=0;app.apply_scene_msaa()
-	check(prefs.preferred_screen("game","psp","")=="wide" and prefs.preferred_screen("game","wii","")=="standard" and prefs.preferred_screen("game","snes","")=="standard","Selected modern platforms start wide; Wii and classic platforms remain standard")
+	check(prefs.preferred_screen("game","psp","")=="standard" and prefs.preferred_screen("game","snes","")=="standard","All consoles start on 4:3")
+	prefs.set_tv_policy("console")
+	check(prefs.preferred_screen("game","psp","")=="wide" and prefs.preferred_screen("game","wii","")=="standard","Console-specific TVs are an explicit preference")
 	app.set_widescreen(false);width(.81);app.distance=2.0
 	app.set_widescreen(true);width(.94);app.distance=3.4
 	app.set_widescreen(false)

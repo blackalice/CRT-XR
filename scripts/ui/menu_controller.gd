@@ -77,6 +77,7 @@ func discard_pause_cache() -> void:
 	pause_cache = {}
 
 var backdrop: ColorRect
+var reading_shade: ColorRect
 var reading_frame: MarginContainer
 var help_frame: PanelContainer
 var help_slot: Control
@@ -103,7 +104,8 @@ const HelpArticle = preload("res://scripts/ui/help_article.gd")
 ## Confirmation answers shown in the danger colour.
 const DESTRUCTIVE := ["Exit","Delete","Forget","Remove","Reset","Overwrite","Stop","Replace"]
 var location_bar: PanelContainer
-const CATEGORIES := ["View","Picture","Audio","Room","Controls","Saved setups","About & Help","Quick settings","Videos","Menu","Emulation"]
+const CATEGORIES := ["View & glasses","TV & picture","Sound","Room","Controls","Saved setups","Help & system","Quick settings","Videos","Menu & access","Games & controls"]
+const SETTINGS_ORDER := [0, 1, 2, 3, 10, 5, 9, 6]
 var host
 var catalog := Catalog.new()
 var library := Library.new()
@@ -117,6 +119,7 @@ var editing_id := ""
 const EVERYDAY := 7
 var subsection := 0
 var sections: Dictionary = {}
+var settings_origin: Dictionary = {}
 var memory: Dictionary = {}
 var selected_id := ""
 var items: Array = []
@@ -286,6 +289,11 @@ func _ready() -> void:
 	library.default_dir = host.default_rom_dir
 	# The space backdrop fills the whole panel; the page sits inside its frame.
 	backdrop=MenuSkin.space_backdrop(); add_child(backdrop)
+	reading_shade = ColorRect.new()
+	reading_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	reading_shade.color = Color(0.0, 0.025, 0.08, 0.82)
+	reading_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(reading_shade)
 	var frame := MarginContainer.new()
 	reading_frame=frame
 	var centred := CenterContainer.new()
@@ -415,10 +423,9 @@ func _ready() -> void:
 		sidebar.add_child(button); sidebar_buttons.append(button)
 	# Keep category IDs stable while putting the everyday route first.
 	sidebar.move_child(sidebar_buttons[7],1)
-	sidebar_buttons[EVERYDAY].hide()
-	sidebar.move_child(sidebar_buttons[8],sidebar_buttons[3].get_index()+1)
-	sidebar.move_child(sidebar_buttons[10],sidebar_buttons[5].get_index())
-	sidebar.move_child(sidebar_buttons[9],sidebar_buttons[6].get_index())
+	for hidden_category in [EVERYDAY, 4, 8]: sidebar_buttons[hidden_category].hide()
+	for i in range(SETTINGS_ORDER.size()):
+		sidebar.move_child(sidebar_buttons[SETTINGS_ORDER[i]], i + 1)
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation",8)
@@ -541,7 +548,7 @@ func _ready() -> void:
 # Left-aligned category labels need side padding without taller buttons.
 func sidebar_box(colour: Color, chosen := false) -> StyleBoxFlat:
 	# The open category is a lit bar with a light top-left edge.
-	var style := MenuSkin.box(Color("2c58c0") if chosen else colour,Color("88a8e8"),0,6)
+	var style := MenuSkin.box(Color("142852") if chosen else colour,Color("88a8e8"),0,6)
 	style.content_margin_left=12; style.content_margin_right=12
 	# Categories must fit beside a page with three lines of help. With their
 	# icons they get a little more room; Larger text hides the icons and keeps it tight.
@@ -589,6 +596,7 @@ func refresh() -> void:
 
 func open_pause() -> void:
 	remember(); clear_input()
+	settings_origin.clear()
 	# Opening the menu starts from a clean slate: no half-finished edit or rename.
 	editing_id = ""; rename_room = -1; rename_preset = -1; entry_initialized = false
 	mode = "pause"; preview = false
@@ -598,8 +606,22 @@ func open_pause() -> void:
 
 func open_settings() -> void:
 	remember(); clear_input()
+	settings_origin.clear()
 	mode = "settings"; preview = false
 	subsection = int(sections.get(category,0))
+	render()
+
+## Activity shortcuts use section titles rather than fragile numeric offsets.
+func open_settings_section(target: int, title: String) -> void:
+	remember(); clear_input()
+	if mode == "music_browser" and music.music_origin.get("mode") != "settings" or mode == "videos" and videos.video_origin.get("mode") != "settings":
+		settings_origin = snapshot()
+	mode = "settings"; preview = false; category = target
+	var pages := catalog.pages(target)
+	subsection = 0
+	for i in range(pages.size()):
+		if pages[i].title == title: subsection = i; break
+	sections[category] = subsection
 	render()
 
 func switch_category(delta: int) -> void:
@@ -653,7 +675,13 @@ func back() -> void:
 	remember(); clear_input()
 	match mode:
 		"pause": host.close_settings()
-		"settings", "library": mode="pause"; render()
+		"settings":
+			if settings_origin.is_empty(): mode="pause"; render()
+			else:
+				var origin := settings_origin
+				settings_origin = {}
+				restore(origin)
+		"library": mode="pause"; render()
 		"library_tools": mode="library"; render()
 		"browser", "volumes", "drives":
 			# A folder picker opened by first-run setup returns to it.
@@ -1151,7 +1179,9 @@ func _render(incremental: bool) -> void:
 	profile_stage = Time.get_ticks_usec()
 	sidebar.visible = mode=="settings" and not preview
 	sidebar_panel.visible = sidebar.visible
-	section_bar.visible = mode=="settings" and not preview and catalog.pages(category).size() > 1
+	# Reserve the same tab and context space on every settings page. Single-page
+	# categories must not move the sidebar, content or help when switching.
+	section_bar.visible = mode=="settings" and not preview
 	section_block.visible = section_bar.visible
 	for i in range(sidebar_buttons.size()):
 		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("3b3329") if i==category else Color.TRANSPARENT,i==category))
@@ -1440,8 +1470,10 @@ func refresh_labels() -> void:
 	elif mode=="launch": subtitle.text = ""
 	elif mode=="library_tools": subtitle.text = "Where CRT XR finds your games · Your files stay where they are"
 	elif mode=="settings":
-		if category==1: subtitle.text=context+" · "+pictures.preset_caption()
-		elif category==2 and subsection==2: subtitle.text=host.music.status
+		if category==1 and subsection < 6: subtitle.text=context
+		elif category==1 and subsection == 6: subtitle.text="TV effects · shared across games and videos"
+		elif category==1: subtitle.text="Video playback and VCR preferences"
+		elif category==2 and subsection==1: subtitle.text=host.music.status
 		else: subtitle.text="• marks a setting you've changed"
 	elif mode=="states": subtitle.text = host.emulator.rom_path.get_file().get_basename()+" · %d slots" % play.STATE_SLOTS
 	elif mode=="my_room": subtitle.text = "Room %d · %s" % [my_room+1,"✓ In use" if host.rooms.active()=="mine.%d" % my_room else ("Saved" if host.rooms.saved(my_room) else "Empty")]
@@ -1451,9 +1483,9 @@ func refresh_labels() -> void:
 	else: subtitle.text = ""
 	# Highlighted when Picture changes belong to one game or to videos, not everything.
 	subtitle.add_theme_color_override("font_color",MenuSkin.AMBER if mode=="settings" and category==1 and not host.display_settings.content.is_empty() else MenuSkin.MUTED)
-	# The pause menu and settings keep their words for the help window; the line
-	# under the title stays for browsing, where it says where you are.
-	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible and not mode in ["pause","settings"]
+	# Settings always reserve the context line, even if a status is temporarily
+	# empty. Its appearance must never move the page below it.
+	subtitle.visible = not preview and (mode == "settings" or not subtitle.text.is_empty()) and not location_bar.visible and mode != "pause"
 	subtitle_row.visible = subtitle.visible
 	show_step_marks(welcome.number() if mode=="welcome" and subtitle.visible else 0)
 	scan_icon.visible = mode=="library" and rom_index.scanning
@@ -1466,6 +1498,8 @@ func refresh_labels() -> void:
 	elif exit_selected: help_label.text = "Exit CRT XR. Your settings will be saved."
 	elif row!=null: help_label.text = str(row.item.get("help",""))
 	else: help_label.text = library.message if mode=="browser" else "Nothing here yet. {B} goes back."
+	if row != null and row.item.has("picture_field") and notification_time <= 0:
+		help_label.text = host.display_settings.field_source(row.item.picture_field) + ". " + help_label.text
 	if mode=="library":
 		help_frame.visible = not preview and not help_label.text.is_empty()
 		help_label.visible = help_frame.visible
@@ -2010,6 +2044,7 @@ func style_rows() -> void:
 	if host.menu_high_contrast: add_theme_stylebox_override("panel",MenuSkin.box(Color("000000"),Color("cccccc"),2,0))
 	else: remove_theme_stylebox_override("panel")
 	backdrop.visible=not host.menu_high_contrast
+	reading_shade.visible = mode == "settings" and not preview and not host.menu_high_contrast
 
 
 

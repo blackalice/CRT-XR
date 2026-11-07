@@ -32,6 +32,9 @@ func save_radio_url() -> void:
 func music_browser_items() -> Array:
 	var result: Array=[]
 	var entries: Array=[]
+	if menu.welcome.choosing != "music":
+		result.append(menu.entry(menu.catalog.action("music.settings", "Music & radio settings", func(): menu.open_settings_section(2, "Music"), "Radio, repeat, volume and music preferences."), menu.SECTION_HERE, "gear"))
+		result.append(menu.entry(menu.catalog.action("music.visualiser_settings", "Visualiser settings", func(): menu.open_settings_section(2, "Visualiser"), "Choose visuals, brightness and automatic changes."), menu.SECTION_HERE, "sliders"))
 	var album: Array=host.music.album_tracks(music_dir)
 	# First-run setup chooses the folder the music browser opens first.
 	if menu.welcome.choosing=="music":
