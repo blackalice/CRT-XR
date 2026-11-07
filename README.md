@@ -11,6 +11,7 @@
 
 <p align="center">
   <a href="#features">Features</a> ·
+  <a href="#new-in-development-builds">Development builds</a> ·
   <a href="https://github.com/blackalice/CRT-XR/releases">Downloads</a> ·
   <a href="#install-on-steam-deck">Steam Deck setup</a> ·
   <a href="docs/GETTING-STARTED.md">Getting started</a> ·
@@ -41,7 +42,24 @@
 
 Bring your own games and music. Cartridges can be plain files or sit alone in a ZIP (Deflate or stored; 7z and RAR are not read). Sega CD discs can be a `.cue` sheet, a `.bin` carrying the Sega CD header, or a CHD in a Sega CD folder (`segacd`, `megacd`, or a folder inside one). A zipped game shares its saves with the same game unzipped. Sega CD and Atari Lynx need their hardware's own files: the Sega CD BIOS (`bios_CD_U.bin` and friends) and the Lynx boot ROM (`lynxboot.img`). CRT XR finds them in the `bios` folder next to your `roms` folder (the EmuDeck layout), in `~/Applications/CRT-XR/bios` on the Deck, or in a `bios` folder next to `CRT-XR.exe` on Windows. The game library names anything still missing.
 
-Development checkout: experimental Dreamcast support via Flycast is available; see [Dreamcast setup and validation](docs/emulation.md#dreamcast-development). Steam Deck gameplay acceptance is pending.
+## New in development builds
+
+Development builds add five consoles beyond the 15 systems in beta.15. GameCube, Wii, PlayStation 2 and PSP are experimental Steam Deck integrations. Each requires the matching Linux core and a development opt-in. Dreamcast uses Flycast and is also available in Windows development builds.
+
+| Console | Core | Game folder | Setup and compatibility |
+|---|---|---|---|
+| Dreamcast | Flycast | `dreamcast/` | CHD, GDI and CDI, with M3U playlists for multi-disc games. The first player's VMU can appear as a floating LCD below the TV. [Dreamcast guide](docs/emulation.md#dreamcast-development) |
+| GameCube | Dolphin | `gamecube/` | ISO, GCM, RVZ and WIA. Includes C-stick and analogue trigger mappings. [GameCube guide](docs/gamecube-integration.md) |
+| Wii | Dolphin | `wii/` | ISO, RVZ, WIA and WBFS. Uses a Wii Remote with Classic Controller layout. [Wii setup](docs/wii-ps2-psp.md) |
+| PlayStation 2 | LRPS2 | `ps2/` | ISO, supported cue sheets and CHD. Requires a PS2 BIOS. Internal resolution and EE cycle rate can be set per console or game. [PS2 setup](docs/wii-ps2-psp.md) |
+| PlayStation Portable (PSP) | PPSSPP | `psp/` | ISO, CSO and PSP PBP eboots. Plays at the PSP's native widescreen resolution by default. [PSP setup](docs/wii-ps2-psp.md) |
+
+- **Choose your TV.** Use the standard 4:3 CRT or a wider 16:9 cabinet in silver or black. First-run setup lets you choose one TV for all consoles or start with choices by console. Videos have their own starting TV. Each cabinet remembers its placement for desktop and XR use.
+- **Fit the game to either TV.** A 4:3 game can play on the wide CRT with side borders, and a widescreen game can play on the standard CRT with borders above and below. **Fit** preserves the whole image and its shape, **Fill** crops the edges, and **Stretch** fills the screen by changing the shape. **Quick settings → TV & fit** adjusts both for the current game or video. [Picture controls](docs/picture-controls.md)
+- **Know what you’re editing.** The settings sidebar has eight categories. **TV & picture** shows whether changes apply to this game or video, the console, or the TV defaults. **Games & controls** groups mappings and emulator options. Video Library and the music browser open their own settings, and Back returns to the same selection.
+- **Read and adjust in place.** The settings frame stays put as you move between pages. Long choices use the space beside their labels before wrapping. **Clearer menus**, larger text, higher contrast and reduced animation are in **Menu & access → Accessibility**. The idle menu can show a drifting logo screensaver. [Settings and startup](docs/settings-and-startup.md)
+
+The menu paths below describe the development build. The public beta.15 packages listed next contain the features described in their release notes.
 
 ## Download the beta
 
@@ -159,13 +177,13 @@ In **Video Library**, select **Choose a video folder** and pick the folder holdi
 - **Windows:** choose **Set up video playback** in **Video Library**. CRT XR downloads FFmpeg's five LGPL video libraries (about 55 MB) from the public [BtbN builds](https://github.com/BtbN/FFmpeg-Builds), checks them and keeps them in its own user-data folder.
 - **Other Linux systems:** install FFmpeg 7.1 or 8 with your package manager.
 
-While watching, **A** pauses, **D-pad left/right** skips 10 seconds (hold to scrub), **up/down** skips a minute, **Y** changes the picture shape and **X** the audio track; the menu has a scrubbable timeline. Settings are in the **Videos** category: **Picture** (the video picture, shape, lines, interlacing), **VCR** (tape look, on-screen text, sounds) and **Playback** (subtitles, hardware decoding, folder). See [Videos](docs/emulation.md#videos) for details.
+While watching, **A** pauses, **D-pad left/right** skips 10 seconds (hold to scrub), **up/down** skips a minute, **Y** changes broadcast framing and **X** changes the audio track. The pause menu has a timeline you can scrub. Open **Video settings** from the Video Library or go to **TV & picture → Videos** for default framing, picture lines, interlacing, VCR effects, subtitles and hardware decoding. See [Videos](docs/emulation.md#videos) for details.
 
 ## Music and visualiser
 
 Expand **Music** on the home or pause menu to browse MP3 albums or play direct MP3 web radio. Select **Visualiser**, beside **Browse albums**, to put music visuals on the CRT. It pauses the previous game or video; **B / Escape** opens the menu while the visualiser stays active, and selecting **Visualiser** again returns to it.
 
-While viewing, **A / Space** pauses or plays music, **left/right** selects a preset, **up/down** changes brightness and **Y** toggles automatic preset changes. Automatic mode changes presets every 30 seconds; reduced animation keeps the current preset. **Audio → Visualiser** contains these settings and **Stop visualiser**, which restores the previous programme while music keeps playing. Preferences are remembered, but playback does not start automatically.
+While viewing, **A / Space** pauses or plays music, **left/right** selects a preset, **up/down** changes brightness and **Y** toggles automatic preset changes. Automatic mode changes presets every 30 seconds; reduced animation keeps the current preset. **Sound → Visualiser** contains these settings and **Stop visualiser**, which restores the previous programme while music keeps playing. Preferences are remembered, but playback does not start automatically.
 
 Three original presets are included; importing your own presets is not yet supported. Steam Deck performance and long-session checks remain pending. See the [music visualiser guide](docs/music-visualiser.md).
 
@@ -185,9 +203,9 @@ On Steam Deck, use Steam's **Gamepad With Joystick Trackpad** layout. On Windows
 | Move TV closer / farther | Right stick, when enabled | Page Up / Page Down |
 | Screenshot | Pause menu | F6 |
 
-Continue or library setup leads the home screen. Home and game pause menus include a six-tile Quick settings grid for Room, Picture, Game volume, TV distance, Screen height offset and Music volume. Select distance or height to open the compact placement preview. Videos use the same layout with video volume and playback-specific controls. In system game lists, left/right or L1/R1 changes pages of 50 games; **Jump to letter** navigates longer lists. Steam Deck starts with controller glyphs, including in Desktop Mode; pressing a keyboard key switches to keyboard prompts.
+Continue or library setup leads the home screen. Home and game pause menus include a six-tile Quick settings grid for Room, Picture, Game volume, TV distance, TV height and TV & fit. Select distance or height to open the compact placement preview. Videos use the same layout with video volume and playback-specific controls. In system game lists, left/right or L1/R1 changes pages of 50 games; **Jump to letter** navigates longer lists. Steam Deck starts with controller glyphs, including in Desktop Mode; pressing a keyboard key switches to keyboard prompts.
 
-**Reset game** is in the pause menu. **Emulation → Performance → Separate preview core** controls the separate emulator copy used by **Reduce input delay**. Save picture presets under **Picture → Presets**; accessibility options, including **Clean menu feed**, are under **Menu → Accessibility**. **Menu → Layout & placement → Menu on the TV** switches between the CRT and floating menu; **Menu depth** places the floating menu in front of the TV and dims the room in side-by-side 3D. The compact preview does not dim the room. **Menu → Audio & vibration** controls menu sounds, boot sound, menu music and controller vibration, with an independent menu music volume. Music uses a compact strip when idle or paused and expands its transport and timeline during playback. Left/right selects playback controls or seeks; up/down moves between music and game actions. Game controls follow each supported console's layout.
+**Reset game** is in the pause menu. **Games & controls → Advanced → Separate preview core** controls the separate emulator copy used by **Reduce input delay**. Save picture presets under **TV & picture → Presets**. **Clearer menus** is under **Menu & access → Accessibility**. **Menu & access → Layout & placement → Menu on the TV** switches between the CRT and floating menu. **Menu depth** places the floating menu in front of the TV and dims the room in side-by-side 3D. The compact preview does not dim the room. **Menu & access → Audio & vibration** controls menu sounds, boot sound, menu music and controller vibration, with an independent menu music volume. Music uses a compact strip when idle or paused and expands its transport and timeline during playback. Left/right selects playback controls or seeks; up/down moves between music and game actions. Game controls follow each supported console's layout.
 
 ## Updates, help and feedback
 
@@ -199,7 +217,7 @@ On Steam Deck, run the installer from a newer complete package to update the exi
 - [Development and builds](docs/DEVELOPMENT.md)
 - [Pre-launch checklist](docs/PRE-LAUNCH-CHECKLIST.md) · [Detailed beta review](docs/BETA-REVIEW.md)
 
-For a bug report, use **About & Help → Copy diagnostics** and include your device, Desktop/Gaming Mode, mono/SBS, and steps to reproduce. Review logs before sharing: they can contain local paths or radio URLs.
+For a bug report, use **Help & system → Copy diagnostics** and include your device, Desktop/Gaming Mode, mono/SBS, and steps to reproduce. Review logs before sharing: they can contain local paths or radio URLs.
 
 ## Credits and licensing
 
