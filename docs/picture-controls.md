@@ -2,7 +2,7 @@
 
 Open settings with **L1 + R1 + Start**. Use up/down to select and left/right to adjust. **A** activates actions or toggles switches; **B** goes back. **L1/R1** changes category and **L2/R2** changes subsection. **Y resets only the selected option**; **X** opens compact preview for visual settings. Closing the menu saves preferences.
 
-## Picture → Screen fit
+## TV & picture → Screen fit
 
 The whole framebuffer is mapped into a safe rectangle inside the rounded tube,
 including PAL-height and high-resolution SNES output. It does not discard
@@ -21,17 +21,16 @@ Restore full-picture fit resets these fitting controls.
 helps if the virtual TV is outside the camera frame at the current settings.
 Head tracking still lets you look away from the anchored television.
 
-## Picture → Signal and CRT
+## TV & picture → Signal and CRT
 
 Signal offers Clean, RGB CRT, PAL composite, NTSC composite and Auto composite
 presets. Auto chooses PAL below 55 Hz and NTSC otherwise, using the core's game
-rate. Deck Showcase uses PAL by default. RGB bypasses the extra composite pass.
-Picture presets preserve fitting, room and view; Deck Showcase also restores its
-recorded glass and tube-curvature settings.
+rate. The historical default picture uses PAL. RGB bypasses the extra composite pass.
+Picture presets preserve fitting, room and view. Deck Showcase is no longer offered; existing saved pictures keep their values.
 
 Your own tuned picture is never lost to a preset: choosing any preset while the
 picture is Custom first keeps it in `presets/picture-custom.cfg`. **Custom** in
-Quick settings, or **Picture → Presets → Restore my custom picture**, brings it
+Quick settings, or **TV & picture → Presets → Restore my custom picture**, brings it
 back. **My preset 1–3** on the same page save, apply, rename and delete your own
 pictures (CRT, colour and signal; screen fitting stays per game). Saved presets
 also appear by name in the Quick settings preset choice.
@@ -40,7 +39,7 @@ Display gamma controls the tube response: **lower gamma lightens midtones**.
 Brightness, contrast, saturation, warmth and hue allow further adjustment.
 Composite strength blends colour bleed into the clean signal; composite
 artifacts adds luma/chroma interference. Phase noise and moving signal artifacts
-default to 38% and 95% in Deck Showcase, matching the saved Deck setup. Set them
+retain their historical default values of 38% and 95%. Set them
 to zero for a steady signal. They stop while
 paused or in settings. Composite controls have no visible effect in RGB mode.
 

@@ -1,5 +1,6 @@
 #include "libretro_host.h"
 #include <cstdlib>
+#include <cmath>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -19,6 +20,7 @@ int main(int argc, char** argv) {
         check(!host.load_core("/missing/crt_xr-core"), "Missing core fails cleanly");
         check(host.load_core(argv[1]), "Fixture core dynamically loads");
         check(host.load_game(argv[3], argv[4]), "Legacy core option default and ROM loading work");
+        check(host.display_aspect.load() == 1.0, "Initial display aspect comes from core AV information");
         check(host.step(0) && host.width == 2 && host.height == 2, "Core framebuffer dimensions captured");
         check(host.save_ram()[6] == 15, "Every advertised controller port is initialized, including disconnected ports");
         const auto lcd = host.vmu_lcd(0);
@@ -36,6 +38,10 @@ int main(int argc, char** argv) {
         check(!state.empty() && host.step(0) && host.unserialize(state.data(), state.size()) && host.serialize() == state, "Save state round-trip restores core execution state");
         const std::uint8_t invalid = 1;
         check(!host.unserialize(&invalid, 1), "Core rejects malformed state without crashing");
+        check(host.step(1 << RETRO_DEVICE_ID_JOYPAD_SELECT) && std::abs(host.display_aspect.load() - 16.0 / 9.0) < 0.0001,
+            "Runtime geometry updates display aspect independently of the framebuffer shape");
+        check(host.step(1 << RETRO_DEVICE_ID_JOYPAD_START) && host.display_aspect.load() == 0.0,
+            "A core can clear its display aspect to use the frontend fallback");
         auto ram = host.save_ram();
         {
             const auto running = host.serialize();

@@ -77,7 +77,10 @@ func discard_pause_cache() -> void:
 	pause_cache = {}
 
 var backdrop: ColorRect
+var reading_shade: ColorRect
+var reading_frame: MarginContainer
 var help_frame: PanelContainer
+var help_slot: Control
 var subtitle_row: HBoxContainer
 var scan_icon: Control
 ## Each category's icon in the sidebar, by CATEGORIES order.
@@ -101,7 +104,8 @@ const HelpArticle = preload("res://scripts/ui/help_article.gd")
 ## Confirmation answers shown in the danger colour.
 const DESTRUCTIVE := ["Exit","Delete","Forget","Remove","Reset","Overwrite","Stop","Replace"]
 var location_bar: PanelContainer
-const CATEGORIES := ["View","Picture","Audio","Room","Controls","Saved setups","About & Help","Quick settings","Videos","Menu","Emulation"]
+const CATEGORIES := ["View & glasses","TV & picture","Sound","Room","Controls","Saved setups","Help & system","Quick settings","Videos","Menu & access","Games & controls"]
+const SETTINGS_ORDER := [0, 1, 2, 3, 10, 5, 9, 6]
 var host
 var catalog := Catalog.new()
 var library := Library.new()
@@ -115,6 +119,7 @@ var editing_id := ""
 const EVERYDAY := 7
 var subsection := 0
 var sections: Dictionary = {}
+var settings_origin: Dictionary = {}
 var memory: Dictionary = {}
 var selected_id := ""
 var items: Array = []
@@ -206,6 +211,10 @@ var entry_initialized := false
 var sound_player: AudioStreamPlayer
 var focus_tween: Tween
 var boot: Control
+var screensaver: Control
+## Seconds the open menu has gone without input; the screensaver starts after
+## host.menu_screensaver_delay of them.
+var idle_time := 0.0
 
 static func is_steam_deck() -> bool:
 	if OS.get_name()!="Linux": return false
@@ -227,6 +236,41 @@ func begin_boot() -> void:
 	boot.menu = self
 	add_child(boot)
 
+func screensaver_allowed() -> bool:
+	# Not over first-run setup, the boot sequence, typing or a preview of the picture.
+	if not host.menu_screensaver or not visible or preview or mode == "welcome": return false
+	if is_instance_valid(boot) and boot.active: return false
+	var focus := get_viewport().gui_get_focus_owner()
+	return not (focus is LineEdit)
+
+func begin_screensaver() -> void:
+	if is_instance_valid(screensaver): return
+	screensaver = preload("res://scripts/ui/menu_screensaver.gd").new()
+	screensaver.menu = self
+	add_child(screensaver)
+
+func end_screensaver() -> void:
+	idle_time = 0.0
+	if not is_instance_valid(screensaver): return
+	screensaver.finish()
+	screensaver = null
+	clear_input()
+
+static func wakes(event: InputEvent) -> bool:
+	if event is InputEventKey or event is InputEventJoypadButton or event is InputEventMouseButton: return event.pressed
+	if event is InputEventJoypadMotion: return absf(event.axis_value) > .35
+	if event is InputEventMouseMotion: return event.relative.length() > 2.0
+	return false
+
+## Any input counts as activity; while the screensaver is up it only wakes the
+## menu, so the press that brings the page back does not also act on it.
+func idle_input(event: InputEvent) -> bool:
+	if not wakes(event): return false
+	idle_time = 0.0
+	if not is_instance_valid(screensaver): return false
+	end_screensaver()
+	return true
+
 
 func _ready() -> void:
 	add_child(state_previews)
@@ -234,6 +278,8 @@ func _ready() -> void:
 		if not visible: return
 		if items.any(func(item): return item.get("thumbnail_path", "") == path) or (mode == "launch" and host.emulator.auto_path_for(games.launch_path) == path) or (mode == "confirm" and confirmation.get("preview", "") == path): refresh())
 	for helper in [pictures,videos,music,games,play,keys,controls,welcome]: helper.host=host; helper.menu=self
+	# The menu stops processing once hidden, so the screensaver is put away here.
+	visibility_changed.connect(func(): if not visible: end_screensaver())
 	theme = MenuSkin.create()
 	host.box_art.art_ready.connect(thumbnail_arrived)
 	sound_player=AudioStreamPlayer.new(); sound_player.volume_db=-28; add_child(sound_player)
@@ -243,11 +289,20 @@ func _ready() -> void:
 	library.default_dir = host.default_rom_dir
 	# The space backdrop fills the whole panel; the page sits inside its frame.
 	backdrop=MenuSkin.space_backdrop(); add_child(backdrop)
+	reading_shade = ColorRect.new()
+	reading_shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	reading_shade.color = Color(0.0, 0.025, 0.08, 0.82)
+	reading_shade.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(reading_shade)
 	var frame := MarginContainer.new()
+	reading_frame=frame
+	var centred := CenterContainer.new()
+	add_child(centred)
+	frame.custom_minimum_size=Vector2(888,664)
 	# The page gets the height: slim margins top and bottom, wider at the sides.
 	for side in ["left","right"]: frame.add_theme_constant_override("margin_"+side,18)
 	for side in ["top","bottom"]: frame.add_theme_constant_override("margin_"+side,12)
-	add_child(frame)
+	centred.add_child(frame)
 	var layout := VBoxContainer.new()
 	layout.add_theme_constant_override("separation",6)
 	frame.add_child(layout)
@@ -368,10 +423,9 @@ func _ready() -> void:
 		sidebar.add_child(button); sidebar_buttons.append(button)
 	# Keep category IDs stable while putting the everyday route first.
 	sidebar.move_child(sidebar_buttons[7],1)
-	sidebar_buttons[EVERYDAY].hide()
-	sidebar.move_child(sidebar_buttons[8],sidebar_buttons[3].get_index()+1)
-	sidebar.move_child(sidebar_buttons[10],sidebar_buttons[5].get_index())
-	sidebar.move_child(sidebar_buttons[9],sidebar_buttons[6].get_index())
+	for hidden_category in [EVERYDAY, 4, 8]: sidebar_buttons[hidden_category].hide()
+	for i in range(SETTINGS_ORDER.size()):
+		sidebar.move_child(sidebar_buttons[SETTINGS_ORDER[i]], i + 1)
 	var content := VBoxContainer.new()
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation",8)
@@ -446,13 +500,16 @@ func _ready() -> void:
 	layout.add_child(pinned); pinned.hide()
 	help_label = GlyphText.new("", 20, Color("09132b"))
 	help_label.controller=input_kind=="controller"
-	help_label.custom_minimum_size.y = 64
+	help_label.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	# Help sits in a framed message window, as console menus put their text.
 	help_frame = PanelContainer.new()
 	var window := MenuSkin.box(Color("c5d7ff"),Color("3858a0"),2,0)
 	window.content_margin_left=14; window.content_margin_right=14; window.content_margin_top=6; window.content_margin_bottom=6
 	help_frame.add_theme_stylebox_override("panel",window)
-	help_frame.add_child(help_label)
+	# A minimum on the text itself still grows when a long explanation wraps.
+	# Keep text inside a fixed slot so selection cannot resize the page.
+	help_slot=Control.new();help_slot.custom_minimum_size.y=64;help_slot.clip_contents=true
+	help_slot.add_child(help_label);help_frame.add_child(help_slot)
 	layout.add_child(help_frame)
 	hints = preload("res://scripts/ui/shortcut_footer.gd").new()
 	hints.pressed.connect(footer_pressed)
@@ -491,7 +548,7 @@ func _ready() -> void:
 # Left-aligned category labels need side padding without taller buttons.
 func sidebar_box(colour: Color, chosen := false) -> StyleBoxFlat:
 	# The open category is a lit bar with a light top-left edge.
-	var style := MenuSkin.box(Color("2c58c0") if chosen else colour,Color("88a8e8"),0,6)
+	var style := MenuSkin.box(Color("142852") if chosen else colour,Color("88a8e8"),0,6)
 	style.content_margin_left=12; style.content_margin_right=12
 	# Categories must fit beside a page with three lines of help. With their
 	# icons they get a little more room; Larger text hides the icons and keeps it tight.
@@ -539,6 +596,7 @@ func refresh() -> void:
 
 func open_pause() -> void:
 	remember(); clear_input()
+	settings_origin.clear()
 	# Opening the menu starts from a clean slate: no half-finished edit or rename.
 	editing_id = ""; rename_room = -1; rename_preset = -1; entry_initialized = false
 	mode = "pause"; preview = false
@@ -548,8 +606,22 @@ func open_pause() -> void:
 
 func open_settings() -> void:
 	remember(); clear_input()
+	settings_origin.clear()
 	mode = "settings"; preview = false
 	subsection = int(sections.get(category,0))
+	render()
+
+## Activity shortcuts use section titles rather than fragile numeric offsets.
+func open_settings_section(target: int, title: String) -> void:
+	remember(); clear_input()
+	if mode == "music_browser" and music.music_origin.get("mode") != "settings" or mode == "videos" and videos.video_origin.get("mode") != "settings":
+		settings_origin = snapshot()
+	mode = "settings"; preview = false; category = target
+	var pages := catalog.pages(target)
+	subsection = 0
+	for i in range(pages.size()):
+		if pages[i].title == title: subsection = i; break
+	sections[category] = subsection
 	render()
 
 func switch_category(delta: int) -> void:
@@ -603,7 +675,13 @@ func back() -> void:
 	remember(); clear_input()
 	match mode:
 		"pause": host.close_settings()
-		"settings", "library": mode="pause"; render()
+		"settings":
+			if settings_origin.is_empty(): mode="pause"; render()
+			else:
+				var origin := settings_origin
+				settings_origin = {}
+				restore(origin)
+		"library": mode="pause"; render()
 		"library_tools": mode="library"; render()
 		"browser", "volumes", "drives":
 			# A folder picker opened by first-run setup returns to it.
@@ -667,16 +745,14 @@ func quick_controls(video_view := false) -> Array:
 	result[2].help = "Adjust video audio." if video_view else "Adjust game audio independently of music."
 	if video_view:result[2].label="Video volume"
 	for source in catalog.pages(EVERYDAY)[0].rows:
-		if source.id=="quick.music_volume" and video_view:continue
-		if source.id in ["quick.view.distance", "quick.view.height_offset", "quick.music_volume"]:
+		if source.id in ["quick.view.distance", "quick.view.height_offset", "quick.display"]:
 			var control: Dictionary = source.duplicate()
 			control.id = str(source.id).replace("quick.", "pause.")
-			control["row_icon"] = "view" if source.id == "quick.view.distance" else ("up" if source.id == "quick.view.height_offset" else "music")
-			if source.id != "quick.music_volume":
+			control["row_icon"] = "view" if source.id == "quick.view.distance" else ("up" if source.id == "quick.view.height_offset" else "tv")
+			if source.id != "quick.display":
 				control["quick_preview"] = true
 				control["title_size"] = 18
 				control.help = "Open preview to move the TV nearer or farther." if source.id == "quick.view.distance" else "Open preview to move the screen, stand and room vertically."
-			else: control.help = "Adjust album and radio volume. Menu music has its own level."
 			result.append(control)
 	for row in result:
 		row.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"stacked":true,"compact":true,"meter":false}, true)
@@ -920,7 +996,7 @@ func _render(incremental: bool) -> void:
 		if mode == "pause":
 			for item in items: item.erase("layout")
 	column.add_theme_constant_override("separation", 4 if mode == "pause" else 6)
-	help_label.custom_minimum_size.y = 32 if mode == "pause" else 64
+	help_slot.custom_minimum_size.y = 32 if mode == "pause" else 64
 	var pause_key := pause_shape(items) if mode == "pause" and not preview else ""
 	var reuse_pause: bool = not pause_key.is_empty() and pause_cache.get("key", "") == pause_key
 	if reuse_pause:
@@ -985,16 +1061,17 @@ func _render(incremental: bool) -> void:
 					for side in ["left","top","right","bottom"]: inset.add_theme_constant_override("margin_"+side,8)
 					panel.add_child(inset); column.add_child(panel)
 					music_layout=VBoxContainer.new(); music_layout.add_theme_constant_override("separation",6); inset.add_child(music_layout)
-					var display := HBoxContainer.new(); display.add_theme_constant_override("separation",12); music_layout.add_child(display)
-					var lcd := LcdReadout.new(); lcd.source=helper.deck_state; display.add_child(lcd)
-					var words := VBoxContainer.new(); words.add_theme_constant_override("separation",0)
-					words.size_flags_horizontal=Control.SIZE_EXPAND_FILL; words.alignment=BoxContainer.ALIGNMENT_CENTER; display.add_child(words)
-					music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
-					deck_detail=Label.new(); deck_detail.add_theme_font_size_override("font_size",16); deck_detail.add_theme_color_override("font_color",MenuSkin.MUTED)
-					for line in [music_heading,deck_detail]:
-						line.autowrap_mode=TextServer.AUTOWRAP_OFF; line.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
-						MenuSkin.shadow(line); words.add_child(line)
-					deck_text=helper.deck_text
+					if item.get("deck_header",true):
+						var display := HBoxContainer.new(); display.add_theme_constant_override("separation",12); music_layout.add_child(display)
+						var lcd := LcdReadout.new(); lcd.source=helper.deck_state; display.add_child(lcd)
+						var words := VBoxContainer.new(); words.add_theme_constant_override("separation",0)
+						words.size_flags_horizontal=Control.SIZE_EXPAND_FILL; words.alignment=BoxContainer.ALIGNMENT_CENTER; display.add_child(words)
+						music_heading=Label.new(); music_heading.add_theme_font_size_override("font_size",20); MenuSkin.weigh(music_heading,MenuSkin.SEMIBOLD)
+						deck_detail=Label.new(); deck_detail.add_theme_font_size_override("font_size",16); deck_detail.add_theme_color_override("font_color",MenuSkin.MUTED)
+						for line in [music_heading,deck_detail]:
+							line.autowrap_mode=TextServer.AUTOWRAP_OFF; line.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
+							MenuSkin.shadow(line); words.add_child(line)
+						deck_text=helper.deck_text
 				if item.layout=="transport":
 					if transport_grid==null:
 						transport_grid=HBoxContainer.new(); transport_grid.add_theme_constant_override("separation",6); music_layout.add_child(transport_grid)
@@ -1102,7 +1179,9 @@ func _render(incremental: bool) -> void:
 	profile_stage = Time.get_ticks_usec()
 	sidebar.visible = mode=="settings" and not preview
 	sidebar_panel.visible = sidebar.visible
-	section_bar.visible = mode=="settings" and not preview and catalog.pages(category).size() > 1
+	# Reserve the same tab and context space on every settings page. Single-page
+	# categories must not move the sidebar, content or help when switching.
+	section_bar.visible = mode=="settings" and not preview
 	section_block.visible = section_bar.visible
 	for i in range(sidebar_buttons.size()):
 		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("3b3329") if i==category else Color.TRANSPARENT,i==category))
@@ -1160,8 +1239,7 @@ func _render(incremental: bool) -> void:
 	location_bar.visible = not place.is_empty() and not preview
 	if location_bar.visible: location_bar.show_path(place,library.home_folder(),library.cards())
 	subtitle.visible = not preview and not location_bar.visible
-	position = Vector2(36,522) if preview else Vector2(36,28)
-	size = Vector2(888,170) if preview else Vector2(888,664)
+	fit_panel()
 	help_label.visible = not preview and not mode in ["help","library","games","launch"] and not (mode=="welcome" and welcome.step=="welcome") # These pages use the room for content.
 	# The Welcome page is the boot logo's landing place: no title bar above it.
 	heading.get_parent().visible = not (mode=="welcome" and welcome.step=="welcome")
@@ -1228,8 +1306,11 @@ func _render(incremental: bool) -> void:
 		print("PROFILE_MENU ", mode, " ", JSON.stringify(profile_stages))
 
 func fit_panel() -> void:
-	position = Vector2(36,522) if preview else Vector2(36,28)
-	size = Vector2(888,170) if preview else Vector2(888,664)
+	# The reading area stays 4:3. Only the backdrop/frame grows with a wide feed.
+	if reading_frame!=null: reading_frame.custom_minimum_size=Vector2(888,170 if preview else 664)
+	var wide: bool=not preview and host.menu_view.size.x>960
+	position = Vector2.ZERO if wide else (Vector2(36,522) if preview else Vector2(36,28))
+	size = Vector2(host.menu_view.size) if wide else Vector2(888,170 if preview else 664)
 
 func restore_scroll(value: int, revision: int) -> void:
 	# Let wrapped text establish row heights before restoring the saved viewport.
@@ -1366,10 +1447,7 @@ func refresh_labels() -> void:
 	var row = selected_row()
 	# Picture pages change whichever picture is in use; say which, plainly.
 	var context: String
-	if host.active_game_key==host.VIDEO_PROFILE: context="Editing the video picture · all videos"
-	elif not host.active_game_key.is_empty(): context="Editing %s's picture · this game only" % host.emulator.rom_path.get_file().get_basename()
-	elif host.video.loaded: context="Editing the global picture · games, videos and test signal"
-	else: context="Editing the global picture · games and test signal"
+	context="Editing " + host.display_settings.context_label()
 	if mode=="pause":
 		if host.video.loaded: subtitle.text = "Video · paused" if host.video.paused else "Video"
 		elif host.emulator.loaded: subtitle.text = library.Registry.SYSTEMS.get(host.emulator.system_id, {}).get("name", "Game") + " · paused"
@@ -1392,8 +1470,10 @@ func refresh_labels() -> void:
 	elif mode=="launch": subtitle.text = ""
 	elif mode=="library_tools": subtitle.text = "Where CRT XR finds your games · Your files stay where they are"
 	elif mode=="settings":
-		if category==1: subtitle.text=context+" · "+pictures.preset_caption()
-		elif category==2 and subsection==2: subtitle.text=host.music.status
+		if category==1 and subsection < 6: subtitle.text=context
+		elif category==1 and subsection == 6: subtitle.text="TV effects · shared across games and videos"
+		elif category==1: subtitle.text="Video playback and VCR preferences"
+		elif category==2 and subsection==1: subtitle.text=host.music.status
 		else: subtitle.text="• marks a setting you've changed"
 	elif mode=="states": subtitle.text = host.emulator.rom_path.get_file().get_basename()+" · %d slots" % play.STATE_SLOTS
 	elif mode=="my_room": subtitle.text = "Room %d · %s" % [my_room+1,"✓ In use" if host.rooms.active()=="mine.%d" % my_room else ("Saved" if host.rooms.saved(my_room) else "Empty")]
@@ -1402,10 +1482,10 @@ func refresh_labels() -> void:
 	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
 	else: subtitle.text = ""
 	# Highlighted when Picture changes belong to one game or to videos, not everything.
-	subtitle.add_theme_color_override("font_color",MenuSkin.AMBER if mode=="settings" and category==1 and not host.active_game_key.is_empty() else MenuSkin.MUTED)
-	# The pause menu and settings keep their words for the help window; the line
-	# under the title stays for browsing, where it says where you are.
-	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible and not mode in ["pause","settings"]
+	subtitle.add_theme_color_override("font_color",MenuSkin.AMBER if mode=="settings" and category==1 and not host.display_settings.content.is_empty() else MenuSkin.MUTED)
+	# Settings always reserve the context line, even if a status is temporarily
+	# empty. Its appearance must never move the page below it.
+	subtitle.visible = not preview and (mode == "settings" or not subtitle.text.is_empty()) and not location_bar.visible and mode != "pause"
 	subtitle_row.visible = subtitle.visible
 	show_step_marks(welcome.number() if mode=="welcome" and subtitle.visible else 0)
 	scan_icon.visible = mode=="library" and rom_index.scanning
@@ -1418,6 +1498,8 @@ func refresh_labels() -> void:
 	elif exit_selected: help_label.text = "Exit CRT XR. Your settings will be saved."
 	elif row!=null: help_label.text = str(row.item.get("help",""))
 	else: help_label.text = library.message if mode=="browser" else "Nothing here yet. {B} goes back."
+	if row != null and row.item.has("picture_field") and notification_time <= 0:
+		help_label.text = host.display_settings.field_source(row.item.picture_field) + ". " + help_label.text
 	if mode=="library":
 		help_frame.visible = not preview and not help_label.text.is_empty()
 		help_label.visible = help_frame.visible
@@ -1568,6 +1650,9 @@ func navigate(next: Vector2i) -> void:
 		if rows[i].item.id==selected_id: index=i
 	if index<0: return
 	var from_row = rows[index]
+	if rows[index].item.get("layout","")=="transport" and editing_id==selected_id:
+		if next.x!=0: adjust(next.x); return
+		finish_editing()
 	if rows[index].item.get("layout","")=="tile" or rows[index].item.get("game_grid",false):
 		var position: int=rows[index].item.tile_index
 		var count: int=rows[index].item.tile_count
@@ -1701,7 +1786,8 @@ func activate() -> void:
 func reset_option() -> void:
 	var row = selected_row()
 	if row==null or row.disabled or not row.item.has("default"): return
-	row.item.setter.call(row.item.default)
+	if row.item.has("reset"): row.item.reset.call()
+	else: row.item.setter.call(row.item.default)
 	row.refresh(); notify("Selected option restored to its default")
 
 func toggle_preview() -> void:
@@ -1866,6 +1952,12 @@ func update_direction() -> void:
 		if next!=Vector2i.ZERO: navigate(next)
 
 func _process(delta: float) -> void:
+	if screensaver_allowed():
+		idle_time += delta
+		if idle_time >= host.menu_screensaver_delay: begin_screensaver()
+	else:
+		idle_time = 0.0
+		if is_instance_valid(screensaver): end_screensaver()
 	if is_instance_valid(boot) and boot.active: return
 	scan_refresh_elapsed+=delta
 	var welcome_found := mode=="welcome" and welcome.step=="found"
@@ -1952,6 +2044,7 @@ func style_rows() -> void:
 	if host.menu_high_contrast: add_theme_stylebox_override("panel",MenuSkin.box(Color("000000"),Color("cccccc"),2,0))
 	else: remove_theme_stylebox_override("panel")
 	backdrop.visible=not host.menu_high_contrast
+	reading_shade.visible = mode == "settings" and not preview and not host.menu_high_contrast
 
 
 

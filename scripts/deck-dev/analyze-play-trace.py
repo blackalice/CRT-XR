@@ -41,7 +41,7 @@ def summarise(path):
         return
     start = events[0]['t']
     context = {}
-    games = defaultdict(lambda: {'ticks': [], 'draws': [], 'emu': [], 'time': 0.0, 'target': 60.0, 'system': ''})
+    games = defaultdict(lambda: {'ticks': [], 'draws': [], 'emu': [], 'time': 0.0, 'target': 60.0, 'system': '', 'refresh': set()})
     last_t = None
     for e in events:
         kind = e.get('k')
@@ -57,6 +57,8 @@ def summarise(path):
         g = games[context['game']]
         g['system'] = context.get('system', '')
         g['target'] = context.get('target_fps') or g['target']
+        # The launch-time rate in 'start' can predate the glasses' SBS mode.
+        if context.get('refresh'): g['refresh'].add(round(context['refresh'], 2))
         if kind == 'tick':
             g['ticks'].append((e['t'], e['gap']))
         elif kind == 'draw':
@@ -88,7 +90,8 @@ def summarise(path):
             if previous is not None and d > previous:
                 drops_at.append(e['t'])
             previous = d
-        print(f"\n  {name}  [{g['system']}]  {seconds / 60:.1f} min playing")
+        print(f"\n  {name}  [{g['system']}]  {seconds / 60:.1f} min playing"
+              + (f"  (display {', '.join(f'{r:g}' for r in sorted(g['refresh']))} Hz)" if g['refresh'] else ""))
         print(f"    room   : {room_hz:.2f} Hz  frame ms p50/p95/p99/max {pct(ticks, .5):.1f}/{pct(ticks, .95):.1f}/{pct(ticks, .99):.1f}/{max(ticks):.1f}"
               f"  missed vsync (>20 ms) {sum(t > 20 for t in ticks)}  (>34 ms) {sum(t > 34 for t in ticks)}")
         if draws:

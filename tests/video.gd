@@ -91,7 +91,7 @@ func run() -> void:
 	# the shown frame is the latest one due rather than a fixed time.
 	var shown: float = session.decoder.frame_time()
 	check(session.clock > 0.1 and shown <= session.clock and session.clock - shown < 0.08, "Shown frames follow the clock (frame %.3f, clock %.3f)" % [shown, session.clock])
-	check(session.cycle_style() == "14:9" and session.decoder.get_style() == 1, "Style cycling reaches the decoder")
+	check(session.cycle_style() == session.STYLES[1] and session.decoder.get_style() == 1, "Style cycling reaches the decoder")
 	session.seek_by(10.0)
 	check(session.clock <= 3.5, "Seeking clamps inside the file")
 	await play_for(session, 1.5)

@@ -1,0 +1,8 @@
+FROM ubuntu:22.04@sha256:5ec03bb3441e8b0bf3b4f9cd4629a1ae763010dc3035bb8da3ae6cf026486401
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    build-essential g++-12 ninja-build make pkg-config git ca-certificates python3 python3-pip \
+    zlib1g-dev libgl-dev libegl-dev binutils file \
+    && python3 -m pip install --no-cache-dir cmake==3.28.4 \
+    && rm -rf /var/lib/apt/lists/*
+ENV CC=gcc-12 CXX=g++-12
+WORKDIR /work

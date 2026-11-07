@@ -10,18 +10,20 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 
 | Category | Subsections |
 |---|---|
-| Quick settings | TV distance; height; recenter; picture preset; game volume; music volume |
-| View | Placement; Display; Tracking; Advanced calibration |
-| Picture | Presets; CRT; Screen fit; Colour; Signal |
-| Audio | TV sound; Balance; Music; Music space; TV effects |
-| Room | Presets; Lighting; Materials; Props; Sound; Placement |
-| Controls | Game controls; Controller |
-| Emulation | Consoles; This game; Performance; Info |
-| Saved setups | Setup slots; Per-game picture |
-| Menu | Accessibility; Layout & placement; Audio & vibration |
-| About & Help | About, controls, device status, troubleshooting, credits and diagnostics; Settings management |
+| View & glasses | TV placement; Screen & stereo; Tracking; Advanced calibration |
+| TV & picture | TV & defaults; Presets; CRT; Game/video fit; Colour; Signal; TV effects; Videos |
+| Sound | TV sound (including volume balance); Music; Music space; Visualiser |
+| Room | Presets; Lighting (including screen glow/bloom); Surfaces; Props; Ambience; Placement |
+| Games & controls | Consoles; This game; Advanced; Info; Game controls; View controls; Dreamcast VMU while playing Dreamcast |
+| Saved setups | Three personal setup slots and undo |
+| Menu & access | Accessibility; Layout & placement; Screensaver; Audio & vibration |
+| Help & system | Help, setup, device status, diagnostics and settings management |
 
-**Console region** (Menu → Layout & placement) chooses PAL (Europe, the default), NTSC (Americas) or Japan. It changes only how consoles are named and pictured in the menus; games, saves and folder recognition are unaffected. Consoles that differ by region:
+Category IDs stay stable internally, but Controls and Videos no longer occupy separate sidebar entries. Quick settings remain on Home/pause. Video Library offers Video settings; the music browser offers Music & radio settings and Visualiser settings. These shortcuts open the same settings used by the main sidebar. Back returns to the originating library or music folder.
+
+Every settings page reserves the same header, context line, tab strip, sidebar, scrolling content area and help area. Single-section categories retain their tab strip. Switching categories or showing picture scope must not shift the frame. Settings dim the decorative backdrop and only the focused slider uses amber.
+
+**Console names & icons** (Menu & access → Layout & placement) chooses PAL (Europe, the default), NTSC (Americas) or Japan. It changes only how consoles are named and pictured in the menus; games, saves and folder recognition are unaffected. Consoles that differ by region:
 
 | Console | PAL | NTSC | Japan |
 |---|---|---|---|
@@ -41,7 +43,7 @@ Up/down selects, left/right adjusts immediately, A toggles switches or opens act
 and Y resets only the selected option. There is no edit lock. L1/R1 changes category;
 L2/R2 changes subsection once per trigger press. Category and subsection selection use
 a quiet category fill and section underline; the focused setting gets the strongest amber border.
-Quick settings appears first in the sidebar; category shortcuts follow that visual order.
+Quick settings live on Home/pause; category shortcuts follow the sidebar order.
 Subsections stay on one line with input-specific navigation hints beside them.
 Scroll edges fade only where more content is available, alongside a clearer scrollbar.
 
@@ -50,7 +52,7 @@ Tab changes category, and Z/C changes subsection. Hints follow the last-used inp
 method. Pointer hover does not steal selection. Disabled sound and composite options
 show a reason and cannot be changed using their arrows.
 
-Audio includes Preview sound, which plays the existing licensed CRT sample through
+Sound includes Preview sound, which plays the existing licensed CRT sample through
 the selected sound mode while emulation remains paused. Original bypasses the effects;
 TV speakers enables speaker character; TV in room additionally enables room amount
 and directional strength.
@@ -71,7 +73,7 @@ inside the same row. Y opens a scrollable full-title view (or clears an active s
 pointer users can also hover for the full title. Long descriptive values appear below their labels. Numeric rows
 show the minimum and maximum beside the track; a full Scanlines track explicitly means the 70% maximum. A dot
 marks values changed from their defaults. Presets include a look description and active
-checkmark; manual edits show Custom. Picture → Presets offers Undo picture preset.
+checkmark; manual edits show Custom. TV & picture → Presets offers Undo picture preset.
 Changes persist when closing the menu, with Saved feedback only after a successful write.
 
 New manual and automatic saves include a small game-frame thumbnail with the existing
@@ -80,16 +82,18 @@ selects Cancel first. Older saves remain readable and can lack thumbnails. Conti
 shows the automatic resume preview. Preview capture reuses the presented CPU frame.
 
 About & Help includes scrollable controls, troubleshooting, device status, full credits
-and diagnostics. Device status stays separate from the selected action’s help. Menu → Accessibility provides larger text, stronger contrast, reduced animation and Clean menu feed. The menu on the CRT uses the current picture settings by default, including colour, CRT effects, fitting and composite decoding. Clean menu feed restores the separate RGB reading picture without changing game settings. Auto composite keeps the current programme’s PAL/NTSC rate while the menu is shown. Menu layout and placement, sounds and vibration have their own sections.
+and diagnostics. Device status stays separate from the selected action’s help. Menu & access → Accessibility provides larger text, stronger contrast, reduced animation and Clearer menus. The menu on the CRT uses the current picture settings by default, including colour, CRT effects, fitting and composite decoding. Clearer menus restores the separate RGB reading picture without changing game settings. Auto composite keeps the current programme’s PAL/NTSC rate while the menu is shown. Menu layout and placement, sounds and vibration have their own sections.
+
+**Screensaver** (Menu → Screensaver, on by default) takes over when the open menu has had no input for the chosen time (30 seconds to 15 minutes, default 2 minutes). The page fades away and the logo card drifts diagonally across the space backdrop, taking a new colour at every edge. Any key, button, stick push or click brings the page straight back; that input is used only to wake the menu, so it never selects or changes anything. It does not start during first-run setup, the boot sequence, adjust-with-preview or while typing in a text field. With Reduced animation the logo moves to a new resting place every few seconds instead of drifting.
 Focus transitions only change colour; the UI remains a sharp shared 2D texture.
 Controller shortcuts use drawn button icons and follow the last input method. With Menu sounds enabled, valid L1/R1 category or game-page changes and L2/R2 subsection changes play the supplied click. Held controls, ignored shortcuts and page boundaries stay silent.
 
 ## Compact adjustment preview
 
 Home and the paused-game menu carry six Quick settings in a three-column,
-two-row grid: Room, Picture, Game volume, TV distance, Screen height offset and
-Music volume (the album/radio player, independent of the menu background loop).
-TV distance and height open the floating bottom preview strip with A / Enter or
+two-row grid: Room, Picture, Game volume, TV distance, TV height and TV & fit.
+Music volume lives with the music transport and is independent of menu music.
+TV distance and TV height open the floating bottom preview strip with A / Enter or
 a pointer click. Left/right adjusts, up/down switches between those two controls,
 Y resets, and B returns to the same quick tile while gameplay stays paused.
 The default Home (including Continue) and game-pause layouts fit without a
@@ -143,18 +147,21 @@ physical display mode and tracking provider. Undo restores previous in-memory
 preferences. Each slot retains its existing previous-version backup. Reset-all
 and exiting also ask for confirmation; ordinary adjustments and closing do not.
 
-## Per-game picture
+## Starting TV preferences
 
-Off by default to keep the Showcase picture global; switch it on in Saved setups. Each ROM's content SHA-256 is
-its identity, so moving or renaming a game retains its preferences. Picture
-fitting, CRT/glass/curvature and signal/colour settings are remembered. Room,
-view, input preview and hardware calibration remain global.
+First-run setup → Your view begins with Your TV. TV for games offers Standard TV (4:3), the new-user default; Wide TV (16:9); and Choose by console. The latter uses widescreen for PS2, GameCube and PSP and 4:3 for other consoles. All use Fit with original proportions, rather than automatic cropping or stretching. TV for videos is independent and defaults to Wide TV (16:9). The ratios describe each TV model's screen, rather than a forced game aspect ratio; the setup page explains this above both selectors. Fixed-width values keep the controls stationary while choices change. The TVs, game shape & fitting guide is available beside the setup choices and on the TV/defaults and fitting settings pages. It explains Fit, Fill/crop and Stretch in both directions, including 4:3 games on the wide TV, handheld shapes, and games with their own widescreen options.
 
-Switching or stopping games saves the outgoing picture and restores the global
-baseline before loading the next game's override. A game with no override uses
-global picture preferences. **Use global picture settings for this game** clears
-its override; future global changes apply until you customise it again.
-To change the global picture baseline, return to the test signal and adjust it.
+The same choices live in TV & picture → TV & defaults. These are starting preferences: deliberate console and game overrides continue to win. New consoles follow the selected policy, and loading settings never re-seeds console overrides. Older preferences retain their appearance until a policy is explicitly chosen; matching historical automatic TV/stretch fields are then removed, while other custom fields are retained. An old manual value identical to an automatic seed cannot be distinguished from that seed.
+
+Rerunning setup initially offers Keep current. Your view floats while selecting and positioning TVs, so changing cabinet does not resize or reposition the menu. The selected menu placement takes effect after leaving this step. All set summarises game and video TV choices.
+
+## Picture scope and inheritance
+
+TV & picture → TV & defaults shows starting TV choices when editing defaults, or a cabinet override when editing a specific console, game or video. The scope selector appears when there is a game or video context: This game/video, Console defaults, or TV defaults. Games inherit console and TV defaults; videos inherit their TV defaults. Each TV keeps independent game and video pictures.
+
+The editing context remains visible across all six picture sections. When content is loaded, the other picture sections also offer a compact Apply changes to selector. Selected-control help identifies inherited or custom values. Y restores the inherited value; Use inherited picture settings clears picture/fitting overrides at the displayed scope. TV effects and video playback preferences identify their broader scope separately.
+
+Picture looks, room presets and saved setups remain distinct: picture looks change CRT/colour/signal; room presets change the environment; saved setups capture view, room, picture and emulation preview preferences. Deck Showcase is no longer offered as a preset or setup. Existing saved values are retained and its old picture identity appears as Custom.
 
 Preferences live in Godot's user-data folder: `settings.cfg`, `recent.cfg`,
 `presets/slot-N.cfg` and `games/ROM-SHA256.cfg`. Files are written to a temporary
@@ -310,7 +317,7 @@ The default setup was captured from the user's saved Steam Deck preferences on 1
 - TV-in-room audio: room amount 18%, speaker character 15%, directional strength 80%.
 - Metrics overlay off. Per-game picture off by default, matching the captured configuration.
 
-**Picture → Presets → Deck Showcase (PAL)** restores the picture, glass and curvature while retaining screen fitting, room and view. **Saved setups → Setup slots → Deck Showcase** restores the full built-in view/room/picture/audio setup and hides metrics, with Undo available. It occupies none of the three writable setup slots and retains the current display mode, platform field of view, tracking axes and per-game preference. Other CRT/composite presets now use stronger scanline/mask/glow settings and composite movement; Clean source remains the comparison reference.
+**TV & picture → Presets → Deck Showcase (PAL)** restores the picture, glass and curvature while retaining screen fitting, room and view. **Saved setups → Setup slots → Deck Showcase** restores the full built-in view/room/picture/audio setup and hides metrics, with Undo available. It occupies none of the three writable setup slots and retains the current display mode, platform field of view, tracking axes and per-game preference. Other CRT/composite presets now use stronger scanline/mask/glow settings and composite movement; Clean source remains the comparison reference.
 
 Existing saved settings and per-game overrides are retained. New installs and explicit defaults resets use Showcase. Metrics is a persistent toggle under **View → Tracking → Metrics overlay**; F1 also toggles it. Closing the menu saves the choice. Native FOV remains platform-specific (24° for glasses tracking, 50° for the desktop simulation), rather than forcing the captured glasses calibration into desktop previews.
 

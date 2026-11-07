@@ -1,13 +1,12 @@
 extends SubViewport
 ## Burns subtitles into the picture before it reaches the CRT, so they get the
 ## same scanlines, mask and composite colour as the programme, like subtitles
-## on a broadcast or a DVD. Text is laid out in 4:3 display space and squashed
+## on a broadcast or a DVD. Text is laid out in source display space and squashed
 ## to the frame's line count (a 640x240 frame has tall pixels); picture
 ## subtitles arrive already placed in frame pixels. The VCR's green on-screen
 ## display (PLAY, PAUSE, FF, REW) is drawn here too, for the same reason.
 ## With a VHS tape look, the picture itself plays through the tape shader
 ## first; the VCR's text and subtitles stay clean on top, as a VCR adds them.
-const DISPLAY_HEIGHT_PER_WIDTH := 0.75
 const VCR_FONT := preload("res://assets/fonts/VCR_OSD_MONO.ttf")
 const VCR_GREEN := Color("38ff52")
 var picture := TextureRect.new()
@@ -52,13 +51,13 @@ func set_tape(look: int) -> void:
 	tape.set_shader_parameter("wear", TAPE_WEAR[tape_look])
 	picture.material = tape if tape_look > 0 else null
 
-func setup(frame: Texture2D, width: int, height: int) -> void:
+func setup(frame: Texture2D, width: int, height: int, aspect := 4.0/3.0) -> void:
 	size = Vector2i(width, height)
 	picture.texture = frame
 	tape.set_shader_parameter("frame", frame)
 	picture.size = Vector2(width, height)
 	images.size = Vector2(width, height)
-	var display := Vector2(width, width * DISPLAY_HEIGHT_PER_WIDTH)
+	var display := Vector2(width, width / maxf(aspect,.2))
 	stage.size = display
 	stage.scale = Vector2(1.0, height / display.y)
 	# Inside the safe area a CRT shows: clear of the curved edges and the bars.

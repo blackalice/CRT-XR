@@ -22,6 +22,10 @@ var saved := {}
 var light_countdown := -1
 
 func wanted() -> bool:
+	# TV selection is previewed behind a stationary floating setup page, rather
+	# than resizing the interface between the two cabinets' menu canvases.
+	var setup_view: bool = host.menu.mode == "welcome" or (host.menu.mode == "help" and host.menu.help_origin.get("mode", "") == "welcome")
+	if setup_view and host.menu.welcome.step == "view": return false
 	return host.menu_on_tv and host.settings_panel.visible and not host.menu.preview and is_instance_valid(host.world)
 
 ## Called by main at the start of its frame, before it decides what floats:
@@ -29,9 +33,11 @@ func wanted() -> bool:
 ## up full size for one frame as the menu opened.
 func update(delta: float) -> void:
 	var want := wanted()
+	var canvas_changed := sync_canvas(want)
 	if want and not active: enter()
 	elif active and not want: leave()
 	elif active and host.world.picture.source_texture != menu_texture(): adopt()
+	elif active and canvas_changed: show_menu()
 	if active:
 		if clean_feed != host.menu_clean_feed: apply_picture()
 		apply_tube()
@@ -49,11 +55,22 @@ func update(delta: float) -> void:
 func menu_texture() -> Texture2D:
 	return host.menu_view.get_texture()
 
+func sync_canvas(on_tv: bool) -> bool:
+	var dimensions:=Vector2i(1280 if on_tv and host.world.widescreen else 960,720)
+	if host.menu_view.size==dimensions: return false
+	host.menu_view.size=dimensions
+	host.menu.fit_panel()
+	if is_instance_valid(host.menu_depth_view):
+		for material in host.menu_depth_view.materials: material.set_shader_parameter("tex_size",Vector2(dimensions))
+	return true
+
 ## Where the TV sits: at `base`, or eased in and centred while the menu is on it.
 func lean_position(base: Vector3) -> Vector3:
 	if lean <= 0.0: return base
 	var vertical := tan(deg_to_rad(float(host.vertical_fov)) * 0.5)
-	var near := clampf(TUBE_HALF_HEIGHT * float(host.tv_scale) / (vertical * FILL), 0.8, -base.z)
+	var aspect:=float(host.views[0].size.x)/maxf(float(host.views[0].size.y),1.0)
+	var half_width: float=.88 if host.world.widescreen else .66
+	var near := clampf(maxf(TUBE_HALF_HEIGHT,half_width/aspect) * float(host.tv_scale) / (vertical * FILL), 0.8, -base.z)
 	return base.lerp(Vector3(0.0, 1.25, -near), lean * lean * (3.0 - 2.0 * lean))
 
 func enter() -> void:
@@ -68,6 +85,7 @@ func enter() -> void:
 func apply_picture() -> void:
 	clean_feed = host.menu_clean_feed
 	var picture: Node = host.world.picture
+	picture.menu_fitting = true
 	if clean_feed:
 		var drawn := BEAM.duplicate()
 		drawn.merge({"width": 1.0, "height": 1.0, "shift_x": 0.0, "shift_y": 0.0})
@@ -96,12 +114,13 @@ func show_menu() -> void:
 	var picture: Node = host.world.picture
 	# Auto composite keeps the programme's PAL/NTSC standard while the menu is shown.
 	picture.source_rate = saved.rate
-	picture.source_aspect = 4.0 / 3.0
+	picture.source_aspect = float(host.menu_view.size.x)/float(host.menu_view.size.y)
 	picture.set_source(menu_texture())
 
 func leave() -> void:
 	active = false
 	var picture: Node = host.world.picture
+	picture.menu_fitting = false
 	picture.override = {}
 	# Choosing a game loads it (the loading card or its picture takes the tube)
 	# and closes the menu in the same frame, before update() can adopt it. Put

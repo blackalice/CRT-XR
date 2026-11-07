@@ -122,6 +122,14 @@ RETRO_API void retro_run() {
     ++counter;
     poll();
     const bool pressed = input(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_B);
+    if (input(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_SELECT)) {
+        retro_game_geometry geometry{2, 2, 2, 2, 16.0f / 9.0f};
+        environment(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
+    }
+    if (input(0, RETRO_DEVICE_JOYPAD, 0, RETRO_DEVICE_ID_JOYPAD_START)) {
+        retro_game_geometry geometry{2, 2, 2, 2, -1.0f};
+        environment(RETRO_ENVIRONMENT_SET_GEOMETRY, &geometry);
+    }
     // Dolphin polls input on its emulated CPU thread. Exercise the same C
     // callbacks without any calling-thread host scope, then join before video.
     std::thread cpu([&] {

@@ -16,9 +16,26 @@ func capture(title: String):
 	app.menu_view.get_texture().get_image().save_png("res://build/layout-review/"+title+".png")
 func page(cat: int, section := 0):
 	app.menu.mode="settings"; app.menu.category=cat; app.menu.subsection=section; app.menu.preview=false; app.menu.render()
+func check_choice_wrapping():
+	var row := preload("res://scripts/ui/setting_row.gd").new()
+	row.configure({"id":"test.long_choice", "label":"Mode", "kind":"choice", "choices":["Stretch to 4:3 broadcast"], "getter":func(): return 0})
+	root.add_child(row)
+	row.size.x = 560
+	await settle()
+	var wide_height: float = row.custom_minimum_size.y
+	check(row.title_label.get_line_count() == 1 and row.value_label.get_line_count() == 1, "A long value uses spare space beside the title")
+	row.size.x = 290
+	await settle()
+	check(row.value_label.get_line_count() > 1 and row.custom_minimum_size.y > wide_height, "A value wraps when the row genuinely runs out of space")
+	row.size.x = 560
+	await settle()
+	check(row.value_label.get_line_count() == 1 and row.custom_minimum_size.y == wide_height, "A wider row returns to one line")
+	row.free()
 func run():
 	app=load("res://scenes/main.tscn").instantiate(); root.add_child(app); app.use_tracking(false)
+	if "--wide" in OS.get_cmdline_user_args(): app.set_widescreen(true)
 	await settle()
+	await check_choice_wrapping()
 	var m=app.menu
 	for large in [false,true]:
 		app.menu_large_text=large
@@ -36,10 +53,14 @@ func run():
 					var context := "%d/%d %s large=%s" % [cat,section,kind,large]
 					if sidebar_width < 0: sidebar_width = m.sidebar_panel.size.x
 					check(is_equal_approx(m.sidebar_panel.size.x, sidebar_width), "Category sidebar width stays fixed: " + context)
+					# Tabs sit in a sideways-scrolling strip (one row, the chosen tab in
+					# view); a category with many sections scrolls rather than wraps.
 					var tabs_ok := true
 					for tab in m.section_tabs.get_children():
-						tabs_ok=tabs_ok and inside(m.section_bar,tab) and is_equal_approx(tab.position.y,0)
-					check(tabs_ok and m.get_rect().end.x<=960 and m.get_rect().end.y<=720,"Section tabs fit a single line: "+context)
+						tabs_ok=tabs_ok and is_equal_approx(tab.position.y,0)
+					var chosen: Control = m.section_tabs.get_child(section) if section < m.section_tabs.get_child_count() else null
+					tabs_ok=tabs_ok and chosen!=null and inside(m.section_scroll,chosen)
+					check(tabs_ok and m.get_rect().end.x<=app.menu_view.size.x and m.get_rect().end.y<=app.menu_view.size.y,"Section tabs stay on one line with the chosen tab in view: "+context)
 					var contents_ok := true
 					for row in m.rows:
 						contents_ok=contents_ok and inside(row,row.title_label) and inside(row,row.value_label)
@@ -51,7 +72,7 @@ func run():
 			var performance_help_rect: Rect2 = m.help_frame.get_rect()
 			m.select("controls.separate_preview",false); await settle()
 			check(m.help_frame.get_rect()==performance_help_rect, "Emulation help does not shift the layout: %s large=%s" % [kind,large])
-			page(1,4); m.select("picture.connection",false); await settle()
+			page(1,5); m.select("picture.connection",false); await settle()
 			var selector = m.selected_row()
 			for choice in range(selector.item.choices.size()):
 				selector.item.setter.call(choice); await settle()
@@ -60,7 +81,7 @@ func run():
 				check(selector.value_label.size.x - label_width <= 6.0 and inside(selector,selector.adjust_buttons[0]) and inside(selector,selector.adjust_buttons[1]), "Signal selector keeps arrows close to %s: %s large=%s" % [selector.value_label.text,kind,large])
 			page(2); m.select("music.game_volume",false); await settle()
 			await capture("audio-"+kind+("-large" if large else ""))
-			page(1,1); m.select("crt.scanlines",false); await capture("crt-"+kind+("-large" if large else ""))
+			page(1,2); m.select("crt.scanlines",false); await capture("crt-"+kind+("-large" if large else ""))
 			m.games.open_library(); m.rom_index.cancel()
 			m.rom_index.games={"snes":[{"path":"/fixture/mario.sfc","label":"Super Mario World (Europe) (Rev 1)"},{"path":"/fixture/long.sfc","label":"A deliberately long game title with an extended subtitle (Europe) (En,Fr,De,Es,It) (Revision 12)"}]}
 			m.games.open_system("snes"); m.select("game:/fixture/mario.sfc",false); await settle()

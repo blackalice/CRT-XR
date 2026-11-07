@@ -2,7 +2,7 @@ extends RefCounted
 ## First-run setup: a short run of pages, in the menu's own look, that teaches
 ## the menu shortcut and sets up the view, console region, game library, videos
 ## and music, and comfort options. New users see it once, straight from the boot
-## animation; About & Help → Run setup again shows it any time.
+## animation; Help & system → Run setup again shows it any time.
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
@@ -15,7 +15,7 @@ const LOGO_SIZE := Vector2(232, 266)
 const STEPS := ["welcome", "controls", "view", "region", "library", "found", "media", "comfort", "done"]
 ## Welcome and All set sit outside the six numbered steps; both library pages are step 4.
 const NUMBERS := {"controls": 1, "view": 2, "region": 3, "library": 4, "found": 4, "media": 5, "comfort": 6}
-const TITLES := {"controls": "Controls", "view": "Your view", "region": "Console region", "library": "Game library",
+const TITLES := {"controls": "Controls", "view": "Your view", "region": "Console names & icons", "library": "Game library",
 	"found": "Game library", "media": "Videos & music", "comfort": "Comfort", "done": "You're all set"}
 ## The consoles the region page shows; their names and pictures follow the region.
 const PREVIEW_CONSOLES := ["snes", "nes", "megadrive", "pcengine", "dreamcast"]
@@ -37,10 +37,12 @@ var choosing := ""
 ## The Welcome page's logo, where the boot animation's logo lands.
 var logo: Control
 var region_suggested := false
+var keep_display_preferences := false
 
 func open(at := "welcome") -> void:
 	menu.remember(); menu.clear_input()
 	active = true; shortcut_done = false; choosing = ""
+	keep_display_preferences = host.welcome_done
 	step = at; menu.mode = "welcome"; menu.preview = false
 	menu.error_label.hide()
 	menu.memory.erase(menu.state_key())
@@ -156,9 +158,9 @@ func items() -> Array:
 		"media": return media_items()
 		"comfort": return comfort_items()
 		"done":
-			var library: Dictionary = menu.entry(c.action("welcome.library", "Open Game Library", func(): finish(true), "Run this setup again from Settings › About & Help › Run setup again.", false, "›"), "", "gamepad")
+			var library: Dictionary = menu.entry(c.action("welcome.library", "Open Game Library", func(): finish(true), "Run this setup again from Settings › Help & system › Run setup again.", false, "›"), "", "gamepad")
 			library["emphasis"] = "primary"
-			return [library, menu.entry(c.action("welcome.home", "Go to Home", func(): finish(false), "Run this setup again from Settings › About & Help › Run setup again.", false, "›"), "", "home")]
+			return [library, menu.entry(c.action("welcome.home", "Go to Home", func(): finish(false), "Run this setup again from Settings › Help & system › Run setup again.", false, "›"), "", "home")]
 	return []
 
 func tracking_working() -> bool:
@@ -168,6 +170,14 @@ func view_items() -> Array:
 	var c = menu.catalog
 	var h = host
 	var result: Array = []
+	var games_tv: Dictionary = h.display_settings.policy_row("welcome.tv.games", keep_display_preferences)
+	games_tv["section"] = "YOUR TV"
+	games_tv["section_detail"] = "Either TV can show 4:3 or widescreen games. Fit adds borders; Fill crops; Stretch changes shape."
+	result.append(games_tv)
+	result.append(h.display_settings.video_tv_row("welcome.tv.videos"))
+	var fitting_help: Dictionary = c.fitting_help("welcome.tv.help")
+	fitting_help["compact"] = true
+	result.append(fitting_help)
 	if not tracking_working():
 		result.append(menu.tile(c.action("welcome.view.connect", "Connect glasses", func(): h.use_tracking(true); menu.refresh(), "Connects or retries the glasses' head tracking.", false, ""), "glasses", "", "tracking", 2))
 		result.append(menu.tile(c.action("welcome.view.fixed", "Use fixed view", func(): h.use_tracking(false); h.recenter(); menu.refresh(), "Keeps the TV still. This is also how CRT XR plays on a normal screen.", false, ""), "view", "", "tracking", 2))
@@ -188,7 +198,7 @@ func view_items() -> Array:
 		"section": "MENU", "row_icon": "home", "visual": false,
 		"getter": func(): return 0 if h.menu_on_tv else 1,
 		"setter": func(value): h.menu_on_tv = int(value) == 0; menu.refresh(),
-		"help": "On the TV shows the menu on the TV's screen. Floating keeps it in front of you, over the game."})
+		"help": "Choose where menus appear after this step. This page floats so you can see and position either TV without moving the controls."})
 	result.append(next_row("region"))
 	return result
 
@@ -204,7 +214,7 @@ func region_items() -> Array:
 		item.merge({"layout": "tile", "group": "regions", "columns": 3, "expanded": h.console_region == id}, true)
 		if h.console_region == id: item["row_icon"] = "check"
 		result.append(item)
-	result.append(next_row("library", "Next", "Also in Settings › Menu › Layout & placement › Console region."))
+	result.append(next_row("library", "Next", "Also in Settings › Menu & access › Layout & placement › Console names & icons."))
 	return result
 
 ## "SD card · Emulation/roms" or "Deck storage · Emulation/roms" for a found folder.
@@ -277,20 +287,24 @@ func comfort_items() -> Array:
 	var c = menu.catalog
 	var h = host
 	var pictures = menu.pictures
-	var descriptions := ["Warm PAL colour and pronounced scanlines. The tuned default.", "Crisp source pixels; scanlines and phosphor effects off.",
+	var descriptions := ["Keep your current picture.", "Crisp source pixels; scanlines and phosphor effects off.",
 		"Clean RGB colour with a defined CRT beam.", "Composite character matched to the game’s frame rate.",
 		"Soft PAL colour blending and analog texture.", "NTSC colour bleed and classic composite artifacts."]
-	var picture := {"id": "welcome.picture", "label": "Picture style", "kind": "choice", "choices": pictures.PRESET_NAMES, "section": "PICTURE", "row_icon": "tv", "visual": false,
-		"getter": func(): return maxi(0, pictures.PRESET_IDS.find(pictures.applied_preset())),
-		"setter": func(value): pictures.apply_preset(pictures.PRESET_IDS[int(value)]),
-		"detail_getter": func(): return descriptions[maxi(0, pictures.PRESET_IDS.find(pictures.applied_preset()))],
-		"help": "More looks, and your own, in Settings › Picture › Presets."}
+	var custom: bool = not pictures.applied_preset() in pictures.PRESET_IDS
+	var offset: int = 1 if custom else 0
+	var picture := {"id": "welcome.picture", "label": "Picture style", "kind": "choice", "choices": (["Current picture"] if custom else []) + pictures.PRESET_NAMES, "section": "PICTURE", "row_icon": "tv", "visual": false,
+		"getter": func(): return pictures.PRESET_IDS.find(pictures.applied_preset()) + offset,
+		"setter": func(value):
+			if int(value) >= offset: pictures.apply_preset(pictures.PRESET_IDS[int(value) - offset]),
+		"detail_getter": func(): return descriptions[pictures.PRESET_IDS.find(pictures.applied_preset()) + 1],
+		"help": "More looks, and your own, in Settings › TV & picture › Presets."}
 	var rows: Array = [picture]
-	for spec in [["welcome.large", "Larger menu text", "menu_large_text", false, "Bigger text and taller rows.", menu.apply_accessibility, "search"],
+	for spec in [["welcome.clean", "Clearer menus", "menu_clean_feed", false, "Shows menus without CRT distortion while keeping your game picture.", func(): menu.refresh(), "tv"],
+			["welcome.large", "Larger menu text", "menu_large_text", false, "Bigger text and taller rows.", menu.apply_accessibility, "search"],
 			["welcome.motion", "Reduced animation", "menu_reduced_motion", false, "No TV warm-up, boot animation or drifting stars.", menu.apply_accessibility, "refresh"],
 			["welcome.music", "Menu music", "menu_music_enabled", true, "Quiet background music in the menus.", h.apply_menu_music, "music"],
-			["welcome.haptics", "Controller vibration", "menu_haptics", false, "A light tick as the selection moves.", func(): menu.refresh(), "gamepad"]]:
-		var row: Dictionary = c.toggle(spec[0], spec[1], h, spec[2], spec[3], spec[4] + " More in Settings › Menu › Accessibility.", spec[5], false)
+			["welcome.haptics", "Menu vibration", "menu_haptics", false, "A light tick as the selection moves.", func(): menu.refresh(), "gamepad"]]:
+		var row: Dictionary = c.toggle(spec[0], spec[1], h, spec[2], spec[3], spec[4] + " More in Settings › Menu & access › Accessibility.", spec[5], false)
 		row["section"] = "READING AND MOTION"; row["row_icon"] = spec[6]
 		rows.append(row)
 	rows.append(next_row("done", "Finish"))
@@ -474,13 +488,13 @@ func view_status() -> Control:
 	var words := VBoxContainer.new(); words.add_theme_constant_override("separation", 2)
 	words.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var title_text := "Playing on this screen"
-	var detail := "The TV stays still. Connect glasses later in View › Tracking."
+	var detail := "The TV stays still. Connect glasses later in View & glasses › Tracking."
 	var dot := MenuSkin.MUTED
 	if tracking_working():
 		title_text = "Head tracking is on"; detail = str(host.provider.status); dot = Color("58d878")
 	elif host.provider.real:
 		title_text = "Glasses found, but no head tracking yet"; dot = MenuSkin.AMBER
-		detail = "Check the VITURE SDK is beside CRT-XR.exe, or use OpenTrack in View › Tracking." if OS.get_name() == "Windows" else "Check XR Gaming in Decky can see the glasses, then connect."
+		detail = "Check the VITURE SDK is beside CRT-XR.exe, or use OpenTrack in View & glasses › Tracking." if OS.get_name() == "Windows" else "Check XR Gaming in Decky can see the glasses, then connect."
 	words.add_child(text(title_text, 20)); words.add_child(text(detail, 16, MenuSkin.MUTED))
 	line.add_child(words)
 	var light := ColorRect.new(); light.color = dot; light.custom_minimum_size = Vector2(12, 12)
@@ -597,7 +611,9 @@ func done_parts() -> Array[Control]:
 	if not h.video_dir.is_empty(): media.append("Videos")
 	if not h.music_folder.is_empty(): media.append("Music")
 	var region_index: int = maxi(0, Registry.REGIONS.find(h.console_region))
-	for pair in [["Console region", Registry.REGION_LABELS[region_index]], ["Game library", library], ["Head tracking", tracking],
+	for pair in [["Console names & icons", Registry.REGION_LABELS[region_index]], ["Game library", library], ["Head tracking", tracking],
+			["Games TV", h.display_settings.TV_POLICY_NAMES[h.display_settings.TV_POLICIES.find(h.display_settings.data.game_tv_policy)] if h.display_settings.data.game_tv_policy in h.display_settings.TV_POLICIES else "Current console preferences"],
+			["Videos TV", "Wide TV (16:9)" if h.display_settings.data.defaults.video == "wide" else "Standard TV (4:3)"],
 			["Menu", "On the TV" if h.menu_on_tv else "Floating"], ["Picture", picture],
 			["Videos, music", " and ".join(media) + " ready" if not media.is_empty() else "Not set up yet: add them from Home"]]:
 		var key := text(pair[0], 18, MenuSkin.MUTED); key.custom_minimum_size.x = 190

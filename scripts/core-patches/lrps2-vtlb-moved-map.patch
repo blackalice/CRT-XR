@@ -1,0 +1,44 @@
+diff --git a/pcsx2/vtlb.cpp b/pcsx2/vtlb.cpp
+index 4a2111571..d85e3fbd3 100644
+--- a/pcsx2/vtlb.cpp
++++ b/pcsx2/vtlb.cpp
+@@ -1325,6 +1325,15 @@ bool vtlb_Core_Alloc(void)
+ {
+ 	// Can't return regions to the bump allocator
+ 	static vtlb_virt_t* vmap = NULL;
++	/* CRT XR: the core stays loaded between games, but the main map it was
++	 * carved from is placed afresh for each one; a cached block from an
++	 * earlier placement points into memory that is no longer mapped. */
++	static u8* vmap_main = NULL;
++	if (vmap && vmap_main != GetVmMemory()->main.baseptr)
++	{
++		vmap = NULL;
++		vtlbdata.vmap = NULL;
++	}
+ 	if (!vmap)
+ 	{
+ 		vmap = (vtlb_virt_t*)vmm_bump_alloc(&GetVmMemory()->bump, VMAP_SIZE);
+@@ -1333,6 +1342,7 @@ bool vtlb_Core_Alloc(void)
+ 			log_cb(RETRO_LOG_ERROR, "Failed to allocate vtlb vmap\n");
+ 			return false;
+ 		}
++		vmap_main = GetVmMemory()->main.baseptr;
+ 	}
+ 
+ 	if (!vtlbdata.vmap)
+@@ -1413,9 +1423,15 @@ void vtlb_Alloc_Ppmap(void)
+ 		return;
+ 
+ 	static u32* ppmap = NULL;
++	static u8* ppmap_main = NULL; /* CRT XR: see vtlb_Core_Alloc */
++	if (ppmap && ppmap_main != GetVmMemory()->main.baseptr)
++		ppmap = NULL;
+ 
+ 	if (!ppmap)
++	{
+ 		ppmap = (u32*)vmm_bump_alloc(&GetVmMemory()->bump, PPMAP_SIZE);
++		ppmap_main = GetVmMemory()->main.baseptr;
++	}
+ 
+ 	mode.m_read    = true;
+ 	mode.m_write   = true;

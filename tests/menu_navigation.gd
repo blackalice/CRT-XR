@@ -27,7 +27,7 @@ func run():
             if e is InputEventJoypadButton or e is InputEventJoypadMotion:InputMap.action_erase_event(action,e)
     app=load("res://scenes/main.tscn").instantiate();root.add_child(app);app.use_tracking(false);await settle()
     var m=app.menu
-    check(m.items.map(func(i):return i.id)==["home.library","home.videos","transport.choose","pause.room","pause.preset","pause.game_volume","pause.view.distance","pause.view.height_offset","pause.music_volume","home.glasses","home.settings"],"Startup offers both libraries, music, six quick settings and help/settings actions")
+    check(m.items.map(func(i):return i.id)==["home.library","home.videos","transport.choose","pause.room","pause.preset","pause.game_volume","pause.view.distance","pause.view.height_offset","pause.display","home.glasses","home.settings"],"Startup offers both libraries, music, six quick settings and help/settings actions")
     check(m.selected_id=="home.library","No-game startup hides Continue and selects Library")
     # Two rows of quick settings precede the first-run help/settings actions.
     var tiled=m.items.filter(func(i):return i.get("layout","")=="tile" and not i.get("quick",false)).map(func(i):return i.id)
@@ -39,7 +39,7 @@ func run():
     m.navigate(Vector2i(1,0));m.navigate(Vector2i(1,0))
     check(m.selected_id=="pause.game_volume","Right stops at the edge of the grid")
     m.navigate(Vector2i(0,1))
-    check(m.selected_id=="pause.music_volume","Down into the next grid keeps to the same column (%s)"%m.selected_id)
+    check(m.selected_id=="pause.display","Down into the next grid keeps to the same column (%s)"%m.selected_id)
     m.navigate(Vector2i(-1,0));m.navigate(Vector2i(0,-1))
     check(m.selected_id=="pause.preset","Up from a middle tile lands on the middle tile above (%s)"%m.selected_id)
     m.navigate(Vector2i(0,-1))
@@ -78,7 +78,7 @@ func run():
     var release:=InputEventJoypadMotion.new();release.device=7;release.axis=JOY_AXIS_TRIGGER_RIGHT;release.axis_value=0;Input.parse_input_event(release);Input.flush_buffered_events()
     page(4,1);m.select("controls.distance",false);var before:bool=app.right_stick_distance;await button(JOY_BUTTON_A)
     check(app.right_stick_distance!=before,"A toggles immediately")
-    page(1,4);app.world.picture.mode=0;m.render();await settle();m.select("picture.connection",false)
+    page(1,5);app.world.picture.mode=0;m.render();await settle();m.select("picture.connection",false)
     var disabled=row("picture.composite_strength")
     check(disabled.disabled and disabled.adjust_buttons.all(func(b):return b.disabled),"Composite controls and their arrows are disabled in RGB")
     check(disabled.unavailable_label.visible and not disabled.unavailable_label.text.is_empty(),"Disabled reason is visible")
@@ -120,7 +120,7 @@ func run():
     check(m.mode=="games" and m.games.game_page==2 and m.selected_id=="game:/test/Zelda.sfc","Letter jump reaches games beyond the first page")
     await button(JOY_BUTTON_B);m.open_settings()
     var unique:Dictionary={};var count:=0
-    for cat_index in range(m.CATEGORIES.size()):
+    for cat_index in m.SETTINGS_ORDER:
         var pages:Array=m.catalog.pages(cat_index)
         for section in range(pages.size()):
             page(cat_index,section);await settle()

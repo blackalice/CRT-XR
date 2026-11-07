@@ -1,0 +1,14 @@
+{
+  "triangles": 4914,
+  "mesh_objects": 8,
+  "source": "artwork/widescreen-crt/crt-xr-26-wide-new.blend",
+  "export": "assets/models/widescreen-crt/crt-xr-26-wide.glb",
+  "front_axis_gltf": "+Z",
+  "source_preserved": true,
+  "graphics_source": "artwork/TV.ai",
+  "finishes": [
+    "silver",
+    "black"
+  ],
+  "printing": "opaque albedo, no additional triangles or material batches"
+}

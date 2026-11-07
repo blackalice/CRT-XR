@@ -28,7 +28,7 @@ func rows() -> Array:
 		choices.append("Custom")
 		index = choices.size() - 1
 	var result := [
-		{"id":"controls.scope","label":"Layout for","kind":"choice","choices":["All %s games" % console,"This game only"],"default":0,"visual":false,
+		{"id":"controls.scope","label":"Apply control changes to","kind":"choice","choices":["%s defaults" % console,"This game"],"default":0,"visual":false,
 			"getter":func(): return 1 if Layouts.has_game_layout(emulator.rom_hash) else 0,
 			"setter":func(value): set_game_layout(int(value) == 1),
 			"help":"All %s games share a layout unless a game has its own. This game only keeps changes to this game; switching back returns it to the console's layout." % console},

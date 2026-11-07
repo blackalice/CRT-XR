@@ -32,6 +32,9 @@ func save_radio_url() -> void:
 func music_browser_items() -> Array:
 	var result: Array=[]
 	var entries: Array=[]
+	if menu.welcome.choosing != "music":
+		result.append(menu.entry(menu.catalog.action("music.settings", "Music & radio settings", func(): menu.open_settings_section(2, "Music"), "Radio, repeat, volume and music preferences."), menu.SECTION_HERE, "gear"))
+		result.append(menu.entry(menu.catalog.action("music.visualiser_settings", "Visualiser settings", func(): menu.open_settings_section(2, "Visualiser"), "Choose visuals, brightness and automatic changes."), menu.SECTION_HERE, "sliders"))
 	var album: Array=host.music.album_tracks(music_dir)
 	# First-run setup chooses the folder the music browser opens first.
 	if menu.welcome.choosing=="music":
@@ -89,6 +92,9 @@ func show_panel() -> void:
 func visualizer_action() -> Dictionary:
 	return menu.catalog.action("transport.visualiser","Visualiser",host.visualizer.enter,"Show or return to the music visualiser on the CRT.",false,"")
 
+func volume_control() -> Dictionary:
+	return menu.catalog.number("transport.volume","Music volume",host.music,"volume",0,1,.05,.45,"percent",
+		"Album and radio volume. Menu music keeps its own level.",host.music.apply,false).merged({"layout":"transport","skin":"music","icon":"volume","quick":true,"meter":false})
 
 func music_actions() -> Array:
 	var result: Array=[]
@@ -114,7 +120,7 @@ func music_actions() -> Array:
 		hide.merge({"layout":"transport", "skin":"music", "icon":"hide"})
 		result.append(hide)
 		if music.duration()>0:
-			result.push_front({"id":"transport.seek","label":"Track position","kind":"seek","layout":"music_seek","skin":"music","getter":music.position_seconds,"setter":music.seek,"duration":music.duration,"progress":music.progress_text,"help":"Left/right seeks by 10 seconds. Drag or click the timeline to jump through a long mix."})
+			result.push_front({"id":"transport.seek","label":"Track position","kind":"seek","layout":"music_seek","skin":"music","getter":music.position_seconds,"setter":music.seek,"duration":music.duration,"progress":music.progress_text,"help":"Left/right seeks 10 seconds; click or drag to jump."})
 	if not music.kind.is_empty() and result.is_empty():
 		var resume_music: Dictionary=menu.catalog.action("transport.play","Resume music",func(): music.toggle_playback(); menu.refresh(),music.now_playing(),false,"")
 		resume_music["row_icon"]="play"
@@ -129,15 +135,12 @@ func music_actions() -> Array:
 		browse.layout="transport"; browse.icon="music"; browse.caption="Browse albums"; browse["skin"]="music"
 	# With music stopped, Resume music and Browse share one row as two tiles.
 	elif result.size()==1 and result[0].id=="transport.play":
-		var resume: Dictionary=result[0]
-		browse.label="Browse albums"
-		var pair: Array = [menu.tile(resume,"play","","music",3), menu.tile(browse,"music","","music",3), menu.tile(visualizer_action(),"music","","music",3)]
-		# Full height, like Choose game and Settings.
-		for item in pair: item.compact=false
-		return pair
+		result[0].merge({"layout":"transport","skin":"music","icon":"play","caption":"Resume music","lead":true,"deck_header":false})
+		browse.merge({"layout":"transport","skin":"music","icon":"music","caption":"Browse albums"})
 	result.append(browse)
 	if browse.get("layout", "")=="transport":
 		var visual: Dictionary=visualizer_action()
-		visual.merge({"layout":"transport","skin":"music","icon":"visualiser","caption":"Visualiser"})
+		visual.merge({"layout":"transport","skin":"music","icon":"visualiser"})
 		result.append(visual)
+		result.append(volume_control())
 	return result

@@ -60,6 +60,8 @@ class SteamSessionTests(unittest.TestCase):
             env=spawn.call_args_list[1].kwargs["env"]
             self.assertEqual(env["CRT_XR_SBS_SIZE"],"5120x1440")
             self.assertTrue(env["CRT_XR_DISPLAY_PROBE"].endswith("display.json"))
+            self.assertIn("--app-status",spawn.call_args_list[0].args[0])
+            self.assertIn(env["CRT_XR_DISPLAY_STATUS"],spawn.call_args_list[0].args[0])
             watcher.terminate.assert_called_once();watcher.wait.assert_called_once()
 
     def test_default_gaming_glasses_launch_is_supervised(self):

@@ -18,12 +18,14 @@ func run() -> void:
  app.emulator.set_paused(true)
  var catalog = app.menu.catalog
  var pages: Array = catalog.pages(10)
- check(pages.map(func(p): return p.title) == ["Consoles", "This game", "VMU", "Performance", "Info"], "Console settings lead the navigation")
+ check(pages.map(func(p): return p.title) == ["Consoles", "This game", "Advanced", "Info", "Game controls", "View controls"], "Console settings lead the navigation")
  var headers: Array = pages[0].rows.filter(func(r): return r.has("disclosure"))
- check(headers.size() == catalog.CORE_SYSTEMS.size() and headers[0].id == "core.console.snes" and headers[0].value == "Playing", "Playing console is marked and first")
+ # Experimental consoles (behind their opt-ins) follow the standard ones.
+ var listed: int = catalog.CORE_SYSTEMS.size() + catalog.EXPERIMENTAL_SYSTEMS.filter(func(system): return app.emulator.Registry.SYSTEMS.has(system)).size()
+ check(headers.size() == listed and headers[0].id == "core.console.snes" and headers[0].value == "Playing", "Playing console is marked and first")
  check(headers[0].expanded, "Playing console opens automatically")
  headers[0].action.call()
- check(catalog.pages(10)[0].rows.size() == catalog.CORE_SYSTEMS.size(), "Playing console can stay collapsed")
+ check(catalog.pages(10)[0].rows.size() == listed, "Playing console can stay collapsed")
  var row: Dictionary = pages[1].rows[0]
  check(row.getter.call() == 1 and row.detail_getter.call() == "Game override", "Per-game override has a source label")
  row.setter.call(0)

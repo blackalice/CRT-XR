@@ -7,11 +7,12 @@ signal content_changed(texture: Texture2D)
 signal frame_presented(image: Image)
 signal status_changed(message: String)
 signal active_changed(active: bool)
+signal aspect_changed(aspect: float)
 signal finished
 ## The VCR's mechanism at work: "play", "resume", "pause", "search" or "stop".
 signal mechanism(event: String)
 
-const STYLES := ["Letterbox", "14:9", "Fill 4:3", "Stretch"]
+const STYLES := ["Original aspect", "14:9 broadcast crop", "Fill 4:3 broadcast", "Stretch to 4:3 broadcast"]
 const INTERLACE_MODES := ["Field motion", "Blend"]
 const VideoLibrary = preload("res://scripts/video/video_library.gd")
 const SubtitleLayer = preload("res://scripts/video/subtitle_layer.gd")
@@ -107,7 +108,7 @@ func open(file: String) -> bool:
 		return false
 	decoder = ClassDB.instantiate("VideoDecoder")
 	decoder.set_interlace(interlace)
-	info = decoder.open(ProjectSettings.globalize_path(file), lines, style, hardware)
+	info = decoder.open(ProjectSettings.globalize_path(file), lines, 4 if style==0 else style, hardware)
 	if info.is_empty():
 		report("Could not play %s: %s" % [file.get_file(), decoder.last_error()])
 		decoder = null
@@ -210,9 +211,18 @@ func seek_to(seconds: float) -> void:
 		set_paused(false)
 
 func cycle_style() -> String:
-	style = (style + 1) % STYLES.size()
-	if decoder != null: decoder.set_style(style)
+	set_style((style + 1) % STYLES.size())
 	return STYLES[style]
+
+func set_style(value: int) -> void:
+	style=clampi(value,0,STYLES.size()-1)
+	if decoder != null: decoder.set_style(4 if style==0 else style)
+	if texture != null: subtitle_layer.setup(texture,texture.get_width(),texture.get_height(),display_aspect())
+	aspect_changed.emit(display_aspect())
+
+func display_aspect() -> float:
+	var aspect := float(info.get("display_aspect",4.0/3.0)) if style==0 else 4.0/3.0
+	return aspect if is_finite(aspect) and aspect>=.2 and aspect<=8.0 else 4.0/3.0
 
 ## "ENG · Main · AAC 5.1" for each audio track, in file order.
 func track_names() -> PackedStringArray:
@@ -307,7 +317,7 @@ func refresh_output() -> void:
 	var wanted: Texture2D = texture
 	if layered():
 		if subtitle_layer.size != Vector2i(texture.get_width(), texture.get_height()) or subtitle_layer.picture.texture != texture:
-			subtitle_layer.setup(texture, texture.get_width(), texture.get_height())
+			subtitle_layer.setup(texture, texture.get_width(), texture.get_height(), display_aspect())
 		wanted = subtitle_layer.get_texture()
 	if wanted != output:
 		output = wanted

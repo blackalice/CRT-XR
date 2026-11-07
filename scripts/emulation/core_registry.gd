@@ -19,6 +19,37 @@ const DEFINITIONS := {
 			"dolphin_main_cpu_thread":"enabled", "dolphin_aspect_ratio":"2", "dolphin_call_back_audio_method":"1",
 			# Dolphin's own messages draw into the game picture; the room has its own.
 			"dolphin_osd_enabled":"disabled"}},
+	# The same Dolphin core and defaults. Port 1 is a Wii Remote with a Classic
+	# Controller (RETRO_DEVICE_SUBCLASS(JOYPAD, 4)): its buttons and sticks match a
+	# modern pad. Wii widescreen stays off: the picture is for a 4:3 CRT.
+	"wii": {"name":"Wii", "core":"dolphin", "extensions":[], "aspect":4.0/3.0,
+		"controller":(4 << 8) | 1, "analog":true, "triggers":true, "preview":false, "hardware":true,
+		"options":{"dolphin_efb_scale":"1", "dolphin_cpu_core":"1", "dolphin_dsp_hle":"enabled",
+			"dolphin_main_cpu_thread":"enabled", "dolphin_aspect_ratio":"2", "dolphin_call_back_audio_method":"1",
+			"dolphin_osd_enabled":"disabled", "dolphin_widescreen":"disabled", "dolphin_wiimote_default_device":"frontend"}},
+	# Experimental (CRT_XR_EXPERIMENTAL_PS2): LRPS2, a libretro PCSX2, on OpenGL 3.3
+	# at native resolution. It needs a real BIOS: the first of "bios_any" found is
+	# staged into its pcsx2/bios folder and chosen with "bios_option". Fast boot
+	# skips the BIOS logo; MTVU runs VU1 on a thread of its own (the Deck has four
+	# cores; the x86 default leaves it off).
+	"ps2": {"name":"PlayStation 2", "short":"PS2", "core":"pcsx2", "extensions":[], "aspect":4.0/3.0,
+		# LRPS2 takes the plain joypad as a DualShock 2 (pcsx2/PAD/PAD.cpp); any
+		# other device, the PS1 DualShock subclass included, leaves the port empty.
+		"controller":1, "analog":true, "triggers":true, "preview":false, "hardware":true,
+		"bios_any":["scph39001.bin","scph70012.bin","scph77001.bin","scph90001.bin","SCPH-70004_BIOS_V12_PAL_200.BIN",
+			"scph70004.bin","scph50004.bin","scph30004.bin","scph10000.bin"],
+		"bios_option":"pcsx2_bios", "context_first":true,
+		"options":{"pcsx2_renderer":"OpenGL", "pcsx2_upscale_multiplier":"1x (Native)", "pcsx2_fastboot":"enabled",
+			"pcsx2_mtvu":"enabled"}},
+	# Experimental (CRT_XR_EXPERIMENTAL_PSP): PPSSPP v1.20.4 on OpenGL at the
+	# handheld's 480x272, uncropped, without duplicated frames (so the frame rate
+	# is the game's). Its assets are staged as <system>/PPSSPP.
+	"psp": {"name":"PlayStation Portable", "short":"PSP", "core":"ppsspp", "extensions":["cso"], "aspect":480.0/272.0,
+		"analog":true, "preview":false, "hardware":true, "context_first":true,
+		"core_data":{"source":"ppsspp/PPSSPP", "target":"PPSSPP", "required":["compat.ini", "ppge_atlas.zim"]},
+		"options":{"ppsspp_backend":"opengl", "ppsspp_internal_resolution":"480x272", "ppsspp_cropto16x9":"disabled",
+			"ppsspp_frame_duplication":"disabled", "ppsspp_cpu_core":"JIT", "ppsspp_frameskip":"disabled",
+			"ppsspp_auto_frameskip":"disabled", "ppsspp_language":"English"}},
 	"snes": {"name":"SNES", "core":"snes9x", "extensions":["sfc","smc","swc","fig"], "aspect":4.0/3.0},
 	"nes": {"name":"NES", "core":"nestopia", "extensions":["nes","unf","unif"], "aspect":4.0/3.0},
 	"megadrive": {"name":"Mega Drive", "short":"MD", "core":"genesis_plus_gx", "extensions":["md","gen","smd"], "aspect":4.0/3.0},
@@ -91,20 +122,25 @@ static func apply_region(id: String) -> void:
 
 static func available_systems() -> Dictionary:
 	var systems := DEFINITIONS.duplicate(true)
-	if not Folders.gamecube_enabled(): systems.erase("gamecube")
+	for console in Folders.EXPERIMENTAL:
+		if not Folders.experimental_enabled(console): systems.erase(console)
 	return systems
 
 static func identify(path: String) -> String:
 	var extension := path.get_extension().to_lower()
-	if SYSTEMS.has("gamecube") and extension in ["iso", "gcm", "rvz", "wia"] and gamecube_disc(path): return "gamecube"
+	if extension in ["iso", "gcm", "rvz", "wia", "wbfs"]:
+		var console := nintendo_disc(path)
+		if not console.is_empty(): return console if SYSTEMS.has(console) else ""
 	if extension == "cue": return disc_identify(path)
 	if extension == "m3u": return playlist_identify(path)
-	if extension == "pbp": return "psx" if psx_eboot(path) else ""
+	if extension == "pbp":
+		if psx_eboot(path): return "psx"
+		return "psp" if SYSTEMS.has("psp") and psp_eboot(path) else ""
 	if extension == "zip": return archive_game(path).get("system", "")
 	# A CHD's sectors are compressed, so its console folder says what it holds.
 	if extension == "chd":
 		var folder := folder_system(path)
-		return folder if folder in ["segacd", "psx", "dreamcast"] else ""
+		return folder if folder in ["segacd", "psx", "dreamcast", "ps2", "psp"] else ""
 	var system := extension_system(extension)
 	if not system.is_empty(): return system
 	# .md also means Markdown, so do not list arbitrary documentation as ROMs.
@@ -114,7 +150,15 @@ static func identify(path: String) -> String:
 			system = header_system(file.get_buffer(0x110), extension)
 			if system.is_empty() and extension == "bin" and psx_disc(file): system = "psx"
 			return system
-	if extension == "iso": return "psx" if psx_disc(FileAccess.open(path, FileAccess.READ)) else ""
+	if extension == "iso": return sony_disc(FileAccess.open(path, FileAccess.READ))
+	return ""
+
+## PlayStation, PlayStation 2 or PSP from an ISO's volume, or "" (also when that
+## console is not enabled).
+static func sony_disc(file: FileAccess) -> String:
+	if psx_disc(file): return "psx"
+	if SYSTEMS.has("ps2") and ps2_disc(file): return "ps2"
+	if SYSTEMS.has("psp") and psp_disc(file): return "psp"
 	return ""
 
 static func extension_system(extension: String) -> String:
@@ -202,7 +246,7 @@ static func content_hash(path: String) -> String:
 		return hashing.finish().hex_encode()
 	# PlayStation images run to hundreds of megabytes: their opening megabyte holds
 	# the volume and boot data that tell discs apart, and the size goes in too.
-	if extension in ["pbp", "iso", "cdi", "gcm", "rvz", "wia"] or (extension == "bin" and FileAccess.get_size(path) > LARGE_IMAGE and identify(path) == "psx"):
+	if extension in ["pbp", "iso", "cdi", "gcm", "rvz", "wia", "wbfs", "cso"] or (extension == "bin" and FileAccess.get_size(path) > LARGE_IMAGE and identify(path) == "psx"):
 		var image := FileAccess.open(path, FileAccess.READ)
 		if image == null: return ""
 		var sampled := HashingContext.new()
@@ -275,7 +319,7 @@ static func disc_identify(cue_path: String) -> String:
 	var image := FileAccess.open(files[0], FileAccess.READ)
 	if image == null: return ""
 	if tag_at(image.get_buffer(0x110), 0x100, "SEGADISCSYSTEM"): return "segacd"
-	return "psx" if psx_disc(image) else ""
+	return sony_disc(image)
 
 ## The discs an .m3u playlist lists, as full paths; comments and blank lines skipped.
 static func playlist_files(m3u_path: String) -> Array[String]:
@@ -293,7 +337,7 @@ static func playlist_identify(m3u_path: String) -> String:
 	var system := identify(files[0])
 	for file in files:
 		if file.get_extension().to_lower() in ["m3u", "zip"] or identify(file) != system: return ""
-	return system if system in ["psx", "dreamcast", "gamecube"] else ""
+	return system if system in ["psx", "dreamcast", "gamecube", "wii", "ps2"] else ""
 
 ## Files a cue sheet or playlist among paths already stands for, so a game appears
 ## once rather than as its cue, its tracks and each disc of its playlist.
@@ -327,22 +371,42 @@ static func playlist_members(paths: Array) -> Dictionary:
 ## then plain 2048-byte ISO sectors, each as [sector size, data offset].
 const DISC_LAYOUTS := [[2352, 24], [2352, 16], [2048, 0]]
 
-## ISO/GCM carry a big-endian GameCube magic at 0x1c. WIA/RVZ retain the disc
-## header uncompressed at 0x58 (Dolphin docs/WiaAndRvz.md). Wii uses the same
-## extensions; neither a folder name nor the extension establishes the console.
-static func gamecube_disc(path: String) -> bool:
+## ISO/GCM carry a big-endian GameCube magic at 0x1c, Wii discs theirs at 0x18.
+## WIA/RVZ retain the disc header uncompressed at 0x58 and declare the disc type
+## (1 GameCube, 2 Wii) at 0x48 (Dolphin docs/WiaAndRvz.md). WBFS keeps the Wii
+## disc header at 0x200. Neither a folder name nor the extension establishes the console.
+const GAMECUBE_MAGIC := [0xc2, 0x33, 0x9f, 0x3d]
+const WII_MAGIC := [0x5d, 0x1c, 0x9e, 0xa3]
+
+## "gamecube", "wii" or "" from a disc image's header.
+static func nintendo_disc(path: String) -> String:
 	var file := FileAccess.open(path, FileAccess.READ)
-	if file == null: return false
-	var header := file.get_buffer(0xd8)
+	if file == null: return ""
+	var extension := path.get_extension().to_lower()
+	var header := file.get_buffer(0x220)
 	var offset := 0
-	if path.get_extension().to_lower() in ["rvz", "wia"]:
-		var expected := PackedByteArray([0x52, 0x56, 0x5a, 1]) if path.get_extension().to_lower() == "rvz" else PackedByteArray([0x57, 0x49, 0x41, 1])
-		if header.size() < 0xd8 or header.slice(0, 4) != expected: return false
-		# Both the declared disc type and the embedded disc magic must agree.
-		if header.slice(0x48, 0x4c) != PackedByteArray([0, 0, 0, 1]): return false
+	var declared := 0
+	if extension in ["rvz", "wia"]:
+		var expected := PackedByteArray([0x52, 0x56, 0x5a, 1]) if extension == "rvz" else PackedByteArray([0x57, 0x49, 0x41, 1])
+		if header.size() < 0xd8 or header.slice(0, 4) != expected: return ""
+		declared = big_u32(header, 0x48)
 		offset = 0x58
-	if header.size() < offset + 0x20: return false
-	return header.slice(offset + 0x1c, offset + 0x20) == PackedByteArray([0xc2, 0x33, 0x9f, 0x3d]) and header.slice(offset + 0x18, offset + 0x1c) != PackedByteArray([0x5d, 0x1c, 0x9e, 0xa3])
+	elif extension == "wbfs":
+		if not tag_at(header, 0, "WBFS"): return ""
+		offset = 0x200
+	if header.size() < offset + 0x20: return ""
+	var gamecube := header.slice(offset + 0x1c, offset + 0x20) == PackedByteArray(GAMECUBE_MAGIC)
+	var wii := header.slice(offset + 0x18, offset + 0x1c) == PackedByteArray(WII_MAGIC)
+	# The declared type and the embedded magic must agree.
+	if wii and not gamecube and declared in [0, 2]: return "wii"
+	if gamecube and not wii and declared in [0, 1] and extension != "wbfs": return "gamecube"
+	return ""
+
+static func big_u32(bytes: PackedByteArray, at: int) -> int:
+	return (bytes[at] << 24) | (bytes[at + 1] << 16) | (bytes[at + 2] << 8) | bytes[at + 3]
+
+static func gamecube_disc(path: String) -> bool:
+	return nintendo_disc(path) == "gamecube"
 
 static func disc_sector(file: FileAccess, layout: Array, sector: int) -> PackedByteArray:
 	var offset: int = sector * layout[0] + layout[1]
@@ -375,6 +439,26 @@ static func system_cnf(file: FileAccess, layout: Array, volume: PackedByteArray)
 				return disc_sector(file, layout, sector.decode_u32(at + 2)).get_string_from_ascii()
 			at += size
 	return ""
+
+## A PlayStation 2 disc: a PLAYSTATION volume whose SYSTEM.CNF boots with BOOT2.
+static func ps2_disc(file: FileAccess) -> bool:
+	if file == null: return false
+	for layout in DISC_LAYOUTS:
+		var volume := disc_sector(file, layout, 16)
+		if volume.size() < 2048 or not tag_at(volume, 1, "CD001") or not tag_at(volume, 8, "PLAYSTATION"): continue
+		return system_cnf(file, layout, volume).contains("BOOT2")
+	return false
+
+## A PSP UMD image: its ISO 9660 volume names the PSP GAME system.
+static func psp_disc(file: FileAccess) -> bool:
+	if file == null: return false
+	var volume := disc_sector(file, [2048, 0], 16)
+	return volume.size() >= 2048 and tag_at(volume, 1, "CD001") and tag_at(volume, 8, "PSP GAME")
+
+## A PSP eboot: a .pbp that is not a PlayStation one.
+static func psp_eboot(path: String) -> bool:
+	var file := FileAccess.open(path, FileAccess.READ)
+	return file != null and file.get_length() >= 0x28 and file.get_buffer(4) == PackedByteArray([0, 0x50, 0x42, 0x50])
 
 ## A PlayStation eboot (a PSP-format .pbp holding a PS1 disc): its DATA.PSAR
 ## starts with PSISOIMG (one disc) or PSTITLEIMG (several). PSP games do not.
@@ -447,6 +531,12 @@ static func bios_file(name: String) -> String:
 			if file.to_lower() == filename.to_lower(): return folder.path_join(file)
 	return ""
 
+## The first required BIOS file present, by its staged name, or "".
+static func first_bios(system: String) -> String:
+	for name in SYSTEMS[system].get("bios_any", []):
+		if not bios_file(name).is_empty(): return name
+	return ""
+
 static func bios_satisfied(system: String) -> bool:
 	var names: Array = SYSTEMS[system].get("bios_any", [])
 	if names.is_empty(): return true
@@ -454,11 +544,17 @@ static func bios_satisfied(system: String) -> bool:
 		if not bios_file(name).is_empty(): return true
 	return false
 
+## Where in the system directory a core looks for its BIOS.
+const BIOS_FOLDERS := {"dreamcast": "dc", "ps2": "pcsx2/bios"}
+
 static func stage_bios(system: String, destination: String) -> void:
-	if system == "dreamcast":
-		destination = destination.path_join("dc")
+	if system in BIOS_FOLDERS:
+		destination = destination.path_join(BIOS_FOLDERS[system])
 		DirAccess.make_dir_recursive_absolute(destination)
-	for name in SYSTEMS[system].get("bios_any", []) + SYSTEMS[system].get("bios_optional", []):
+	var names: Array = SYSTEMS[system].get("bios_any", []) + SYSTEMS[system].get("bios_optional", [])
+	# A core that is told which BIOS to use gets only that one.
+	if SYSTEMS[system].has("bios_option"): names = [first_bios(system)] if not first_bios(system).is_empty() else []
+	for name in names:
 		var source := bios_file(name)
 		if source.is_empty() and system == "dreamcast": source = bios_file("dc/" + name)
 		if source.is_empty(): continue

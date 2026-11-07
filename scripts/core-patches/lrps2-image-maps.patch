@@ -1,0 +1,111 @@
+diff --git a/pcsx2/Memory.c b/pcsx2/Memory.c
+index d97b3d1c9..86ade9af9 100644
+--- a/pcsx2/Memory.c
++++ b/pcsx2/Memory.c
+@@ -36,6 +36,7 @@ BIOS
+ 
+ 
+ /* C89. */
++#include <stdlib.h>
+ #include <string.h>
+ 
+ #include "common/Pcsx2Defs.h"
+@@ -72,6 +73,35 @@ BIOS
+  * (vtlb.cpp: "if ((sptr)p < 0)"), so guest RAM stays below it. */
+ #define MAIN_CEILING  ((uptr)1 << (sizeof(uptr) * 8 - 1))
+ 
++#if defined(__linux__)
++/* CRT XR: both maps are mapped over this arena in the image's own .bss: inside
++ * the image, so always within reach of its globals and of each other, whatever
++ * else the host has mapped around the module (a Godot room with other cores
++ * crowds it). It is also the same address for every game while the core stays
++ * loaded, which state kept across games assumes. The near search remains for a
++ * host where the arena cannot be mapped. Untouched .bss costs address space only. */
++#define FALLBACK_ARENA_SIZE (HOSTMEM_MAIN_SIZE + HOSTMEM_CODE_SIZE + 2 * RESERVE_ALIGN)
++static u8 s_fallback_arena[FALLBACK_ARENA_SIZE] __attribute__((aligned(4096)));
++
++static bool place_maps_in_image(SysMainMemory* m)
++{
++	uptr main_base = ((uptr)s_fallback_arena + RESERVE_ALIGN - 1) & ~(RESERVE_ALIGN - 1);
++	uptr code_base = (main_base + m->main.size + RESERVE_ALIGN - 1) & ~(RESERVE_ALIGN - 1);
++	if (code_base + m->code.size > (uptr)s_fallback_arena + sizeof(s_fallback_arena))
++		return false;
++	if (!vmm_map_over(&m->main, main_base))
++		return false;
++	if (!vmm_map_over(&m->code, code_base))
++	{
++		vmm_unmap(&m->main);
++		return false;
++	}
++	log_cb(RETRO_LOG_INFO, "Placed the memory maps in the core's own image (main at %p, code at %p).\n",
++	       (void*)m->main.baseptr, (void*)m->code.baseptr);
++	return true;
++}
++#endif
++
+ /* Any object in the image will do as the point the image is found from. */
+ static const char s_image_anchor = 0;
+ static near_space_t s_space;
+@@ -127,7 +157,14 @@ bool sys_memory_init(SysMainMemory* m)
+ 		return false;
+ 	}
+ 
+-	if (!place_maps(m))
++#if defined(__linux__)
++	/* CRT_XR_LRPS2_IMAGE_MAPS=0 tries the near search first, to test it. */
++	const char* image_maps = getenv("CRT_XR_LRPS2_IMAGE_MAPS");
++	bool placed = (image_maps && image_maps[0] == '0') ? (place_maps(m) || place_maps_in_image(m)) : (place_maps_in_image(m) || place_maps(m));
++#else
++	bool placed = place_maps(m);
++#endif
++	if (!placed)
+ 	{
+ 		vmm_map(&m->main, 0);
+ 		vmm_map(&m->code, 0);
+diff --git a/pcsx2/VirtualMemory.c b/pcsx2/VirtualMemory.c
+index 3fd01ceb6..52450b2dd 100644
+--- a/pcsx2/VirtualMemory.c
++++ b/pcsx2/VirtualMemory.c
+@@ -105,6 +105,27 @@ bool vmm_map(VirtualMemoryManager* m, uptr base)
+ 	return m->baseptr != NULL;
+ }
+ 
++#if defined(__linux__)
++/* CRT XR: exactly at base, replacing whatever the core itself has mapped there
++ * (its own .bss arena, see Memory.c). Only ever given memory the core owns. */
++bool vmm_map_over(VirtualMemoryManager* m, uptr base)
++{
++	void* p;
++	if (m->baseptr || !m->pageuse)
++		return false;
++	if (m->file_handle)
++		p = mmap((void*)base, m->size, PROT_READ | PROT_WRITE,
++				MAP_SHARED | MAP_FIXED, (int)(intptr_t)m->file_handle, 0);
++	else
++		p = mmap((void*)base, m->size, PROT_READ | PROT_WRITE | PROT_EXEC,
++				MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0);
++	if (p == MAP_FAILED || (uptr)p != base)
++		return false;
++	m->baseptr = (u8*)p;
++	return true;
++}
++#endif
++
+ void vmm_unmap(VirtualMemoryManager* m)
+ {
+ 	if (!m->baseptr)
+diff --git a/pcsx2/VirtualMemory.h b/pcsx2/VirtualMemory.h
+index 0bad5ff01..2a2e2b385 100644
+--- a/pcsx2/VirtualMemory.h
++++ b/pcsx2/VirtualMemory.h
+@@ -43,6 +43,10 @@ bool vmm_init(VirtualMemoryManager* m, const char* file_mapping_name, size_t siz
+ /* Maps the block at exactly base, or anywhere when base is 0. */
+ bool vmm_map(VirtualMemoryManager* m, uptr base);
+ void vmm_unmap(VirtualMemoryManager* m);
++#if defined(__linux__)
++/* Maps the block exactly at base over memory the core owns (MAP_FIXED). */
++bool vmm_map_over(VirtualMemoryManager* m, uptr base);
++#endif
+ void vmm_destroy(VirtualMemoryManager* m);
+ 
+ /* The size bytes at offset (both page-aligned) of a mapped block, or NULL

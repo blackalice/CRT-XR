@@ -34,7 +34,7 @@ func run():
 	UI.set_value(app,"picture.gamma",1.8)
 	UI.reset(app,"picture.gamma")
 	check(is_equal_approx(picture.values.gamma,2.25) and picture.mode==2 and is_equal_approx(picture.values.width,.72),"Per-option reset changes only gamma")
-	for section in [1,3]:
+	for section in [2,4]:
 		UI.page(app,1,section)
 		await settle()
 		check(app.menu.get_rect().end.y<=720 and app.menu.get_rect().end.x<=960,"Picture controls fit the shared eye canvas")
@@ -44,7 +44,7 @@ func run():
 	app.save_settings()
 	var config := ConfigFile.new()
 	config.load("user://settings.cfg")
-	check(is_equal_approx(config.get_value("picture","shift_x"),.65) and not config.get_value("picture","keep_aspect") and config.get_value("picture","connection") == 2, "Fitting and connection settings persist together")
+	check(is_equal_approx(config.get_value("display_profiles","data").pictures["game.standard.screen"]["picture.shift_x"],.65) and not config.get_value("display_profiles","data").pictures["game.standard.screen"]["picture.keep_aspect"] and config.get_value("display_profiles","data").pictures["game.standard.screen"].get("picture.mode",config.get_value("picture","connection")) == 2, "Fitting and connection settings persist together")
 	# Read back only coloured test markers; never save or inspect licensed model images.
 	app.settings_panel.hide()
 	picture.reset_fields(picture.FIT_FIELDS)
@@ -96,7 +96,7 @@ func run():
 			check(inside,"Fit TV frames the whole tube at extreme scale %.1f in eye %d" % [scale_value,eye])
 	app.distance_save_delay = -1
 	# Window exit also autosaves now: restore the deliberately saved fixture first.
-	app.apply_settings(config)
+	app.restore_settings(config)
 	app.free()
 	app = load("res://scenes/main.tscn").instantiate()
 	root.add_child(app)

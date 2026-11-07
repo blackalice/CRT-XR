@@ -19,7 +19,7 @@ constexpr GLenum FRAMEBUFFER = 0x8D40, READ_FRAMEBUFFER = 0x8CA8, RENDERBUFFER =
     DEPTH_STENCIL_ATTACHMENT = 0x821A, FRAMEBUFFER_COMPLETE = 0x8CD5, RGBA = 0x1908, UNSIGNED_BYTE = 0x1401,
     READ_FRAMEBUFFER_BINDING = 0x8CAA, PIXEL_PACK_BUFFER = 0x88EB, PIXEL_PACK_BUFFER_BINDING = 0x88ED,
     PACK_ALIGNMENT = 0x0D05, PACK_ROW_LENGTH = 0x0D02, STREAM_READ = 0x88E1, MAP_READ_BIT = 0x0001,
-    SYNC_GPU_COMMANDS_COMPLETE = 0x9117, SYNC_FLUSH_COMMANDS_BIT = 0x0001, WAIT_FAILED = 0x911D, TIMEOUT_EXPIRED = 0x911B;
+    SYNC_GPU_COMMANDS_COMPLETE = 0x9117, SYNC_FLUSH_COMMANDS_BIT = 0x0001, GL_SYNC_WAIT_FAILED = 0x911D, TIMEOUT_EXPIRED = 0x911B;
 using GLsync = void*; using GLsizeiptr = std::ptrdiff_t; using GLintptr = std::ptrdiff_t; using GLuint64 = std::uint64_t;
 // Optional: asynchronous readback through pixel-pack buffers (OpenGL 3.2+).
 struct GlAsync {
@@ -336,7 +336,7 @@ int GlContext::collect(PendingRead& read, std::vector<std::uint8_t>& rgba, unsig
     const GLenum waited = gla.ClientWaitSync(read.fence, SYNC_FLUSH_COMMANDS_BIT, 250000000ull);
     gla.DeleteSync(read.fence);
     read.fence = nullptr;
-    if (waited == WAIT_FAILED) return -1;
+    if (waited == GL_SYNC_WAIT_FAILED) return -1;
     gla_bind_pack(read.buffer);
     const std::size_t size = static_cast<std::size_t>(read.width) * read.height * 4;
     const auto* mapped = static_cast<const std::uint8_t*>(gla.MapBufferRange(PIXEL_PACK_BUFFER, 0, static_cast<GLsizeiptr>(size), MAP_READ_BIT));

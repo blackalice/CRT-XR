@@ -37,6 +37,7 @@ class RetroCore : public godot::RefCounted {
         bool want_vmu = false;
         std::vector<FrameTiming> timings;   // drained by stream_info
         double fps = 60.0, sample_rate = 48000.0;
+        double display_aspect = 0.0;
         int reserve_frames = 8;
         // The device the worker fills directly; null: paced by the wall clock.
         godot::Ref<godot::AudioStreamGeneratorPlayback> playback;
@@ -86,6 +87,7 @@ public:
     void set_option(const godot::String& key, const godot::String& value);
     void set_controller(int device);
     void set_hardware_rendering(bool enabled);
+    void set_destroy_context_first(bool enabled);
     void set_trigger_pressure(int left, int right);
     void set_analog(int left_x, int left_y, int right_x, int right_y);
     godot::Dictionary disc_info() const;

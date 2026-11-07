@@ -41,6 +41,11 @@ public:
     // call into the core then runs on a thread of its own, where the core's hidden
     // OpenGL context lives, so Godot's context on the main thread is never touched.
     bool hardware_rendering = false;
+    // RetroArch's order: context_destroy before retro_unload_game. LRPS2 and
+    // PPSSPP need it (their teardown waits on, or frees, what unload stops).
+    bool destroy_context_first = false;
+    // Set by RETRO_ENVIRONMENT_SHUTDOWN; cleared when a game loads.
+    bool shutdown_requested = false;
     bool load_core(const std::string& path);
     bool load_game(const std::string& path, const std::string& save_directory);
     bool step(std::uint16_t buttons);
@@ -83,6 +88,7 @@ public:
     // False tells the core its audio is unused (input preview) and drops samples.
     bool want_audio = true;
     double fps = 60.0, sample_rate = 32040.0;
+    std::atomic<double> display_aspect{0.0}; // zero: frontend/platform fallback
     std::string error, name;
     std::vector<std::uint8_t> rgba;
     std::vector<std::int16_t> pcm;

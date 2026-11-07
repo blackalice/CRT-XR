@@ -1,6 +1,6 @@
 # TV audio
 
-Settings → Audio → TV sound contains the game sound controls. Up/down selects, left/right adjusts, A toggles, and Y resets the selected option. Preview sound works while the game stays paused.
+Settings → Sound → TV sound contains the game sound controls. Up/down selects, left/right adjusts, A toggles, and Y resets the selected option. Preview sound works while the game stays paused.
 
 | Option | Default | Behaviour |
 |---|---|---|
@@ -19,7 +19,7 @@ The mouse cursor is hidden throughout SBS playback and menus, including the SBS 
 
 ## TV power-on
 
-Audio → TV sound also includes **TV power-on effect** (On by default), **Power-on sound volume** (60%), and **Preview TV power-on**. Preview closes the menu and replays the effect. Zero volume keeps the animation silent; switching the effect Off bypasses both picture and sound.
+TV & picture → TV effects includes **TV power-on effect** (On by default), **TV effect sounds** (60%), and **Preview TV power-on**. Preview closes the menu and replays the effect. Zero volume keeps the animation silent; switching the effect Off bypasses both picture and sound.
 
 The first unobstructed view of the TV in each application session gets a 0.70-second tube warm-up: a dim centre line opens into the full picture. It waits until the startup menu and SBS curtain have closed. Ordinary menu visits, game changes and recentering do not replay it. The game begins/resumes immediately; animation never stalls the core or queues additional game audio. The effect uses the existing CRT shader and screen lights, then stops its controller processing. The `--capture` tooling option bypasses startup for stable comparisons.
 
@@ -55,7 +55,7 @@ Read-only ID3v2.2/2.3/2.4 text frames and ID3v1.1 fallback cover title, artist, 
 
 Music occupies a separate tinted player panel in the main menu, with vector Previous/Play-Pause/Next/Stop icons, track metadata, an adjustable local-MP3 timeline and an album browser link. Hover tooltips name icons; the selected icon has an amber focus ring. Left/right moves between icons, while down exits directly to the menu row below and up selects the timeline. Left/right on the timeline seeks in 10-second steps; pointer users can click or drag to any position. Seeking while paused is retained and applied on resume. Live radio has no seek bar.
 
-Audio → TV sound includes **Dip game during music** (Off by default) and **Game volume dip** (50% by default). This reduces the manually chosen game level multiplicatively while unpaused, non-muted music is playing. It uses a 150 ms fade down and 400 ms recovery, never changes the saved game volume, and adds no rendering passes or game-audio buffering. Stop, local pause, muted music or a radio disconnection restores the chosen game level. Preferences remain global and use the existing settings store.
+Sound → TV sound includes **Lower game volume during music** (Off by default) and **Game volume reduction** (50% by default). This reduces the manually chosen game level multiplicatively while unpaused, non-muted music is playing. It uses a 150 ms fade down and 400 ms recovery, never changes the saved game volume, and adds no rendering passes or game-audio buffering. Stop, local pause, muted music or a radio disconnection restores the chosen game level. Preferences remain global and use the existing settings store.
 
 ## Ready-to-resume music
 

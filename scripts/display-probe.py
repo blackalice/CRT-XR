@@ -29,6 +29,27 @@ def is_glasses_edid(edid):
     return any(name in lowered for name in GLASSES_NAMES)
 
 
+def optional_text(path):
+    try:
+        return path.read_text().strip()
+    except OSError:
+        return None
+
+
+def runtime_snapshot(path, now):
+    if path is None:
+        return None
+    try:
+        if path.stat().st_size > 16384:
+            return None
+        data = json.loads(path.read_text(encoding='utf-8'))
+        if not isinstance(data, dict):
+            return None
+        return dict(age_seconds=max(0.0, now - path.stat().st_mtime), report=data)
+    except (OSError, ValueError, UnicodeError):
+        return None  # First launch or a write in progress; retry next poll.
+
+
 def inventory(root=Path('/sys/class/drm')):
     outputs = []
     for status in sorted(root.glob('card*-*/status')):
@@ -39,7 +60,8 @@ def inventory(root=Path('/sys/class/drm')):
             modes = status.with_name('modes').read_text().splitlines()
             outputs.append(dict(connector=status.parent.name, edid_sha256=hashlib.sha256(edid).hexdigest() if edid else '',
                                 known_glasses=is_glasses_edid(edid), advertised_modes=list(dict.fromkeys(modes)),
-                                active_mode=None))
+                                active_mode=None, enabled=optional_text(status.with_name('enabled')),
+                                dpms=optional_text(status.with_name('dpms'))))
         except OSError:
             continue # Hotplug may remove files between reads; retry on the next poll.
     return outputs
@@ -60,17 +82,21 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--size', default='3840x1080', type=dimensions)
     parser.add_argument('--connector', default='')
+    parser.add_argument('--app-status', type=Path)
     args=parser.parse_args()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     previous=None
+    last_log=0.0
     while True:
         data=report(args.size, connector=args.connector)
+        data['app']=runtime_snapshot(args.app_status, data['timestamp'])
         temporary=args.output.with_suffix('.tmp')
         temporary.write_text(json.dumps(data), encoding='utf-8'); temporary.replace(args.output)
         signature=json.dumps([data['outputs'], data['selected_connector'], data['advertised']])
-        if signature != previous:
+        if signature != previous or time.monotonic()-last_log >= 5.0:
             with args.output.with_suffix('.jsonl').open('a', encoding='utf-8') as log: log.write(json.dumps(data)+'\n')
             previous=signature
+            last_log=time.monotonic()
         time.sleep(.5)
 
 if __name__=='__main__': main()

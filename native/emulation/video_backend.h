@@ -10,7 +10,7 @@ namespace crt_xr {
 // static functions here pick whichever version the system provides.
 class VideoBackend {
 public:
-    enum Style { LETTERBOX = 0, FOURTEEN_NINE = 1, FILL = 2, STRETCH = 3 };
+    enum Style { LETTERBOX = 0, FOURTEEN_NINE = 1, FILL = 2, STRETCH = 3, NATIVE = 4 };
     // How interlaced sources are shown: each field in turn at the field rate
     // (smooth TV motion), or both fields blended into one picture.
     enum Interlace { FIELDS = 0, BLEND = 1 };

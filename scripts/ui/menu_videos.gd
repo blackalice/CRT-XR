@@ -109,6 +109,7 @@ func video_items() -> Array:
 		if FfmpegInstaller.installed():
 			result.append(menu.entry(menu.catalog.action("library.ffmpeg_remove","Remove downloaded video libraries",func(): menu.ask("Remove the video libraries?","Videos stop playing until set up again. The files go when CRT XR next starts.",func(): FfmpegInstaller.remove(); menu.notify("Video libraries will be removed when CRT XR restarts.")),"Your videos are not touched.",false,""),"VIDEO FOLDER","clear","danger"))
 
+		result.append(menu.entry(menu.catalog.action("videos.settings", "Video settings", func(): menu.open_settings_section(1, "Videos"), "Playback, subtitles and VCR appearance."), "PREFERENCES", "gear"))
 	return result
 
 ## Search with the on-screen keys (controller) or a keyboard.
@@ -163,19 +164,19 @@ func video_pause_items() -> Array:
 	var video=h.video
 	var length := float(video.info.get("duration",0.0))
 	var tracks: PackedStringArray=video.track_names()
-	var style_row := {"id":"video.style","label":"Picture shape","kind":"choice","choices":VideoSession.STYLES,"default":h.video_style,
+	var style_row := {"id":"video.style","label":"Broadcast framing","kind":"choice","choices":VideoSession.STYLES,"default":h.video_style,
 		"getter":func(): return video.style,"setter":func(value):
-			video.style=int(value); video.decoder.set_style(video.style); h.remember_video_position(),
-		"help":"How a widescreen video fills the 4:3 tube. Y changes it while watching; each video remembers its own."}
+			video.set_style(int(value)); h.remember_video_position(),
+		"help":"Original aspect keeps the video shape. Other options simulate a 4:3 broadcast before TV & fit."}
 	var resume: Dictionary=menu.catalog.action("resume","Resume",h.close_settings,"Return to the video with your settings saved.",false,"▶")
 	resume=menu.entry(resume,"","play")
 	resume.merge({"hero":true,"min_height":56,"value":""})
 	var timeline := {"id":"video.seek","label":"Position","kind":"seek","layout":"video_seek","getter":func(): return video.clock,"setter":func(value): video.seek_to(float(value)),
 		"duration":func(): return length,"progress":func(): return VideoLibrary.clock(video.clock)+" / "+VideoLibrary.clock(length),
-		"help":"Left/right moves 10 seconds and repeats while held; drag or click the timeline to jump. The TV follows as you scrub."}
+		"help":"Left/right seeks 10 seconds; click or drag to jump."}
 	var tape_row := {"id":"video.tape","label":"Tape look","kind":"choice","choices":VideoSession.TAPES,"default":0,
 		"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); video.set_tape(h.video_tape); h.save_library(),
-		"help":"Plays videos as if from a VHS tape, with noise bars when you fast-forward or rewind. Applies to every video; also in Videos → VCR."}
+		"help":"VHS wear and noise bars while seeking. Shared by all videos."}
 	# Resume leads as it does for games; playback controls stay in the deck.
 	var restart: Dictionary = menu.catalog.action("video.restart","Start over",func(): video.seek_to(0.0); h.video_was_paused_before_menu=false; h.close_settings(),"")
 	restart.merge({"layout":"transport","icon":"refresh","caption":"Start over"})

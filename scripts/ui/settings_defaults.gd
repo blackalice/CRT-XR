@@ -5,7 +5,7 @@ const Showcase = preload("res://scripts/presets/showcase.gd")
 const VIEW := Showcase.VIEW
 const PICTURE := Showcase.CRT
 const ROOM := Showcase.ROOM
-const SLIDERS := {"TV distance (m)": "distance", "Screen height offset (m)": "height_offset",
+const SLIDERS := {"TV distance (m)": "distance", "Screen height offset (m)": "height_offset", "TV height (m)": "height_offset",
 	"Distance adjustment speed": "distance_speed", "TV scale": "tv_scale", "IPD (m)": "ipd",
 	"Convergence (m)": "convergence", "Soft view edges": "edge_fade", "Smoothing (seconds)": "smoothing",
 	"Motion prediction (seconds)": "motion_predict",
@@ -44,11 +44,14 @@ static func apply(app: Node, tab: int) -> void:
 			app.world.picture.reset_fields(app.world.picture.FIT_FIELDS)
 			app.world.picture.reset_fields(app.world.picture.COLOR_FIELDS)
 			app.world.picture.keep_aspect = true
+			app.world.picture.fit_mode = 0
+			app.world.picture.aspect_override = 0
 			app.world.picture.guides = false
 			app.world.picture.mode = Showcase.CONNECTION
 			app.world.picture.refresh()
 		3:
 			for key in ROOM: app.world.set(key, ROOM[key])
+			app.world.set_wide_finish(0)
 			app.world.apply_room_settings()
 		4:
 			for axis in ["yaw", "pitch", "roll"]: app.provider.set("invert_" + axis, false)

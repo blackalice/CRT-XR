@@ -76,7 +76,7 @@ Dictionary VideoDecoder::open(const String& path, int lines, int style, bool har
     if (!engine) engine = VideoBackend::create();
     if (!engine) return result;
     engine->set_interlace(interlace == 1 ? VideoBackend::BLEND : VideoBackend::FIELDS);
-    const auto chosen = static_cast<VideoBackend::Style>(std::clamp(style, 0, 3));
+    const auto chosen = static_cast<VideoBackend::Style>(std::clamp(style, 0, 4));
     if (!engine->open(path.utf8().get_data(), lines, chosen, hardware)) return result;
     const auto& info = engine->info();
     result["width"] = info.width;
@@ -173,7 +173,7 @@ Array VideoDecoder::subtitles_at(double clock) {
     return showing;
 }
 
-void VideoDecoder::set_style(int style) { if (engine) engine->set_style(static_cast<VideoBackend::Style>(std::clamp(style, 0, 3))); }
+void VideoDecoder::set_style(int style) { if (engine) engine->set_style(static_cast<VideoBackend::Style>(std::clamp(style, 0, 4))); }
 int VideoDecoder::get_style() const { return engine ? static_cast<int>(engine->style()) : 0; }
 void VideoDecoder::set_interlace(int mode) {
     interlace = mode == 1 ? 1 : 0;
