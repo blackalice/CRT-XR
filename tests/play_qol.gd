@@ -7,9 +7,16 @@ func check(ok: bool, label: String):
 func _initialize(): call_deferred("run")
 func settle():
 	for i in range(4): await process_frame
+## Saving, loading and launching finish in the background.
+func finish_operation(app):
+	var deadline := Time.get_ticks_msec() + 10000
+	while (app.emulator.transition_busy or app.loading_game) and Time.get_ticks_msec() < deadline: await process_frame
+	await settle()
 func run():
 	var history := History.new()
 	history.path="user://history-test.cfg"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(history.path))
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(history.path+".bak"))
 	history.read("missing/old.sfc")
 	history.played("missing/new.sfc"); history.played("missing/old.sfc")
 	check(history.recent==["missing/old.sfc","missing/new.sfc"],"Recent order, deduplication and missing-card retention")
@@ -22,6 +29,21 @@ func run():
 	var before := history.favourites.duplicate()
 	check(not history.toggle("unwritable.sfc") and history.favourites==before,"Failed favourite save rolls back")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(history.path+".tmp"))
+	history.add_play_time("game3.nes",30); history.add_play_time("game5.nes",4000); history.add_play_time("game3.nes",3000)
+	history.add_play_time("game9.nes",59); history.played("game3.nes")
+	check(history.most_played()==["game5.nes","game3.nes"],"Most played orders by total and skips under a minute")
+	for i in range(25): history.played("other%d.nes" % i)
+	copy=History.new(); copy.path=history.path; copy.read()
+	check(copy.play_time("game3.nes")==3030 and copy.last_played("game3.nes")>0,"Play time and last played outlive the recent list")
+	check(History.duration(59)=="" and History.duration(45*60)=="45m" and History.duration(3*3600+20*60)=="3h 20m" and History.duration(2*3600)=="2h" and History.duration(150*3600+5*60)=="150h","Play time reads as minutes and hours")
+	var Menu = load("res://scripts/ui/menu_controller.gd")
+	var bias := int(Time.get_time_zone_from_system().get("bias",0))*60
+	var noon := 1762862400-bias # 11 Nov 2025 12:00 local, a Tuesday
+	check(Menu.saved_when(noon+14*60,noon+3600)=="today at 12:14","Save time today")
+	check(Menu.saved_when(noon-86400+5*60,noon)=="yesterday at 12:05","Save time yesterday")
+	check(Menu.saved_when(noon-3*86400,noon)=="Sat at 12:00","Save time this week names the day")
+	check(Menu.saved_when(noon-30*86400,noon)=="12 Oct at 12:00","Save time this year")
+	check(Menu.saved_when(noon-400*86400,noon)=="7 Oct 2024 at 12:00","Save time in another year")
 	var app=load("res://scenes/main.tscn").instantiate(); root.add_child(app); app.use_tracking(false)
 	var rom := ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")
 	check(app.load_game(rom),"Diagnostic cartridge loads")
@@ -47,26 +69,35 @@ func run():
 	check(menu.mode=="launch" and menu.selected_id=="launch.continue","Existing auto save offers Continue first")
 	menu.back()
 	check(menu.mode=="recent" and menu.selected_id=="game:"+rom,"Back restores originating game selection")
-	menu.games.select_file(rom); menu.games.launch_game(rom,true)
+	menu.games.select_file(rom); await menu.games.launch_game(rom,true); await finish_operation(app)
 	check(not menu.visible and not app.emulator.paused,"Continue closes the menu and resumes gameplay")
 	app.toggle_settings()
 	app.emulator.write_bytes_atomic(automatic,PackedByteArray([1,2,3]))
 	var corrupt_hash := FileAccess.get_sha256(automatic)
 	app.emulator.auto_saved=true
-	menu.games.select_file(rom); menu.games.launch_game(rom,true)
+	menu.games.select_file(rom); await menu.games.launch_game(rom,true); await finish_operation(app)
 	check(menu.visible and menu.mode=="launch" and menu.error_label.visible and FileAccess.get_sha256(automatic)==corrupt_hash,"Unreadable automatic save stays intact with Start fresh recovery")
-	menu.games.launch_game(rom,false)
+	await menu.games.launch_game(rom,false); await finish_operation(app)
 	check(not menu.visible and not app.emulator.paused,"Start fresh recovers without using the automatic state")
 	await settle(); app.toggle_settings()
 	menu.games.open_history("recent"); menu.select("game:"+rom)
 	menu.games.toggle_favourite()
 	check(rom in app.play_history.favourites,"Selected game can be favourited")
+	var before_play: int=app.play_history.play_time(rom)
+	app.close_settings(); app.track_play_time(61.5)
+	check(app.play_history.play_time(rom)==before_play+61,"Unpaused play adds to the game's total")
+	app.toggle_settings(); app.track_play_time(500.0); app.save_play_clock()
+	check(app.play_history.play_time(rom)==before_play+61,"Menus and pauses do not count as play")
+	menu.games.open_history("most_played")
+	check(menu.heading.text=="Most played" and menu.games.history_paths().has(rom),"Most played lists the game")
+	menu.select("game:"+rom)
+	check(str(menu.selected_row().item.detail).contains("1m played"),"Library row shows play time")
 	menu.mode="pause"; menu.render(); menu.play.state_action(false)
 	check(menu.mode=="confirm" and menu.selected_id=="cancel","Manual load requires confirmation, default Cancel")
 	var current: PackedByteArray=app.emulator.core.save_state()
 	menu.back()
 	check(app.emulator.core.save_state()==current and app.emulator.paused,"Cancelled load preserves progress and pause")
-	menu.play.state_action(false); menu.confirmed()
+	menu.play.state_action(false); menu.confirmed(); await finish_operation(app)
 	check(menu.notification.contains("Loaded • Slot 1"),"Successful load names the slot, counted from 1 like the slot page")
 	app.emulator.auto_saved=false
 	DirAccess.make_dir_absolute(ProjectSettings.globalize_path(app.emulator.auto_path_for(rom)+".tmp"))

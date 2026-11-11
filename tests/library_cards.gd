@@ -27,7 +27,7 @@ func run():
 	index.start(path.path_join("PS2"))
 	check(not index.scanning and index.message.contains("not supported"),"An unsupported console root offers recovery instead of scanning it")
 	var app=load("res://scenes/main.tscn").instantiate(); root.add_child(app); app.use_tracking(false)
-	app.play_history.recent.clear(); app.play_history.favourites.clear()
+	app.play_history.recent.clear(); app.play_history.favourites.clear(); app.play_history.play_seconds.clear()
 	if is_instance_valid(app.menu.boot): app.menu.boot.finish()
 	app.default_rom_dir=path; app.choose_rom(); var menu=app.menu
 	while menu.rom_index.scanning: await process_frame

@@ -1,7 +1,8 @@
 extends RefCounted
 ## Game pages: the library and its locations, the folder browser, console,
-## recent and favourite lists, jump to letter, and choosing a game to play.
+## recent, most played and favourite lists, jump to letter, and choosing a game to play.
 const RomIndex = preload("res://scripts/content/rom_index.gd")
+const History = preload("res://scripts/content/play_history.gd")
 const VideoSession = preload("res://scripts/video/video_session.gd")
 const FfmpegInstaller = preload("res://scripts/video/ffmpeg_installer.gd")
 var host: Node
@@ -40,6 +41,9 @@ func library_items() -> Array:
 	# Quick-access shelves appear once they hold something.
 	if not h.play_history.recent.is_empty(): result.append(
 		menu.card(menu.catalog.action("library.recent","Recently played",func(): open_history("recent"),"Return to your latest games. Unplugged-card entries are kept.",h.play_history.recent.is_empty(),"%d game%s" % [h.play_history.recent.size(),"" if h.play_history.recent.size()==1 else "s"]),"PICK UP & PLAY","recent",menu.MenuSkin.AMBER,"QUICK ACCESS"))
+	var most: Array[String] = h.play_history.most_played()
+	if not most.is_empty(): result.append(
+		menu.card(menu.catalog.action("library.most_played","Most played",func(): open_history("most_played"),"The games you've spent longest with. Only time spent playing counts, not menus or pauses.",false,"%d game%s" % [most.size(),"" if most.size()==1 else "s"]),"YOUR ALL-TIME TOP","most_played",menu.MenuSkin.AMBER,"QUICK ACCESS"))
 	if not h.play_history.favourites.is_empty(): result.append(
 		menu.card(menu.catalog.action("library.favourites","Favourites",func(): open_history("favourites"),"Your favourites across every supported console. Press {X} on a game to add it.",h.play_history.favourites.is_empty(),"%d game%s" % [h.play_history.favourites.size(),"" if h.play_history.favourites.size()==1 else "s"]),"YOUR PERSONAL SHELF","favourites",Color("dfb984"),"QUICK ACCESS"))
 	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"],"psx":["SONY · 32-BIT CD","a9b6cf"],"n64":["NINTENDO · 64-BIT","8fcf9a"],"dreamcast":["SEGA · 128-BIT","c3cbd9"],"gamecube":["NINTENDO · GAMECUBE","b0a6e8"],"wii":["NINTENDO · WII","c9d3dc"],"ps2":["SONY · 128-BIT DVD","8fa3d6"],"psp":["SONY · HANDHELD","b4b8c4"]}
@@ -280,11 +284,18 @@ func game_item(path: String, label: String) -> Dictionary:
 		parts.append(menu.library.Registry.SYSTEMS[system].name if not system.is_empty() else "Game")
 	if not FileAccess.file_exists(path): parts.append("Storage unavailable")
 	elif RomIndex.Folders.system(folder).is_empty(): parts.append(folder)
+	var total := play_label(path)
+	if not total.is_empty(): parts.append(total)
 	var played: int=host.play_history.last_played(path)
-	if played>0: parts.append("Played "+menu.ago(played))
+	if played>0: parts.append(("last " if not total.is_empty() else "Played ")+menu.ago(played))
 	item["detail"]=" · ".join(parts)
 	with_box_art(item,path)
 	return item
+
+## A game's total play time, "3h 20m played", or empty under a minute.
+func play_label(path: String) -> String:
+	var total := History.duration(host.play_history.play_time(path))
+	return "" if total.is_empty() else total + " played"
 
 ## Shows a game's box art in its row, when the player's scrapes have some.
 func with_box_art(item: Dictionary, rom_path: String) -> Dictionary:
@@ -306,18 +317,25 @@ func game_entries() -> Array:
 	if menu.search_query.is_empty(): return games
 	return games.filter(func(game): return str(game.label).to_lower().contains(menu.search_query.to_lower()))
 
+## The paths of a quick-access list: "recent", "favourites" or "most_played".
+func shelf(which: String) -> Array:
+	match which:
+		"recent": return host.play_history.recent
+		"most_played": return host.play_history.most_played()
+	return host.play_history.favourites
+
 func history_paths() -> Array:
-	var paths: Array=host.play_history.recent if menu.mode=="recent" else host.play_history.favourites
+	var paths: Array=shelf(menu.mode)
 	if menu.search_query.is_empty(): return paths
 	return paths.filter(func(path): return str(path).get_file().get_basename().to_lower().contains(menu.search_query.to_lower()))
 
 func open_alphabet() -> void:
-	if menu.mode not in ["games","recent","favourites"]: return
+	if menu.mode not in ["games","recent","favourites","most_played"]: return
 	menu.remember(); menu.clear_input(); alphabet_origin=menu.mode; menu.mode="alphabet"; menu.render()
 
 func alphabet_entries() -> Array:
 	if alphabet_origin=="games": return game_entries()
-	var paths: Array=host.play_history.recent if alphabet_origin=="recent" else host.play_history.favourites
+	var paths: Array=shelf(alphabet_origin)
 	var result: Array=[]
 	for path in paths:
 		var label: String=str(path).get_file().get_basename()
@@ -351,6 +369,7 @@ func launch_return_label() -> String:
 		"pause": return "Go to Home" if not host.emulator.loaded and not host.video.loaded else "Back to menu"
 		"recent": return "Back to Recently played"
 		"favourites": return "Back to Favourites"
+		"most_played": return "Back to Most played"
 		"browser": return "Back to folders"
 		"games", "library": return "Back to library"
 	return "Back"
@@ -365,7 +384,7 @@ func launch_items() -> Array:
 	fresh["detail_getter"] = func(): return "In-game saves are kept."
 	return [continuing, fresh, menu.catalog.action("launch.cancel",launch_return_label(),menu.back,"",false,"")]
 
-## Recently played or favourites, with Jump to letter on long lists.
+## Recently played, most played or favourites, with Jump to letter on long lists.
 func history_items() -> Array:
 	var paths: Array = history_paths()
 	var result: Array = [menu.catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",paths.is_empty())] if paths.size() > JUMP_MINIMUM else []

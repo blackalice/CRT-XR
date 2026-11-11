@@ -687,7 +687,7 @@ func back() -> void:
 			# A folder picker opened by first-run setup returns to it.
 			if welcome.choosing=="library": welcome.resume()
 			else: mode="library_tools"; render()
-		"games", "recent", "favourites": mode="library"; render()
+		"games", "recent", "favourites", "most_played": mode="library"; render()
 		"alphabet": mode=games.alphabet_origin; render()
 		"launch": restore(games.launch_origin)
 		"slot": mode="settings"; render()
@@ -898,6 +898,22 @@ static func ago(unix: int) -> String:
 	var date := Time.get_date_dict_from_unix_time(unix)
 	return "%d %s" % [date.day, ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][date.month - 1]]
 
+## When something was saved, in local time: "today at 14:32", "yesterday at
+## 09:05", "Tue at 14:32" this week, then "3 Nov at 14:32" or "3 Nov 2025 at 14:32".
+static func saved_when(unix: int, now := 0) -> String:
+	if unix <= 0: return "at an unknown time"
+	if now <= 0: now = int(Time.get_unix_time_from_system())
+	var bias := int(Time.get_time_zone_from_system().get("bias", 0)) * 60
+	var local := Time.get_datetime_dict_from_unix_time(unix + bias)
+	var clock := "%02d:%02d" % [local.hour, local.minute]
+	var days := floori(float(now + bias) / 86400.0) - floori(float(unix + bias) / 86400.0)
+	if days <= 0: return "today at " + clock
+	if days == 1: return "yesterday at " + clock
+	if days < 7: return "%s at %s" % [["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][local.weekday], clock]
+	var month: String = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][local.month - 1]
+	if local.year == Time.get_datetime_dict_from_unix_time(now + bias).year: return "%d %s at %s" % [local.day, month, clock]
+	return "%d %s %d at %s" % [local.day, month, local.year, clock]
+
 ## The end of a long folder path, so it fits on one line: "…/snes/rpgs".
 static func short_path(path: String, keep := 2) -> String:
 	var parts := path.replace("\\", "/").split("/", false)
@@ -940,7 +956,7 @@ func get_items() -> Array:
 			if h.video.loaded: return videos.video_pause_items()
 			return play.pause_items() if h.emulator.loaded else play.home_items()
 		"launch": return games.launch_items()
-		"recent", "favourites": return games.history_items()
+		"recent", "favourites", "most_played": return games.history_items()
 		"settings": return catalog.pages(category)[subsection].rows
 		"help": return []
 		"welcome": return welcome.items()
@@ -1099,7 +1115,7 @@ func _render(incremental: bool) -> void:
 				parent=tiles
 				item["tile_index"]=int(tile_numbers.get(named,0)); item["tile_count"]=int(tile_counts[named]); item["tile_columns"]=tiles.columns
 				tile_numbers[named]=int(item.tile_index)+1
-			if mode in ["games", "recent", "favourites"] and host.game_list_columns > 1 and item.get("layout", "") == "game" and item.has("rom_path"):
+			if mode in ["games", "recent", "favourites", "most_played"] and host.game_list_columns > 1 and item.get("layout", "") == "game" and item.has("rom_path"):
 				if game_grid == null:
 					game_grid = GridContainer.new(); game_grid.columns = host.game_list_columns
 					game_grid.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -1217,7 +1233,7 @@ func _render(incremental: bool) -> void:
 			section_tabs.add_child(tab)
 			if i==subsection: reveal_section_tab.call_deferred(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","most_played":"Most played","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm":
 		state_previews.request(confirmation.get("preview", ""))
@@ -1230,7 +1246,7 @@ func _render(incremental: bool) -> void:
 	if mode=="rename" and rename_preset>=0: heading.text="Name your preset"
 	if mode=="rename" and rename_room>=0: heading.text="Name your room"
 	if mode=="my_preset": heading.text=pictures.my_preset_name(pictures.my_preset)
-	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites","videos"] and (mode!="videos" or videos.videos_shown()) and not preview
+	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites","most_played","videos"] and (mode!="videos" or videos.videos_shown()) and not preview
 	search_field.placeholder_text="Search videos…  (Ctrl+F)" if mode=="videos" else "Search games…  (Ctrl+F)"
 	if not search_field.visible and search_field.has_focus(): search_field.release_focus()
 	body.visible = not preview
@@ -1251,7 +1267,7 @@ func _render(incremental: bool) -> void:
 	var saved: Dictionary = memory.get(state_key(),{})
 	var preferred: String = selected_id if preview else str(saved.get("id",""))
 	if mode=="library" and not scan_preferred_id.is_empty(): preferred=scan_preferred_id
-	if preferred.is_empty() and mode in ["games","recent","favourites"]:
+	if preferred.is_empty() and mode in ["games","recent","favourites","most_played"]:
 		# Land on the first game rather than the Jump to letter tool above it.
 		for row in rows:
 			if row.item.get("layout","")=="game": preferred=row.item.id; break
@@ -1275,6 +1291,8 @@ func _render(incremental: bool) -> void:
 		var console := Label.new()
 		var system: String = library.Registry.identify(games.launch_path)
 		console.text = library.Registry.SYSTEMS.get(system, {}).get("name", "Game")
+		var played: String = games.play_label(games.launch_path)
+		if not played.is_empty(): console.text += " · " + played
 		console.add_theme_font_size_override("font_size",16)
 		console.add_theme_color_override("font_color",MenuSkin.MUTED)
 		column.add_child(console)
@@ -1284,7 +1302,7 @@ func _render(incremental: bool) -> void:
 		var preview_panel := ResumePreview.new(); hero.add_child(preview_panel)
 		var auto: String=host.emulator.auto_path_for(games.launch_path)
 		state_previews.request(auto)
-		preview_panel.describe(auto,"Saved " + ago(host.emulator.state_stamp(auto)))
+		preview_panel.describe(auto,"Saved " + saved_when(host.emulator.state_stamp(auto)))
 		var actions := VBoxContainer.new(); actions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; actions.alignment=BoxContainer.ALIGNMENT_CENTER
 		actions.add_theme_constant_override("separation",12); hero.add_child(actions)
 		for row in rows: column.remove_child(row); actions.add_child(row)
@@ -1465,7 +1483,7 @@ func refresh_labels() -> void:
 		var count: int = games.game_entries().size()
 		subtitle.text = count_caption(count,"game")
 		if count>games.GAMES_PER_PAGE: subtitle.text += " · Page %d of %d" % [games.game_page+1,ceili(float(count)/games.GAMES_PER_PAGE)]
-	elif mode in ["recent","favourites"]:
+	elif mode in ["recent","favourites","most_played"]:
 		subtitle.text = count_caption(games.history_paths().size(),"game")
 	elif mode=="launch": subtitle.text = ""
 	elif mode=="library_tools": subtitle.text = "Where CRT XR finds your games · Your files stay where they are"
@@ -1489,7 +1507,7 @@ func refresh_labels() -> void:
 	subtitle_row.visible = subtitle.visible
 	show_step_marks(welcome.number() if mode=="welcome" and subtitle.visible else 0)
 	scan_icon.visible = mode=="library" and rom_index.scanning
-	if mode in ["games","recent","favourites"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
+	if mode in ["games","recent","favourites","most_played"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
 	if notification_time>0 and notification_context==state_key(): help_label.text = notification
 	elif mode=="help": help_label.text=""
 	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in any console list and press {X}."
@@ -1561,7 +1579,7 @@ func refresh_hints(row) -> void:
 	preview_button.text="Preview" if pad else "Preview  [X]"
 	preview_glyph.visible=false
 	# One vocabulary everywhere: Deck glyphs for the pad, key names for the keyboard.
-	var parts: Array=["D-pad Select" if mode in ["games","recent","favourites"] and host.game_list_columns>1 else "↑↓ Select"]
+	var parts: Array=["D-pad Select" if mode in ["games","recent","favourites","most_played"] and host.game_list_columns>1 else "↑↓ Select"]
 	var open := "A Open" if pad else "Enter Open"
 	var go_back := "B Back" if pad else "Backspace Back"
 	if mode=="pause" and preview:
@@ -1577,7 +1595,7 @@ func refresh_hints(row) -> void:
 			if row.item.has("default"): parts.append("Y Reset")
 		if preview_available() and not preview: parts.append("X Preview")
 		parts.append(("B Settings" if pad else "Backspace Settings") if preview else go_back)
-	elif mode in ["games","recent","favourites"]:
+	elif mode in ["games","recent","favourites","most_played"]:
 		parts.append(open)
 		if row!=null and row.item.has("rom_path"): parts.append_array(["X Favourite","Y Full title" if search_query.is_empty() else "Y Clear search"])
 		parts.append(go_back)
@@ -1703,7 +1721,7 @@ func navigate(next: Vector2i) -> void:
 			while candidate>=0 and candidate<rows.size() and rows[candidate].item.get("layout","")=="transport":
 				if not rows[candidate].disabled: select(rows[candidate].item.id); return
 				candidate+=next.x
-		elif mode in ["browser","games","recent","favourites"]: jump_entries(next.x*10)
+		elif mode in ["browser","games","recent","favourites","most_played"]: jump_entries(next.x*10)
 		else: adjust(next.x)
 
 ## The key a row of deck keys is entered at: the one marked "lead", else the first.
@@ -1737,7 +1755,7 @@ func jump_entries(amount: int) -> void:
 	for row in rows:
 		if row.disabled: continue
 		if mode=="browser" and not str(row.item.id).begins_with("file:"): continue
-		if mode in ["recent","favourites"] and row.item.get("layout","")!="game": continue
+		if mode in ["recent","favourites","most_played"] and row.item.get("layout","")!="game": continue
 		candidates.append(row.item.id)
 	if candidates.is_empty(): return
 	var current := candidates.find(selected_id)
@@ -1864,12 +1882,12 @@ func handle(event: InputEvent) -> bool:
 			JOY_BUTTON_B: back()
 			JOY_BUTTON_Y:
 				if mode=="browser": games.open_default()
-				elif mode in ["games","recent","favourites"]: games.game_title_action()
+				elif mode in ["games","recent","favourites","most_played"]: games.game_title_action()
 				else: reset_option()
 			JOY_BUTTON_X:
 				if mode=="welcome": welcome.skip()
 				elif mode=="browser": games.open_cards()
-				elif mode in ["games","recent","favourites"]: games.toggle_favourite()
+				elif mode in ["games","recent","favourites","most_played"]: games.toggle_favourite()
 				else: toggle_preview()
 			JOY_BUTTON_RIGHT_STICK: host.recenter()
 			JOY_BUTTON_LEFT_SHOULDER:
@@ -1898,7 +1916,7 @@ func handle(event: InputEvent) -> bool:
 			update_direction()
 		return true
 	if event is InputEventKey:
-		if mode in ["games","recent","favourites","videos"]:
+		if mode in ["games","recent","favourites","most_played","videos"]:
 			if event.pressed and not event.echo and event.ctrl_pressed and event.physical_keycode==KEY_F:
 				clear_input(); search_field.grab_focus(); return true
 			if search_field.has_focus():
@@ -1920,14 +1938,14 @@ func handle(event: InputEvent) -> bool:
 				KEY_ENTER,KEY_SPACE: activate()
 				KEY_BACKSPACE: back()
 				KEY_Y:
-					if mode in ["games","recent","favourites"]: games.game_title_action()
+					if mode in ["games","recent","favourites","most_played"]: games.game_title_action()
 					else: reset_option()
 				KEY_X:
 					if mode=="welcome": welcome.skip()
-					elif mode in ["games","recent","favourites"]: games.toggle_favourite()
+					elif mode in ["games","recent","favourites","most_played"]: games.toggle_favourite()
 					else: toggle_preview()
 				KEY_J:
-					if mode in ["games","recent","favourites"]: games.open_alphabet()
+					if mode in ["games","recent","favourites","most_played"]: games.open_alphabet()
 				KEY_R:
 					if mode=="library": games.refresh_library()
 				KEY_TAB:
@@ -1981,7 +1999,7 @@ func set_input_kind(kind: String) -> void:
 	if kind==input_kind: return
 	input_kind=kind
 	help_label.controller=kind=="controller"; error_label.controller=kind=="controller"
-	search_field.visible=kind=="keyboard" and mode in ["games","recent","favourites","videos"] and (mode!="videos" or videos.videos_shown())
+	search_field.visible=kind=="keyboard" and mode in ["games","recent","favourites","most_played","videos"] and (mode!="videos" or videos.videos_shown())
 	if kind=="controller" and search_field.has_focus():
 		search_field.release_focus(); select(selected_id,false)
 	refresh_labels()

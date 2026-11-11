@@ -30,6 +30,13 @@ func _draw() -> void:
 		var points := PackedVector2Array()
 		for i in range(10): points.append(Vector2(30,30)+Vector2.from_angle(-PI/2+i*PI/5)*(25 if i%2==0 else 12))
 		draw_colored_polygon(points,accent)
+	elif kind=="most_played":
+		# A podium: the tallest step in the middle, a star above it.
+		block(Rect2(5,36,16,18),accent,2); block(Rect2(22,26,16,28),accent,2); block(Rect2(39,42,16,12),accent,2)
+		var star := PackedVector2Array()
+		for i in range(10): star.append(Vector2(30,13)+Vector2.from_angle(-PI/2+i*PI/5)*(9 if i%2==0 else 4))
+		draw_colored_polygon(star,accent)
+		draw_line(Vector2(30,31),Vector2(30,40),ink,3)
 	elif kind=="locations":
 		block(Rect2(6,18,48,35),accent); block(Rect2(6,12,23,12),accent); block(Rect2(12,26,36,3),ink)
 	elif kind in ["gamegear","gameboy","gba","atarilynx","ngpc"]:

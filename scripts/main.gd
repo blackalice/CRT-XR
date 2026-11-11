@@ -226,6 +226,10 @@ var menu_view: SubViewport
 var menu_overlays: Array[TextureRect] = []
 var play_history := preload("res://scripts/content/play_history.gd").new()
 var last_game_path := ""
+## Unpaused play of the running game not yet added to its total.
+var play_clock_game := ""
+var play_clock := 0.0
+const PLAY_CLOCK_SAVE_SECONDS := 60.0
 ## Videos are opt-in: nothing appears in the library until a folder is chosen.
 var video_dir := ""
 var video_style := 0
@@ -510,6 +514,10 @@ func start_application() -> void:
 		profile_boot_action("cover", func(): show_game_cover(emulator.rom_path if active else ""))
 		profile_boot_action("preferences", func(): change_game_preferences(active))
 		profile_boot_action("programme", func(): show_programme(active, emulator.fps, emulator.display_aspect))
+		# The outgoing game keeps its play; the clock starts again for the new one.
+		save_play_clock()
+		play_clock_game = emulator.rom_path if active else ""
+		play_clock = 0.0
 		if active:
 			last_game_path = emulator.rom_path
 			profile_boot_action("history", func():
@@ -761,6 +769,7 @@ func apply_settings(config: ConfigFile) -> void:
 
 func _process(delta: float) -> void:
 	notice_time = maxf(0.0, notice_time - delta)
+	track_play_time(delta)
 	if video.loaded and not video.paused:
 		video_checkpoint += delta
 		if video_checkpoint >= VIDEO_CHECKPOINT_SECONDS: remember_video_position()
@@ -992,6 +1001,7 @@ func _input(event: InputEvent) -> void:
 
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT and is_instance_valid(emulator):
+		save_play_clock()
 		emulator.gamepad.clear()
 		clear_menu_gamepad()
 		if is_instance_valid(music): music.save_resume()
@@ -1030,7 +1040,22 @@ func use_tracking(real_tracking: bool) -> void:
 	if changed: vertical_fov = xr_fov if real_tracking else desktop_fov
 	if changed and display_settings.initialized: display_settings.restore_view()
 
+## Counts play only while the game runs: not paused, in a menu or loading.
+func track_play_time(delta: float) -> void:
+	if play_clock_game.is_empty() or not emulator.loaded or emulator.paused or not loading_path.is_empty(): return
+	if emulator.rom_path != play_clock_game: return
+	play_clock += delta
+	if play_clock >= PLAY_CLOCK_SAVE_SECONDS: save_play_clock()
+
+## Adds the clock's whole seconds to the game's total in the play history.
+func save_play_clock() -> void:
+	var seconds := int(play_clock)
+	if seconds <= 0 or play_clock_game.is_empty(): return
+	play_clock -= seconds
+	play_history.add_play_time(play_clock_game, seconds)
+
 func request_exit() -> void:
+	save_play_clock()
 	remember_video_position()
 	if not emulator.save_auto() or not save_settings():
 		if not settings_panel.visible: toggle_settings()
@@ -1054,6 +1079,7 @@ func request_exit() -> void:
 	get_tree().quit()
 
 func _exit_tree() -> void:
+	save_play_clock()
 	if video_library != null: video_library.stop_thumbnails()
 	Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
 	if is_instance_valid(emulator) and is_instance_valid(settings_panel): save_settings()
@@ -1094,6 +1120,8 @@ func toggle_settings() -> void:
 		close_settings()
 		return
 	settings_dirty = false
+	# The library shows play time up to the moment the menu opened.
+	save_play_clock()
 	was_paused_before_menu = emulator.paused
 	if emulator.loaded: emulator.set_paused(true)
 	if video.loaded:

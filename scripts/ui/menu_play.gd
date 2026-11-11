@@ -20,7 +20,7 @@ func state_items() -> Array:
 		var saved: bool=FileAccess.file_exists(path)
 		if saved: menu.state_previews.request(path)
 		var help: String=("Replaces this save with the game as it is now." if saved else "Saves the game as it is now.") if states_saving else ("Returns to this point. Progress since then is lost." if saved else "Nothing is saved here yet.")
-		var item: Dictionary=menu.entry(menu.catalog.action("state.%d" % slot,"Slot %d" % (slot+1),func(): choose_state(slot),help,not states_saving and not saved,""),"","","","Saved "+menu.ago(host.emulator.state_stamp(path)) if saved else "Empty")
+		var item: Dictionary=menu.entry(menu.catalog.action("state.%d" % slot,"Slot %d" % (slot+1),func(): choose_state(slot),help,not states_saving and not saved,""),"","","","Saved "+menu.saved_when(host.emulator.state_stamp(path)) if saved else "Empty")
 		item["thumbnail_path"]=path; item["thumbnail_icon"]="save"; item["thumbnail_size"]=Vector2(64,48); item["thumbnail"]=state_picture(path)
 		result.append(item)
 	return result
@@ -35,10 +35,10 @@ func choose_state(slot: int) -> void:
 	var path: String=host.emulator.state_path(slot)
 	var game: String=host.emulator.rom_path.get_file().get_basename()
 	if states_saving:
-		if FileAccess.file_exists(path): menu.ask("Overwrite slot %d?" % (slot+1),"Replace the save for %s from %s?" % [game,menu.ago(host.emulator.state_stamp(path))],func(): perform_state_action(true,slot),path)
+		if FileAccess.file_exists(path): menu.ask("Overwrite slot %d?" % (slot+1),"Replace the save for %s from %s?" % [game,menu.saved_when(host.emulator.state_stamp(path))],func(): perform_state_action(true,slot),path)
 		else: perform_state_action(true,slot)
 	elif FileAccess.file_exists(path):
-		menu.ask("Load slot %d?" % (slot+1),"Return to %s as saved %s. Progress since then is lost." % [game,menu.ago(host.emulator.state_stamp(path))],func(): perform_state_action(false,slot),path)
+		menu.ask("Load slot %d?" % (slot+1),"Return to %s as saved %s. Progress since then is lost." % [game,menu.saved_when(host.emulator.state_stamp(path))],func(): perform_state_action(false,slot),path)
 
 ## Step-by-step help for glasses on this platform, in the help page markup
 ## (scripts/ui/help_article.gd).
@@ -79,10 +79,10 @@ func state_action(saving: bool) -> void:
 	if not saving:
 		if not FileAccess.file_exists(host.emulator.state_path()):
 			menu.show_error("No manual save yet. Choose Save state first."); return
-		menu.ask("Load manual save?","Current progress will be replaced. %s • Slot 1 • saved %s" % [host.emulator.rom_path.get_file().get_basename(),menu.ago(host.emulator.state_stamp(host.emulator.state_path()))],func(): perform_state_action(false),host.emulator.state_path())
+		menu.ask("Load manual save?","Current progress will be replaced. %s • Slot 1 • saved %s" % [host.emulator.rom_path.get_file().get_basename(),menu.saved_when(host.emulator.state_stamp(host.emulator.state_path()))],func(): perform_state_action(false),host.emulator.state_path())
 		return
 	if FileAccess.file_exists(host.emulator.state_path()):
-		menu.ask("Overwrite manual save?", "Replace the save for %s from %s?" % [host.emulator.rom_path.get_file().get_basename(),menu.ago(host.emulator.state_stamp(host.emulator.state_path()))],func(): perform_state_action(true),host.emulator.state_path())
+		menu.ask("Overwrite manual save?", "Replace the save for %s from %s?" % [host.emulator.rom_path.get_file().get_basename(),menu.saved_when(host.emulator.state_stamp(host.emulator.state_path()))],func(): perform_state_action(true),host.emulator.state_path())
 	else: perform_state_action(true)
 
 func reset_game() -> void:
@@ -140,7 +140,9 @@ func home_items() -> Array:
 		var system: String = menu.library.Registry.identify(h.last_game_path)
 		if not system.is_empty(): parts.append(menu.library.Registry.SYSTEMS[system].name)
 		var played: int = h.play_history.last_played(h.last_game_path)
-		if played > 0: parts.append("played " + menu.ago(played))
+		var total: String = menu.games.play_label(h.last_game_path)
+		if not total.is_empty(): parts.append(total)
+		if played > 0: parts.append(("last " if not total.is_empty() else "played ") + menu.ago(played))
 		home.append(menu.games.with_box_art(menu.entry(menu.catalog.action("home.continue",h.last_game_path.get_file().get_basename(),func(): menu.games.select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",false,"›"),"","play","primary"," · ".join(parts)),h.last_game_path))
 		# The two libraries sit side by side.
 		main = [menu.tile(library_row,"gamepad","","main",2), menu.tile(video_row,"video","","main",2)]
