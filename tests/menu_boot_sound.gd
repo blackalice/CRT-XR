@@ -14,7 +14,7 @@ func run() -> void:
 	app.apply_settings(ConfigFile.new())
 	check(app.menu_boot_sound and not app.menu_sounds, "Boot sound defaults on independently of menu ticks")
 	app.menu_reduced_motion = false
-	var options: Array = app.menu.catalog.pages(9)[2].rows
+	var options: Array = app.menu.catalog.pages(9).filter(func(page): return page.title == "Audio & vibration")[0].rows
 	var option: Dictionary = options.filter(func(row): return row.id == "access.boot_sound")[0]
 	option.setter.call(false)
 	var saved: ConfigFile = app.capture_settings()

@@ -57,7 +57,9 @@ func run() -> void:
 			session.flush_sram()
 			var ram: PackedByteArray = FileAccess.get_file_as_bytes(session.save_directory.path_join(session.rom_hash+".srm"))
 			check(not ram.is_empty() and 0x5A in ram, "Cartridge battery RAM persisted")
-		check(is_equal_approx(session.display_aspect,Registry.SYSTEMS[pair[1]].aspect), "System display proportions")
+		# The core's own reported aspect wins; the console's registry value is only the fallback.
+		var reported := float(session.core.info().get("display_aspect",0.0))
+		check(is_equal_approx(session.display_aspect,reported if reported>=.2 and reported<=8.0 else Registry.SYSTEMS[pair[1]].aspect), "System display proportions follow the core: %.4f" % session.display_aspect)
 		var battery: PackedByteArray = session.core.save_ram()
 		check(session.reset_game() and session.loaded and session.core.run_frame(0) and session.core.save_ram()==battery, "Reset restarts the console and keeps battery RAM: "+pair[1])
 	var copy := FileAccess.get_file_as_bytes("res://build/crt-xr-probe.md")

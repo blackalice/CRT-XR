@@ -42,6 +42,8 @@ func run() -> void:
 	await settle(3)
 	check(shift(app, 0, "curve_shift") == 0.0 and shift(app, 0, "curve_height") == 0.0, "The 16-bit menu stays flat even with Curved menu on")
 	app.menu_curve = false
+	# The compact preview opens from a page of picture sliders (CRT); Presets holds only buttons.
+	app.menu.subsection = 2; app.menu.render(); await settle()
 	app.menu.toggle_preview()
 	await settle()
 	check(app.menu.preview and not app.menu_depth_view.dim_nodes[0].visible, "The compact preview leaves the room undimmed")

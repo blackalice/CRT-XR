@@ -29,7 +29,7 @@ func run() -> void:
 	app.stop_boot_sound()
 	bed.update(0.75, true, false, app.boot_audio)
 	check(is_equal_approx(bed.gain, 1.0), "Crossfade reaches the chosen low volume")
-	var options: Array = app.menu.catalog.pages(9)[2].rows
+	var options: Array = app.menu.catalog.pages(9).filter(func(page): return page.title == "Audio & vibration")[0].rows
 	var toggle: Dictionary = options.filter(func(row): return row.id == "access.menu_music")[0]
 	var volume: Dictionary = options.filter(func(row): return row.id == "access.menu_music_volume")[0]
 	volume.setter.call(0.05)

@@ -22,7 +22,7 @@ func run() -> void:
 	var menu = app.menu
 	menu.open_settings(); menu.category = 9; menu.subsection = 0; menu.render()
 	await settle()
-	check(menu.catalog.pages(9)[2].title == "Audio & vibration", "Menu section is named Audio & vibration")
+	check(menu.catalog.pages(9).any(func(page): return page.title == "Audio & vibration"), "Menu section is named Audio & vibration")
 	for code in [JOY_BUTTON_LEFT_SHOULDER, JOY_BUTTON_RIGHT_SHOULDER]:
 		var before: int = menu.category
 		menu.sound_player.stop()

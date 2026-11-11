@@ -21,6 +21,8 @@ func run():
  check(game.contains("test.sfc") and game.contains("SNES") and game.contains("Test core 1") and game.contains("50.00 fps"), "Reports loaded game details")
  for system in ["psx", "n64"]:
   app.emulator.system_id = system
+  # A real load fills in the console's controller layout; this pretend load must too.
+  app.emulator.controls = preload("res://scripts/emulation/controller_layouts.gd").standard(system, app.emulator.Registry.SYSTEMS[system])
   var row: Dictionary = catalog.pages(10)[2].rows[0]
   check(row.disabled and row.disabled_reason.contains("unavailable"), "Input preview explains unsupported " + system)
  app.emulator.loaded = false

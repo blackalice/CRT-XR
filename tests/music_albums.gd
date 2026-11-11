@@ -103,7 +103,9 @@ func run():
  var saved: ConfigFile=app.capture_settings()
  check(saved.get_value("music","duck_game")==true and saved.get_value("music","duck_amount")==.5,"Ducking settings persist globally")
  app.menu.music.open_music_browser(ProjectSettings.globalize_path(folder))
- check(app.menu.items[0].id=="music.album" and app.menu.items.any(func(i):return "First café" in i.label),"Folder browser has Play album and readable ID3 titles")
+ var ids: Array=app.menu.items.map(func(i):return str(i.id))
+ var first_track: int=ids.find(ids.filter(func(id):return id.begins_with("music.track."))[0]) if ids.any(func(id):return id.begins_with("music.track.")) else -1
+ check(ids.has("music.album") and ids.find("music.album")<first_track and app.menu.items.any(func(i):return "First café" in i.label),"Folder browser offers Play album before the tracks, with readable ID3 titles")
  app.free()
  for i in range(3): await process_frame
  await create_timer(.15).timeout
