@@ -26,7 +26,10 @@ const PICTURE_SECTIONS := ["crt", "picture"]
 ## Picture profile used for every video, kept apart from games and the test signal.
 const VIDEO_PROFILE := "video"
 const VIDEO_CHECKPOINT_SECONDS := 30.0
-const PROFILE_NAMES := ["Everyday", "Evening", "Bright room"]
+## Names for setup slots until you name them yourself.
+const PROFILE_NAMES := ["Setup 1", "Setup 2", "Setup 3"]
+## What a saved setup holds: TV placement, the room and the base picture.
+const SETUP_SECTIONS := ["view", "room", "crt", "picture"]
 var settings_store := SettingsStore.new()
 var screen_picture_profiles: Dictionary = {}
 var display_settings := preload("res://scripts/ui/display_preferences.gd").new()
@@ -110,7 +113,9 @@ var welcome_done := true
 ## The folder the music browser opens first, chosen in first-run setup.
 var music_folder := ""
 ## Accessibility: use the separate reading picture instead of the current CRT settings.
-var menu_clean_feed := false
+## On by default: menus on the TV use a plain, readable picture, the same for
+## every game. Off, they take the current game's colour, signal and tube.
+var menu_clean_feed := true
 var tv_menu: Node
 var menu_was_open := false
 ## A light controller tick as the menu selection moves, and on confirm.
@@ -147,6 +152,21 @@ var previous_tracking_status := ""
 var center := Quaternion.IDENTITY
 var displayed := Quaternion.IDENTITY
 var stereo := false
+## Flat screen mode (scripts/rendering/flat_screen.gd): the picture fills the
+## window without the room, for playing without glasses. flat_screen_saved is
+## the saved choice; --flat turns the mode on for one launch without saving it.
+var flat_screen := false
+var flat_screen_saved := false
+var flat_screen_launch := "--flat" in OS.get_cmdline_user_args()
+var flat: Node
+## Flat view has been offered once (first-run setup's question, or the startup
+## suggestion when no glasses are found); it is not offered again.
+var flat_view_offered := false
+## Seconds since startup without glasses tracking, before suggesting Flat view.
+var no_glasses_time := 0.0
+const FLAT_VIEW_OFFER_SECONDS := 5.0
+## Scripted test runs never get the suggestion unless a test asks for it.
+var flat_offer_in_tests := false
 var distance: float = Showcase.VIEW.distance
 var height_offset: float = Showcase.VIEW.height_offset
 var right_stick_distance: bool = Showcase.VIEW.right_stick_distance
@@ -467,6 +487,10 @@ func start_application() -> void:
 		panel.add_child(visual_bar)
 		visualizer_bars.append(visual_bar)
 	world.television.add_child(vmu_display)
+	flat = preload("res://scripts/rendering/flat_screen.gd").new()
+	flat.name = "FlatScreen"
+	add_child(flat)
+	flat.setup(self, panels)
 	emulator = Emulation.new()
 	add_child(emulator)
 	var LiveTrace = preload("res://scripts/diagnostics/live_trace.gd")
@@ -669,6 +693,9 @@ func apply_settings(config: ConfigFile) -> void:
 	display_settings.read(config)
 	scene_msaa=clampi(int(config.get_value("display_profiles","msaa",0)),0,2)
 	apply_scene_msaa()
+	flat_screen_saved = bool(config.get_value("display","flat_screen",false))
+	flat_view_offered = bool(config.get_value("display","flat_view_offered",flat_view_offered))
+	set_flat_screen(flat_screen_saved or flat_screen_launch, false)
 	var profiles = config.get_value("screen_profiles", "pictures", screen_picture_profiles)
 	if profiles is Dictionary: screen_picture_profiles = profiles.duplicate(true)
 	for key in vmu_display.DEFAULTS: vmu_display.set(key,config.get_value("vmu",key,vmu_display.DEFAULTS[key]))
@@ -683,7 +710,10 @@ func apply_settings(config: ConfigFile) -> void:
 	picture_preset_signature=str(config.get_value("menu","picture_preset_signature",""))
 	room_preset_id=str(config.get_value("menu","room_preset_id",""))
 	room_preset_signature=str(config.get_value("menu","room_preset_signature",""))
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve","menu_clean_feed"]: set(key,bool(config.get_value("accessibility",key,false)))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,bool(config.get_value("accessibility",key,false)))
+	# The plain menu picture became the default on 13 November 2026. Settings saved
+	# before then always stored the old default (off), so they take the new one once.
+	menu_clean_feed = bool(config.get_value("accessibility","menu_clean_feed",true)) if config.has_section_key("accessibility","menu_plain_picture_default") else true
 	menu_boot_sound = bool(config.get_value("accessibility","menu_boot_sound",true))
 	apply_boot_sound()
 	menu_music_enabled = bool(config.get_value("accessibility","menu_music_enabled",true))
@@ -808,6 +838,7 @@ func _process(delta: float) -> void:
 	if recovery_elapsed >= 1.0:
 		recovery_elapsed = 0.0
 		refresh_startup_status()
+	offer_flat_view(delta)
 	# The menu on the TV is a live picture, so the tube keeps updating under it.
 	world.picture.paused = false if visualizer.active else (menu_open and not tv_menu.active) or (emulator.paused if emulator.loaded else pattern.paused) and not tv_menu.active
 	if right_stick_distance and not menu_open:
@@ -893,7 +924,7 @@ func display_runtime_report() -> Dictionary:
 	return {"timestamp":Time.get_unix_time_from_system(),"stereo":stereo,
 		"width":get_window().size.x,"height":get_window().size.y,"screen":[screen.x,screen.y],
 		"frames":Engine.get_process_frames(),"draws":Engine.get_frames_drawn(),
-		"room_fps":Engine.get_frames_per_second(),"msaa":scene_msaa,"widescreen":world.widescreen,
+		"room_fps":Engine.get_frames_per_second(),"msaa":scene_msaa,"flat_screen":flat_screen,"widescreen":world.widescreen,
 		"tracking_valid":provider.valid,"tracking_status":provider.status,"camera_degrees":[angles.x,angles.y,angles.z],
 		"system":emulator.system_id if emulator.loaded else "","source_aspect":world.picture.source_aspect}
 
@@ -979,6 +1010,9 @@ func _input(event: InputEvent) -> void:
 			KEY_TAB:
 				if not emulator.loaded: toggle_settings()
 			KEY_F2: set_stereo(not stereo)
+			KEY_F3:
+				set_flat_screen(not flat_screen)
+				show_notice("Flat screen on" if flat_screen else "Flat screen off · back in the room")
 			KEY_F11: toggle_fullscreen()
 			KEY_SPACE:
 				if emulator.loaded: emulator.set_paused(not emulator.paused)
@@ -1109,10 +1143,42 @@ func set_stereo(value: bool) -> void:
 	stereo = value
 	Input.mouse_mode=Input.MOUSE_MODE_HIDDEN if value else Input.MOUSE_MODE_VISIBLE
 	panels[1].visible = value
-	views[1].render_target_update_mode = SubViewport.UPDATE_ALWAYS if value else SubViewport.UPDATE_DISABLED
+	views[1].render_target_update_mode = SubViewport.UPDATE_ALWAYS if value and not flat_screen else SubViewport.UPDATE_DISABLED
 	close_settings()
 	if DisplayServer.window_get_mode() == DisplayServer.WINDOW_MODE_WINDOWED:
 		DisplayServer.window_set_size(Vector2i(1280, 360) if value else (Vector2i(1280,800) if "--deck-mono" in OS.get_cmdline_user_args() else Vector2i(1280,720)))
+
+## Once, at the menu, when glasses have not been found for a few seconds: asks
+## whether to use Flat view. Not during first-run setup (it asks itself), the
+## boot sequence, a game or video, side-by-side 3D, or scripted test runs.
+func offer_flat_view(delta: float) -> void:
+	if flat_view_offered or flat_screen or stereo or (provider.real and provider.valid):
+		no_glasses_time = 0.0
+		return
+	if ("--script" in OS.get_cmdline_args() and not flat_offer_in_tests) or capture_requested or not settings_panel.visible: return
+	if menu_boot_pending or startup_loading or is_instance_valid(sbs_prompt) or menu.welcome.active: return
+	if emulator.loaded or video.loaded or not menu.mode in ["pause", "launch"]: return
+	no_glasses_time += delta
+	if no_glasses_time < FLAT_VIEW_OFFER_SECONDS: return
+	flat_view_offered = true
+	settings_dirty = true
+	menu.ask("Use Flat view?", "No glasses found. Flat view shows the game full-screen on this screen, without the room. Switch any time with Flat view beside Exit.", func():
+		set_flat_screen(true)
+		show_notice("Flat view on · Flat view beside Exit switches back"), "", "Use Flat view", "Keep the room")
+
+## Turns flat screen mode on or off. The room's eye views stop rendering while it
+## is on; the picture, its settings and the menu carry on as they are.
+## remember=false applies it without changing the saved choice (--flat, loading).
+func set_flat_screen(value: bool, remember := true) -> void:
+	if remember:
+		flat_screen_saved = value
+		flat_screen_launch = false
+		settings_dirty = true
+	flat_screen = value
+	views[0].render_target_update_mode = SubViewport.UPDATE_DISABLED if value else SubViewport.UPDATE_ALWAYS
+	views[1].render_target_update_mode = SubViewport.UPDATE_ALWAYS if stereo and not value else SubViewport.UPDATE_DISABLED
+	flat.set_active(value)
+	if is_instance_valid(menu): menu.refresh()
 
 func toggle_settings() -> void:
 	var profile_start := Time.get_ticks_usec()
@@ -1480,7 +1546,8 @@ func profile_path() -> String:
 
 func save_profile(title: String) -> bool:
 	var config := ConfigFile.new()
-	SettingsStore.copy_sections(capture_settings(), config, PackedStringArray(["view","room","crt","picture","emulation"]))
+	# The view, the room and the picture; input delay belongs to the games, not the room.
+	SettingsStore.copy_sections(capture_settings(), config, PackedStringArray(SETUP_SECTIONS))
 	config.set_value("meta","name",title.strip_edges().left(32) if not title.strip_edges().is_empty() else PROFILE_NAMES[selected_profile])
 	if SettingsStore.write(profile_path(),config) == OK:
 		show_notice("Setup saved: " + str(config.get_value("meta","name")))
@@ -1499,7 +1566,8 @@ func load_profile() -> void:
 		return
 	profile_undo = capture_settings()
 	var merged := capture_settings()
-	SettingsStore.copy_sections(saved,merged,PackedStringArray(["view","room","crt","picture","emulation"]))
+	# Older setups also stored input delay ([emulation]); it is no longer applied.
+	SettingsStore.copy_sections(saved,merged,PackedStringArray(SETUP_SECTIONS))
 	merged.set_value("room","widescreen",world.widescreen)
 	# Validate against live types before applying user-editable files.
 	var validator := ConfigFile.new()
@@ -1613,12 +1681,14 @@ func reset_all_options() -> void:
 	world.set_widescreen(false)
 	for index in range(5): SettingsDefaults.apply(self,index)
 	scene_msaa=0;apply_scene_msaa()
+	set_flat_screen(false)
 	display_settings.scope=0
 	display_settings.base=display_settings.live_picture()
 	display_settings.refresh_screen()
 	emulator.tv_audio.reset_defaults()
 	music.reset_defaults()
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve","menu_clean_feed"]: set(key,false)
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_haptics","menu_curve"]: set(key,false)
+	menu_clean_feed = true
 	menu_boot_sound = true
 	menu_music_enabled = true
 	menu_music_volume = 0.10
@@ -1700,10 +1770,11 @@ func screenshot_directory() -> String:
 func take_screenshot() -> String:
 	if taking_screenshot: return ""
 	taking_screenshot = true
-	# Read only the 3D eye viewport: HUD, settings and the SBS join are outside it.
+	# Read only the eye viewport (or the flat picture): HUD, settings and the SBS
+	# join are outside it.
 	# Keep the running display mode and the game's current pause state intact.
 	await RenderingServer.frame_post_draw
-	var image := views[0].get_texture().get_image()
+	var image: Image = (flat.view if flat_screen else views[0]).get_texture().get_image()
 	var folder := screenshot_directory()
 	var error := DirAccess.make_dir_recursive_absolute(folder)
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-")
@@ -1766,6 +1837,7 @@ func capture_settings() -> ConfigFile:
 	config.set_value("preferences","metrics_visible",metrics_visible)
 	config.set_value("preferences","game_fps_visible",game_fps_visible)
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","menu_screensaver","menu_screensaver_delay"]: config.set_value("accessibility",key,get(key))
+	config.set_value("accessibility","menu_plain_picture_default",true)
 	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
 	config.set_value("accessibility","menu_music_volume",menu_music_volume)
 	config.set_value("welcome","done",welcome_done)
@@ -1796,6 +1868,8 @@ func capture_settings() -> ConfigFile:
 	config.set_value("picture", "aspect_override", world.picture.aspect_override)
 	config.set_value("display_profiles","data",display_settings.data.duplicate(true))
 	config.set_value("display_profiles","msaa",scene_msaa)
+	config.set_value("display","flat_screen",flat_screen_saved)
+	config.set_value("display","flat_view_offered",flat_view_offered)
 	config.set_value("room", "widescreen", world.widescreen)
 	config.set_value("screen_profiles", "pictures", screen_picture_profiles.duplicate(true))
 	config.set_value("crt", "glass", glass_reflections)

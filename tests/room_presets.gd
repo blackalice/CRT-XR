@@ -66,7 +66,11 @@ func run() -> void:
 	var quick_rows: Array = menu.catalog.pages(7)[0].rows.map(func(row): return row.id)
 	check("quick.room" in quick_rows, "Quick settings offers the room switch")
 	var room_page: Array = menu.catalog.pages(3)[0].rows.map(func(row): return row.id)
-	check(menu.catalog.pages(3)[0].title == "Presets" and room_page.slice(0, 4) == ["room.preset", "room.mine.0", "room.mine.1", "room.mine.2"], "Room → Presets has the switch and three rooms of your own")
+	var built_in: Array = room_page.filter(func(id): return str(id).begins_with("room.look."))
+	check(menu.catalog.pages(3)[0].title == "Rooms" and built_in.size() == rooms.BUILT_IN.size() and room_page.filter(func(id): return str(id).begins_with("room.mine.")).size() == 3, "Room → Rooms lists the built-in rooms like picture looks, then three of your own")
+	var bright: Dictionary = menu.catalog.pages(3)[0].rows.filter(func(row): return row.id == "room.look.bright")[0]
+	bright.action.call()
+	check(rooms.active() == "bright" and menu.catalog.pages(3)[0].rows.filter(func(row): return row.id == "room.look.bright")[0].value == "✓ Active", "Applying a built-in room marks it active")
 	menu.open_my_room(0)
 	check(menu.mode == "my_room" and menu.heading.text == "Late night" and "room_mine.apply" in ids(menu), "Each room has its own page")
 	var in_use: String = rooms.active()

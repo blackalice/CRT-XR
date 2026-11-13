@@ -27,7 +27,7 @@ func run():
             if e is InputEventJoypadButton or e is InputEventJoypadMotion:InputMap.action_erase_event(action,e)
     app=load("res://scenes/main.tscn").instantiate();root.add_child(app);app.use_tracking(false);await settle()
     var m=app.menu
-    check(m.items.map(func(i):return i.id)==["home.library","home.videos","transport.choose","pause.room","pause.preset","pause.game_volume","pause.view.distance","pause.view.height_offset","pause.display","home.glasses","home.settings"],"Startup offers both libraries, music, six quick settings and help/settings actions")
+    check(m.items.map(func(i):return i.id)==["home.library","home.videos","transport.choose","pause.room","pause.preset","pause.game_volume","pause.view.distance","pause.tv","pause.fit","home.glasses","home.settings"],"Startup offers both libraries, music, six quick settings and help/settings actions")
     check(m.selected_id=="home.library","No-game startup hides Continue and selects Library")
     # Two rows of quick settings precede the first-run help/settings actions.
     var tiled=m.items.filter(func(i):return i.get("layout","")=="tile" and not i.get("quick",false)).map(func(i):return i.id)
@@ -39,7 +39,7 @@ func run():
     m.navigate(Vector2i(1,0));m.navigate(Vector2i(1,0))
     check(m.selected_id=="pause.game_volume","Right stops at the edge of the grid")
     m.navigate(Vector2i(0,1))
-    check(m.selected_id=="pause.display","Down into the next grid keeps to the same column (%s)"%m.selected_id)
+    check(m.selected_id=="pause.fit","Down into the next grid keeps to the same column (%s)"%m.selected_id)
     m.navigate(Vector2i(-1,0));m.navigate(Vector2i(0,-1))
     check(m.selected_id=="pause.preset","Up from a middle tile lands on the middle tile above (%s)"%m.selected_id)
     m.navigate(Vector2i(0,-1))
@@ -52,7 +52,7 @@ func run():
     check(m.editing_id.is_empty() and app.settings_panel.visible,"B finishes adjusting and keeps the menu open")
     app.music.game_volume=volume
     m.select("home.library",false)
-    m.open_settings();page(0,0);m.select("view.distance",false);app.distance=3.0
+    m.open_settings();page(0,1);m.select("view.distance",false);app.distance=3.0
     await button(JOY_BUTTON_DPAD_RIGHT)
     check(is_equal_approx(app.distance,3.1) and m.category==0,"Right adjusts immediately")
     var held_right:=InputEventJoypadButton.new();held_right.device=7;held_right.button_index=JOY_BUTTON_DPAD_RIGHT;held_right.pressed=true
@@ -74,11 +74,11 @@ func run():
     check(m.category==0 and m.selected_id=="view.height_offset","Category focus is restored")
     for value in [.9,.95]:
         var e:=InputEventJoypadMotion.new();e.device=7;e.axis=JOY_AXIS_TRIGGER_RIGHT;e.axis_value=value;Input.parse_input_event(e);Input.flush_buffered_events();await settle()
-    check(m.subsection==1,"Holding a trigger advances only one subsection")
+    check(m.subsection==2,"Holding a trigger advances only one subsection")
     var release:=InputEventJoypadMotion.new();release.device=7;release.axis=JOY_AXIS_TRIGGER_RIGHT;release.axis_value=0;Input.parse_input_event(release);Input.flush_buffered_events()
-    page(4,1);m.select("controls.distance",false);var before:bool=app.right_stick_distance;await button(JOY_BUTTON_A)
+    page(0,1);m.select("controls.distance",false);var before:bool=app.right_stick_distance;await button(JOY_BUTTON_A)
     check(app.right_stick_distance!=before,"A toggles immediately")
-    page(1,5);app.world.picture.mode=0;m.render();await settle();m.select("picture.connection",false)
+    page(1,2);app.world.picture.mode=0;m.render();await settle();m.select("picture.connection",false)
     var disabled=row("picture.composite_strength")
     check(disabled.disabled and disabled.adjust_buttons.all(func(b):return b.disabled),"Composite controls and their arrows are disabled in RGB")
     check(disabled.unavailable_label.visible and not disabled.unavailable_label.text.is_empty(),"Disabled reason is visible")
@@ -86,14 +86,14 @@ func run():
     check(app.world.picture.mode==0,"Disabled arrows cannot change another selected control")
     await button(JOY_BUTTON_DPAD_RIGHT)
     check(app.world.picture.mode==1 and not row("picture.composite_strength").disabled,"Changing connection immediately enables composite controls")
-    page(2,0);app.emulator.tv_audio.mode=0;app.emulator.tv_audio.apply();m.render();await settle()
+    page(2,1);app.emulator.tv_audio.mode=0;app.emulator.tv_audio.apply();m.render();await settle()
     check(row("audio.room_amount").disabled and row("audio.speaker_character").disabled and row("audio.directional_strength").disabled,"Original audio mode disables bypassed controls")
     check(row("audio.preview")!=null and app.emulator.tv_audio.preview_player.bus=="Master","Sound preview uses the selected audio route")
     if DisplayServer.get_name()!="headless":
         app.emulator.tv_audio.preview_sample()
         check(app.emulator.tv_audio.preview_player.playing,"Preview starts while the game menu remains open")
         app.emulator.tv_audio.preview_player.stop()
-    page(3,0);m.select("room.ambient",false);await button(JOY_BUTTON_X)
+    page(3,1);m.select("room.ambient",false);await button(JOY_BUTTON_X)
     check(m.preview,"Room lighting has working compact preview")
     await button(JOY_BUTTON_B)
     m.games.open_library();m.rom_index.cancel()
@@ -134,7 +134,7 @@ func run():
                 DirAccess.make_dir_recursive_absolute("res://build/ui-notes-review")
                 app.menu_view.get_texture().get_image().save_png("res://build/ui-notes-review/%d-%d.png"%[cat_index,section])
     check(count>80 and unique.has("system.reset"),"All settings remain reachable, including General reset")
-    page(0,0);m.select("view.distance",false)
+    page(0,1);m.select("view.distance",false)
     var motion:=InputEventJoypadMotion.new();motion.device=7;motion.axis=JOY_AXIS_LEFT_Y;motion.axis_value=1;m.handle(motion)
     Input.joy_connection_changed.emit(7,false)
     check(m.direction==Vector2i.ZERO,"Disconnect stops held movement")
@@ -142,7 +142,7 @@ func run():
     check(m.direction==Vector2i.ZERO,"Focus loss clears held navigation")
     m.open_pause();m.select("home.settings",false);m.exit_footer.pressed.emit();await settle();await button(JOY_BUTTON_B)
     check(m.mode=="pause" and m.selected_id=="home.settings","Exit footer cancellation restores selection")
-    m.open_settings();page(6,1);m.select("system.reset",false);await button(JOY_BUTTON_A)
+    m.open_settings();page(6,2);m.select("system.reset",false);await button(JOY_BUTTON_A)
     check(m.mode=="confirm" and m.selected_id=="cancel","Reset-all confirmation defaults to Cancel")
     await button(JOY_BUTTON_B)
     check(m.mode=="settings" and m.selected_id=="system.reset","Cancelling reset restores selection")

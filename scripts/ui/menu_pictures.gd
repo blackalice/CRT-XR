@@ -28,7 +28,7 @@ func apply_preset(id: String) -> void:
 	picture_undo=host.capture_settings()
 	host.apply_picture_preset(id)
 	host.picture_preset_id=id; host.picture_preset_signature=picture_signature()
-	menu.refresh(); menu.notify("Picture preset applied · Undo available on TV & picture → Presets")
+	menu.refresh(); menu.notify("Picture preset applied · Undo available in Picture → Looks")
 
 func undo_picture_preset() -> void:
 	if picture_undo==null: return
@@ -40,7 +40,7 @@ func undo_picture_preset() -> void:
 	menu.refresh(); menu.notify("Previous picture restored")
 
 ## Choosing any preset first keeps a hand-tuned ("Custom") picture on disk, so
-## Custom in Quick settings or TV & picture → Presets can always bring it back.
+## Custom in the pause menu or Picture → Looks can always bring it back.
 func custom_picture_path() -> String:
 	return "user://presets/picture-custom.cfg"
 
@@ -92,7 +92,7 @@ func apply_my_preset(index: int) -> void:
 	if not my_preset_saved(index): return
 	remember_custom_picture()
 	apply_saved_picture(host.SettingsStore.new().read(my_preset_path(index)),"mine.%d" % index)
-	menu.refresh(); menu.notify(my_preset_name(index)+" applied · Undo available on TV & picture → Presets")
+	menu.refresh(); menu.notify(my_preset_name(index)+" applied · Undo available in Picture → Looks")
 
 func save_my_preset(index: int) -> void:
 	var title := my_preset_name(index)

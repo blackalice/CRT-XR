@@ -11,6 +11,17 @@ var capturing := -1
 var capture_name := ""
 var captures := 0
 
+## True while the Games scope strip says This game; false for all the console's games.
+func editing_game() -> bool:
+	return menu.catalog.game_scope == 0
+
+## The layout the page shows and edits: this game's (its own, or the console's
+## it would start from) or the console's own.
+func edited_layout() -> Dictionary:
+	var emulator: Node = host.emulator
+	if editing_game(): return emulator.controls
+	return Layouts.resolve(emulator.system_id, emulator.Registry.SYSTEMS[emulator.system_id], "")
+
 func rows() -> Array:
 	var emulator: Node = host.emulator
 	if not emulator.loaded:
@@ -19,7 +30,8 @@ func rows() -> Array:
 	var system: String = emulator.system_id
 	var spec: Dictionary = emulator.Registry.SYSTEMS[system]
 	var console: String = spec.get("short", spec.name)
-	var layout: Dictionary = emulator.controls
+	var layout: Dictionary = edited_layout()
+	var own := Layouts.has_game_layout(emulator.rom_hash)
 	var presets := Layouts.presets(system, spec)
 	var current := Layouts.preset_of(system, spec, layout)
 	var choices: Array = presets.map(func(entry): return entry[1])
@@ -27,12 +39,9 @@ func rows() -> Array:
 	if current == "custom":
 		choices.append("Custom")
 		index = choices.size() - 1
+	var where: String = ("This game's own layout." if own else "Changing anything here gives this game its own layout, starting from the %s one." % console) if editing_game() else ("Every %s game without its own layout uses this." % console + (" This game has its own, so it is not affected." if own else ""))
 	var result := [
-		{"id":"controls.scope","label":"Apply control changes to","kind":"choice","choices":["%s defaults" % console,"This game"],"default":0,"visual":false,
-			"getter":func(): return 1 if Layouts.has_game_layout(emulator.rom_hash) else 0,
-			"setter":func(value): set_game_layout(int(value) == 1),
-			"help":"All %s games share a layout unless a game has its own. This game only keeps changes to this game; switching back returns it to the console's layout." % console},
-		{"id":"controls.preset","label":"Layout","kind":"choice","choices":choices,"default":0,"visual":false,
+		{"id":"controls.preset","label":"Layout","kind":"choice","choices":choices,"default":0,"visual":false,"section_detail":where,
 			"getter":func(): return index,
 			"setter":func(value): if int(value) < presets.size(): apply(presets[int(value)][3].duplicate(true)),
 			"help":presets[index][2] if index < presets.size() else "Your own changes. Choose a preset to start again from it."}]
@@ -56,30 +65,35 @@ func rows() -> Array:
 		row["value_inputs"] = inputs
 		result.append(row)
 	result.append(menu.catalog.action("controls.reset","Reset to Standard",func(): apply(Layouts.standard(system, spec)),
-		"Puts back the console's usual layout for %s." % ("this game" if Layouts.has_game_layout(emulator.rom_hash) else "all %s games" % console),current == "standard",""))
+		"Puts back the console's usual layout for %s." % ("this game" if editing_game() else "all %s games" % console),current == "standard",""))
+	# Removing this game's own layout is its own step, and asks first: changing
+	# the scope above never deletes anything.
+	result.append(menu.catalog.unavailable(menu.catalog.action("controls.remove_game","Remove this game's layout…",remove_game_layout,
+		"%s goes back to the %s layout. Other games are not affected." % [emulator.rom_path.get_file().get_basename(), console],not own,""),"This game already uses the %s layout." % console))
 	return result
 
-## Saves a layout where the game's controls come from (its own, or its console's) and uses it.
+func remove_game_layout() -> void:
+	var emulator: Node = host.emulator
+	var spec: Dictionary = emulator.Registry.SYSTEMS[emulator.system_id]
+	menu.ask("Remove this game's layout?", "%s goes back to the %s layout. Other games are not affected." % [emulator.rom_path.get_file().get_basename(), spec.get("short", spec.name)], func():
+		if Layouts.save("game", emulator.rom_hash, null) != OK:
+			menu.show_error("Could not save the controller layout. Check free space.")
+			return
+		emulator.reload_controls()
+		menu.refresh())
+
+## Saves a layout where the page is editing (this game, or the console's games) and uses it.
 func apply(layout: Dictionary) -> void:
 	var emulator: Node = host.emulator
-	var own := Layouts.has_game_layout(emulator.rom_hash)
-	if Layouts.save("game" if own else "console", emulator.rom_hash if own else emulator.system_id, layout) != OK:
-		menu.show_error("Could not save the controller layout. Check free space.")
-		return
-	emulator.reload_controls()
-	menu.refresh()
-
-## This game starts its own layout from the one in use, or goes back to the console's.
-func set_game_layout(own: bool) -> void:
-	var emulator: Node = host.emulator
-	if Layouts.save("game", emulator.rom_hash, emulator.controls.duplicate(true) if own else null) != OK:
+	var to_game := editing_game()
+	if Layouts.save("game" if to_game else "console", emulator.rom_hash if to_game else emulator.system_id, layout) != OK:
 		menu.show_error("Could not save the controller layout. Check free space.")
 		return
 	emulator.reload_controls()
 	menu.refresh()
 
 func set_stick(side: String, value: String) -> void:
-	var layout: Dictionary = host.emulator.controls.duplicate(true)
+	var layout: Dictionary = edited_layout().duplicate(true)
 	layout[side] = value
 	apply(layout)
 
@@ -124,7 +138,7 @@ func handle(event: InputEvent) -> bool:
 	if input.is_empty(): return true
 	var id := capturing
 	capturing = -1
-	var layout: Dictionary = host.emulator.controls.duplicate(true)
+	var layout: Dictionary = edited_layout().duplicate(true)
 	Layouts.assign(layout, input, id)
 	apply(layout)
 	# The assigned control stays latched until released, so it cannot also act in the menu.

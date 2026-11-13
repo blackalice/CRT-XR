@@ -26,14 +26,16 @@ func run() -> void:
 	var menu = app.menu
 	menu.open_pause()
 	await fits("First-run Home")
-	menu.select("pause.view.height_offset",false); await settle()
-	var height_row = menu.selected_row()
-	var height_size: Vector2 = height_row.size
-	var height_lines: int = height_row.title_label.get_line_count()
-	for offset in [-1.5,-0.15,0.05,1.5,0.0]:
-		app.height_offset=offset; height_row.refresh(); await settle()
-		check(height_row.size==height_size and height_row.title_label.get_line_count()==height_lines and height_row.title_label.text==height_row.item.label, "Height dot cannot alter the tile layout at %.2f m" % offset)
-		check(menu.column.size.y<=menu.scroll.size.y+1.0, "Changed height keeps the default Home free of scrolling")
+	check(menu.items.filter(func(item): return item.get("quick", false)).map(func(item): return item.id) == ["pause.room", "pause.preset", "pause.game_volume", "pause.view.distance", "pause.tv", "pause.fit"], "Six quick tiles: room, picture, volume, TV position, TV and fit")
+	menu.select("pause.view.distance",false); await settle()
+	var position_row = menu.selected_row()
+	check(position_row.item.label == "TV position", "The placement tile is called TV position")
+	var position_size: Vector2 = position_row.size
+	var position_lines: int = position_row.title_label.get_line_count()
+	for value in [1.2, 2.0, 4.95, app.Showcase.VIEW.distance]:
+		app.distance=value; position_row.refresh(); await settle()
+		check(position_row.size==position_size and position_row.title_label.get_line_count()==position_lines and position_row.title_label.text==position_row.item.label, "Changed-value dot cannot alter the tile layout at %.2f m" % value)
+		check(menu.column.size.y<=menu.scroll.size.y+1.0, "A changed distance keeps the default Home free of scrolling")
 	var rom := ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")
 	app.last_game_path = rom; menu.open_pause()
 	await fits("Home with Continue")
@@ -43,7 +45,9 @@ func run() -> void:
 	for kind in ["controller", "keyboard"]:
 		menu.set_input_kind(kind)
 		for id in ["pause.view.distance", "pause.view.height_offset"]:
-			menu.select(id, false); menu.activate(); await settle()
+			# TV position opens the preview; height is the second control inside it.
+			menu.select("pause.view.distance", false); menu.activate(); await settle()
+			if id.ends_with("height_offset"): menu.navigate(Vector2i.DOWN); await settle()
 			check(menu.preview and menu.mode == "pause" and not menu.body.visible and not app.tv_menu.active, id + " opens the floating placement preview: " + kind)
 			var before: float = app.distance if id.ends_with("distance") else app.height_offset
 			menu.navigate(Vector2i.RIGHT); await settle()
@@ -52,17 +56,23 @@ func run() -> void:
 			menu.reset_option()
 			check(is_equal_approx(app.distance if id.ends_with("distance") else app.height_offset, app.Showcase.VIEW.distance if id.ends_with("distance") else app.Showcase.VIEW.height_offset), "Y restores the placement default")
 			menu.back(); await settle()
-			check(not menu.preview and menu.selected_id == id and menu.column.size.y <= menu.scroll.size.y + 1.0, "Back returns to the same quick tile without a scrollbar")
+			check(not menu.preview and menu.selected_id == "pause.view.distance" and menu.column.size.y <= menu.scroll.size.y + 1.0, "Back returns to the TV position tile without a scrollbar")
 	menu.select("pause.view.distance", false); menu.activate(); await settle()
 	menu.navigate(Vector2i.DOWN)
 	check(menu.selected_id == "pause.view.height_offset" and menu.preview, "Preview up/down switches between the two placement controls")
 	menu.back(); await settle()
 	check(not menu.items.any(func(item):return item.id=="pause.music_volume"), "Quick settings no longer duplicates music volume")
-	menu.select("pause.display", false); menu.activate()
 	var previous: int=app.display_settings.display_choice()
+	menu.select("pause.tv", false); menu.activate()
 	menu.navigate(Vector2i.RIGHT)
-	check(app.display_settings.display_choice()==(previous+1)%6 and not menu.preview, "Quick Display switches the current game's TV and fitting in place")
-	check(menu.selected_id=="pause.display" and menu.editing_id=="pause.display", "Display switch preserves controller focus and adjustment mode")
+	var now: int = app.display_settings.display_choice()
+	check(now / 3 != previous / 3 and now % 3 == previous % 3 and app.world.widescreen == (now >= 3) and not menu.preview, "The TV tile switches the TV and keeps the fit")
+	check(menu.selected_id=="pause.tv" and menu.editing_id=="pause.tv", "The TV switch keeps focus and adjustment mode")
+	menu.back()
+	menu.select("pause.fit", false); menu.activate()
+	menu.navigate(Vector2i.RIGHT)
+	var fitted: int = app.display_settings.display_choice()
+	check(fitted / 3 == now / 3 and fitted % 3 == (now % 3 + 1) % 3, "The Fit tile changes the fit and keeps the TV")
 	menu.back()
 	app.free()
 	print("QUICK SETTINGS: ", failures, " failures")

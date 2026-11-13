@@ -27,3 +27,9 @@ static func get_value(app, id: String):
 static func reset(app, id: String) -> void:
 	select(app,id)
 	app.menu.reset_option()
+
+## Chooses a scope on the strip of a scoped settings category (Picture 1, Games 10).
+static func set_scope(app, category: int, index: int) -> void:
+	page(app, category)
+	app.menu.set_scope(index)
+	app.menu.render()

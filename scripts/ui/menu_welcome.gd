@@ -158,9 +158,9 @@ func items() -> Array:
 		"media": return media_items()
 		"comfort": return comfort_items()
 		"done":
-			var library: Dictionary = menu.entry(c.action("welcome.library", "Open Game Library", func(): finish(true), "Run this setup again from Settings › Help & system › Run setup again.", false, "›"), "", "gamepad")
+			var library: Dictionary = menu.entry(c.action("welcome.library", "Open Game Library", func(): finish(true), "Run this setup again from Settings › Setups & help › Help › Run setup again.", false, "›"), "", "gamepad")
 			library["emphasis"] = "primary"
-			return [library, menu.entry(c.action("welcome.home", "Go to Home", func(): finish(false), "Run this setup again from Settings › Help & system › Run setup again.", false, "›"), "", "home")]
+			return [library, menu.entry(c.action("welcome.home", "Go to Home", func(): finish(false), "Run this setup again from Settings › Setups & help › Help › Run setup again.", false, "›"), "", "home")]
 	return []
 
 func tracking_working() -> bool:
@@ -170,6 +170,13 @@ func view_items() -> Array:
 	var c = menu.catalog
 	var h = host
 	var result: Array = []
+	# Asked here, so nobody without glasses is walked through tracking and recentring.
+	h.flat_view_offered = true
+	result.append({"id": "welcome.view.playing", "label": "Playing with", "kind": "choice", "choices": ["Glasses", "This screen"], "default": 0,
+		"section": "HOW YOU PLAY", "row_icon": "glasses", "visual": false,
+		"getter": func(): return 1 if h.flat_screen else 0,
+		"setter": func(value): h.set_flat_screen(int(value) == 1); menu.refresh(),
+		"help": "This screen shows the game full-screen without the room (Flat view). Switch any time with Flat view beside Exit."})
 	var games_tv: Dictionary = h.display_settings.policy_row("welcome.tv.games", keep_display_preferences)
 	games_tv["section"] = "YOUR TV"
 	games_tv["section_detail"] = "Either TV can show 4:3 or widescreen games. Fit adds borders; Fill crops; Stretch changes shape."
@@ -178,13 +185,17 @@ func view_items() -> Array:
 	var fitting_help: Dictionary = c.fitting_help("welcome.tv.help")
 	fitting_help["compact"] = true
 	result.append(fitting_help)
+	# Flat view has no room to place the TV in, no head to track and no menu position.
+	if h.flat_screen:
+		result.append(next_row("region"))
+		return result
 	if not tracking_working():
 		result.append(menu.tile(c.action("welcome.view.connect", "Connect glasses", func(): h.use_tracking(true); menu.refresh(), "Connects or retries the glasses' head tracking.", false, ""), "glasses", "", "tracking", 2))
 		result.append(menu.tile(c.action("welcome.view.fixed", "Use fixed view", func(): h.use_tracking(false); h.recenter(); menu.refresh(), "Keeps the TV still. This is also how CRT XR plays on a normal screen.", false, ""), "view", "", "tracking", 2))
 	var recentre: Dictionary = c.action("welcome.view.recentre", "Look straight ahead, then press", func(): h.recenter(); menu.notify("View recentred"), "Centres the TV in front of you. {R3} does this any time, in a game too.", false, "")
 	recentre["row_icon"] = "view"; recentre["value_inputs"] = ["R3"]
 	result.append(recentre)
-	for source in c.pages(0)[0].rows:
+	for source in c.page("TV placement", c.placement_rows(), "", {}, false).rows:
 		if source.id in ["view.distance", "view.height_offset"]:
 			var copy: Dictionary = source.duplicate()
 			copy.id = "welcome." + str(source.id)
@@ -214,7 +225,7 @@ func region_items() -> Array:
 		item.merge({"layout": "tile", "group": "regions", "columns": 3, "expanded": h.console_region == id}, true)
 		if h.console_region == id: item["row_icon"] = "check"
 		result.append(item)
-	result.append(next_row("library", "Next", "Also in Settings › Menu & access › Layout & placement › Console names & icons."))
+	result.append(next_row("library", "Next", "Also in Settings › Games › Consoles › Console names & icons."))
 	return result
 
 ## "SD card · Emulation/roms" or "Deck storage · Emulation/roms" for a found folder.
@@ -297,9 +308,9 @@ func comfort_items() -> Array:
 		"setter": func(value):
 			if int(value) >= offset: pictures.apply_preset(pictures.PRESET_IDS[int(value) - offset]),
 		"detail_getter": func(): return descriptions[pictures.PRESET_IDS.find(pictures.applied_preset()) + 1],
-		"help": "More looks, and your own, in Settings › TV & picture › Presets."}
+		"help": "More looks, and your own, in Settings › Picture › Looks."}
 	var rows: Array = [picture]
-	for spec in [["welcome.clean", "Clearer menus", "menu_clean_feed", false, "Shows menus without CRT distortion while keeping your game picture.", func(): menu.refresh(), "tv"],
+	for spec in [["welcome.clean", "Plain picture behind menus", "menu_clean_feed", true, "Menus stay plain and readable whatever the game's picture. Off, they take the game's own look.", func(): menu.refresh(), "tv"],
 			["welcome.large", "Larger menu text", "menu_large_text", false, "Bigger text and taller rows.", menu.apply_accessibility, "search"],
 			["welcome.motion", "Reduced animation", "menu_reduced_motion", false, "No TV warm-up, boot animation or drifting stars.", menu.apply_accessibility, "refresh"],
 			["welcome.music", "Menu music", "menu_music_enabled", true, "Quiet background music in the menus.", h.apply_menu_music, "music"],
@@ -490,7 +501,10 @@ func view_status() -> Control:
 	var title_text := "Playing on this screen"
 	var detail := "The TV stays still. Connect glasses later in View & glasses › Tracking."
 	var dot := MenuSkin.MUTED
-	if tracking_working():
+	if host.flat_screen:
+		title_text = "Flat view: the game fills this screen"
+		detail = "No room and no TV around it. Switch any time with Flat view beside Exit."
+	elif tracking_working():
 		title_text = "Head tracking is on"; detail = str(host.provider.status); dot = Color("58d878")
 	elif host.provider.real:
 		title_text = "Glasses found, but no head tracking yet"; dot = MenuSkin.AMBER

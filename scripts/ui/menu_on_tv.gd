@@ -26,7 +26,8 @@ func wanted() -> bool:
 	# than resizing the interface between the two cabinets' menu canvases.
 	var setup_view: bool = host.menu.mode == "welcome" or (host.menu.mode == "help" and host.menu.help_origin.get("mode", "") == "welcome")
 	if setup_view and host.menu.welcome.step == "view": return false
-	return host.menu_on_tv and host.settings_panel.visible and not host.menu.preview and is_instance_valid(host.world)
+	# Flat screen mode has no TV to lean in: the menu floats over the picture.
+	return host.menu_on_tv and not host.flat_screen and host.settings_panel.visible and not host.menu.preview and is_instance_valid(host.world)
 
 ## Called by main at the start of its frame, before it decides what floats:
 ## run on its own, this caught up a frame late and the floating menu flashed

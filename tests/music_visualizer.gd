@@ -49,7 +49,7 @@ func run():
  app._input(back)
  for i in range(5):await process_frame
  check(app.settings_panel.visible and app.music.player.playing and app.visualizer.active,"B returns to menu without stopping the visualiser or music")
- app.menu.mode="settings";app.menu.category=2;app.menu.subsection=app.menu.catalog.pages(2).size()-1;app.menu.render()
+ app.menu.mode="settings";app.menu.category=2;app.menu.subsection=2;app.menu.render()
  for i in range(6):await process_frame
  check(app.menu.items.any(func(item):return item.id=="visualiser.brightness" and item.kind=="number") and app.menu.items.any(func(item):return item.id=="visualiser.preset" and item.kind=="choice"),"Visualiser uses shared settings rows")
  if DisplayServer.get_name()!="headless":

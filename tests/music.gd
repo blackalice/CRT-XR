@@ -18,7 +18,7 @@ func run():
 	check(music.play_file(ProjectSettings.globalize_path("res://build/crt-power-original-preview.mp3")),"Local MP3 opens")
 	app.menu.open_settings_section(2, "Music")
 	check(music.player.playing,"Music continues while the settings menu is open")
-	check(app.menu.CATEGORIES[2]=="Sound" and app.menu.items.any(func(i): return i.id=="music.file"),"Sound has a music page")
+	check(app.menu.CATEGORIES[2]=="Sound" and app.menu.items.any(func(i): return i.id=="music.loop"),"Sound has a music page")
 	music.volume=.3; music.game_volume=.2; music.apply()
 	check(is_equal_approx(music.player.volume_db,linear_to_db(.3)) and is_equal_approx(app.emulator.player.volume_db,-6+linear_to_db(.2)),"Game and music volume controls are independent")
 	var config: ConfigFile=app.capture_settings()

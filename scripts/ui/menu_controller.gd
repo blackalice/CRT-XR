@@ -82,6 +82,17 @@ var reading_frame: MarginContainer
 var help_frame: PanelContainer
 var help_slot: Control
 var subtitle_row: HBoxContainer
+## The editing scope strip, in place of the context line on scoped tabs (Picture,
+## Games): "EDITING  This game · All SNES games · Game defaults", changed with
+## View (Select) or S. Its pills are rebuilt only when their choices change.
+var scope_strip: HBoxContainer
+var scope_pills: HBoxContainer
+var scope_shown := ""
+## In Settings, B moves focus to the sidebar (up and down change category, A or
+## right goes back into the page); B there leaves Settings.
+var sidebar_focus := false
+## Where the changed-settings list (Start, or F) was opened from.
+var changed_origin: Dictionary = {}
 var scan_icon: Control
 ## Each category's icon in the sidebar, by CATEGORIES order.
 const CATEGORY_ICONS := ["fit","tv","audio","lamp","gamepad","save","help","sliders","play","sliders","gear"]
@@ -104,8 +115,12 @@ const HelpArticle = preload("res://scripts/ui/help_article.gd")
 ## Confirmation answers shown in the danger colour.
 const DESTRUCTIVE := ["Exit","Delete","Forget","Remove","Reset","Overwrite","Stop","Replace"]
 var location_bar: PanelContainer
-const CATEGORIES := ["View & glasses","TV & picture","Sound","Room","Controls","Saved setups","Help & system","Quick settings","Videos","Menu & access","Games & controls"]
-const SETTINGS_ORDER := [0, 1, 2, 3, 10, 5, 9, 6]
+## Category IDs are stable (navigation memory, shortcuts, tests); the sidebar
+## shows SETTINGS_ORDER. Controls (4), Saved setups (5) and Quick settings (7)
+## live inside other categories now and stay as hidden aliases.
+const CATEGORIES := ["View & glasses","Picture","Sound","Room","Controls","Saved setups","Setups & help","Quick settings","Videos","Menu & access","Games"]
+const SETTINGS_ORDER := [0, 1, 3, 2, 10, 8, 9, 6]
+const HIDDEN_CATEGORIES := [4, 5, 7]
 var host
 var catalog := Catalog.new()
 var library := Library.new()
@@ -138,13 +153,21 @@ var section_pad_hint: Control
 var preview_glyph: Control
 var preview_button: Button
 var section_hint: Label
+var tab_position: Label
+## The settings tab being shown, as built for this render.
+var current_page: Dictionary = {}
 var heading: Label
 var heading_symbol: TextureRect
 var subtitle: Label
 var help_label: Control
 var hints: HFlowContainer
 var exit_footer: Button
+## Flat view, beside Exit on Home and the pause menu: switches flat screen mode.
+var flat_footer: Button
+## A footer button has the selection (Down past the last row); footer_flat says
+## it is Flat view rather than Exit. Left and right move between them.
 var exit_selected := false
+var footer_flat := false
 var error_label: Control
 var body: HBoxContainer
 var sidebar: VBoxContainer
@@ -220,7 +243,10 @@ static func is_steam_deck() -> bool:
 	if OS.get_name()!="Linux": return false
 	if OS.get_environment("SteamDeck")=="1": return true
 	# Works in Desktop Mode too, where Steam's environment flag may be absent.
-	var product := FileAccess.get_file_as_string("/sys/devices/virtual/dmi/id/product_name").strip_edges() if FileAccess.file_exists("/sys/devices/virtual/dmi/id/product_name") else ""
+	# Read one line: reading this sysfs file whole can return stray bytes after
+	# the name, so the comparison failed at random in Desktop Mode.
+	var dmi := FileAccess.open("/sys/devices/virtual/dmi/id/product_name", FileAccess.READ)
+	var product := dmi.get_line().strip_edges() if dmi != null else ""
 	return product in ["Jupiter", "Galileo", "Steam Deck"]
 
 static func initial_input_kind() -> String:
@@ -354,6 +380,19 @@ func _ready() -> void:
 	step_marks = HBoxContainer.new(); step_marks.add_theme_constant_override("separation",4)
 	step_marks.size_flags_vertical = Control.SIZE_SHRINK_CENTER; step_marks.hide()
 	subtitle_row.add_child(step_marks)
+	scope_strip = HBoxContainer.new(); scope_strip.name = "ScopeStrip"; scope_strip.add_theme_constant_override("separation",8); scope_strip.hide()
+	scope_strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var scope_title := Label.new(); scope_title.text = "EDITING"
+	scope_title.add_theme_font_size_override("font_size",14); scope_title.add_theme_color_override("font_color",MenuSkin.MUTED)
+	scope_title.size_flags_vertical = Control.SIZE_SHRINK_CENTER; MenuSkin.weigh(scope_title,MenuSkin.BOLD); MenuSkin.shadow(scope_title)
+	scope_strip.add_child(scope_title)
+	scope_pills = HBoxContainer.new(); scope_pills.add_theme_constant_override("separation",6)
+	scope_strip.add_child(scope_pills)
+	var scope_key := key_hint(); scope_key.name = "ScopeKey"; scope_key.text = "S"; scope_key.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	scope_strip.add_child(scope_key)
+	var scope_glyph := InputGlyph.new("back", 26.0); scope_glyph.name = "ScopeGlyph"; scope_glyph.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	scope_strip.add_child(scope_glyph)
+	subtitle_row.add_child(scope_strip)
 	layout.add_child(subtitle_row)
 	location_bar=LocationBar.new(); location_bar.hide(); layout.add_child(location_bar)
 	# Messages name controls in braces ("press {R1}"): drawn as the same glyphs as the hints.
@@ -423,7 +462,7 @@ func _ready() -> void:
 		sidebar.add_child(button); sidebar_buttons.append(button)
 	# Keep category IDs stable while putting the everyday route first.
 	sidebar.move_child(sidebar_buttons[7],1)
-	for hidden_category in [EVERYDAY, 4, 8]: sidebar_buttons[hidden_category].hide()
+	for hidden_category in HIDDEN_CATEGORIES: sidebar_buttons[hidden_category].hide()
 	for i in range(SETTINGS_ORDER.size()):
 		sidebar.move_child(sidebar_buttons[SETTINGS_ORDER[i]], i + 1)
 	var content := VBoxContainer.new()
@@ -453,6 +492,11 @@ func _ready() -> void:
 	section_tabs = HBoxContainer.new()
 	section_tabs.add_theme_constant_override("separation",8)
 	tabs_margin.add_child(section_tabs)
+	# "2 / 4": where this tab sits, so tabs past the strip's edge are never a surprise.
+	tab_position=Label.new(); tab_position.name="TabPosition"
+	tab_position.add_theme_font_size_override("font_size",14); tab_position.add_theme_color_override("font_color",MenuSkin.MUTED)
+	tab_position.size_flags_vertical=Control.SIZE_SHRINK_CENTER; MenuSkin.shadow(tab_position)
+	section_bar.add_child(tab_position)
 	section_hint=key_hint(); section_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	section_hint.tooltip_text="Previous / next section"
 	section_bar.add_child(section_hint)
@@ -520,6 +564,16 @@ func _ready() -> void:
 	footer.add_theme_constant_override("separation", 12)
 	hints.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	footer.add_child(hints)
+	flat_footer=Button.new()
+	flat_footer.name="FlatView"
+	flat_footer.icon=RowIcon.doubled("fit")
+	flat_footer.add_theme_constant_override("icon_max_width",24)
+	flat_footer.focus_mode=Control.FOCUS_NONE
+	flat_footer.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	flat_footer.add_theme_font_size_override("font_size",18)
+	flat_footer.add_theme_color_override("font_color",MenuSkin.TEXT)
+	flat_footer.pressed.connect(toggle_flat_view)
+	footer.add_child(flat_footer)
 	exit_footer=Button.new()
 	exit_footer.icon=RowIcon.doubled("exit")
 	exit_footer.add_theme_constant_override("icon_max_width",24)
@@ -546,15 +600,17 @@ func _ready() -> void:
 	hide()
 
 # Left-aligned category labels need side padding without taller buttons.
-func sidebar_box(colour: Color, chosen := false) -> StyleBoxFlat:
-	# The open category is a lit bar with a light top-left edge.
-	var style := MenuSkin.box(Color("142852") if chosen else colour,Color("88a8e8"),0,6)
+func sidebar_box(colour: Color, chosen := false, focused := false) -> StyleBoxFlat:
+	# The open category is a lit bar with a light top-left edge; amber all round
+	# while the sidebar itself has the focus.
+	var style := MenuSkin.box(Color("142852") if chosen else colour,MenuSkin.AMBER if focused else Color("88a8e8"),0,6)
 	style.content_margin_left=12; style.content_margin_right=12
 	# Categories must fit beside a page with three lines of help. With their
 	# icons they get a little more room; Larger text hides the icons and keeps it tight.
 	var room := 3 if host.menu_large_text else 5
 	style.content_margin_top=room; style.content_margin_bottom=room
 	if chosen: style.border_width_top=2; style.border_width_left=2
+	if focused: style.set_border_width_all(2)
 	return style
 
 ## A small key chip, such as "Q / E", so shortcuts read apart from content.
@@ -606,17 +662,25 @@ func open_pause() -> void:
 
 func open_settings() -> void:
 	remember(); clear_input()
-	settings_origin.clear()
+	settings_origin.clear(); sidebar_focus = false
 	mode = "settings"; preview = false
 	subsection = int(sections.get(category,0))
 	render()
+
+## Settings from a game's pause menu: on Picture (This game) unless you were
+## last in Picture or Games, which are about the game too.
+func open_settings_for_game() -> void:
+	if host.emulator.loaded and not category in [1, 10]:
+		sections[category] = subsection
+		category = 1
+	open_settings()
 
 ## Activity shortcuts use section titles rather than fragile numeric offsets.
 func open_settings_section(target: int, title: String) -> void:
 	remember(); clear_input()
 	if mode == "music_browser" and music.music_origin.get("mode") != "settings" or mode == "videos" and videos.video_origin.get("mode") != "settings":
 		settings_origin = snapshot()
-	mode = "settings"; preview = false; category = target
+	mode = "settings"; preview = false; category = target; sidebar_focus = false
 	var pages := catalog.pages(target)
 	subsection = 0
 	for i in range(pages.size()):
@@ -661,21 +725,129 @@ func switch_section(delta: int) -> void:
 	render()
 	play_navigation_click()
 
+## B in Settings: the sidebar takes the focus and the page's selection steps back.
+func enter_sidebar() -> void:
+	if mode != "settings" or preview: return
+	remember(); clear_input()
+	sidebar_focus = true
+	finish_editing()
+	play_menu_sound()
+	render()
+
+## A or right on the sidebar: back into the page, where it was.
+func leave_sidebar() -> void:
+	if not sidebar_focus: return
+	sidebar_focus = false
+	clear_input()
+	play_menu_sound(true)
+	render()
+
+## Every setting that differs from its default, across Settings, as a list that
+## jumps to each one. The same test as the rows' changed-value dot.
+func open_changed() -> void:
+	if mode == "changed": back(); return
+	if mode != "settings": return
+	remember(); clear_input()
+	changed_origin = snapshot()
+	sidebar_focus = false; preview = false
+	mode = "changed"
+	memory[state_key()] = {"id":"", "scroll":0}
+	render()
+
+func changed_items() -> Array:
+	var result: Array = []
+	for target in SETTINGS_ORDER:
+		var pages: Array = catalog.pages(target)
+		for index in range(pages.size()):
+			var tab: Dictionary = pages[index]
+			for row in tab.rows:
+				if not row is Dictionary or not str(row.get("kind", "")) in ["number", "choice", "toggle"] or row.get("disabled", false): continue
+				if not Row.differs(row): continue
+				var where := "%s › %s" % [CATEGORIES[target], tab.title]
+				var go_to := [target, index, str(row.id)]
+				var item: Dictionary = catalog.action("changed." + str(row.id), str(row.label), func(): jump_to_setting(go_to[0], go_to[1], go_to[2]),
+					"%s. Default: %s. {A} takes you there." % [where, Row.format_value(row, true, row.default)], false, Row.format_value(row))
+				result.append(entry(item, where.to_upper()))
+	if result.is_empty():
+		result.append(catalog.unavailable(catalog.action("changed.none", "Nothing changed yet", func(): pass, "", true, ""), "Every setting is at its default."))
+	return result
+
+func jump_to_setting(target: int, index: int, id: String) -> void:
+	mode = "settings"; category = target; subsection = index; sections[target] = index
+	sidebar_focus = false
+	settings_origin = changed_origin.duplicate()
+	if settings_origin.get("mode", "") == "settings": settings_origin = {}
+	memory[state_key()] = {"id":id, "scroll":0}
+	clear_input(); render()
+
+## The scope strip's choices on this tab ({} when it has none).
+func current_scope() -> Dictionary:
+	if mode != "settings" or preview: return {}
+	return current_page.get("scope", {})
+
+## Moves the editing scope along the strip (View / Select, or S), wrapping round.
+func change_scope(delta: int) -> void:
+	var scope := current_scope()
+	if scope.is_empty() or scope.choices.size() < 2: return
+	var next := posmod(int(scope.index) + delta, scope.choices.size())
+	set_scope(next)
+
+func set_scope(index: int) -> void:
+	var scope := current_scope()
+	if scope.is_empty() or index == int(scope.index): return
+	remember(); clear_input()
+	scope.set.call(index)
+	play_navigation_click()
+	notify("Editing " + str(scope.choices[index]))
+
+## Draws the strip for this tab: amber for the scope being edited.
+func refresh_scope_strip() -> void:
+	var scope := current_scope()
+	scope_strip.visible = not scope.is_empty()
+	if scope.is_empty(): return
+	var key := "%s|%d|%s" % [",".join(scope.choices), int(scope.index), input_kind]
+	scope_strip.get_node("ScopeKey").visible = input_kind != "controller"
+	scope_strip.get_node("ScopeGlyph").visible = input_kind == "controller" and scope.choices.size() > 1
+	if scope_strip.get_node("ScopeKey").visible: scope_strip.get_node("ScopeKey").visible = scope.choices.size() > 1
+	if key == scope_shown: return
+	scope_shown = key
+	for child in scope_pills.get_children(): scope_pills.remove_child(child); child.queue_free()
+	for i in range(scope.choices.size()):
+		var index := i
+		var chosen: bool = i == int(scope.index)
+		var pill := Button.new()
+		pill.name = "Scope%d" % i
+		pill.text = str(scope.choices[i])
+		pill.focus_mode = Control.FOCUS_NONE
+		pill.add_theme_font_size_override("font_size", 16)
+		MenuSkin.weigh(pill, MenuSkin.SEMIBOLD if chosen else MenuSkin.REGULAR)
+		var style := MenuSkin.box(MenuSkin.AMBER if chosen else Color("0c1840"), MenuSkin.AMBER if chosen else Color("3858a0"), 1, 0)
+		style.content_margin_left = 10; style.content_margin_right = 10; style.content_margin_top = 1; style.content_margin_bottom = 1
+		for state in ["normal", "pressed", "hover", "hover_pressed"]: pill.add_theme_stylebox_override(state, style)
+		for state in ["font_color", "font_hover_color", "font_pressed_color", "font_hover_pressed_color"]:
+			pill.add_theme_color_override(state, Color("1a1405") if chosen else MenuSkin.TEXT)
+		pill.pressed.connect(func(): set_scope(index))
+		scope_pills.add_child(pill)
+
 func snapshot() -> Dictionary:
 	return {"mode":mode,"category":category,"subsection":subsection}
 
 func restore(state: Dictionary) -> void:
-	mode = state.mode; category = state.category; subsection = state.subsection
+	mode = state.mode; category = state.category; subsection = state.subsection; sidebar_focus = false
 	clear_input(); render()
 
 func back() -> void:
 	if not editing_id.is_empty(): finish_editing(); return
 	if preview:
-		remember(); preview = false; clear_input(); render(); return
+		remember(); keep_position_tile(); preview = false; clear_input(); render(); return
 	remember(); clear_input()
 	match mode:
 		"pause": host.close_settings()
 		"settings":
+			# A shortcut into Settings (Music settings, Video settings) goes straight back.
+			if not sidebar_focus and settings_origin.is_empty():
+				enter_sidebar(); return
+			sidebar_focus = false
 			if settings_origin.is_empty(): mode="pause"; render()
 			else:
 				var origin := settings_origin
@@ -706,14 +878,18 @@ func back() -> void:
 		"video_launch": mode="videos"; render()
 		"video_search": mode="videos"; render()
 		"video_folder": restore(videos.folder_origin if not videos.folder_origin.is_empty() else {"mode":"videos","category":category,"subsection":subsection})
-		"radio_url": mode="settings"; render()
+		"radio_url": restore(music.radio_origin if not music.radio_origin.is_empty() else {"mode":"music_browser","category":category,"subsection":subsection})
 		"help": restore(help_origin)
+		"changed": restore(changed_origin if not changed_origin.is_empty() else {"mode":"settings","category":category,"subsection":subsection})
 		"confirm": restore(return_state)
 		"welcome": welcome.back()
 
-func ask(title: String, detail: String, callback: Callable, preview_path := "") -> void:
+## A question with Cancel selected first. The answer button is named by the
+## title's first word ("Overwrite this setup?" → Overwrite) unless `answer` names
+## it; `cancel` can name the other button.
+func ask(title: String, detail: String, callback: Callable, preview_path := "", answer := "", cancel := "Cancel") -> void:
 	remember(); return_state = snapshot(); clear_input()
-	confirmation = {"title":title,"detail":detail,"callback":callback,"preview":preview_path}
+	confirmation = {"title":title,"detail":detail,"callback":callback,"preview":preview_path,"answer":answer,"cancel":cancel}
 	mode = "confirm"
 	memory[state_key()] = {"id":"cancel","scroll":0}
 	render()
@@ -744,15 +920,22 @@ func quick_controls(video_view := false) -> Array:
 	result[1].help = "Change the picture preset. Custom restores your tuned picture."
 	result[2].help = "Adjust video audio." if video_view else "Adjust game audio independently of music."
 	if video_view:result[2].label="Video volume"
-	for source in catalog.pages(EVERYDAY)[0].rows:
-		if source.id in ["quick.view.distance", "quick.view.height_offset", "quick.display"]:
+	# TV position opens the preview strip, where up and down switch between its
+	# distance and height; so height is a tile only while that preview is open.
+	var position_ids: Array = ["quick.view.distance", "quick.view.height_offset"] if preview else ["quick.view.distance"]
+	for wanted in position_ids + ["quick.tv", "quick.fit"]:
+		for source in catalog.pages(EVERYDAY)[0].rows:
+			if source.id != wanted: continue
 			var control: Dictionary = source.duplicate()
 			control.id = str(source.id).replace("quick.", "pause.")
-			control["row_icon"] = "view" if source.id == "quick.view.distance" else ("up" if source.id == "quick.view.height_offset" else "tv")
-			if source.id != "quick.display":
+			control["row_icon"] = {"quick.view.distance":"view", "quick.view.height_offset":"up", "quick.tv":"tv", "quick.fit":"fit"}[source.id]
+			if source.id.begins_with("quick.view."):
 				control["quick_preview"] = true
 				control["title_size"] = 18
-				control.help = "Open preview to move the TV nearer or farther." if source.id == "quick.view.distance" else "Open preview to move the screen, stand and room vertically."
+				if source.id == "quick.view.distance" and not preview: control.label = "TV position"
+				control.help = "Preview: move the TV nearer, farther, up or down." if source.id == "quick.view.distance" else "Moves the screen, stand and room up or down."
+			elif source.id == "quick.tv": control.help = "The TV for this game or video."
+			else: control.help = "Fit shows it all; Fill crops; Stretch reshapes."
 			result.append(control)
 	for row in result:
 		row.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"stacked":true,"compact":true,"meter":false}, true)
@@ -765,7 +948,7 @@ func room_choice(id: String) -> Dictionary:
 		"setter":func(value):
 			host.rooms.apply(str(choices[int(value)][0]))
 			host.rebuild_settings(),
-		"help":"Warm bedroom, Bright inspection, Dim XR or a room you saved under Room → Presets. Custom is your own tuned room."}
+		"help":"Warm bedroom, Bright inspection, Dim XR or a room you saved under Room → Rooms. Custom is your own tuned room."}
 
 func save_my_room(index: int) -> void:
 	var title: String=host.rooms.name(index)
@@ -957,8 +1140,13 @@ func get_items() -> Array:
 			return play.pause_items() if h.emulator.loaded else play.home_items()
 		"launch": return games.launch_items()
 		"recent", "favourites", "most_played": return games.history_items()
-		"settings": return catalog.pages(category)[subsection].rows
+		"settings":
+			var pages: Array = catalog.pages(category)
+			subsection = clampi(subsection, 0, pages.size() - 1)
+			current_page = pages[subsection]
+			return current_page.rows
 		"help": return []
+		"changed": return changed_items()
 		"welcome": return welcome.items()
 		"library": return games.library_items()
 		"library_tools": return games.library_tool_items()
@@ -977,7 +1165,7 @@ func get_items() -> Array:
 		"slot":
 			var saved := FileAccess.file_exists(h.profile_path()) or FileAccess.file_exists(h.profile_path()+".bak")
 			return [catalog.action("slot.save","Save current setup",save_setup,"Stores current room, view and picture in this slot."),
-				catalog.unavailable(catalog.action("slot.load","Load setup",h.load_profile,"Apply this slot while retaining display mode and tracking provider.",not saved),"Save a setup to this slot first."),
+				catalog.unavailable(catalog.action("slot.load","Load setup",h.load_profile,"Applies this setup's view, room and picture. Display mode, tracking and input delay stay as they are; games with their own picture keep it.",not saved),"Save a setup to this slot first."),
 				catalog.action("slot.rename","Rename slot",func(): rename_preset=-1; rename_room=-1; mode="rename"; entry_initialized=false; clear_input(); render(); keys.focus_entry(),"Use the on-screen keys or a physical keyboard."),
 				catalog.unavailable(catalog.action("slot.undo","Undo last setup load",h.undo_profile,"Restores the settings from before the last setup load.",h.profile_undo==null),"Available after loading a setup.")]
 		"folder_path": return keys.text_keys()+[catalog.action("folder_path.open","Open folder",games.submit_folder_path,"Opens a local folder or a network share you can access in Windows."),catalog.action("folder_path.cancel","Cancel",back)]
@@ -985,9 +1173,10 @@ func get_items() -> Array:
 		"rename": return keys.text_keys()+[catalog.action("rename.save","Use this name",save_draft_name,"Renames this preset now." if rename_preset>=0 else "The new name is stored when you save the setup."),catalog.action("rename.cancel","Cancel",back,"Leave the name unchanged.")]
 		# Dialog titles lead with their verb ("Overwrite this setup?"), which names the button.
 		"confirm":
-			var answer: Dictionary = catalog.action("confirm",str(confirmation.title).get_slice(" ",0).trim_suffix("?"),confirmed,confirmation.detail,false,"")
+			var named: String = str(confirmation.get("answer", ""))
+			var answer: Dictionary = catalog.action("confirm",named if not named.is_empty() else str(confirmation.title).get_slice(" ",0).trim_suffix("?"),confirmed,confirmation.detail,false,"")
 			if answer.label in DESTRUCTIVE: answer["emphasis"]="danger"
-			return [catalog.action("cancel","Cancel",back,"Keep things as they are.",false,""),answer]
+			return [catalog.action("cancel",str(confirmation.get("cancel","Cancel")),back,"Keep things as they are.",false,""),answer]
 	return []
 
 func render() -> void:
@@ -999,7 +1188,7 @@ func _render(incremental: bool) -> void:
 	if not is_instance_valid(column) or (not visible and not incremental): return
 	var profile_start := Time.get_ticks_usec()
 	var profile_stages := {}
-	exit_selected=false
+	exit_selected=false; footer_flat=false
 	rendering = true
 	layout_revision+=1
 	var build_revision := layout_revision
@@ -1200,7 +1389,7 @@ func _render(incremental: bool) -> void:
 	section_bar.visible = mode=="settings" and not preview
 	section_block.visible = section_bar.visible
 	for i in range(sidebar_buttons.size()):
-		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("3b3329") if i==category else Color.TRANSPARENT,i==category))
+		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("3b3329") if i==category else Color.TRANSPARENT,i==category,i==category and sidebar_focus))
 		sidebar_buttons[i].add_theme_color_override("icon_normal_color",MenuSkin.TEXT if i==category else MenuSkin.MUTED)
 		# Larger text needs the sidebar's width for its words: the icons step aside.
 		sidebar_buttons[i].icon = null if host.menu_large_text else RowIcon.doubled(CATEGORY_ICONS[i])
@@ -1233,7 +1422,9 @@ func _render(incremental: bool) -> void:
 			section_tabs.add_child(tab)
 			if i==subsection: reveal_section_tab.call_deferred(tab)
 		heading.text = CATEGORIES[category]
-	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","most_played":"Most played","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state"}.get(mode,"CRT XR")
+		tab_position.text = "%d / %d" % [subsection + 1, pages.size()]
+		tab_position.visible = pages.size() > 1
+	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","most_played":"Most played","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state","changed":"Changed settings"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm":
 		state_previews.request(confirmation.get("preview", ""))
@@ -1281,6 +1472,9 @@ func _render(incremental: bool) -> void:
 	for row in rows: row.editing = not editing_id.is_empty() and row.item.id==editing_id
 	select(selected_id,false)
 	style_rows()
+	# With the sidebar focused the page keeps its place but shows no selection.
+	if mode=="settings" and sidebar_focus:
+		for row in rows: row.set_selected(false)
 	if mode=="launch":
 		var title := Label.new()
 		title.text = games.launch_path.get_file().get_basename()
@@ -1400,7 +1594,7 @@ func finish_editing() -> void:
 
 func select(id: String, user_action := true) -> void:
 	if rendering or selecting: return
-	exit_selected=false
+	exit_selected=false; footer_flat=false
 	if user_action:
 		scan_preferred_id=""; notification_time=0
 	var candidate = null
@@ -1463,9 +1657,6 @@ func refresh_labels() -> void:
 		music_heading.text=lines[0]; deck_detail.text=lines[1] if lines.size()>1 else ""
 		deck_detail.visible=not deck_detail.text.is_empty()
 	var row = selected_row()
-	# Picture pages change whichever picture is in use; say which, plainly.
-	var context: String
-	context="Editing " + host.display_settings.context_label()
 	if mode=="pause":
 		if host.video.loaded: subtitle.text = "Video · paused" if host.video.paused else "Video"
 		elif host.emulator.loaded: subtitle.text = library.Registry.SYSTEMS.get(host.emulator.system_id, {}).get("name", "Game") + " · paused"
@@ -1488,11 +1679,12 @@ func refresh_labels() -> void:
 	elif mode=="launch": subtitle.text = ""
 	elif mode=="library_tools": subtitle.text = "Where CRT XR finds your games · Your files stay where they are"
 	elif mode=="settings":
-		if category==1 and subsection < 6: subtitle.text=context
-		elif category==1 and subsection == 6: subtitle.text="TV effects · shared across games and videos"
-		elif category==1: subtitle.text="Video playback and VCR preferences"
-		elif category==2 and subsection==1: subtitle.text=host.music.status
-		else: subtitle.text="• marks a setting you've changed"
+		# Each tab says what it applies to; Picture names the scope being edited.
+		subtitle.text = str(current_page.get("subtitle", ""))
+		if subtitle.text.is_empty(): subtitle.text = "• marks a changed setting · %s lists them all" % ("Start" if input_kind == "controller" else "F")
+	elif mode=="changed":
+		var count: int = items.filter(func(item): return not item.get("disabled", false)).size()
+		subtitle.text = count_caption(count, "setting") + " changed from their defaults"
 	elif mode=="states": subtitle.text = host.emulator.rom_path.get_file().get_basename()+" · %d slots" % play.STATE_SLOTS
 	elif mode=="my_room": subtitle.text = "Room %d · %s" % [my_room+1,"✓ In use" if host.rooms.active()=="mine.%d" % my_room else ("Saved" if host.rooms.saved(my_room) else "Empty")]
 	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [pictures.my_preset+1,"✓ Active" if pictures.applied_preset()=="mine.%d" % pictures.my_preset else ("Saved" if pictures.my_preset_saved(pictures.my_preset) else "Empty")]
@@ -1505,6 +1697,11 @@ func refresh_labels() -> void:
 	# empty. Its appearance must never move the page below it.
 	subtitle.visible = not preview and (mode == "settings" or not subtitle.text.is_empty()) and not location_bar.visible and mode != "pause"
 	subtitle_row.visible = subtitle.visible
+	# A scoped tab shows its strip in the context line's place, at the same height.
+	refresh_scope_strip()
+	if scope_strip.visible:
+		subtitle_row.custom_minimum_size.y = subtitle.get_combined_minimum_size().y
+		subtitle.visible = false
 	show_step_marks(welcome.number() if mode=="welcome" and subtitle.visible else 0)
 	scan_icon.visible = mode=="library" and rom_index.scanning
 	if mode in ["games","recent","favourites","most_played"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
@@ -1513,11 +1710,11 @@ func refresh_labels() -> void:
 	elif mode=="favourites" and items.is_empty(): help_label.text = "No favourites yet. Select a game in any console list and press {X}."
 	elif mode=="library" and not rom_index.message.is_empty(): help_label.text=rom_index.message
 	elif mode=="library": help_label.text=""
+	elif exit_selected and footer_flat: help_label.text = ("Back to the room and the TV." if host.flat_screen else "Shows the game full-screen without the room or the TV, for playing without glasses.") + " Also F3, or View & glasses → Stereo & comfort."
 	elif exit_selected: help_label.text = "Exit CRT XR. Your settings will be saved."
+	elif mode=="settings" and sidebar_focus: help_label.text = "Up and down choose a category. {A} opens it; {B} leaves Settings."
 	elif row!=null: help_label.text = str(row.item.get("help",""))
 	else: help_label.text = library.message if mode=="browser" else "Nothing here yet. {B} goes back."
-	if row != null and row.item.has("picture_field") and notification_time <= 0:
-		help_label.text = host.display_settings.field_source(row.item.picture_field) + ". " + help_label.text
 	if mode=="library":
 		help_frame.visible = not preview and not help_label.text.is_empty()
 		help_label.visible = help_frame.visible
@@ -1543,6 +1740,21 @@ func playing_title() -> String:
 	if host.emulator.loaded: return host.emulator.rom_path.get_file().get_basename()
 	return "Welcome to CRT XR"
 
+## Flat view in the footer: flat screen on or off, keeping the button selected
+## through the menu's rebuild so it can be pressed again to switch back.
+func toggle_flat_view() -> void:
+	var keep := exit_selected and footer_flat
+	host.set_flat_screen(not host.flat_screen)
+	play_menu_sound(true)
+	notify("Flat view on · the room is off" if host.flat_screen else "Flat view off · back in the room")
+	if keep: reselect_flat_view.call_deferred()
+
+func reselect_flat_view() -> void:
+	if mode != "pause" or not flat_footer.visible: return
+	exit_selected=true; footer_flat=true
+	for row in rows: row.set_selected(false)
+	refresh_labels()
+
 func request_exit() -> void:
 	if mode!="pause": return
 	var detail := "Your place in this video and your settings will be saved." if host.video.loaded else ("An automatic resume point, settings and cartridge SRAM will be saved." if host.emulator.loaded else "Your settings will be saved.")
@@ -1566,7 +1778,15 @@ func refresh_hints(row) -> void:
 	hints.controller=pad
 	exit_footer.visible=mode=="pause" and not preview
 	exit_footer.text="Exit"
-	exit_footer.add_theme_stylebox_override("normal",MenuSkin.box(Color("982830") if exit_selected else Color("701c28"),Color("ffc0a8") if exit_selected else Color("e87870"),2,6))
+	var exit_lit := exit_selected and not footer_flat
+	exit_footer.add_theme_stylebox_override("normal",MenuSkin.box(Color("982830") if exit_lit else Color("701c28"),Color("ffc0a8") if exit_lit else Color("e87870"),2,6))
+	# Flat view: amber edge while flat screen is on, bright when selected.
+	flat_footer.visible=exit_footer.visible
+	flat_footer.text="Flat view · On" if host.flat_screen else "Flat view"
+	var flat_lit := exit_selected and footer_flat
+	var flat_edge: Color = MenuSkin.AMBER if host.flat_screen else Color("88a8e8")
+	flat_footer.add_theme_stylebox_override("normal",MenuSkin.box(Color("2a3f8a") if flat_lit else Color("142852"),Color("ffffff") if flat_lit else flat_edge,2,6))
+	flat_footer.add_theme_stylebox_override("hover",MenuSkin.box(Color("2a3f8a"),Color("ffffff"),2,6))
 	var back_caption := ("Return to visualiser" if host.visualizer.active else ("Return to game" if host.emulator.loaded else "Close menu")) if mode=="pause" else "Back"
 	back_button.text=back_caption+("" if pad else "  [Backspace]")
 	# One place for prompts: the footer. The header keeps the title and clock.
@@ -1584,6 +1804,8 @@ func refresh_hints(row) -> void:
 	var go_back := "B Back" if pad else "Backspace Back"
 	if mode=="pause" and preview:
 		parts = ["↑↓ Setting", "←→ Adjust", "Y Reset", "B Quick settings" if pad else "Backspace Quick settings"]
+	elif mode=="settings" and sidebar_focus:
+		parts=["↑↓ Category", "A Open" if pad else "Enter Open", ("B Close" if pad else "Backspace Close") if settings_origin.is_empty() else go_back]
 	elif mode=="settings":
 		# Up and down need no saying here; the footer keeps room for what changes.
 		parts=[]
@@ -1592,7 +1814,8 @@ func refresh_hints(row) -> void:
 			elif row.item.kind!="action": parts.append("←→ Adjust")
 			elif str(row.item.get("value",""))=="Apply": parts.append("A Apply" if pad else "Enter Apply")
 			else: parts.append(open)
-			if row.item.has("default"): parts.append("Y Reset")
+			# Say what Y gives back: the default, the inherited picture, the console's value.
+			if row.item.has("default"): parts.append("Y " + str(row.item.get("reset_label", "Default")))
 		if preview_available() and not preview: parts.append("X Preview")
 		parts.append(("B Settings" if pad else "Backspace Settings") if preview else go_back)
 	elif mode in ["games","recent","favourites","most_played"]:
@@ -1611,6 +1834,7 @@ func refresh_hints(row) -> void:
 			if row!=null and row.item.get("quick_preview",false): parts.append("A Preview" if pad else "Enter Preview")
 			elif row!=null and row.item.get("quick",false): parts.append("A Adjust" if pad else "Enter Adjust")
 			elif row!=null and row.item.kind in ["choice","number"]: parts.append("←→ Adjust")
+			elif exit_selected: parts.append(("A " if pad else "Enter ") + ("Switch" if footer_flat else "Exit"))
 			else: parts.append(open)
 			parts.append(("B " if pad else "Backspace ")+back_caption)
 	elif mode=="launch":
@@ -1627,7 +1851,7 @@ func footer_pressed(action: String) -> void:
 	if control in ["A","Enter"]: activate()
 	elif control in ["B","Backspace"]: back()
 	elif control=="X" and action.ends_with("Preview"): toggle_preview()
-	elif control=="Y" and action.ends_with("Reset"): reset_option()
+	elif control=="Y" and not action.ends_with("Full title") and not action.ends_with("Clear search"): reset_option()
 	elif control=="X" and action.ends_with("Skip setup"): welcome.skip()
 
 func navigate_library(next: Vector2i) -> void:
@@ -1656,8 +1880,15 @@ func navigate_library(next: Vector2i) -> void:
 			target+=next.y
 
 func navigate(next: Vector2i) -> void:
+	if mode=="settings" and sidebar_focus:
+		if next.y!=0: switch_category(next.y)
+		elif next.x>0: leave_sidebar()
+		return
 	if exit_selected:
 		if next.y<0: select(selected_id)
+		elif next.x!=0 and footer_flat != (next.x<0):
+			footer_flat = next.x<0
+			play_menu_sound(); refresh_labels()
 		return
 	if mode=="help": scroll.scroll_vertical+=next.y*80; return
 	if mode in ["library","alphabet"]: navigate_library(next); return
@@ -1722,6 +1953,7 @@ func navigate(next: Vector2i) -> void:
 				if not rows[candidate].disabled: select(rows[candidate].item.id); return
 				candidate+=next.x
 		elif mode in ["browser","games","recent","favourites","most_played"]: jump_entries(next.x*10)
+		elif mode=="settings" and next.x<0 and rows[index].item.kind=="action": enter_sidebar()
 		else: adjust(next.x)
 
 ## The key a row of deck keys is entered at: the one marked "lead", else the first.
@@ -1779,7 +2011,9 @@ func adjust(delta: int) -> void:
 	row.refresh(); notify("Changed · Saved when you finish setup" if mode=="welcome" else "Changed · Saved when you close the menu")
 
 func activate() -> void:
+	if exit_selected and footer_flat: toggle_flat_view(); return
 	if exit_selected: request_exit(); return
+	if mode=="settings" and sidebar_focus: leave_sidebar(); return
 	var row=selected_row()
 	if row==null or row.disabled: return
 	if row.item.get("quick",false):
@@ -1802,6 +2036,7 @@ func activate() -> void:
 	refresh_labels()
 
 func reset_option() -> void:
+	if sidebar_focus: return
 	var row = selected_row()
 	if row==null or row.disabled or not row.item.has("default"): return
 	if row.item.has("reset"): row.item.reset.call()
@@ -1809,9 +2044,9 @@ func reset_option() -> void:
 	row.refresh(); notify("Selected option restored to its default")
 
 func toggle_preview() -> void:
-	if mode not in ["settings", "pause", "welcome"]: return
+	if mode not in ["settings", "pause", "welcome"] or sidebar_focus: return
 	if preview:
-		remember(); preview=false; clear_input(); render(); return
+		remember(); keep_position_tile(); preview=false; clear_input(); render(); return
 	if not preview_available(): return
 	var row=selected_row()
 	if row==null or row.disabled or not row.item.get("quick_preview" if mode in ["pause","welcome"] else "visual",false):
@@ -1819,6 +2054,13 @@ func toggle_preview() -> void:
 			if not candidate.disabled and candidate.item.get("quick_preview" if mode in ["pause","welcome"] else "visual",false):
 				select(candidate.item.id,false); break
 	finish_editing(); remember(); preview=true; clear_input(); render()
+
+## The pause menu's height tile exists only in the preview: leaving it from
+## there comes back to the TV position tile it opened from.
+func keep_position_tile() -> void:
+	if mode == "pause" and selected_id == "pause.view.height_offset":
+		selected_id = "pause.view.distance"
+		memory[state_key()] = {"id":selected_id, "scroll":memory.get(state_key(), {}).get("scroll", 0)}
 
 func notify(message: String) -> void:
 	notification = message; notification_time=4.0; notification_context=state_key()
@@ -1890,6 +2132,9 @@ func handle(event: InputEvent) -> bool:
 				elif mode in ["games","recent","favourites","most_played"]: games.toggle_favourite()
 				else: toggle_preview()
 			JOY_BUTTON_RIGHT_STICK: host.recenter()
+			JOY_BUTTON_BACK: change_scope(1)
+			JOY_BUTTON_START:
+				if mode in ["settings", "changed"]: open_changed()
 			JOY_BUTTON_LEFT_SHOULDER:
 				if mode=="browser":
 					var before: String = library.current_dir
@@ -1954,6 +2199,10 @@ func handle(event: InputEvent) -> bool:
 					switch_category(-1)
 				KEY_E:
 					switch_category(1)
+				KEY_S:
+					change_scope(-1 if event.shift_pressed else 1)
+				KEY_F:
+					if mode in ["settings", "changed"]: open_changed()
 				KEY_Z:
 					switch_section(-1)
 				KEY_C:

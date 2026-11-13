@@ -41,7 +41,10 @@ func run() -> void:
 	await settle()
 	check(app.tv_menu.active and app.world.picture.source_texture == app.menu_view.get_texture(), "Opening the menu switches the tube to the menu")
 	check(not app.menu_overlays[0].visible and not app.menu_depth_view.dim_nodes[0].visible, "Nothing floats over the room and the room stays undimmed")
-	check(not app.menu_clean_feed and app.world.picture.override.is_empty(), "The menu shares the current picture by default")
+	check(app.menu_clean_feed and app.world.picture.effective_mode() == 0 and is_equal_approx(float(app.world.screen_material.get_shader_parameter("scanlines")),0.18), "The menu uses the plain picture by default, whatever the game's")
+	app.menu_clean_feed = false
+	await settle()
+	check(app.world.picture.override.is_empty(), "Off, the menu shares the current picture")
 	check(app.world.picture.effective_mode() == 2 and is_equal_approx(float(app.world.screen_material.get_shader_parameter("scanlines")),scanlines), "Auto composite stays PAL and scanlines keep the programme setting")
 	check(app.world.picture.shown_values() == app.world.picture.values, "Menu uses the current colour, fitting and beam settings")
 	var mesh = app.world.television.get_node("PhosphorSurface").mesh
@@ -120,7 +123,15 @@ func run() -> void:
 	check(app.menu_clean_feed, "Clean feed survives settings restore")
 	app.toggle_settings()
 	app.reset_all_options()
-	check(not app.menu_clean_feed, "Reset all settings restores the shared menu picture")
+	check(app.menu_clean_feed, "Reset all settings restores the plain menu picture")
+	# Settings saved before the plain picture became the default always held
+	# false: they take the new default once; a later choice is kept.
+	var old_settings := ConfigFile.new(); old_settings.set_value("accessibility", "menu_clean_feed", false)
+	app.apply_settings(old_settings)
+	check(app.menu_clean_feed, "Older settings move to the plain menu picture")
+	app.menu_clean_feed = false
+	app.apply_settings(app.capture_settings())
+	check(not app.menu_clean_feed, "Turning it off afterwards is kept")
 	app.free()
 	print("MENU ON TV CHECKS: ", "PASS" if failures == 0 else "%d FAILED" % failures)
 	quit(1 if failures else 0)

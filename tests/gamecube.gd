@@ -84,8 +84,10 @@ func run() -> void:
 	await process_frame
 	app.emulator.system_id = "gamecube"; app.emulator.loaded = true; app.emulator.rom_path = "fixture.iso"
 	var pages: Array = app.menu.catalog.pages(10)
+	check(pages[0].rows.size() == Options.definitions("gamecube").size() and pages[0].rows[0].section.contains("GameCube"), "Per-game settings keep the existing page layout")
+	app.menu.catalog.game_scope = 1
+	pages = app.menu.catalog.pages(10)
 	check(pages[0].rows[0].id == "core.console.gamecube" and pages[0].rows[0].expanded, "Playing GameCube opens its existing console accordion")
-	check(pages[1].rows.size() == Options.definitions("gamecube").size() and pages[1].rows[0].section.contains("GameCube"), "Per-game settings keep the existing page layout")
 	app.emulator.loaded = false
 	app.queue_free()
 	await process_frame

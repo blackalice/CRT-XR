@@ -169,7 +169,7 @@ func run() -> void:
 	check(header.get_combined_minimum_size().x <= app.menu.size.x, "A long title shortens instead of widening the menu")
 	app.menu.open_settings(); app.menu.category = 3
 	var titles: Array = app.menu.catalog.pages(3).map(func(page): return page.title)
-	check("Ambience" in titles and app.menu.catalog.pages(3)[titles.find("Ambience")].rows.any(func(row): return row.id == "room.ambience"), "Room has an Ambience page with the room sound")
+	check("TV moments" in titles and app.menu.catalog.pages(2)[0].rows.any(func(row): return row.id == "room.ambience"), "Room has TV moments; the room sound sits with the other volumes")
 	app.free()
 	await settle()
 	print("TV ATMOSPHERE CHECKS COMPLETE: ", failures, " failures")

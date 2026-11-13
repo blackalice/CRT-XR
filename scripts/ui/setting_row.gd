@@ -263,21 +263,33 @@ func refresh() -> void:
 	sync_content_height()
 
 func formatted_value() -> String:
-	if item.kind == "action": return item.get("value","›")
-	var value = item.getter.call()
-	if item.kind == "toggle": return "On" if value else "Off"
-	if item.kind == "choice": return str(item.choices[int(value)])
-	match item.get("unit",""):
+	return format_value(item)
+
+## A row's value as the menus write it ("70%", "2.30 m", "On"); also used by
+## the changed-settings list. value_override shows another value (a default).
+static func format_value(row: Dictionary, use_override := false, value_override = null) -> String:
+	if row.kind == "action": return row.get("value","›")
+	var value = value_override if use_override else row.getter.call()
+	if row.kind == "toggle": return "On" if value else "Off"
+	if row.kind == "choice": return str(row.choices[clampi(int(value), 0, row.choices.size() - 1)])
+	match row.get("unit",""):
 		"percent": return "%d%%" % roundi(float(value)*100)
 		# Share of the allowed range, so the strongest setting reads 100%.
-		"strength": return "%d%%" % roundi(float(value)/float(item.max)*100)
+		"strength": return "%d%%" % roundi(float(value)/float(row.max)*100)
 		"m": return "%.2f m" % value
 		"m/s": return "%.1f m/s" % value
 		"mm": return "%d mm" % roundi(float(value)*1000)
 		"ms": return "%d ms" % roundi(float(value)*1000)
 		"degrees": return "%.1f°" % value
 		"x": return "%.2f×" % value
-	return ("%.2f" if float(item.step)<1 else "%d") % value
+	return ("%.2f" if float(row.step)<1 else "%d") % value
+
+## True when a row's value differs from its default: the changed-value dot.
+static func differs(row: Dictionary) -> bool:
+	if not row.has("default") or not row.has("getter"): return false
+	var value = row.getter.call()
+	if value is float or value is int: return not is_equal_approx(float(value),float(row.default))
+	return value != row.default
 
 func set_selected(value: bool) -> void:
 	selected_now=value
@@ -298,10 +310,7 @@ func update_selection_style() -> void:
 	panel.material=MenuSkin.panel_material(kind)
 
 func changed_from_default() -> bool:
-	if not item.has("default") or not item.has("getter"): return false
-	var value = item.getter.call()
-	if value is float or value is int: return not is_equal_approx(float(value),float(item.default))
-	return value != item.default
+	return differs(item)
 
 func format_limit(value: float) -> String:
 	match item.get("unit",""):

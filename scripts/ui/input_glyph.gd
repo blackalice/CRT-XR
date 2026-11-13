@@ -17,7 +17,7 @@ const FACE := {"north": Vector2(0, -1), "south": Vector2(0, 1), "west": Vector2(
 const DIRECTIONS := {"up": Vector2(0, -1), "down": Vector2(0, 1), "left": Vector2(-1, 0), "right": Vector2(1, 0)}
 ## D-pad drawings for whole axes: which arms are filled.
 const DPADS := {"dpad": ["up", "down", "left", "right"], "dpad_vertical": ["up", "down"], "dpad_horizontal": ["left", "right"]}
-const BADGES := {"l1": "L1", "r1": "R1", "l2": "L2", "r2": "R2", "l3": "L3", "r3": "R3", "back": "Back", "start": "Start"}
+const BADGES := {"l1": "L1", "r1": "R1", "l2": "L2", "r2": "R2", "l3": "L3", "r3": "R3", "back": "View", "start": "Start"}
 const ALIASES := {"A": "south", "B": "east", "X": "west", "Y": "north", "L1": "l1", "R1": "r1", "L2": "l2", "R2": "r2",
 	"L3": "l3", "R3": "r3", "Start": "start", "D-pad": "dpad", "↑↓": "dpad_vertical", "←→": "dpad_horizontal"}
 # "Back" and "Select" stay words: the menus use them for actions ("B Back").

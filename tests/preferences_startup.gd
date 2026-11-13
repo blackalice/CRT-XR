@@ -47,7 +47,7 @@ func run():
 	check(app.menu.CATEGORIES.size()==11,"Settings include Quick settings and all detailed categories")
 	UI.page(app,1,3)
 	await settle()
-	check(app.menu.catalog.pages(1)[app.menu.subsection].title.ends_with("game fit") and app.menu.selected_row()!=null,"Screen-fit page focuses its first editable row")
+	check(app.menu.catalog.pages(1)[app.menu.subsection].title == "Fit & TV" and app.menu.selected_row()!=null,"Fit & TV page focuses its first editable row")
 	UI.page(app,5,0)
 	app.menu.select("slot.0",false)
 	app.menu.activate()

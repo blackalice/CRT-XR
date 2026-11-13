@@ -57,7 +57,7 @@ func run() -> void:
 	check((status.level >= 0) == not status.battery_folder.is_empty(), "The battery shows only where the system has one")
 
 	# Glasses help.
-	var about: Array = menu.catalog.pages(6)[0].rows.map(func(item): return item.id)
-	check("system.glasses" in about and menu.play.glasses_guide().contains("SBS"), "About & Help explains using glasses")
+	var about: Array = menu.catalog.pages(6)[1].rows.map(func(item): return item.id)
+	check("system.glasses" in about and menu.play.glasses_guide().contains("SBS"), "Setups & help → Help explains using glasses")
 	print("BOX ART CHECKS COMPLETE: %d failures" % failures)
 	quit(1 if failures else 0)

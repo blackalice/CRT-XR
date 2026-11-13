@@ -46,7 +46,7 @@ func run():
  app.apply_settings(config)
  check(not app.vmu_display.enabled and is_equal_approx(app.vmu_display.width,0.44),"VMU preferences survive settings capture and restore")
  var pages: Array = app.menu.catalog.pages(10)
- check(pages[2].title == "VMU" and pages[2].rows.size() == 5,"VMU controls use the existing settings page and row types")
+ check(pages[-1].title == "Dreamcast VMU" and pages[-1].rows.size() == 5,"VMU controls are the last Games tab, so the others keep their places")
  for i in range(4): await process_frame
  app.free()
  print("VMU display checks: ",failures," failures")

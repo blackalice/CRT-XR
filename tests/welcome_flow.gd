@@ -199,7 +199,7 @@ func run() -> void:
 	check(app.welcome_done and menu.mode == "pause" and not welcome.active, "Go to Home finishes setup")
 	var saved := ConfigFile.new(); saved.load("user://settings.cfg")
 	check(saved.get_value("welcome", "done", false) == true, "Finishing is saved")
-	check(menu.catalog.pages(6)[0].rows.any(func(row): return row.id == "system.setup"), "About & Help offers Run setup again")
+	check(menu.catalog.pages(6)[1].rows.any(func(row): return row.id == "system.setup"), "Setups & help → Help offers Run setup again")
 	welcome.open("view"); await settle()
 	key(KEY_X); await settle()
 	check(welcome.step == "done", "X skips to All set")

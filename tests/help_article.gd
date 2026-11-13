@@ -52,7 +52,7 @@ func run() -> void:
 	# About: the version row opens it, with the current logo floating in front.
 	var about := HelpArticle.parse(menu.catalog.about_page())
 	check(about[0][0] == "logo" and about.any(func(b): return b[0] == "fact" and b[2] == "Website" and b[1] == "stua.rtfoy.co.uk"), "About has the logo, then facts including the website")
-	menu.open_settings(); menu.category = 6; menu.render(); await settle()
+	menu.open_settings(); menu.category = 6; menu.subsection = 1; menu.render(); await settle()
 	menu.select("system.version"); menu.activate(); await settle()
 	var logo = menu.column.find_child("BrandLogo", true, false)
 	check(menu.mode == "help" and menu.help_title == "About CRT XR" and logo != null, "The version row opens About CRT XR")

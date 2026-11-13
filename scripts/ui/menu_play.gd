@@ -50,12 +50,14 @@ func glasses_guide() -> String:
 			"2. On your normal monitor, choose the glasses' display and select Open glasses view.",
 			"## Head tracking",
 			"- VITURE: put the VITURE Windows SDK in a folder named sdk beside CRT-XR.exe.",
-			"- Other glasses: use a tool that sends OpenTrack, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo), then choose View → Tracking → Tracking source → OpenTrack.",
+			"- Other glasses: use a tool that sends OpenTrack, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo), then choose View & glasses → Tracking → Tracking source → OpenTrack.",
 			"## While playing",
 			"R3 | R :: Recentre the view",
-			"> Turning the wrong way? Invert that axis in View → Tracking.",
+			"> Turning the wrong way? Invert that axis in View & glasses → Tracking.",
 			"!! Fixed view",
-			"There's no tracking yet, so the TV stays still. It's also how CRT XR plays on a normal screen."])
+			"There's no tracking yet, so the TV stays still. It's also how CRT XR plays on a normal screen.",
+			"!! No glasses?",
+			"Turn on View & glasses → Stereo & comfort → Flat screen (or press F3) to play full-screen without the room."])
 	return "\n".join([
 		"## Before you start",
 		"Install Decky Loader and its XR Gaming plugin, and check XR Gaming recognises your glasses. CRT XR uses its head tracking.",
@@ -69,11 +71,13 @@ func glasses_guide() -> String:
 		"2. Press the glasses' SBS button to go back to 2D. CRT XR closes when they do.",
 		"## While playing",
 		"R3 :: Recentre the view",
-		"> Turning the wrong way? Invert that axis in View → Tracking.",
+		"> Turning the wrong way? Invert that axis in View & glasses → Tracking.",
 		"## Your glasses",
 		"CRT XR recognises VITURE, XREAL, Rokid and RayNeo displays. Only the VITURE Pro 2 has been tested.",
 		"!! Fixed view",
-		"There's no tracking yet, so the TV stays still. Check XR Gaming sees the glasses, then use View → Tracking → Connect glasses."])
+		"There's no tracking yet, so the TV stays still. Check XR Gaming sees the glasses, then use View & glasses → Tracking → Connect glasses.",
+		"!! No glasses?",
+		"Turn on View & glasses → Stereo & comfort → Flat screen to play full-screen on the Deck's own screen, without the room."])
 
 func state_action(saving: bool) -> void:
 	if not saving:
@@ -128,7 +132,7 @@ func _perform_state_action(saving: bool, slot: int) -> void:
 func home_items() -> Array:
 	var h=host
 	var home: Array = []
-	var recenter: Dictionary = menu.tile(menu.catalog.action("home.recenter","Recenter view",h.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)
+	var recenter: Dictionary = menu.tile(menu.catalog.action("home.recenter","Recentre view",h.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)
 	var settings: Dictionary = menu.catalog.action("home.settings","Settings",menu.open_settings,"Adjust the view, picture, audio and room.")
 	var library_row: Dictionary = menu.catalog.action("home.library","Game Library",menu.games.open_library,"Choose your main ROM folder or SD card. Your supported games appear automatically." if h.default_rom_dir.is_empty() else "Recent, Favourites and supported consoles.",false,"›")
 	var video_row: Dictionary = menu.catalog.action("home.videos","Video Library",menu.videos.open_videos,"Browse your videos or set up video playback.",false,"›")
@@ -199,8 +203,8 @@ func library_tiles(video_id := "home.videos", video_action := Callable()) -> Arr
 
 func action_tiles() -> Array:
 	var result: Array = [
-		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings,"Adjust the view, picture, room, controls and saved setups."),"gear","","actions",3),
+		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings_for_game,"Opens on this game's picture. The view, room, sound and controls are a category away." if host.emulator.loaded else "Adjust the view, picture, room, sound and controls."),"gear","","actions",3),
 		menu.tile(menu.catalog.action("screenshot","Screenshot",host.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),"camera","","actions",3),
-		menu.tile(menu.catalog.action("recenter","Recenter view",host.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)]
+		menu.tile(menu.catalog.action("recenter","Recentre view",host.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)]
 	result[0]["section"]="ACTIONS"
 	return result

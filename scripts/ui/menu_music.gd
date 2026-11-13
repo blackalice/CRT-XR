@@ -18,8 +18,11 @@ func open_music_browser(path := "") -> void:
 	if DirAccess.open(path)==null: menu.show_error("Folder unavailable. Reconnect its drive."); return
 	music_dir=path; music_page=0; menu.mode="music_browser"; menu.render()
 
+## Where the radio address was edited from, to return there afterwards.
+var radio_origin: Dictionary = {}
+
 func edit_radio_url() -> void:
-	menu.remember(); menu.clear_input(); menu.mode="radio_url"; menu.render()
+	menu.remember(); menu.clear_input(); radio_origin=menu.snapshot(); menu.mode="radio_url"; menu.render()
 	menu.rename_field.text=host.music.station_url; menu.keys.focus_entry()
 
 func save_radio_url() -> void:
@@ -27,14 +30,19 @@ func save_radio_url() -> void:
 	if not url.is_empty() and host.music.parse_url(url).is_empty():
 		menu.show_error("Use a direct http:// or https:// MP3 stream URL."); return
 	host.music.station_url=url
-	menu.mode="settings"; menu.clear_input(); menu.render(); menu.notify("Radio URL ready. Choose Play radio to listen.")
+	menu.restore(radio_origin if not radio_origin.is_empty() else {"mode":"music_browser","category":menu.category,"subsection":menu.subsection})
+	menu.notify("Radio URL ready. Choose Play radio to listen.")
 
 func music_browser_items() -> Array:
 	var result: Array=[]
 	var entries: Array=[]
 	if menu.welcome.choosing != "music":
-		result.append(menu.entry(menu.catalog.action("music.settings", "Music & radio settings", func(): menu.open_settings_section(2, "Music"), "Radio, repeat, volume and music preferences."), menu.SECTION_HERE, "gear"))
-		result.append(menu.entry(menu.catalog.action("music.visualiser_settings", "Visualiser settings", func(): menu.open_settings_section(2, "Visualiser"), "Choose visuals, brightness and automatic changes."), menu.SECTION_HERE, "sliders"))
+		# Radio and the visualiser are things you play, so they live here rather than in Settings.
+		var music = host.music
+		result.append(menu.entry(menu.catalog.unavailable(menu.catalog.action("music.radio", "Play radio", func(): music.play_station(music.station_url); menu.refresh(); menu.notify(music.status), "Plays your radio stream: " + music.station_url, music.station_url.is_empty(), ""), "Add a radio stream URL first."), menu.SECTION_HERE, "network"))
+		result.append(menu.entry(menu.catalog.action("music.url", "Radio stream URL", edit_radio_url, "Enter a direct MP3 stream URL. Station webpages, AAC and HLS are not supported.", false, "Edit"), menu.SECTION_HERE, "edit"))
+		result.append(menu.entry(menu.catalog.action("music.visualiser", "Return to visualiser" if host.visualizer.active else "Start visualiser", host.visualizer.enter, "Show music visuals on the CRT. B returns to the menu without stopping them.", false, ""), menu.SECTION_HERE, "sliders"))
+		result.append(menu.entry(menu.catalog.action("music.settings", "Music settings", func(): menu.open_settings_section(2, "Music"), "Repeat, room reverb, radio position and the visualiser's look. Volumes are in Sound → Volumes."), menu.SECTION_HERE, "gear"))
 	var album: Array=host.music.album_tracks(music_dir)
 	# First-run setup chooses the folder the music browser opens first.
 	if menu.welcome.choosing=="music":

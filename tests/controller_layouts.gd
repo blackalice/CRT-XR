@@ -112,6 +112,8 @@ func run() -> void:
 	await process_frame
 	check(app.emulator.load_rom(ProjectSettings.globalize_path("res://build/crt-xr-probe.sfc")), "A SNES game loads")
 	if not app.menu.visible: app.toggle_settings()
+	# The Games scope strip: All SNES games edits the console's layout.
+	app.menu.catalog.game_scope = 1
 	var rows: Array = app.menu.controls.rows()
 	check(rows.any(func(row): return row.id == "controls.button.%d" % Layouts.X and row.label == "X"), "The page lists the console's own button names")
 	app.menu.controls.start_capture(Layouts.X, "X")
@@ -125,10 +127,17 @@ func run() -> void:
 	var escape := InputEventKey.new()
 	escape.physical_keycode = KEY_ESCAPE; escape.pressed = true
 	check(app.menu.handle(escape) and app.menu.controls.capturing == -1 and app.emulator.controls.buttons.east == Layouts.A, "Escape cancels and leaves the button as it was")
-	app.menu.controls.set_game_layout(true)
-	check(Layouts.has_game_layout(app.emulator.rom_hash), "This game can keep its own layout")
+	app.menu.catalog.game_scope = 0
+	check(not Layouts.has_game_layout(app.emulator.rom_hash) and app.menu.controls.rows().any(func(row): return row.id == "controls.remove_game" and row.get("disabled", false)), "Choosing This game alone creates nothing; removal is unavailable")
 	app.menu.controls.apply(Layouts.standard("snes", Registry.SYSTEMS.snes))
-	check(app.emulator.controls == Layouts.standard("snes", Registry.SYSTEMS.snes) and Layouts.resolve("snes", Registry.SYSTEMS.snes, "").buttons.l1 == Layouts.X, "Changes then go to the game, not the console")
+	check(Layouts.has_game_layout(app.emulator.rom_hash) and app.emulator.controls == Layouts.standard("snes", Registry.SYSTEMS.snes) and Layouts.resolve("snes", Registry.SYSTEMS.snes, "").buttons.l1 == Layouts.X, "A change at This game gives the game its own layout, not the console")
+	app.menu.catalog.game_scope = 1
+	app.menu.controls.apply(Layouts.standard("snes", Registry.SYSTEMS.snes))
+	check(Layouts.has_game_layout(app.emulator.rom_hash), "Changing the scope and the console's layout never removes the game's own")
+	app.menu.controls.remove_game_layout()
+	check(app.menu.mode == "confirm" and Layouts.has_game_layout(app.emulator.rom_hash), "Removing the game's layout asks first")
+	app.menu.confirmed()
+	check(not Layouts.has_game_layout(app.emulator.rom_hash), "Confirming removes only the game's layout")
 	DirAccess.remove_absolute(ProjectSettings.globalize_path(Layouts.STORE))
 	app.queue_free()
 	await process_frame
