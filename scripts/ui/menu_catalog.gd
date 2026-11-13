@@ -99,15 +99,33 @@ func toggle(id: String, label: String, target: Object, key: String, fallback: bo
 const ROW_ICONS := {"view.fit":"fit","view.recenter":"view","tracking.fixed":"view","tracking.recenter":"view",
 	"system.version":"help","system.setup":"refresh","system.glasses":"help","system.device":"help","system.controls":"help","system.help":"help","system.credits":"help"}
 
-## Rows that only change the room or the TV's place, which flat screen mode does
-## not show. Room presets, its sounds and the tube whine still apply.
-const FLAT_UNUSED := ["view.distance","view.height_offset","view.tv_scale","view.fit","view.scene_msaa","view.edge_fade","access.tv"]
+## Rows that only change the room, the TV's place or the TV's glass, which flat
+## screen mode does not show. Room presets, its sounds and the tube whine still
+## apply. The flat picture is drawn without the tube's curve or its glass.
+const FLAT_UNUSED := ["view.distance","view.height_offset","view.tv_scale","view.fit","view.scene_msaa","view.edge_fade","access.tv",
+	"crt.glass_reflections","crt.screen_curvature"]
 const FLAT_ROOM_KEPT := ["room.preset","room.custom","room.ambience","room.ambience_level","room.crt_whine"]
+## The TV model only shapes the flat screen in TV's shape; on the whole display
+## it changes nothing.
+const FLAT_WHOLE_UNUSED := ["picture.cabinet","picture.tv_policy","picture.video_policy"]
 const FLAT_REASON := "Not used in flat screen mode. Turn off View & glasses → Stereo & comfort → Flat screen to use it."
 
 static func flat_unused(id: String) -> bool:
 	if id in FLAT_UNUSED: return true
 	return id.begins_with("room.") and not id in FLAT_ROOM_KEPT and not id.begins_with("room.mine.") and not id.begins_with("room.look.")
+
+## Whether flat view leaves this row unused just now: always for the room's
+## rows, and for the TV model while the screen is the whole display.
+func flat_unused_now(id: String) -> bool:
+	return flat_unused(id) or (int(host.get("flat_shape")) == 0 and id in FLAT_WHOLE_UNUSED)
+
+## Why a page's rows are hidden in flat view, for its one-line note.
+static func flat_note_reason(ids: Array) -> String:
+	if ids.all(func(id): return str(id).begins_with("crt.")):
+		return "They shape the TV's curved glass, which flat view does not draw. Turn off Flat view (beside Exit, or View & glasses → Stereo & comfort) to change them."
+	if ids.all(func(id): return id in FLAT_WHOLE_UNUSED):
+		return "The TV model has no effect while Screen shape is Whole display. Choose TV's shape (View & glasses → Stereo & comfort), or turn off Flat view, to change it."
+	return "They move the TV or change the room. Turn off Flat view (beside Exit, or View & glasses → Stereo & comfort) to change them."
 
 ## Where a picture value comes from, as a short line under the row's title.
 func picture_source(field: String) -> String:
@@ -126,15 +144,23 @@ func page(title: String, rows: Array, subtitle := "", scope := {}, hide_flat := 
 	var flat: bool = bool(host.get("flat_screen"))
 	if flat:
 		var kept: Array = []
-		var hidden := 0
+		var hidden: Array = []
+		var pending_section := ""
 		for row in rows:
-			if row is Dictionary and flat_unused(str(row.get("id",""))):
-				if hide_flat: hidden += 1; continue
+			if row is Dictionary and flat_unused_now(str(row.get("id",""))):
+				if hide_flat:
+					hidden.append(str(row.id))
+					# A hidden row's section heading passes to the next row shown.
+					if row.has("section"): pending_section = str(row.section)
+					continue
 				if not row.get("disabled",false): row["disabled"]=true; row["disabled_reason"]=FLAT_REASON
+			if not pending_section.is_empty() and row is Dictionary:
+				if not row.has("section"): row["section"] = pending_section
+				pending_section = ""
 			kept.append(row)
-		if hidden > 0:
-			var note := unavailable(action("flat.note." + title.to_lower().replace(" ", "_"), "%d %s hidden in flat view" % [hidden, "setting" if hidden == 1 else "settings"], func(): pass, "", true, ""),
-				"They move the TV or change the room. Turn off Flat view (beside Exit, or View & glasses → Stereo & comfort) to change them.")
+		if not hidden.is_empty():
+			var note := unavailable(action("flat.note." + title.to_lower().replace(" ", "_"), "%d %s hidden in flat view" % [hidden.size(), "setting" if hidden.size() == 1 else "settings"], func(): pass, "", true, ""),
+				flat_note_reason(hidden))
 			kept.push_front(note)
 		rows = kept
 	for row in rows:

@@ -113,9 +113,12 @@ and UI processing stop while closed.
 
 **Flat view**, beside Exit at the foot of Home and the pause menu, **View & glasses → Stereo & comfort → Flat screen**, or F3 shows the TV's picture
 full-window without the room, for playing on a normal monitor, a TV or the Deck's
-own screen with no glasses. On the footer, Down past the last row reaches Exit, Left moves to Flat view and A switches it; it stays selected so A switches back, and reads Flat view · On with an amber edge while on. It is one saved switch (`[display] flat_screen` in
-`settings.cfg`, outside saved setups); `--flat` turns it on for one launch without
-changing the saved choice. Reset all settings turns it off.
+own screen with no glasses. On the footer, Down past the last row reaches Exit, Left moves to Flat view and A switches it; it stays selected so A switches back, and reads Flat view · On with an amber edge while on. It is saved outside saved setups, separately for this screen
+(`[display] flat_screen`) and for glasses sessions (`[display] flat_screen_glasses`:
+SBS launches and the Windows XR setup), so Flat view chosen on the Deck's screen
+never puts a flat picture in the glasses; each is kept when the other is saved.
+`--flat` turns it on for one launch without changing the saved choice. Reset all
+settings turns both off.
 
 The picture is the TV's own. `shaders/crt.gdshader` (the tube surface) and
 `shaders/crt_flat.gdshader` (a canvas item) both include
@@ -123,7 +126,8 @@ The picture is the TV's own. `shaders/crt.gdshader` (the tube surface) and
 copies every uniform from the TV's screen material each frame. Picture looks,
 per-game and console pictures, fitting, composite decoding, the shared beam
 pass, power-on, channel change, degauss and power-off all apply unchanged; only
-curvature is lost, since it is geometry.
+curvature is lost, since it is geometry, and the glass's reflections, which
+belong to the room.
 
 **Screen shape** (under Flat screen, and the Screen tile on Home/pause) chooses
 the flat picture's screen, `[display] flat_shape`:
@@ -146,27 +150,38 @@ lines as rows (`menu_on_tv.gd` `flat_canvas`).
 Both eye views stop rendering while it is on, so the room costs nothing. The
 flat picture is drawn once into its own viewport and shown in each eye panel
 under the notices, menu dim and menu; in SBS both eyes show it flat. The menu
-always floats (Menu on the TV needs the TV). Rows that only change the room or
-the TV's place (TV placement, room lighting, surfaces, props and placement,
-edge smoothing, soft view edges, Menu on the TV) are left out of their tabs,
-and one line ("4 settings hidden in flat view") says so and how to get them
-back. Room presets, room sound and tube whine still apply.
+always floats (Menu on the TV needs the TV). Rows flat view does not use are
+left out of their tabs, and one line ("4 settings hidden in flat view") says so,
+why, and how to get them back (`menu_catalog.gd` `FLAT_UNUSED`, `flat_note_reason`):
+the room and the TV's place (TV placement, room lighting, surfaces, props and
+placement, edge smoothing, soft view edges, Menu on the TV); the tube's glass
+(Glass reflections, Screen curvature); and, on the whole display only, the TV
+model rows on Fit & TV (`FLAT_WHOLE_UNUSED`). A hidden row's section heading
+passes to the next row shown. Room presets, room sound and tube whine still apply.
 
 Home and the pause menu swap room tiles for flat ones, keeping the grid: TV
 position becomes **Screen** (the screen shape); on the whole display, where the
 TV model changes nothing, **TV** becomes **Game shape**; and Recentre view
 becomes **XR view**, which turns Flat view off.
 
-Flat view is offered in two places so nobody without glasses has to find it.
+On the Deck's own screen in Gaming Mode (`--deck-mono`: the launcher found no
+glasses), anyone who has not yet been asked starts in Flat view, with a notice
+saying XR view goes back to the room; first-run setup then shows This screen
+chosen. It happens once (`flat_view_offered`), so turning it off is kept.
+
+Elsewhere Flat view is offered in two places so nobody without glasses has to find it.
 First-run setup's Your view step starts with **Playing with: Glasses / This
 screen**; This screen turns Flat view on and skips tracking, recentring, TV
-position and menu position. Existing users get one question at the menu, once,
+position and menu position, and asks for the **Screen shape** under Your screen
+in place of the TV models (it asks for both in TV's shape). Existing users get one question at the menu, once,
 when no glasses have tracked for five seconds (not during setup, boot, a game,
 a video or SBS): **Use Flat view?** with Keep the room / Use Flat view. Either
 way `[display] flat_view_offered` is saved and it is not asked again. Screenshots save the flat picture. The Dreamcast VMU
 display is part of the room and is not shown. `tests/flat_screen.gd` covers the
 switch, saving, shared settings, fitting in both screen shapes, the menu canvas
-at 16:10, 16:9 and 21:9, the flat tiles, unused rows, screenshots and
+at 16:10, 16:9 and 21:9, the flat tiles (and that changing Screen moves
+nothing else), unused rows and their notes, the separate glasses choice, the
+Deck's first start, screenshots and
 `--flat`, and renders both shaders with the same values to check they match.
 
 ## Feedback, previews and accessibility

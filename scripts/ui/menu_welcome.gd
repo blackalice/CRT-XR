@@ -177,11 +177,19 @@ func view_items() -> Array:
 		"getter": func(): return 1 if h.flat_screen else 0,
 		"setter": func(value): h.set_flat_screen(int(value) == 1); menu.refresh(),
 		"help": "This screen shows the game full-screen without the room (Flat view). Switch any time with Flat view beside Exit."})
-	var games_tv: Dictionary = h.display_settings.policy_row("welcome.tv.games", keep_display_preferences)
-	games_tv["section"] = "YOUR TV"
-	games_tv["section_detail"] = "Either TV can show 4:3 or widescreen games. Fit adds borders; Fill crops; Stretch changes shape."
-	result.append(games_tv)
-	result.append(h.display_settings.video_tv_row("welcome.tv.videos"))
+	# Flat view asks for its screen first; the TV models only shape it in TV's shape.
+	if h.flat_screen:
+		var shape: Dictionary = c.flat_shape_row("welcome.view.flat_shape")
+		shape["section"] = "YOUR SCREEN"
+		shape["row_icon"] = "view"
+		result.append(shape)
+	if not h.flat_screen or h.flat_shape == 1:
+		var games_tv: Dictionary = h.display_settings.policy_row("welcome.tv.games", keep_display_preferences)
+		if not h.flat_screen:
+			games_tv["section"] = "YOUR TV"
+			games_tv["section_detail"] = "Either TV can show 4:3 or widescreen games. Fit adds borders; Fill crops; Stretch changes shape."
+		result.append(games_tv)
+		result.append(h.display_settings.video_tv_row("welcome.tv.videos"))
 	var fitting_help: Dictionary = c.fitting_help("welcome.tv.help")
 	fitting_help["compact"] = true
 	result.append(fitting_help)

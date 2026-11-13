@@ -102,6 +102,19 @@ func run() -> void:
 	var ambience: Array = app.menu.catalog.pages(2)[0].rows.filter(func(row): return str(row.get("id", "")) == "room.ambience")
 	check(lighting.is_empty() and app.menu.catalog.pages(3)[1].rows.size() == 1, "Room lighting is hidden, leaving only its note")
 	check(not preset.is_empty() and not preset[0].get("disabled", false) and not ambience.is_empty() and not ambience[0].get("disabled", false), "Room presets and room sound stay available")
+	# The tube's glass and curve are not drawn flat; the TV model only matters in TV's shape.
+	var picture_pages: Dictionary = {}
+	for page in app.menu.catalog.pages(1): picture_pages[page.title] = page.rows.map(func(row): return str(row.get("id", "")))
+	var tube_note: Array = app.menu.catalog.pages(1).filter(func(page): return page.title == "Tube")[0].rows.filter(func(row): return str(row.get("id", "")).begins_with("flat.note"))
+	check(not "crt.glass_reflections" in picture_pages.Tube and not "crt.screen_curvature" in picture_pages.Tube and "crt.scanlines" in picture_pages.Tube, "Tube hides glass reflections and curvature, which flat view does not draw")
+	check(not tube_note.is_empty() and str(tube_note[0].disabled_reason).contains("curved glass"), "The Tube note says why")
+	check(not "picture.tv_policy" in picture_pages["Fit & TV"] and "picture.fitting" in picture_pages["Fit & TV"], "On the whole display, Fit & TV hides the TV model and keeps fitting")
+	var fitting_section: Array = app.menu.catalog.pages(1).filter(func(page): return page.title == "Fit & TV")[0].rows.filter(func(row): return row.get("section", "") == "FITTING")
+	check(not fitting_section.is_empty(), "Fitting keeps its heading")
+	app.flat_shape = 1
+	var tv_shape_rows: Array = app.menu.catalog.pages(1).filter(func(page): return page.title == "Fit & TV")[0].rows.map(func(row): return str(row.get("id", "")))
+	check("picture.tv_policy" in tv_shape_rows, "In the TV's shape, the TV model is back")
+	app.flat_shape = 0
 	var quick_ids: Array = app.menu.quick_controls().map(func(row): return row.id)
 	check(not "pause.view.distance" in quick_ids and "pause.flat_shape" in quick_ids, "Quick settings offer the screen's shape in place of TV position: %s" % [quick_ids])
 	check("pause.game_shape" in quick_ids and not "pause.tv" in quick_ids, "On the whole display, Game shape takes the TV tile")
@@ -142,6 +155,40 @@ func run() -> void:
 	var shot := Image.load_from_file(path) if not path.is_empty() else null
 	check(shot != null and shot.get_size() == app.flat.view.size, "Screenshots save the flat picture")
 	if not path.is_empty(): DirAccess.remove_absolute(path)
+
+	# Glasses sessions keep their own choice: Flat view on this screen stays out of the glasses.
+	var saved: ConfigFile = app.capture_settings()
+	saved.set_value("display", "flat_screen", true)
+	saved.set_value("display", "flat_screen_glasses", false)
+	app.sbs_startup = true
+	app.apply_settings(saved)
+	check(not app.flat_screen, "A glasses session ignores Flat view chosen for this screen")
+	app.set_flat_screen(true)
+	app.set_flat_screen(false)
+	var from_glasses: ConfigFile = app.capture_settings()
+	check(from_glasses.get_value("display", "flat_screen") == true and from_glasses.get_value("display", "flat_screen_glasses") == false, "Changing it in the glasses keeps this screen's choice")
+	app.sbs_startup = false
+	app.apply_settings(from_glasses)
+	check(app.flat_screen, "This screen still starts in Flat view")
+	# First-run setup asks for the screen's shape; the TV models only in TV's shape.
+	var setup_ids: Array = app.menu.welcome.view_items().map(func(item): return str(item.get("id", "")))
+	check("welcome.view.flat_shape" in setup_ids and not "welcome.tv.games" in setup_ids, "Setup in Flat view asks for the screen, not the TV: %s" % [setup_ids])
+	app.flat_shape = 1
+	setup_ids = app.menu.welcome.view_items().map(func(item): return str(item.get("id", "")))
+	check("welcome.tv.games" in setup_ids, "In TV's shape, setup also asks for the TV")
+	app.flat_shape = 0
+	# The Deck's own screen starts in Flat view for anyone not yet asked, once.
+	app.set_flat_screen(false)
+	app.flat_view_offered = false
+	app.start_flat_on_deck_screen(false)
+	check(not app.flat_screen, "Off the Deck's screen nothing changes on its own")
+	app.start_flat_on_deck_screen(true)
+	check(app.flat_screen and app.flat_view_offered and app.capture_settings().get_value("display", "flat_screen") == true, "The Deck's screen starts in Flat view and remembers it")
+	app.set_flat_screen(false)
+	app.start_flat_on_deck_screen(true)
+	check(not app.flat_screen, "Once turned off there, it stays off")
+	app.set_flat_screen(true)
+	await settle()
 
 	# --flat applies for the launch without changing the saved choice.
 	app.set_flat_screen(false)

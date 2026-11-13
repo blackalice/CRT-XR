@@ -155,8 +155,12 @@ var stereo := false
 ## Flat screen mode (scripts/rendering/flat_screen.gd): the picture fills the
 ## window without the room, for playing without glasses. flat_screen_saved is
 ## the saved choice; --flat turns the mode on for one launch without saving it.
+## Glasses sessions and this screen keep separate choices (flat_key), so Flat
+## view chosen on the Deck's screen never shows up in the glasses; the other
+## kind's choice is carried through saves in flat_screen_other.
 var flat_screen := false
 var flat_screen_saved := false
+var flat_screen_other := false
 var flat_screen_launch := "--flat" in OS.get_cmdline_user_args()
 var flat: Node
 ## Flat view's screen: the whole display (0), with the picture fitted to it and
@@ -589,6 +593,7 @@ func start_application() -> void:
 	# [welcome] entry, belong to someone already set up.
 	var stored: ConfigFile = settings_store.read("user://settings.cfg")
 	welcome_done = bool(stored.get_value("welcome", "done", not stored.get_sections().is_empty()))
+	start_flat_on_deck_screen()
 	var recent := settings_store.read("user://recent.cfg")
 	if recent.has_section("library"):
 		last_game_path = str(recent.get_value("library", "last_game", ""))
@@ -697,7 +702,8 @@ func apply_settings(config: ConfigFile) -> void:
 	display_settings.read(config)
 	scene_msaa=clampi(int(config.get_value("display_profiles","msaa",0)),0,2)
 	apply_scene_msaa()
-	flat_screen_saved = bool(config.get_value("display","flat_screen",false))
+	flat_screen_saved = bool(config.get_value("display",flat_key(glasses_session()),false))
+	flat_screen_other = bool(config.get_value("display",flat_key(not glasses_session()),false))
 	flat_view_offered = bool(config.get_value("display","flat_view_offered",flat_view_offered))
 	flat_shape = clampi(int(config.get_value("display","flat_shape",0)), 0, FLAT_SHAPES.size() - 1)
 	set_flat_screen(flat_screen_saved or flat_screen_launch, false)
@@ -1170,6 +1176,26 @@ func offer_flat_view(delta: float) -> void:
 	menu.ask("Use Flat view?", "No glasses found. Flat view shows the game full-screen on this screen, without the room. Switch any time with Flat view beside Exit.", func():
 		set_flat_screen(true)
 		show_notice("Flat view on · Flat view beside Exit switches back"), "", "Use Flat view", "Keep the room")
+
+## A side-by-side glasses session: launched for SBS, or the Windows XR setup
+## found the glasses. Anything else is this screen.
+func glasses_session() -> bool:
+	var arguments := OS.get_cmdline_user_args()
+	return sbs_startup or "--sbs" in arguments or "--full-sbs" in arguments
+
+## Where Flat view's saved choice lives for glasses sessions or for this screen.
+static func flat_key(glasses: bool) -> String:
+	return "flat_screen_glasses" if glasses else "flat_screen"
+
+## The Deck's own screen in Gaming Mode: the launcher found no glasses, so
+## someone who has never chosen starts in Flat view instead of being asked
+## later. First-run setup shows This screen chosen; Keep the room or XR view
+## turns it off, and that is remembered.
+func start_flat_on_deck_screen(deck_screen: bool = "--deck-mono" in OS.get_cmdline_user_args()) -> void:
+	if flat_view_offered or flat_screen or not deck_screen: return
+	flat_view_offered = true
+	set_flat_screen(true)
+	if welcome_done: show_notice("Flat view: the game fills the Deck's screen · XR view on Home goes back to the room")
 
 ## Turns flat screen mode on or off. The room's eye views stop rendering while it
 ## is on; the picture, its settings and the menu carry on as they are.
@@ -1687,6 +1713,7 @@ func reset_all_options() -> void:
 	for index in range(5): SettingsDefaults.apply(self,index)
 	scene_msaa=0;apply_scene_msaa()
 	set_flat_screen(false)
+	flat_screen_other = false
 	flat_shape = 0
 	display_settings.scope=0
 	display_settings.base=display_settings.live_picture()
@@ -1874,7 +1901,8 @@ func capture_settings() -> ConfigFile:
 	config.set_value("picture", "aspect_override", world.picture.aspect_override)
 	config.set_value("display_profiles","data",display_settings.data.duplicate(true))
 	config.set_value("display_profiles","msaa",scene_msaa)
-	config.set_value("display","flat_screen",flat_screen_saved)
+	config.set_value("display",flat_key(glasses_session()),flat_screen_saved)
+	config.set_value("display",flat_key(not glasses_session()),flat_screen_other)
 	config.set_value("display","flat_view_offered",flat_view_offered)
 	config.set_value("display","flat_shape",flat_shape)
 	config.set_value("room", "widescreen", world.widescreen)
