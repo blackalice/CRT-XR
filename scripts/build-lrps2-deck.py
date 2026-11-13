@@ -22,7 +22,10 @@ BUILD=ROOT/'build/lrps2-linux'
 # lrps2-vtlb-moved-map: the VTLB tables cached across games are carved again
 # when the main map was placed elsewhere for the next game (the core stays
 # loaded, so a stale cache pointed into unmapped memory and vtlb_Init crashed).
-PATCHES=['lrps2-image-maps.patch','lrps2-vtlb-moved-map.patch']
+# lrps2-recommended-blending: apply the game database's recommended blending
+# accuracy (upstream only warns), capped at High for the Deck's GPU. GT4 needs
+# it for car brightness and banding. Listed first: git orders its file first.
+PATCHES=['lrps2-recommended-blending.patch','lrps2-image-maps.patch','lrps2-vtlb-moved-map.patch']
 FLAGS=['-DCMAKE_BUILD_TYPE=Release','-DLIBRETRO=ON','-DUSE_VULKAN=OFF']
 # The repository is bind-mounted from Windows, so its owner differs.
 ENV=dict(os.environ,GIT_CONFIG_COUNT='1',GIT_CONFIG_KEY_0='safe.directory',GIT_CONFIG_VALUE_0='*')

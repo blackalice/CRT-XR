@@ -1,0 +1,24 @@
+diff --git a/pcsx2/GameDatabase.cpp b/pcsx2/GameDatabase.cpp
+index 43da55552..720739243 100644
+--- a/pcsx2/GameDatabase.cpp
++++ b/pcsx2/GameDatabase.cpp
+@@ -1121,7 +1121,18 @@ u32 GameDatabase_ApplyGSHardwareFixes(const GameDatabaseEntry* e, Pcsx2Config::G
+ 			break;
+ 
+ 			case GameDatabaseSchema::GSHWFixId::RecommendedBlendingLevel:
+-				break;
++			{
++				/* CRT XR: upstream only warns about a recommended level. Raise
++				 * blending to it, capped at High: Full and Maximum cost too much
++				 * GPU time on a Steam Deck. A higher chosen level is kept. */
++				const int recommended = pcsx2_min_i(value, static_cast<int>(AccBlendLevel::High));
++				if (recommended > static_cast<int>(config.AccurateBlendingUnit))
++				{
++					log_cb(RETRO_LOG_INFO, "(GameDB) Raising blending accuracy to recommended level %d\n", recommended);
++					config.AccurateBlendingUnit = static_cast<AccBlendLevel>(recommended);
++				}
++			}
++			break;
+ 
+ 			case GameDatabaseSchema::GSHWFixId::GetSkipCount:
+ 				config.GetSkipCountFunctionId = static_cast<s16>(value);

@@ -5,8 +5,12 @@
   "source_url": "https://github.com/libretro/ps2.git",
   "source_commit": "88098c430d1e20f7541e4160b9a17e1f90d83446",
   "source_archive": "sources/lrps2-88098c430d1e20f7541e4160b9a17e1f90d83446.tar.gz",
-  "source_sha256": "c1e122f765d1062ce0f24778aa373ec1241abbc432f08a0d741de9e4ae94d03d",
+  "source_sha256": "9326c36789ff48bd1e44e696593df2505dc0433445148e2aa78b8c6e6e303d48",
   "patches": [
+    {
+      "path": "sources/lrps2-recommended-blending.patch",
+      "sha256": "d4bfd2e139fc43fd8fefc3fea2dcc4faa07ee4b2d330160b1920130114d96bd6"
+    },
     {
       "path": "sources/lrps2-image-maps.patch",
       "sha256": "1665e6d09417c5345c5ea7189014bc58edeb86fd7773830a848a3a3ef572c5dc"
@@ -16,7 +20,7 @@
       "sha256": "85dd805a4de150697414069f7769188715356a0891ab494a1de761931341bef6"
     }
   ],
-  "binary_sha256": "7ea33b2b51878e3a2871fb14935fb5c6706390df6a83451c2b8cf7bfb9c2a4f6",
+  "binary_sha256": "d190c756f3bfe610c838038753c25a192528c51297948000e1344a2d81276e03",
   "compiler": "g++-12 (Ubuntu 12.3.0-1ubuntu1~22.04.3) 12.3.0",
   "cmake_flags": [
     "-DCMAKE_BUILD_TYPE=Release",
