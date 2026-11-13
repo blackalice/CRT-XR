@@ -1,4 +1,5 @@
 extends Node
+const GameTitle = preload("res://scripts/content/game_title.gd")
 const Registry = preload("res://scripts/emulation/core_registry.gd")
 const Folders = preload("res://scripts/content/console_folders.gd")
 const Layouts = preload("res://scripts/emulation/controller_layouts.gd")
@@ -236,7 +237,7 @@ func load_from_async(path: String, description: String) -> bool:
 	core_failed = false
 	disc_snapshot = core.disc_info()
 	update_texture(true)
-	report(description + " • " + rom_path.get_file().get_basename())
+	report(description + " • " + GameTitle.of(rom_path))
 	return true
 
 func load_rom_async(path: String) -> bool:
@@ -984,7 +985,7 @@ func reset_game_async() -> bool:
 	accumulator = 0.0; skip_delta = true; auto_saved = false
 	restart_audio()
 	disc_snapshot = core.disc_info()
-	report("Reset • " + rom_path.get_file().get_basename())
+	report("Reset • " + GameTitle.of(rom_path))
 	return true
 
 func save_auto() -> bool:
@@ -1019,7 +1020,7 @@ func save_to(path: String, description: String) -> bool:
 	if saved != OK:
 		report("Could not save state: " + error_string(saved), true)
 		return false
-	report("%s • %s" % [description,rom_path.get_file().get_basename()])
+	report("%s • %s" % [description,GameTitle.of(rom_path)])
 	return true
 
 ## The console's reset button: the game restarts; battery saves and states are kept.
@@ -1036,7 +1037,7 @@ func reset_game() -> bool:
 	accumulator = 0.0
 	skip_delta = true
 	auto_saved = false
-	report("Reset • " + rom_path.get_file().get_basename())
+	report("Reset • " + GameTitle.of(rom_path))
 	return true
 
 func load_state(slot := 0) -> bool:
@@ -1069,7 +1070,7 @@ func load_from(path: String, description: String) -> bool:
 	core_failed = false
 	disc_snapshot = core.disc_info()
 	update_texture(true)
-	report("%s • %s" % [description,rom_path.get_file().get_basename()])
+	report("%s • %s" % [description,GameTitle.of(rom_path)])
 	return true
 
 ## Releases the core and forgets the previous game, so nothing describes a game
@@ -1128,7 +1129,7 @@ func change_disc(index: int) -> bool:
 		return false
 	disc_snapshot = core.disc_info()
 	auto_saved = false
-	report("Disc %d inserted • %s" % [index + 1, rom_path.get_file().get_basename()])
+	report("Disc %d inserted • %s" % [index + 1, GameTitle.of(rom_path)])
 	return true
 
 ## A disc ZIP still to be unpacked (see Registry.needs_unpacking).

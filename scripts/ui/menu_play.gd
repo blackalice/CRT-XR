@@ -1,5 +1,6 @@
 extends RefCounted
 ## While a game is loaded: save-state slots, loading, and the reset button.
+const GameTitle = preload("res://scripts/content/game_title.gd")
 var host: Node
 var menu: Control
 ## Save-state slots per game.
@@ -33,7 +34,7 @@ static func state_picture(path: String) -> Texture2D:
 
 func choose_state(slot: int) -> void:
 	var path: String=host.emulator.state_path(slot)
-	var game: String=host.emulator.rom_path.get_file().get_basename()
+	var game: String=GameTitle.of(host.emulator.rom_path)
 	if states_saving:
 		if FileAccess.file_exists(path): menu.ask("Overwrite slot %d?" % (slot+1),"Replace the save for %s from %s?" % [game,menu.saved_when(host.emulator.state_stamp(path))],func(): perform_state_action(true,slot),path)
 		else: perform_state_action(true,slot)
@@ -83,14 +84,14 @@ func state_action(saving: bool) -> void:
 	if not saving:
 		if not FileAccess.file_exists(host.emulator.state_path()):
 			menu.show_error("No manual save yet. Choose Save state first."); return
-		menu.ask("Load manual save?","Current progress will be replaced. %s • Slot 1 • saved %s" % [host.emulator.rom_path.get_file().get_basename(),menu.saved_when(host.emulator.state_stamp(host.emulator.state_path()))],func(): perform_state_action(false),host.emulator.state_path())
+		menu.ask("Load manual save?","Current progress will be replaced. %s • Slot 1 • saved %s" % [GameTitle.of(host.emulator.rom_path),menu.saved_when(host.emulator.state_stamp(host.emulator.state_path()))],func(): perform_state_action(false),host.emulator.state_path())
 		return
 	if FileAccess.file_exists(host.emulator.state_path()):
-		menu.ask("Overwrite manual save?", "Replace the save for %s from %s?" % [host.emulator.rom_path.get_file().get_basename(),menu.saved_when(host.emulator.state_stamp(host.emulator.state_path()))],func(): perform_state_action(true),host.emulator.state_path())
+		menu.ask("Overwrite manual save?", "Replace the save for %s from %s?" % [GameTitle.of(host.emulator.rom_path),menu.saved_when(host.emulator.state_stamp(host.emulator.state_path()))],func(): perform_state_action(true),host.emulator.state_path())
 	else: perform_state_action(true)
 
 func reset_game() -> void:
-	menu.ask("Reset the game?", "Restarts %s as if you pressed the console's reset button. Progress since your last save is lost; battery saves and save states are kept." % host.emulator.rom_path.get_file().get_basename(), func():
+	menu.ask("Reset the game?", "Restarts %s as if you pressed the console's reset button. Progress since your last save is lost; battery saves and save states are kept." % GameTitle.of(host.emulator.rom_path), func():
 		if host.emulator.transition_busy: return
 		var origin_mode: String = menu.mode
 		var success: bool = await host.emulator.reset_game_async()
@@ -147,7 +148,7 @@ func home_items() -> Array:
 		var total: String = menu.games.play_label(h.last_game_path)
 		if not total.is_empty(): parts.append(total)
 		if played > 0: parts.append(("last " if not total.is_empty() else "played ") + menu.ago(played))
-		home.append(menu.games.with_box_art(menu.entry(menu.catalog.action("home.continue",h.last_game_path.get_file().get_basename(),func(): menu.games.select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",false,"›"),"","play","primary"," · ".join(parts)),h.last_game_path))
+		home.append(menu.games.with_box_art(menu.entry(menu.catalog.action("home.continue",GameTitle.of(h.last_game_path),func(): menu.games.select_file(h.last_game_path),"Open your last cartridge and its automatic resume point, when available.",false,"›"),"","play","primary"," · ".join(parts)),h.last_game_path))
 		# The two libraries sit side by side.
 		main = [menu.tile(library_row,"gamepad","","main",2), menu.tile(video_row,"video","","main",2)]
 		for item in main: item.compact=true

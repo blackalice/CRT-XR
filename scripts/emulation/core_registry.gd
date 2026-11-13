@@ -207,7 +207,8 @@ static func archive_game(path: String) -> Dictionary:
 			system = header_system(Archive.read(path, entry.name).slice(0, 0x110), extension)
 			if system == "segacd": system = ""
 		if not system.is_empty() and entry.size <= Archive.PLAY_LIMIT:
-			game = {"system": system, "entry": entry.name, "size": entry.size}
+			# The CRC lets the library name the game without reading the ZIP again.
+			game = {"system": system, "entry": entry.name, "size": entry.size, "crc": entry.crc}
 			break
 	if game.is_empty(): game = archived_disc(path)
 	archive_cache[path] = {"stamp": stamp, "game": game}
@@ -426,6 +427,10 @@ static func psx_disc(file: FileAccess) -> bool:
 
 ## The text of SYSTEM.CNF in the disc's root directory, or "".
 static func system_cnf(file: FileAccess, layout: Array, volume: PackedByteArray) -> String:
+	return root_file(file, layout, volume, "SYSTEM.CNF").get_string_from_ascii()
+
+## The first sector (2048 bytes) of a file in the disc's root directory, or empty.
+static func root_file(file: FileAccess, layout: Array, volume: PackedByteArray, wanted: String) -> PackedByteArray:
 	var root := volume.decode_u32(156 + 2)
 	var length := mini(volume.decode_u32(156 + 10), 4 * 2048)
 	for index in range(ceili(length / 2048.0)):
@@ -435,10 +440,10 @@ static func system_cnf(file: FileAccess, layout: Array, volume: PackedByteArray)
 			var size := sector[at]
 			if size == 0: break
 			var name := sector.slice(at + 33, at + 33 + sector[at + 32]).get_string_from_ascii()
-			if name.to_upper().begins_with("SYSTEM.CNF"):
-				return disc_sector(file, layout, sector.decode_u32(at + 2)).get_string_from_ascii()
+			if name.to_upper().begins_with(wanted):
+				return disc_sector(file, layout, sector.decode_u32(at + 2))
 			at += size
-	return ""
+	return PackedByteArray()
 
 ## A PlayStation 2 disc: a PLAYSTATION volume whose SYSTEM.CNF boots with BOOT2.
 static func ps2_disc(file: FileAccess) -> bool:

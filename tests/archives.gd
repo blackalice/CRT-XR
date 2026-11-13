@@ -81,8 +81,8 @@ func run() -> void:
 	var labels := {}
 	for system in index.games:
 		for game in index.games[system]: labels[game.label] = system
-	check(labels.get("Probe (USA)") == "snes" and labels.get("Sega Probe") == "megadrive" and labels.get("Advance") == "gba" and labels.get("Commented") == "nes", "The library scan lists zipped games under their own names")
-	check(labels.get("Sonic CD (USA)") == "segacd" and labels.get("Popful Mail") == "segacd" and labels.get("Final Fantasy VII") == "psx" and not labels.has("Loose"), "The library scan lists CHDs under their console folder's system")
+	check(labels.get("Probe") == "snes" and labels.get("Sega Probe") == "megadrive" and labels.get("Advance") == "gba" and labels.get("Commented") == "nes", "The library scan lists zipped games under their own names")
+	check(labels.get("Sonic CD") == "segacd" and labels.get("Popful Mail") == "segacd" and labels.get("Final Fantasy VII") == "psx" and not labels.has("Loose"), "The library scan lists CHDs under their console folder's system")
 	check(not labels.has("notes") and not labels.has("broken") and not labels.has("Disc"), "Non-games stay out of the library")
 	var library = load("res://scripts/ui/rom_library.gd").new()
 	library.show_folder(ProjectSettings.globalize_path(base + "/roms/snes"))

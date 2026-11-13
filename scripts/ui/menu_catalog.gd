@@ -1,6 +1,7 @@
 extends RefCounted
 ## Explicit ordered rows and stable IDs; bindings reuse the application's
 ## existing actions and preferences rather than a second settings store.
+const GameTitle = preload("res://scripts/content/game_title.gd")
 const VideoSession = preload("res://scripts/video/video_session.gd")
 ## Help pages, in the help page markup (scripts/ui/help_article.gd): the
 ## controller button first, then its keyboard key.
@@ -324,13 +325,17 @@ func core_option_pages() -> Array:
 		rows[0]["section"] = "Console defaults"
 		rows[0]["section_detail"] = "Applies next time you load a game."
 	rows.append(region_row())
+	var grouped := toggle("library.group_versions","One row per game",host,"library_group_versions",true,"Lists each game once and plays your region's version, or the one you last played. Pick another version when you start it.",func(): menu.games.list_changed(),false)
+	grouped["section"] = "GAME LISTS"
+	rows.append(grouped)
+	rows.append(toggle("library.hide_extras","Hide betas, demos & hacks",host,"library_hide_extras",false,"Leaves betas, prototypes, demos, hacks and bad dumps out of console lists; translations stay. Favourites and Recently played still show them.",func(): menu.games.list_changed(),false))
 	var scope := games_scope()
 	if playing.is_empty() or game_scope != 0:
 		return [page("Console settings", rows, "Defaults for each console" if playing.is_empty() else "Defaults for every %s game" % console_short(playing), scope)]
 	var game_rows: Array = []
 	for definition in CoreOptions.definitions(playing): game_rows.append(core_option_row(playing, emulator.rom_hash, definition))
 	if not game_rows.is_empty():
-		game_rows[0]["section"] = emulator.rom_path.get_file().get_basename() + " · " + emulator.Registry.SYSTEMS[playing].name
+		game_rows[0]["section"] = GameTitle.of(emulator.rom_path) + " · " + emulator.Registry.SYSTEMS[playing].name
 		game_rows[0]["section_detail"] = "Changes apply next load. Y returns an option to the console setting."
 	else:
 		game_rows.append(unavailable(action("core.no_options", "No options for this console", func(): pass, "", true, ""), "This console's emulator has no settings to change."))
@@ -498,7 +503,7 @@ func stereo_rows() -> Array:
 ## game's automatic resume point, so Continue returns to this moment.
 func stop_for_test_signal() -> void:
 	var h = host
-	var subject: String = h.video.path.get_file().get_basename() if h.video.loaded else h.emulator.rom_path.get_file().get_basename()
+	var subject: String = h.video.path.get_file().get_basename() if h.video.loaded else GameTitle.of(h.emulator.rom_path)
 	menu.ask("Stop %s?" % subject, ("Your place in the video is remembered." if h.video.loaded else "An automatic resume point is saved first, so Continue brings you back to this moment.") + " Then the test signal is shown.", func():
 		if h.video.loaded:
 			h.remember_video_position()
@@ -699,7 +704,7 @@ func category_pages(category: int) -> Array:
 			result.append(page("Controls",menu.controls.rows(),controls_subtitle(),games_scope()))
 			result.append(page("Input delay",[input_delay,separate_preview,game_fps],"For the games you play"))
 			result.append(page("Info",[
-				action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate.",false,h.emulator.rom_path.get_file().get_basename() if h.emulator.loaded else ""),
+				action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate.",false,GameTitle.of(h.emulator.rom_path) if h.emulator.loaded else ""),
 				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")],"Read-only"))
 			# Last, so the other tabs keep their places whether or not a Dreamcast game is loaded.
 			if h.emulator.loaded and h.emulator.system_id == "dreamcast": result.append(vmu_page())

@@ -3,6 +3,7 @@ extends RefCounted
 ## recent, most played and favourite lists, jump to letter, and choosing a game to play.
 const RomIndex = preload("res://scripts/content/rom_index.gd")
 const History = preload("res://scripts/content/play_history.gd")
+const GameTitle = preload("res://scripts/content/game_title.gd")
 const VideoSession = preload("res://scripts/video/video_session.gd")
 const FfmpegInstaller = preload("res://scripts/video/ffmpeg_installer.gd")
 var host: Node
@@ -20,6 +21,18 @@ var system_pages: Dictionary = {}
 var alphabet_origin := "games"
 var folder_path_origin: Dictionary = {}
 var folder_path_music := false
+## Titles that more than one game in a console's list shares, so those rows name
+## their region or revision: [index revision, system, {title: true}].
+var shared_titles_cache: Array = [-1, "", {}]
+## The versions of the game on the launch page, when it has more than one.
+var launch_versions: Array = []
+## A console's list after grouping and hiding: [key, entries].
+var console_cache: Array = ["", []]
+## Tags that "Hide betas, demos & hacks" leaves out. Translations stay.
+const EXTRAS := ["Beta","Prototype","Demo","Sample","Kiosk","Debug","Promo","Hack","Bad dump","Overdump","Bad checksum","BIOS"]
+## Regions each console collection plays first when a game has several versions.
+const REGION_PREFERENCE := {"pal":["Europe","UK","Australia","Germany","France","Spain","Italy","Netherlands","Sweden","Scandinavia","PAL"],
+	"ntsc":["USA","Canada","NTSC"],"japan":["Japan"]}
 
 func open_library() -> void:
 	menu.remember(); menu.clear_input(); menu.mode="library"; menu.preview=false
@@ -49,7 +62,7 @@ func library_items() -> Array:
 	var identity := {"snes":["NINTENDO · 16-BIT","ba9fdb"],"nes":["NINTENDO · 8-BIT","dc9b8e"],"megadrive":["SEGA · 16-BIT","8ebfdc"],"mastersystem":["SEGA · 8-BIT","9ac4ab"],"gamegear":["SEGA · HANDHELD","d4bb7d"],"gameboy":["NINTENDO · HANDHELD","b7bfa8"],"gba":["NINTENDO · 32-BIT HANDHELD","b0a6e8"],"pcengine":["NEC · 16-BIT","e0908a"],"segacd":["SEGA · CD ADD-ON","7fb6dd"],"atari2600":["ATARI · 8-BIT","e0a75f"],"atarilynx":["ATARI · HANDHELD","cf8560"],"ngpc":["SNK · HANDHELD","c4a8d8"],"vectrex":["GCE · VECTOR","8fc4c9"],"psx":["SONY · 32-BIT CD","a9b6cf"],"n64":["NINTENDO · 64-BIT","8fcf9a"],"dreamcast":["SEGA · 128-BIT","c3cbd9"],"gamecube":["NINTENDO · GAMECUBE","b0a6e8"],"wii":["NINTENDO · WII","c9d3dc"],"ps2":["SONY · 128-BIT DVD","8fa3d6"],"psp":["SONY · HANDHELD","b4b8c4"]}
 	for system in menu.library.Registry.SYSTEMS:
 		var id: String=system
-		var count: int=menu.rom_index.games.get(id,[]).size()
+		var count: int=console_games(id).size()
 		if count==0: continue
 		result.append(menu.card(menu.catalog.action("library.system."+id,menu.library.Registry.SYSTEMS[id].name,func(): open_system(id),"",false,"%d game%s" % [count,"" if count==1 else "s"]),identity.get(id,["CONSOLE","c3cbd9"])[0],menu.library.Registry.SYSTEMS[id].get("icon",id),Color(identity.get(id,["CONSOLE","c3cbd9"])[1]),"YOUR CONSOLES"))
 	if h.default_rom_dir.is_empty():
@@ -108,7 +121,8 @@ func refresh_library() -> void:
 func open_system(system: String) -> void:
 	menu.remember(); menu.clear_input(); menu.search_query=""; menu.search_field.text=""
 	library_system=system; game_page=int(system_pages.get(system,0))
-	var count: int = menu.rom_index.games.get(system,[]).size()
+	console_cache=["",[]] # The version last played may have changed since.
+	var count: int = console_games(system).size()
 	game_page=clampi(game_page,0,maxi(0,(count-1)/GAMES_PER_PAGE))
 	menu.mode="games"; menu.render()
 
@@ -178,12 +192,15 @@ func set_default(path: String) -> bool:
 	menu.notify("ROM library folder saved. Choose game shows systems after scanning." if not path.is_empty() else "Default folder cleared; your ROMs are unchanged")
 	return true
 
-func select_file(path: String) -> void:
+## Plays a game, or first offers Continue and, for a game with several versions,
+## which one to play.
+func select_file(path: String, versions: Array = []) -> void:
 	if not FileAccess.file_exists(path): menu.show_error("Game unavailable. Reconnect its SD card and try again."); return
+	launch_versions = versions if versions.size()>1 else []
 	var automatic: String = host.emulator.auto_path_for(path)
-	if FileAccess.file_exists(automatic):
+	if FileAccess.file_exists(automatic) or not launch_versions.is_empty():
 		menu.remember(); launch_origin=menu.snapshot(); launch_path=path
-		menu.clear_input(); menu.mode="launch"; menu.memory["launch"]={"id":"launch.continue","scroll":0}; menu.render()
+		menu.clear_input(); menu.mode="launch"; menu.memory["launch"]={"id":"launch.continue" if FileAccess.file_exists(automatic) else "launch.play","scroll":0}; menu.render()
 	else: launch_game(path,false)
 
 func launch_game(path: String, continuing: bool) -> void:
@@ -257,7 +274,7 @@ func unpack_then_launch(path: String, continuing: bool) -> void:
 		if not error.is_empty():
 			host.end_loading()
 			if not menu.visible: host.toggle_settings()
-			menu.show_error("Could not unpack %s: %s" % [path.get_file().get_basename(), error]); return
+			menu.show_error("Could not unpack %s: %s" % [GameTitle.of(path), error]); return
 		launch_game(path, continuing),
 		CONNECT_ONE_SHOT)
 	host.was_paused_before_menu = false
@@ -269,9 +286,11 @@ func show_unpack_progress(path: String, done: int, total: int) -> void:
 func open_history(which: String) -> void:
 	menu.remember(); menu.clear_input(); menu.search_query=""; menu.search_field.text=""; menu.mode=which; menu.render()
 
-func game_item(path: String, label: String) -> Dictionary:
+## One game's row. `shared` lists titles other games in this list also use: those
+## rows add their region or revision ("Europe · Rev 1") so they can be told apart.
+func game_item(path: String, label: String, shared: Dictionary = {}, versions: Array = []) -> Dictionary:
 	var favourite: bool = path in host.play_history.favourites
-	var item: Dictionary = menu.catalog.action("game:"+path,label,func(): select_file(path),"Open this cartridge or mark it as a favourite.",false,"" if favourite else "›")
+	var item: Dictionary = menu.catalog.action("game:"+path,label,func(): select_file(path,versions),"Open this cartridge or mark it as a favourite.",false,"" if favourite else "›")
 	if favourite: item["value_icon"]="heart"
 	item["rom_path"]=path
 	item["layout"]="game"
@@ -282,12 +301,21 @@ func game_item(path: String, label: String) -> Dictionary:
 		var system: String=menu.library.Registry.identify(path)
 		if system.is_empty(): system=RomIndex.Folders.system(folder)
 		parts.append(menu.library.Registry.SYSTEMS[system].name if not system.is_empty() else "Game")
+	var named: Dictionary = GameTitle.info(path)
+	if versions.size()>1: parts.append("%d versions" % versions.size())
+	elif shared.has(title_key(label,path)) and not str(named.variant).is_empty(): parts.append(str(named.variant))
+	parts.append_array(named.tags)
 	if not FileAccess.file_exists(path): parts.append("Storage unavailable")
 	elif RomIndex.Folders.system(folder).is_empty(): parts.append(folder)
 	var total := play_label(path)
 	if not total.is_empty(): parts.append(total)
 	var played: int=host.play_history.last_played(path)
 	if played>0: parts.append(("last " if not total.is_empty() else "Played ")+menu.ago(played))
+	elif total.is_empty():
+		# Not played yet: what its gamelist or TOSEC name says about it.
+		if str(named.get("year","")).is_valid_int(): parts.append(str(named.year))
+		var kind := str(named.get("genre",named.get("publisher","")))
+		if not kind.is_empty(): parts.append(kind)
 	item["detail"]=" · ".join(parts)
 	with_box_art(item,path)
 	return item
@@ -313,9 +341,9 @@ func toggle_favourite() -> void:
 	menu.refresh(); menu.notify("Favourites updated")
 
 func game_entries() -> Array:
-	var games: Array=menu.rom_index.games.get(library_system,[])
+	var games: Array=console_games(library_system)
 	if menu.search_query.is_empty(): return games
-	return games.filter(func(game): return str(game.label).to_lower().contains(menu.search_query.to_lower()))
+	return games.filter(func(game): return GameTitle.matches(menu.search_query,str(game.path),str(game.label)))
 
 ## The paths of a quick-access list: "recent", "favourites" or "most_played".
 func shelf(which: String) -> Array:
@@ -327,7 +355,7 @@ func shelf(which: String) -> Array:
 func history_paths() -> Array:
 	var paths: Array=shelf(menu.mode)
 	if menu.search_query.is_empty(): return paths
-	return paths.filter(func(path): return str(path).get_file().get_basename().to_lower().contains(menu.search_query.to_lower()))
+	return paths.filter(func(path): return GameTitle.matches(menu.search_query,str(path)))
 
 func open_alphabet() -> void:
 	if menu.mode not in ["games","recent","favourites","most_played"]: return
@@ -338,18 +366,31 @@ func alphabet_entries() -> Array:
 	var paths: Array=shelf(alphabet_origin)
 	var result: Array=[]
 	for path in paths:
-		var label: String=str(path).get_file().get_basename()
-		if label.to_lower().contains(menu.search_query.to_lower()): result.append({"path":path,"label":label})
+		if GameTitle.matches(menu.search_query,str(path)): result.append({"path":path,"label":GameTitle.of(path),"sort":GameTitle.info(path).sort})
 	return result
 
-func letter_for(label: String) -> String:
-	var letter:=label.left(1).to_upper()
-	return letter if letter>="A" and letter<="Z" else "#"
+## A game's Jump to letter heading: "The Legend of Zelda" is under L.
+func letter_for(game: Dictionary) -> String:
+	return GameTitle.letter(str(game.get("sort",GameTitle.sort_key(str(game.label)))))
+
+## A title with its tags: a bad dump or Disc 2 is already told apart by its tag.
+func title_key(label: String, path: String) -> String:
+	return label+"|"+",".join(GameTitle.info(path).tags)
+
+## Titles (with tags) used by more than one of these games.
+func shared_titles(entries: Array) -> Dictionary:
+	var seen: Dictionary={}
+	var shared: Dictionary={}
+	for game in entries:
+		var title: String=title_key(str(game.label),str(game.path))
+		if seen.has(title): shared[title]=true
+		seen[title]=true
+	return shared
 
 func jump_to_letter(letter: String) -> void:
 	var entries:=alphabet_entries()
 	for i in range(entries.size()):
-		if letter_for(str(entries[i].label))!=letter: continue
+		if letter_for(entries[i])!=letter: continue
 		menu.remember(); menu.clear_input(); menu.mode=alphabet_origin
 		if menu.mode=="games": game_page=i/GAMES_PER_PAGE; system_pages[library_system]=game_page
 		menu.selected_id="game:"+str(entries[i].path)
@@ -361,7 +402,9 @@ func game_title_action() -> void:
 		menu.search_field.text=""; menu.update_search(""); return
 	var row=menu.selected_row()
 	if row!=null and row.item.has("rom_path"):
-		menu.open_help("Full game title",str(row.item.label))
+		menu.open_help("Full game title",str(row.item.label)+"
+
+File: "+str(row.item.rom_path).get_file())
 
 ## Name the actual return destination: startup has no preceding page to go back to.
 func launch_return_label() -> String:
@@ -376,28 +419,70 @@ func launch_return_label() -> String:
 
 func launch_items() -> Array:
 	var path := launch_path
-	var continuing: Dictionary = menu.catalog.action("launch.continue","Continue",func(): launch_game(path,true),"",false,"")
-	continuing["emphasis"] = "primary"
-	continuing["row_icon"] = "play"
-	continuing["min_height"] = 84
-	var fresh: Dictionary = menu.catalog.action("launch.fresh","Start from a fresh boot",func(): launch_game(path,false),"In-game saves are kept.",false,"")
-	fresh["detail_getter"] = func(): return "In-game saves are kept."
-	return [continuing, fresh, menu.catalog.action("launch.cancel",launch_return_label(),menu.back,"",false,"")]
+	var result: Array = []
+	if has_resume(path):
+		var continuing: Dictionary = menu.catalog.action("launch.continue","Continue",func(): launch_game(path,true),"",false,"")
+		continuing["emphasis"] = "primary"
+		continuing["row_icon"] = "play"
+		continuing["min_height"] = 84
+		var fresh: Dictionary = menu.catalog.action("launch.fresh","Start from a fresh boot",func(): launch_game(path,false),"In-game saves are kept.",false,"")
+		fresh["detail_getter"] = func(): return "In-game saves are kept."
+		result.append_array([continuing, fresh])
+	else:
+		var play: Dictionary = menu.catalog.action("launch.play","Play",func(): launch_game(path,false),"",false,"")
+		play["emphasis"] = "primary"; play["row_icon"] = "play"; play["min_height"] = 84
+		result.append(play)
+	if launch_versions.size()>1:
+		var names := version_names(launch_versions)
+		result.append({"id":"launch.version","label":"Version","kind":"choice","choices":names,"default":0,"visual":false,
+			"getter":func(): return maxi(0,launch_versions.find(launch_path)),
+			"setter":func(value): choose_version(int(value)),
+			"help":"Each version keeps its own saves and resume point."})
+	result.append(menu.catalog.action("launch.cancel",launch_return_label(),menu.back,"",false,""))
+	return result
+
+## The launch page switches to another version of the game.
+func choose_version(index: int) -> void:
+	launch_path=launch_versions[clampi(index,0,launch_versions.size()-1)]
+	menu.selected_id="launch.version"
+	menu.refresh()
+
+## True when the game has an automatic resume point to continue from.
+func has_resume(path: String) -> bool:
+	return FileAccess.file_exists(host.emulator.auto_path_for(path))
+
+## How each version is told apart: its region and revision, then any tags,
+## or its file name when those say nothing new.
+func version_names(paths: Array) -> Array:
+	var names: Array = []
+	for path in paths:
+		var named: Dictionary = GameTitle.info(path)
+		var parts: Array = [] if str(named.variant).is_empty() else [str(named.variant)]
+		parts.append_array(named.tags)
+		names.append(" · ".join(parts))
+	var labels: Array = names.duplicate()
+	for i in range(names.size()):
+		if str(names[i]).is_empty() or names.count(names[i])>1: labels[i]=str(paths[i]).get_file()
+	return labels
 
 ## Recently played, most played or favourites, with Jump to letter on long lists.
 func history_items() -> Array:
 	var paths: Array = history_paths()
 	var result: Array = [menu.catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",paths.is_empty())] if paths.size() > JUMP_MINIMUM else []
-	for path in paths: result.append(game_item(path,path.get_file().get_basename()))
+	var shared := shared_titles(paths.map(func(path): return {"label":GameTitle.of(path),"path":path}))
+	for path in paths: result.append(game_item(path,GameTitle.of(path),shared))
 	return result
 
 ## One console's games, a page at a time.
 func console_items() -> Array:
 	var listed: Array = game_entries()
 	var result: Array = [menu.catalog.action("games.jump","Jump to letter…",open_alphabet,"Jump to a game with the controller.",listed.is_empty())] if listed.size() > JUMP_MINIMUM else []
+	# Across the whole console, so a clash on the next page still names its region.
+	if shared_titles_cache[0]!=menu.rom_index.revision or shared_titles_cache[1]!=library_system or menu.rom_index.scanning:
+		shared_titles_cache=[menu.rom_index.revision,library_system,shared_titles(console_games(library_system))]
 	for game in listed.slice(game_page*GAMES_PER_PAGE,(game_page+1)*GAMES_PER_PAGE):
 		var path: String = game.path
-		result.append(game_item(path,game.label))
+		result.append(game_item(path,game.label,shared_titles_cache[2],game.get("versions",[])))
 	if listed.size()>GAMES_PER_PAGE:
 		result.append(menu.catalog.action("games.previous","Previous page",func(): change_game_page(-1),"Also available with {L1}. {←→} jumps ten games.",game_page==0))
 		result.append(menu.catalog.action("games.next","Next page",func(): change_game_page(1),"Also available with {R1}. {←→} jumps ten games.",(game_page+1)*GAMES_PER_PAGE>=listed.size()))
@@ -407,7 +492,7 @@ func console_items() -> Array:
 func letter_items() -> Array:
 	var result: Array=[]
 	var available: Dictionary={}
-	for game in alphabet_entries(): available[letter_for(str(game.label))]=true
+	for game in alphabet_entries(): available[letter_for(game)]=true
 	for letter in ["#","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z"]:
 		var chosen: String=letter
 		var item: Dictionary=menu.catalog.action("letter."+chosen,chosen,func(): jump_to_letter(chosen),"Jump to the first matching game.",not available.has(chosen))
@@ -428,3 +513,82 @@ func volume_items() -> Array:
 		var location: String = path
 		result.append(menu.entry(menu.catalog.action("volume:"+location,location.get_file(),func(): open_folder(location),location,false,"›"),"SD CARDS","sd"))
 	return result
+
+## A console's games as its list shows them: hidden extras left out, and versions
+## of one game in one row that plays the preferred version.
+func console_games(system: String) -> Array:
+	var games: Array = menu.rom_index.games.get(system,[])
+	var group: bool = host.library_group_versions
+	var hide: bool = host.library_hide_extras
+	if not group and not hide: return games
+	# The list itself is in the key too: tests and refreshes replace it outright.
+	var ends: String = "" if games.is_empty() else str(games[0].path)+str(games[-1].path)
+	var key := "%d|%s|%s|%s|%s|%d|%s" % [menu.rom_index.revision,system,group,hide,host.console_region,games.size(),ends]
+	if console_cache[0]==key: return console_cache[1]
+	var shown: Array = games.filter(func(game): return not hide or not is_extra(str(game.path)))
+	if group: shown = group_versions(shown)
+	console_cache=[key,shown]
+	return shown
+
+## Betas, prototypes, demos, hacks and bad dumps.
+func is_extra(path: String) -> bool:
+	for tag in GameTitle.info(path).tags:
+		if tag in EXTRAS or tag.get_slice(" ",0) in EXTRAS: return true
+	return false
+
+## One entry per title and tags (so Disc 2 and a hack stay their own rows),
+## in list order, with its versions when there are several.
+func group_versions(games: Array) -> Array:
+	var groups: Dictionary = {}
+	var order: Array = []
+	for game in games:
+		var named: Dictionary = GameTitle.info(str(game.path))
+		var tags: Array = Array(named.tags).filter(func(tag): return tag!="Alternate" and tag!="Fixed")
+		var key: String = str(game.label)+"|"+",".join(tags)
+		if not groups.has(key):
+			groups[key]=[]; order.append(key)
+		groups[key].append(game)
+	var result: Array = []
+	for key in order:
+		var members: Array = groups[key]
+		if members.size()==1:
+			result.append(members[0]); continue
+		var paths: Array = members.map(func(game): return str(game.path))
+		var entry: Dictionary = members[paths.find(preferred_version(paths))].duplicate()
+		entry["versions"]=paths
+		result.append(entry)
+	return result
+
+## The version you last played; otherwise your region's, then World; among
+## equals the last in the list, usually the latest revision.
+func preferred_version(paths: Array) -> String:
+	var best := ""
+	var best_played := 0
+	for path in paths:
+		var played: int = host.play_history.last_played(path)
+		if played>best_played:
+			best=path; best_played=played
+	if not best.is_empty(): return best
+	var wanted: Array = REGION_PREFERENCE.get(host.console_region,[])
+	var best_score := -1
+	for path in paths:
+		var score := 0
+		for region in GameTitle.info(path).get("regions",[]):
+			if region in wanted: score=maxi(score,2)
+			elif region=="World": score=maxi(score,1)
+		if score>=best_score:
+			best=path; best_score=score
+	return best
+
+## The letters a page of a console's list covers, such as "D-F".
+func page_letters() -> String:
+	var page := game_entries().slice(game_page*GAMES_PER_PAGE,(game_page+1)*GAMES_PER_PAGE)
+	if page.is_empty(): return ""
+	var first := letter_for(page[0])
+	var last := letter_for(page[-1])
+	return first if first==last else first+"-"+last
+
+## A library setting changed: rebuild the lists it shapes.
+func list_changed() -> void:
+	console_cache=["",[]]; shared_titles_cache=[-1,"",{}]
+	menu.refresh()

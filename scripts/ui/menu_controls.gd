@@ -1,6 +1,7 @@
 extends RefCounted
 ## The Game controls page: the loaded console's layout and its presets, a layout
 ## for this game alone, stick modes, and press-to-assign for every console button.
+const GameTitle = preload("res://scripts/content/game_title.gd")
 const Layouts = preload("res://scripts/emulation/controller_layouts.gd")
 const CAPTURE_SECONDS := 5.0
 var host: Node
@@ -69,13 +70,13 @@ func rows() -> Array:
 	# Removing this game's own layout is its own step, and asks first: changing
 	# the scope above never deletes anything.
 	result.append(menu.catalog.unavailable(menu.catalog.action("controls.remove_game","Remove this game's layout…",remove_game_layout,
-		"%s goes back to the %s layout. Other games are not affected." % [emulator.rom_path.get_file().get_basename(), console],not own,""),"This game already uses the %s layout." % console))
+		"%s goes back to the %s layout. Other games are not affected." % [GameTitle.of(emulator.rom_path), console],not own,""),"This game already uses the %s layout." % console))
 	return result
 
 func remove_game_layout() -> void:
 	var emulator: Node = host.emulator
 	var spec: Dictionary = emulator.Registry.SYSTEMS[emulator.system_id]
-	menu.ask("Remove this game's layout?", "%s goes back to the %s layout. Other games are not affected." % [emulator.rom_path.get_file().get_basename(), spec.get("short", spec.name)], func():
+	menu.ask("Remove this game's layout?", "%s goes back to the %s layout. Other games are not affected." % [GameTitle.of(emulator.rom_path), spec.get("short", spec.name)], func():
 		if Layouts.save("game", emulator.rom_hash, null) != OK:
 			menu.show_error("Could not save the controller layout. Check free space.")
 			return

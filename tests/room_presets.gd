@@ -81,7 +81,8 @@ func run() -> void:
 	menu.games.launch_path = "res://missing.sfc"
 	menu.mode = "launch"; menu.render()
 	await process_frame
-	check(menu.rows.size() == 3 and menu.rows[0].get_parent() != menu.column, "The resume screen puts its choices beside the picture")
+	# No resume point here, so the page offers Play and Back.
+	check(menu.rows.size() == 2 and menu.rows[0].get_parent() != menu.column, "The launch screen keeps its choices in the action column")
 	# Rooms saved before the glow was rescaled keep their meaning.
 	for pair in [[0.4, 0.5], [0.2, 0.25], [0.0, 0.0]]:
 		var legacy := ConfigFile.new(); legacy.set_value("room", "spill_strength", pair[0])

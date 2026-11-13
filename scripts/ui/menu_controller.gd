@@ -1,4 +1,5 @@
 extends PanelContainer
+const GameTitle = preload("res://scripts/content/game_title.gd")
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const NAV_CLICK = preload("res://assets/audio/menu-click.mp3")
 const Row = preload("res://scripts/ui/setting_row.gd")
@@ -1446,7 +1447,7 @@ func _render(incremental: bool) -> void:
 		heading.text = CATEGORIES[category]
 		tab_position.text = "%d / %d" % [subsection + 1, pages.size()]
 		tab_position.visible = pages.size() > 1
-	else: heading.text = {"help":help_title,"launch":"Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing","recent":"Recently played","favourites":"Favourites","most_played":"Most played","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state","changed":"Changed settings"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":("Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing") if games.has_resume(games.launch_path) else "Choose a version","recent":"Recently played","favourites":"Favourites","most_played":"Most played","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state","changed":"Changed settings"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm":
 		state_previews.request(confirmation.get("preview", ""))
@@ -1499,7 +1500,7 @@ func _render(incremental: bool) -> void:
 		for row in rows: row.set_selected(false)
 	if mode=="launch":
 		var title := Label.new()
-		title.text = games.launch_path.get_file().get_basename()
+		title.text = GameTitle.of(games.launch_path)
 		title.add_theme_font_size_override("font_size",28)
 		MenuSkin.weigh(title,MenuSkin.BOLD)
 		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -1515,10 +1516,12 @@ func _render(incremental: bool) -> void:
 		var gap := Control.new(); gap.custom_minimum_size.y=8; column.add_child(gap)
 		var hero := HBoxContainer.new(); hero.add_theme_constant_override("separation",24)
 		column.add_child(hero)
-		var preview_panel := ResumePreview.new(); hero.add_child(preview_panel)
-		var auto: String=host.emulator.auto_path_for(games.launch_path)
-		state_previews.request(auto)
-		preview_panel.describe(auto,"Saved " + saved_when(host.emulator.state_stamp(auto)))
+		# A version never played has no resume point to picture.
+		if games.has_resume(games.launch_path):
+			var preview_panel := ResumePreview.new(); hero.add_child(preview_panel)
+			var auto: String=host.emulator.auto_path_for(games.launch_path)
+			state_previews.request(auto)
+			preview_panel.describe(auto,"Saved " + saved_when(host.emulator.state_stamp(auto)))
 		var actions := VBoxContainer.new(); actions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; actions.alignment=BoxContainer.ALIGNMENT_CENTER
 		actions.add_theme_constant_override("separation",12); hero.add_child(actions)
 		for row in rows: column.remove_child(row); actions.add_child(row)
@@ -1697,7 +1700,7 @@ func refresh_labels() -> void:
 	elif mode=="games":
 		var count: int = games.game_entries().size()
 		subtitle.text = count_caption(count,"game")
-		if count>games.GAMES_PER_PAGE: subtitle.text += " · Page %d of %d" % [games.game_page+1,ceili(float(count)/games.GAMES_PER_PAGE)]
+		if count>games.GAMES_PER_PAGE: subtitle.text += " · Page %d of %d · %s" % [games.game_page+1,ceili(float(count)/games.GAMES_PER_PAGE),games.page_letters()]
 	elif mode in ["recent","favourites","most_played"]:
 		subtitle.text = count_caption(games.history_paths().size(),"game")
 	elif mode=="launch": subtitle.text = ""
@@ -1709,7 +1712,7 @@ func refresh_labels() -> void:
 	elif mode=="changed":
 		var count: int = items.filter(func(item): return not item.get("disabled", false)).size()
 		subtitle.text = count_caption(count, "setting") + " changed from their defaults"
-	elif mode=="states": subtitle.text = host.emulator.rom_path.get_file().get_basename()+" · %d slots" % play.STATE_SLOTS
+	elif mode=="states": subtitle.text = GameTitle.of(host.emulator.rom_path)+" · %d slots" % play.STATE_SLOTS
 	elif mode=="my_room": subtitle.text = "Room %d · %s" % [my_room+1,"✓ In use" if host.rooms.active()=="mine.%d" % my_room else ("Saved" if host.rooms.saved(my_room) else "Empty")]
 	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [pictures.my_preset+1,"✓ Active" if pictures.applied_preset()=="mine.%d" % pictures.my_preset else ("Saved" if pictures.my_preset_saved(pictures.my_preset) else "Empty")]
 	elif mode=="welcome": subtitle.text = welcome.subtitle()
@@ -1761,7 +1764,7 @@ func count_caption(count: int, noun: String) -> String:
 ## The pause menu's heading: the game or video by name, or a welcome.
 func playing_title() -> String:
 	if host.video.loaded: return host.video.path.get_file().get_basename()
-	if host.emulator.loaded: return host.emulator.rom_path.get_file().get_basename()
+	if host.emulator.loaded: return GameTitle.of(host.emulator.rom_path)
 	return "Welcome to CRT XR"
 
 ## Flat view in the footer: flat screen on or off, keeping the button selected

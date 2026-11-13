@@ -128,6 +128,32 @@ Their source generators, `tests/make_probe_rom.py` and
 `tests/make_multicore_probes.py`, are provided under CC0-1.0.
 They are generated under ignored `build/` and are not automatically included in exports.
 
+## Game names
+
+The library names games whose file names say little by what they contain. The
+tables in `assets/game-db/` are built by `scripts/build-game-db.py`; nothing is
+downloaded at run time.
+
+* Cartridge names and checksums: No-Intro (https://no-intro.org), whose Data
+  Usage License (https://datomatic.no-intro.org/terms.html) allows use,
+  modification and redistribution, including commercially, without attribution.
+  The DATs were taken from libretro-database's `metadat/no-intro/`
+  (https://github.com/libretro/libretro-database, CC BY-SA 4.0); the trimmed
+  tables (`assets/game-db/*.tsv.gz` except `ps2`) are offered under CC BY-SA 4.0
+  with credit to No-Intro and the libretro-database contributors. They were
+  changed: only the checksum, the first 16 digits of the SHA-1 and the name are kept.
+* PlayStation 2 names: PCSX2's `GameIndex.yaml` (GPL version 3, the PCSX2 team;
+  its credits list sonyindex.com, serialstation.com, psxdatacenter.com and
+  redump.org), from the LRPS2 core source (https://github.com/libretro/ps2,
+  `tools/lrps2`). `assets/game-db/ps2.tsv.gz` keeps
+  each serial, its name and region, under the same GPL version 3.
+* GameCube and Wii names: GameTDB (https://www.gametdb.com), as Dolphin ships it
+  in its Sys data (`wiitdb-*.txt`). GameTDB asks software that uses it to link
+  to it so players can add and correct entries.
+* PSP names: the Redump list PPSSPP ships as `redump.csv` in its assets.
+
+Titles and publisher names belong to their owners.
+
 ## Optional CRT cabinet
 
 **CRT TV**, by **Timothy Ahene**.

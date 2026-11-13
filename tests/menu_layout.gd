@@ -97,7 +97,9 @@ func run():
 			check(inside(full,full.detail_label),"Very long titles keep their caption inside the row")
 			var full_title: String=full.item.label
 			m.games.game_title_action(); await settle()
-			check(m.mode=="help" and m.help_copy==full_title,"Full title is available in a scrollable view")
+			check(m.mode=="help" and m.help_copy==full_title+"
+
+File: very-long.sfc","Full title and file name are available in a scrollable view")
 			await capture("full-title-"+kind+("-large" if large else ""))
 			m.back(); await settle()
 			check(m.selected_id=="game:/fixture/very-long.sfc","Full title returns to the same cartridge")
