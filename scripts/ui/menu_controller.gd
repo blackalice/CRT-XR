@@ -923,7 +923,22 @@ func quick_controls(video_view := false) -> Array:
 	# TV position opens the preview strip, where up and down switch between its
 	# distance and height; so height is a tile only while that preview is open.
 	var position_ids: Array = ["quick.view.distance", "quick.view.height_offset"] if preview else ["quick.view.distance"]
+	# Flat view has no TV to place: its screen's shape takes that tile. On the
+	# whole display the TV model changes nothing, so the game's shape takes its tile.
+	var whole_display: bool = host.flat_screen and host.flat_shape == 0
+	if host.flat_screen:
+		position_ids = []
+		var shape: Dictionary = catalog.flat_shape_row("pause.flat_shape")
+		shape.merge({"label":"Screen","row_icon":"view","help":"Whole display fits the game to this screen; TV's shape keeps the TV's outline."}, true)
+		result.append(shape)
 	for wanted in position_ids + ["quick.tv", "quick.fit"]:
+		if wanted == "quick.tv" and whole_display:
+			var game_shape := picture_row("picture.source_aspect")
+			if not game_shape.is_empty():
+				game_shape.merge({"id":"pause.game_shape","row_icon":"tv","help":"Automatic normally. 16:9 if a game's widescreen mode looks squeezed."}, true)
+				game_shape.erase("detail_getter") # the tiles beside it have no source line
+				result.append(game_shape)
+			continue
 		for source in catalog.pages(EVERYDAY)[0].rows:
 			if source.id != wanted: continue
 			var control: Dictionary = source.duplicate()
@@ -940,6 +955,13 @@ func quick_controls(video_view := false) -> Array:
 	for row in result:
 		row.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"stacked":true,"compact":true,"meter":false}, true)
 	return result
+
+## A copy of one row from the Picture settings, by id; empty if it is not there.
+func picture_row(id: String) -> Dictionary:
+	for page in catalog.pages(CATEGORIES.find("Picture")):
+		for source in page.rows:
+			if source is Dictionary and source.get("id", "") == id: return source.duplicate()
+	return {}
 
 func room_choice(id: String) -> Dictionary:
 	var choices: Array = host.rooms.choices()
@@ -1518,8 +1540,10 @@ func _render(incremental: bool) -> void:
 		print("PROFILE_MENU ", mode, " ", JSON.stringify(profile_stages))
 
 func fit_panel() -> void:
-	# The reading area stays 4:3. Only the backdrop/frame grows with a wide feed.
-	if reading_frame!=null: reading_frame.custom_minimum_size=Vector2(888,170 if preview else 664)
+	# The reading area keeps its width; only the backdrop grows with a wide feed.
+	# A canvas taller than 720 (flat view on a 16:10 display) lengthens the page.
+	var extra: int=maxi(host.menu_view.size.y-720,0)
+	if reading_frame!=null: reading_frame.custom_minimum_size=Vector2(888,170 if preview else 664+extra)
 	var wide: bool=not preview and host.menu_view.size.x>960
 	position = Vector2.ZERO if wide else (Vector2(36,522) if preview else Vector2(36,28))
 	size = Vector2(host.menu_view.size) if wide else Vector2(888,170 if preview else 664)
@@ -2302,6 +2326,11 @@ func style_rows() -> void:
 		row.title_label.add_theme_font_size_override("font_size",(23 if host.menu_large_text else 20) if compact else ((32 if host.menu_large_text else 29) if hero else (27 if host.menu_large_text else 24)))
 		if row.item.has("title_size"): row.title_label.add_theme_font_size_override("font_size", int(row.item.title_size) + (3 if host.menu_large_text else 0))
 		row.value_label.add_theme_font_size_override("font_size",(21 if host.menu_large_text else 18) if compact else (25 if host.menu_large_text else 22))
+		# A row built off-screen keeps reporting its labels' old font height after
+		# the size changes here, until they measure again: re-read with the stale
+		# 22 px value, a compact tile set itself 1 px taller than the same tile
+		# built on screen, and the page shifted as tiles came and went.
+		row.title_label.update_minimum_size(); row.value_label.update_minimum_size()
 		row.sync_content_height()
 		if host.menu_high_contrast:
 			row.title_label.add_theme_color_override("font_color",Color.WHITE)

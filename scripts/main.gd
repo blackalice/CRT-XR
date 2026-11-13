@@ -159,6 +159,10 @@ var flat_screen := false
 var flat_screen_saved := false
 var flat_screen_launch := "--flat" in OS.get_cmdline_user_args()
 var flat: Node
+## Flat view's screen: the whole display (0), with the picture fitted to it and
+## the tube's edge at the display's edge, or the TV's own shape (1), as before.
+var flat_shape := 0
+const FLAT_SHAPES := ["Whole display", "TV's shape"]
 ## Flat view has been offered once (first-run setup's question, or the startup
 ## suggestion when no glasses are found); it is not offered again.
 var flat_view_offered := false
@@ -695,6 +699,7 @@ func apply_settings(config: ConfigFile) -> void:
 	apply_scene_msaa()
 	flat_screen_saved = bool(config.get_value("display","flat_screen",false))
 	flat_view_offered = bool(config.get_value("display","flat_view_offered",flat_view_offered))
+	flat_shape = clampi(int(config.get_value("display","flat_shape",0)), 0, FLAT_SHAPES.size() - 1)
 	set_flat_screen(flat_screen_saved or flat_screen_launch, false)
 	var profiles = config.get_value("screen_profiles", "pictures", screen_picture_profiles)
 	if profiles is Dictionary: screen_picture_profiles = profiles.duplicate(true)
@@ -1682,6 +1687,7 @@ func reset_all_options() -> void:
 	for index in range(5): SettingsDefaults.apply(self,index)
 	scene_msaa=0;apply_scene_msaa()
 	set_flat_screen(false)
+	flat_shape = 0
 	display_settings.scope=0
 	display_settings.base=display_settings.live_picture()
 	display_settings.refresh_screen()
@@ -1870,6 +1876,7 @@ func capture_settings() -> ConfigFile:
 	config.set_value("display_profiles","msaa",scene_msaa)
 	config.set_value("display","flat_screen",flat_screen_saved)
 	config.set_value("display","flat_view_offered",flat_view_offered)
+	config.set_value("display","flat_shape",flat_shape)
 	config.set_value("room", "widescreen", world.widescreen)
 	config.set_value("screen_profiles", "pictures", screen_picture_profiles.duplicate(true))
 	config.set_value("crt", "glass", glass_reflections)

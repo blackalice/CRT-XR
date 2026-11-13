@@ -125,24 +125,29 @@ func shown_values() -> Dictionary:
 	return result
 
 func picture_rect() -> Rect2:
+	return picture_rect_in(safe_rect, tube_aspect)
+
+## The picture's place on a screen whose usable area is `aperture` (0-1 across
+## it) and whose whole face is `screen_aspect` wide for 1 high. The TV passes
+## its tube; flat view, filling the display, passes the whole display.
+func picture_rect_in(aperture: Rect2, screen_aspect: float) -> Rect2:
 	if menu_fitting:
 		# Menus fill the tube independently of game overscan, crop and offset.
 		# Their reading area already has safe margins inside the menu canvas.
 		var menu_size:=Vector2.ONE
-		var aspect:=source_aspect/tube_aspect
+		var aspect:=source_aspect/screen_aspect
 		if aspect<1.0:menu_size.x=aspect
 		else:menu_size.y=1.0/aspect
 		return Rect2((Vector2.ONE-menu_size)*.5,menu_size)
 	var shown := shown_values()
 	var fit_aspect: bool = override.get("keep_aspect", keep_aspect)
-	if menu_fitting: fit_aspect = true
 	var border := Vector2.ONE * float(shown.safe_border)
-	var area := Rect2(safe_rect.position + border, safe_rect.size - 2.0 * border)
+	var area := Rect2(aperture.position + border, aperture.size - 2.0 * border)
 	var size := area.size * Vector2(shown.width, shown.height)
 	if fit_aspect:
-		var aspect := source_aspect if aspect_override == 0 or not override.is_empty() or menu_fitting else (4.0/3.0 if aspect_override == 1 else 16.0/9.0)
-		var crop := fit_mode == 1 and override.is_empty() and not menu_fitting
-		var available_aspect := tube_aspect * size.x / size.y
+		var aspect := source_aspect if aspect_override == 0 or not override.is_empty() else (4.0/3.0 if aspect_override == 1 else 16.0/9.0)
+		var crop := fit_mode == 1 and override.is_empty()
+		var available_aspect := screen_aspect * size.x / size.y
 		if (available_aspect > aspect) != crop: size.x *= aspect/available_aspect
 		else: size.y *= available_aspect/aspect
 	var slack := area.size - size

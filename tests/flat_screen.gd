@@ -45,6 +45,10 @@ func run() -> void:
 	check(is_equal_approx(float(app.flat.material.get_shader_parameter("brightness")), 1.3), "Picture settings are shared with the TV")
 	check(is_equal_approx(float(app.flat.material.get_shader_parameter("scanlines")), 0.35), "Tube settings are shared with the TV")
 	check(app.flat.material.get_shader_parameter("signal_texture") == app.world.screen_material.get_shader_parameter("signal_texture"), "The flat picture shows the same signal")
+	# TV's shape: the TV's outline, with the tube's fitting mapped across.
+	check(app.flat_shape == 0, "Flat view fills the whole display by default")
+	app.flat_shape = 1
+	await settle(3)
 	var tube: Vector4 = app.world.screen_material.get_shader_parameter("picture_rect")
 	var area: Rect2 = app.world.picture.safe_rect
 	var flat_rect: Vector4 = app.flat.material.get_shader_parameter("picture_rect")
@@ -62,11 +66,31 @@ func run() -> void:
 	app.world.picture.fit_mode = 0
 	app.world.picture.refresh()
 
+	# Whole display: the flat picture is the panel, and the game is fitted to it.
+	app.flat_shape = 0
+	await settle(3)
+	var panel_size: Vector2 = app.flat.layers[0].size
+	check(Vector2(app.flat.view.size) == panel_size.floor(), "On the whole display the flat picture fills the panel: %s in %s" % [app.flat.view.size, panel_size])
+	var whole: Vector4 = app.flat.material.get_shader_parameter("picture_rect")
+	var shown_shape: float = (whole.z * panel_size.x) / (whole.w * panel_size.y)
+	var border: float = float(app.world.picture.shown_values().safe_border)
+	check(absf(shown_shape - 4.0 / 3.0) < 0.02 and absf(whole.y - border) < 0.01 and whole.x > border, "Fit keeps a 4:3 game's shape, as tall as the display allows: %s" % whole)
+	app.world.picture.fit_mode = 1
+	app.world.picture.refresh()
+	await settle(3)
+	whole = app.flat.material.get_shader_parameter("picture_rect")
+	check(whole.w > 1.0 and whole.y < 0.0 and absf(whole.z - (1.0 - 2.0 * border)) < 0.01, "Fill widens a 4:3 game to the display, cropping top and bottom: %s" % whole)
+	app.world.picture.fit_mode = 0
+	app.world.picture.refresh()
+
 	# The menu floats over the picture: there is no TV to put it on.
 	app.toggle_settings()
 	await settle()
 	check(not app.tv_menu.active and app.menu_overlays[0].visible, "The menu floats over the flat picture")
 	check(app.flat.layers[0].get_index() < app.menu_overlays[0].get_index(), "The flat picture sits under the menu")
+	check(app.menu_view.size == app.tv_menu.flat_canvas() and app.menu.size == Vector2(app.menu_view.size) and app.menu.backdrop.size == app.menu.size, "Flat view's menu canvas takes the display's shape, its backdrop filling it")
+	check(app.menu.reading_frame.size.x < 960.0, "The reading area keeps its standard width, centred")
+	await flat_menu_shapes(app)
 	var placement: Array = app.menu.catalog.pages(0)[1].rows
 	check(not placement.any(func(row): return row.id == "view.distance") and str(placement[0].id).begins_with("flat.note") and placement[0].get("disabled", false), "TV placement hides what flat view does not use, behind one line")
 	check(str(placement[0].label).begins_with("4 settings hidden"), "The line says how many are hidden: %s" % placement[0].label)
@@ -78,8 +102,38 @@ func run() -> void:
 	var ambience: Array = app.menu.catalog.pages(2)[0].rows.filter(func(row): return str(row.get("id", "")) == "room.ambience")
 	check(lighting.is_empty() and app.menu.catalog.pages(3)[1].rows.size() == 1, "Room lighting is hidden, leaving only its note")
 	check(not preset.is_empty() and not preset[0].get("disabled", false) and not ambience.is_empty() and not ambience[0].get("disabled", false), "Room presets and room sound stay available")
-	var quick: Array = app.menu.quick_controls().filter(func(row): return row.id == "pause.view.distance")
-	check(not quick.is_empty() and quick[0].get("disabled", false), "The pause menu's TV distance tile is unavailable too")
+	var quick_ids: Array = app.menu.quick_controls().map(func(row): return row.id)
+	check(not "pause.view.distance" in quick_ids and "pause.flat_shape" in quick_ids, "Quick settings offer the screen's shape in place of TV position: %s" % [quick_ids])
+	check("pause.game_shape" in quick_ids and not "pause.tv" in quick_ids, "On the whole display, Game shape takes the TV tile")
+	app.flat_shape = 1
+	quick_ids = app.menu.quick_controls().map(func(row): return row.id)
+	check("pause.tv" in quick_ids and not "pause.game_shape" in quick_ids, "In the TV's shape, the TV tile is back")
+	app.flat_shape = 0
+	var shape_tile: Array = app.menu.quick_controls().filter(func(row): return row.id == "pause.flat_shape")
+	shape_tile[0].setter.call(1)
+	check(app.flat_shape == 1 and app.capture_settings().get_value("display", "flat_shape") == 1, "The Screen tile changes the shape, and it is saved")
+	shape_tile[0].setter.call(0)
+	# Changing Screen swaps Game shape and TV in place: nothing else moves.
+	app.menu.open_pause()
+	await settle(20)
+	var before := row_rects(app)
+	app.menu.select("pause.flat_shape", false)
+	app.menu.adjust(1)
+	await settle(20)
+	var after := row_rects(app)
+	var moved: Array = before.keys().filter(func(id): return after.has(id) and after[id] != before[id])
+	check(app.flat_shape == 1 and moved.is_empty() and after.has("pause.tv") and not after.has("pause.game_shape"), "Changing Screen swaps one tile without nudging the page: %s" % [moved.map(func(id): return "%s %s -> %s" % [id, before[id], after[id]])])
+	app.flat_shape = 0
+	var actions: Array = app.menu.play.action_tiles().map(func(row): return row.id)
+	check("xr_view" in actions and not "recenter" in actions, "XR view takes Recentre's place among the actions")
+	app.menu.play.action_tiles().filter(func(row): return row.id == "xr_view")[0].action.call()
+	check(not app.flat_screen and "recenter" in app.menu.play.action_tiles().map(func(row): return row.id), "XR view goes back to the room, and Recentre returns")
+	app.set_flat_screen(true)
+	await settle()
+	var stereo_page: Array = []
+	for page in app.menu.catalog.pages(0): stereo_page.append_array(page.rows)
+	var shape_rows: Array = stereo_page.filter(func(row): return str(row.get("id", "")) == "view.flat_shape")
+	check(not shape_rows.is_empty() and not shape_rows[0].get("disabled", false), "Stereo & comfort has Screen shape under Flat screen")
 	app.close_settings()
 	await settle()
 
@@ -101,6 +155,7 @@ func run() -> void:
 	app.toggle_settings()
 	await settle()
 	check(app.tv_menu.active, "The menu goes back on the TV")
+	check(app.world.widescreen or app.menu_view.size == Vector2i(960, 720), "The standard TV gets its 4:3 menu back")
 	app.set_flat_screen(true)
 	app.reset_all_options()
 	check(not app.flat_screen and app.capture_settings().get_value("display", "flat_screen") == false, "Reset all settings turns flat screen off")
@@ -132,6 +187,26 @@ func run() -> void:
 	app.set_flat_screen(false)
 	print("FLAT SCREEN CHECKS: ", "failed " + str(failures) if failures else "all passed")
 	quit(1 if failures else 0)
+
+## Every menu row's place on the canvas, by id.
+func row_rects(app) -> Dictionary:
+	var out := {}
+	for row in app.menu.rows: out[str(row.item.id)] = row.get_global_rect()
+	return out
+
+## The flat menu canvas for the Deck's 16:10, a 16:9 and an ultrawide display:
+## no bars in any of them, and the 16:10 page gains the extra height as rows.
+func flat_menu_shapes(app) -> void:
+	var original: Vector2i = root.size
+	var standard_rows: float = app.menu.scroll.size.y
+	for case in [[Vector2i(1280, 800), Vector2i(1280, 800)], [Vector2i(1920, 1080), Vector2i(1280, 720)], [Vector2i(2560, 1080), Vector2i(1706, 720)]]:
+		root.size = case[0]
+		await settle()
+		check(app.menu_view.size == case[1], "Flat menu canvas for a %s display is %s: %s" % [case[0], case[1], app.menu_view.size])
+		if case[1].y == 800:
+			check(app.menu.reading_frame.size.y >= 744.0 and app.menu.scroll.size.y >= standard_rows + 79.0, "On 16:10 the page grows by 80 lines for more rows: %s" % app.menu.scroll.size.y)
+	root.size = original
+	await settle()
 
 ## The flat shader and the TV's surface, given the same values, draw the same
 ## pixels: a quad filling an orthographic view against a rectangle of the same size.

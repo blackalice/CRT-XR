@@ -123,9 +123,25 @@ The picture is the TV's own. `shaders/crt.gdshader` (the tube surface) and
 copies every uniform from the TV's screen material each frame. Picture looks,
 per-game and console pictures, fitting, composite decoding, the shared beam
 pass, power-on, channel change, degauss and power-off all apply unchanged; only
-curvature is lost, since it is geometry. Fitting is mapped from the tube's safe
-aperture to the whole flat picture, so the picture keeps the chosen TV model's
-shape (standard 4:3 or wide 16:9) and Fit / Fill / Stretch behave as on the TV.
+curvature is lost, since it is geometry.
+
+**Screen shape** (under Flat screen, and the Screen tile on Home/pause) chooses
+the flat picture's screen, `[display] flat_shape`:
+
+- **Whole display** (the default): the screen is the display itself, so nothing
+  is boxed inside a TV's outline. The picture is fitted afresh against the
+  display's shape (`picture_pipeline.picture_rect_in`), with the same Fit / Fill /
+  Stretch, game shape, size, position and safe border as on the TV, and the
+  tube's edge shading frames the whole display. On the Deck's 16:10 screen a
+  wide game no longer gets bars inside bars, and Fill really fills.
+- **TV's shape**: fitting is mapped from the tube's safe aperture to a picture
+  of the chosen TV model's shape (standard 4:3 or wide 16:9), centred with black
+  around it, as before.
+
+The menu canvas takes the display's shape too: displays wider than 16:9 keep 720
+lines and grow sideways; narrower ones keep 1280 columns and grow downwards, so
+the Deck's 1280×800 is drawn pixel for pixel and the page gains the extra 80
+lines as rows (`menu_on_tv.gd` `flat_canvas`).
 
 Both eye views stop rendering while it is on, so the room costs nothing. The
 flat picture is drawn once into its own viewport and shown in each eye panel
@@ -134,8 +150,12 @@ always floats (Menu on the TV needs the TV). Rows that only change the room or
 the TV's place (TV placement, room lighting, surfaces, props and placement,
 edge smoothing, soft view edges, Menu on the TV) are left out of their tabs,
 and one line ("4 settings hidden in flat view") says so and how to get them
-back; the pause menu's TV position tile is greyed out instead, keeping the grid.
-Room presets, room sound and tube whine still apply.
+back. Room presets, room sound and tube whine still apply.
+
+Home and the pause menu swap room tiles for flat ones, keeping the grid: TV
+position becomes **Screen** (the screen shape); on the whole display, where the
+TV model changes nothing, **TV** becomes **Game shape**; and Recentre view
+becomes **XR view**, which turns Flat view off.
 
 Flat view is offered in two places so nobody without glasses has to find it.
 First-run setup's Your view step starts with **Playing with: Glasses / This
@@ -145,7 +165,8 @@ when no glasses have tracked for five seconds (not during setup, boot, a game,
 a video or SBS): **Use Flat view?** with Keep the room / Use Flat view. Either
 way `[display] flat_view_offered` is saved and it is not asked again. Screenshots save the flat picture. The Dreamcast VMU
 display is part of the room and is not shown. `tests/flat_screen.gd` covers the
-switch, saving, shared settings, fitting, the menu, unused rows, screenshots and
+switch, saving, shared settings, fitting in both screen shapes, the menu canvas
+at 16:10, 16:9 and 21:9, the flat tiles, unused rows, screenshots and
 `--flat`, and renders both shaders with the same values to check they match.
 
 ## Feedback, previews and accessibility

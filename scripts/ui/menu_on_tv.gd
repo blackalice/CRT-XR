@@ -26,7 +26,8 @@ func wanted() -> bool:
 	# than resizing the interface between the two cabinets' menu canvases.
 	var setup_view: bool = host.menu.mode == "welcome" or (host.menu.mode == "help" and host.menu.help_origin.get("mode", "") == "welcome")
 	if setup_view and host.menu.welcome.step == "view": return false
-	# Flat screen mode has no TV to lean in: the menu floats over the picture.
+	# Flat screen mode has no TV to lean in: the menu floats over the picture, on
+	# the 16:9 canvas (sync_canvas).
 	return host.menu_on_tv and not host.flat_screen and host.settings_panel.visible and not host.menu.preview and is_instance_valid(host.world)
 
 ## Called by main at the start of its frame, before it decides what floats:
@@ -56,14 +57,28 @@ func update(delta: float) -> void:
 func menu_texture() -> Texture2D:
 	return host.menu_view.get_texture()
 
+## The menu's canvas: 16:9 on the wide TV, 4:3 on the standard TV and while
+## floating in the room. In flat view it takes the display's own shape
+## (flat_canvas). The placement preview keeps its compact floating strip.
 func sync_canvas(on_tv: bool) -> bool:
 	var dimensions:=Vector2i(1280 if on_tv and host.world.widescreen else 960,720)
+	if host.flat_screen and not host.menu.preview: dimensions = flat_canvas()
 	if host.menu_view.size==dimensions: return false
 	host.menu_view.size=dimensions
 	host.menu.fit_panel()
 	if is_instance_valid(host.menu_depth_view):
 		for material in host.menu_depth_view.materials: material.set_shader_parameter("tex_size",Vector2(dimensions))
 	return true
+
+## Flat view's canvas fills the eye panel with no bars. Displays wider than 16:9
+## keep 720 lines and grow sideways; narrower ones (the Deck's 16:10) keep 1280
+## columns and grow downwards, so 1280x800 is drawn pixel for pixel and the page
+## shows more rows. Shapes are held between 4:3 and 32:9.
+func flat_canvas() -> Vector2i:
+	var shown: Vector2 = host.panels[0].size if not host.panels.is_empty() else Vector2.ZERO
+	var shape := 16.0 / 9.0 if shown.y < 1.0 else clampf(shown.x / shown.y, 4.0 / 3.0, 32.0 / 9.0)
+	if shape >= 16.0 / 9.0: return Vector2i(roundi(720.0 * shape / 2.0) * 2, 720)
+	return Vector2i(1280, roundi(1280.0 / shape / 2.0) * 2)
 
 ## Where the TV sits: at `base`, or eased in and centred while the menu is on it.
 func lean_position(base: Vector3) -> Vector3:

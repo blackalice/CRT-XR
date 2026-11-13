@@ -5,7 +5,9 @@ extends Node
 ## the shared composite and beam passes, power-on and channel-change moments)
 ## are copied from the TV's screen material, so the two never differ.
 ## The picture is drawn once into its own viewport, shown in each eye's panel
-## under the notices and the menu, and read by screenshots.
+## under the notices and the menu, and read by screenshots. Its screen is the
+## whole display (the default; the picture is fitted to the display's shape) or
+## the TV's shape, centred with black around it (main.flat_shape).
 const FLAT_SHADER := preload("res://shaders/crt_flat.gdshader")
 
 var host: Node
@@ -57,17 +59,32 @@ func set_active(value: bool) -> void:
 	view.render_target_update_mode = SubViewport.UPDATE_ALWAYS if value else SubViewport.UPDATE_DISABLED
 	if value: sync()
 
+## Whether the flat screen is the whole display rather than the TV's shape.
+func whole_display() -> bool:
+	return int(host.get("flat_shape")) == 0
+
 ## The screen area the picture fits into: the tube's safe aperture, as on the TV.
 func aperture() -> Rect2:
 	return host.world.picture.safe_rect
 
-## Width over height of that area, so the TV model (standard or wide) keeps its shape.
+## Width over height of the flat screen: the display's own, or the TV model's
+## (standard or wide) shape.
 func aspect() -> float:
+	if whole_display():
+		var shown := shown_panel_size()
+		if shown.y >= 1.0: return shown.x / shown.y
 	var area := aperture()
 	return float(host.world.picture.tube_aspect) * area.size.x / maxf(area.size.y, 0.0001)
 
+## The eye panel the picture is drawn into.
+func shown_panel_size() -> Vector2:
+	for layer in layers:
+		if layer.is_visible_in_tree(): return layer.size
+	return layers[0].size if not layers.is_empty() else Vector2.ZERO
+
 ## The largest picture of that shape inside the eye panel, in pixels.
 func picture_size(panel_size: Vector2) -> Vector2i:
+	if whole_display(): return Vector2i(maxi(int(panel_size.x), 16), maxi(int(panel_size.y), 16))
 	var shape := aspect()
 	var size := Vector2(panel_size.x, panel_size.x / shape)
 	if size.y > panel_size.y: size = Vector2(panel_size.y * shape, panel_size.y)
@@ -80,12 +97,19 @@ func flat_rect(tube_rect: Vector4) -> Vector4:
 	return Vector4((tube_rect.x - area.position.x) / area.size.x, (tube_rect.y - area.position.y) / area.size.y,
 		tube_rect.z / area.size.x, tube_rect.w / area.size.y)
 
+## On the whole display the picture is fitted afresh, with the display as the
+## screen: Fit, Fill, Stretch, the game shape and the size and position settings
+## all work as on the TV, against the display's shape instead of the tube's.
+func whole_display_rect() -> Vector4:
+	var area: Rect2 = host.world.picture.picture_rect_in(Rect2(0, 0, 1, 1), aspect())
+	return Vector4(area.position.x, area.position.y, area.size.x, area.size.y)
+
 func sync() -> void:
 	var source: ShaderMaterial = host.world.screen_material
 	for key in uniform_names:
 		var value = source.get_shader_parameter(key)
 		if value == null: continue
-		if key == "picture_rect": value = flat_rect(value)
+		if key == "picture_rect": value = whole_display_rect() if whole_display() else flat_rect(value)
 		material.set_shader_parameter(key, value)
 	for layer in layers:
 		if layer.is_visible_in_tree():

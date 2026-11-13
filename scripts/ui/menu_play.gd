@@ -132,7 +132,7 @@ func _perform_state_action(saving: bool, slot: int) -> void:
 func home_items() -> Array:
 	var h=host
 	var home: Array = []
-	var recenter: Dictionary = menu.tile(menu.catalog.action("home.recenter","Recentre view",h.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)
+	var recenter: Dictionary = view_tile("home.recenter")
 	var settings: Dictionary = menu.catalog.action("home.settings","Settings",menu.open_settings,"Adjust the view, picture, audio and room.")
 	var library_row: Dictionary = menu.catalog.action("home.library","Game Library",menu.games.open_library,"Choose your main ROM folder or SD card. Your supported games appear automatically." if h.default_rom_dir.is_empty() else "Recent, Favourites and supported consoles.",false,"›")
 	var video_row: Dictionary = menu.catalog.action("home.videos","Video Library",menu.videos.open_videos,"Browse your videos or set up video playback.",false,"›")
@@ -205,6 +205,17 @@ func action_tiles() -> Array:
 	var result: Array = [
 		menu.tile(menu.catalog.action("settings","Settings",menu.open_settings_for_game,"Opens on this game's picture. The view, room, sound and controls are a category away." if host.emulator.loaded else "Adjust the view, picture, room, sound and controls."),"gear","","actions",3),
 		menu.tile(menu.catalog.action("screenshot","Screenshot",host.take_screenshot,"Saves a clean single-eye image without menus or diagnostics."),"camera","","actions",3),
-		menu.tile(menu.catalog.action("recenter","Recentre view",host.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)]
+		view_tile("recenter")]
 	result[0]["section"]="ACTIONS"
 	return result
+
+## Recentre view in the room. Flat view has no view to recentre: the tile takes
+## you back to the room instead, as XR view.
+func view_tile(id: String) -> Dictionary:
+	if host.flat_screen:
+		return menu.tile(menu.catalog.action(id.replace("recenter", "xr_view"),"XR view",func():
+			host.set_flat_screen(false)
+			menu.notify("Flat view off · back in the room")
+			menu.select.call_deferred(id, false),
+			"Leaves Flat view for the room and the TV, for glasses. Flat view beside Exit comes back."),"glasses","","actions",3)
+	return menu.tile(menu.catalog.action(id,"Recentre view",host.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)

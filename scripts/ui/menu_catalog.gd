@@ -443,6 +443,13 @@ func placement_rows() -> Array:
 	rows[6]["label"] = "Right stick speed"
 	return rows
 
+## Flat view's screen: the whole display, or the shape of the TV the game uses.
+func flat_shape_row(id: String) -> Dictionary:
+	var h = host
+	return {"id":id,"label":"Screen shape","kind":"choice","choices":h.FLAT_SHAPES,"default":0,"visual":true,
+		"getter":func(): return h.flat_shape,"setter":func(value): h.flat_shape=int(value); h.settings_dirty=true; menu.refresh(),
+		"help":"Whole display fits the game to this screen, with the tube's edge at the screen's edge; Fit, Fill and Stretch work against it. TV's shape keeps the standard or wide TV's outline, with black around it."}
+
 ## View & glasses → Stereo & comfort. Fullscreen is a desktop window control, so
 ## the Steam Deck (always fullscreen) does not offer it.
 func stereo_rows() -> Array:
@@ -451,6 +458,7 @@ func stereo_rows() -> Array:
 		{"id":"view.flat","label":"Flat screen","kind":"toggle","default":false,"visual":false,
 			"getter":func(): return h.flat_screen,"setter":func(value): h.set_flat_screen(bool(value)),
 			"help":"Shows the game full-screen without the room or the TV, for playing without glasses. Uses your picture settings. F3 also switches it."},
+		unavailable(flat_shape_row("view.flat_shape").merged({"disabled":not h.flat_screen},true),"Turn on Flat screen first."),
 		toggle("view.stereo","Side-by-side 3D",h,"stereo",false,"Use with the glasses' own SBS mode. This does not switch the glasses themselves.",func(): h.set_stereo(h.stereo)),
 		property_row("edge_fade","Soft view edges",0,.2,.005,"percent","Fades the edges of the glasses' view into black."),
 		{"id":"view.scene_msaa","label":"Room edge smoothing","kind":"choice","choices":["Off","2× MSAA","4× MSAA"],"default":0,"visual":true,
