@@ -24,7 +24,7 @@ fi
 test -f "$PACK" || { echo "No pack at $PACK" >&2; exit 1; }
 ssh $O $H "NEW=$NEW bash -s" <<'REMOTE'
 set -eu
-if pgrep -x crt-xr-engine.x >/dev/null || pgrep -f crt-xr-engine.x86_64 >/dev/null; then echo 'Exit CRT XR on the Deck first.' >&2; exit 1; fi
+if pgrep -x crt-xr-engine >/dev/null || pgrep -x crt-xr-engine.x >/dev/null; then echo 'Exit CRT XR on the Deck first.' >&2; exit 1; fi
 cd ~/Applications/CRT-XR/releases
 BASE=$(basename "$(readlink -f ~/Applications/CRT-XR/current)")
 test "$BASE" != "$NEW" || { echo "$NEW is already current" >&2; exit 1; }
