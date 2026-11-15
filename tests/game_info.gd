@@ -43,6 +43,8 @@ func run():
 	check(text.contains("Samus returns to Zebes.") and text.contains("From your gamelist") and text.contains("1994"), "The page shows the description, its source and the year")
 	var ids: Array = m.items.map(func(item): return item.id)
 	check(ids.has("game_info.play") and ids.has("game_info.favourite") and not ids.has("game_info.lookup"), "With a description already, it doesn't offer to look one up: %s" % [ids])
+	m.select("game_info.play", false); m.navigate(Vector2i.RIGHT)
+	check(m.selected_id == "game_info.favourite", "Play and Favourite sit side by side")
 	check(not app.library_info_online, "Online look-ups are off unless turned on")
 	m.back(); await settle()
 	check(m.mode == "games" and m.selected_id == "game:" + rom, "Back returns to the same game")

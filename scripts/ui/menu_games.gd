@@ -609,19 +609,28 @@ func info_items() -> Array:
 	var c = menu.catalog
 	var path := info_path
 	var result: Array = []
-	var play: Dictionary = c.action("game_info.play", "Play", func(): select_file(path, info_versions), "", not FileAccess.file_exists(path), "")
-	play["emphasis"] = "primary"; play["row_icon"] = "play"
+	# Side by side under the facts, so the description below stays in view.
+	var play: Dictionary = menu.tile(c.action("game_info.play", "Play", func(): select_file(path, info_versions), "", not FileAccess.file_exists(path), ""), "play", "primary", "info", 3)
 	result.append(play)
 	var favourite: bool = path in host.play_history.favourites
-	result.append(c.action("game_info.favourite", "Remove from favourites" if favourite else "Add to favourites", func():
+	result.append(menu.tile(c.action("game_info.favourite", "Unfavourite" if favourite else "Favourite", func():
 		if not host.play_history.toggle(path): menu.show_error("Favourite could not be saved. Check user-folder permissions."); return
-		menu.render(), "", false, ""))
+		menu.render(), "", false, ""), "heart", "", "info", 3))
 	var has_text: bool = not str(local_info().get("description", "")).is_empty() or not info_online.is_empty()
-	if not has_text or not info_online.is_empty():
-		var label := "Look it up again" if not info_online.is_empty() else "Look up a description online"
-		result.append(c.action("game_info.lookup", label, look_up_info,
-			"Finds this game's Wikipedia article and keeps a short summary here. Only the game's name is sent. Turn on automatic look-ups in Games › Library.", info_source().busy == path, ""))
+	if not has_text:
+		result.append(menu.tile(c.action("game_info.lookup", "Describe it", look_up_info,
+			"Finds this game's Wikipedia article and keeps a short summary here. Only the game's name is sent. Turn on automatic look-ups in Games › Library.", info_source().busy == path, ""), "search", "", "info", 3))
 	return result
+
+## Up to `limit` characters, ending at a sentence where one fits, else a word, with "…".
+static func short_text(text: String, limit: int) -> String:
+	var clean := text.strip_edges().replace("\n", " ")
+	if clean.length() <= limit: return clean
+	var cut := clean.left(limit)
+	var stop := cut.rfind(". ")
+	if stop > limit / 2: return cut.left(stop + 1)
+	var space := cut.rfind(" ")
+	return cut.left(space if space > 0 else limit).strip_edges() + "…"
 
 func info_heading() -> String:
 	return info_label
@@ -637,7 +646,7 @@ func decorate_info(column: VBoxContainer) -> void:
 	var named: Dictionary = GameTitle.info(path)
 	var local := local_info()
 	var hero := HBoxContainer.new(); hero.add_theme_constant_override("separation", 22)
-	hero.add_child(cover_panel(path, Vector2(220, 248)))
+	hero.add_child(cover_panel(path, Vector2(200, 228)))
 	var facts := VBoxContainer.new(); facts.add_theme_constant_override("separation", 6); facts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	var lines: Array = []
 	var variant := str(named.get("variant", ""))
@@ -662,11 +671,10 @@ func decorate_info(column: VBoxContainer) -> void:
 		row.add_child(key); row.add_child(value); facts.add_child(row)
 	hero.add_child(facts)
 	# Play, Favourite and Look up sit under the facts, beside the cover.
-	var actions := VBoxContainer.new(); actions.add_theme_constant_override("separation", 8)
 	var gap := Control.new(); gap.custom_minimum_size.y = 6; facts.add_child(gap)
-	facts.add_child(actions)
-	for row in menu.rows:
-		row.get_parent().remove_child(row); actions.add_child(row)
+	if not menu.rows.is_empty():
+		var tiles: Control = menu.rows[0].get_parent()
+		tiles.get_parent().remove_child(tiles); facts.add_child(tiles)
 	var top: Array[Control] = [hero]
 	# A long name is trimmed in the heading: the page spells it out in full.
 	var full := info_label
@@ -684,7 +692,9 @@ func decorate_info(column: VBoxContainer) -> void:
 	if not text.is_empty() or not info_status.is_empty():
 		var about := Label.new(); about.text = text if not text.is_empty() else info_status
 		about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		about.max_lines_visible = 4 if host.menu_large_text else 5; about.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		# Trimmed by hand at a sentence: a wrapping Label with an overrun mode
+		# measured itself empty on long Wikipedia summaries.
+		if not text.is_empty(): about.text = short_text(text, 300 if host.menu_large_text else 400)
 		about.add_theme_font_size_override("font_size", 19 + (3 if host.menu_large_text else 0))
 		about.add_theme_color_override("font_color", menu.MenuSkin.TEXT if not text.is_empty() else menu.MenuSkin.MUTED)
 		var box := PanelContainer.new(); box.add_theme_stylebox_override("panel", menu.MenuSkin.box(Color("0b1a48"), Color("3858a0"), 2, 14))
