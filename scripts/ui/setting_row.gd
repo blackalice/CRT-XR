@@ -53,7 +53,10 @@ func configure(definition: Dictionary) -> void:
 	content=VBoxContainer.new(); content.add_theme_constant_override("separation",8)
 	content.mouse_filter=Control.MOUSE_FILTER_IGNORE; content_margin.add_child(content)
 	if item.get("hero",false): content.alignment=BoxContainer.ALIGNMENT_CENTER
-	var line := HBoxContainer.new(); line.add_theme_constant_override("separation",16)
+	# A "stacked" tile puts its picture above its words (the save strip).
+	var stacked: bool = item.get("stacked", false)
+	var line: BoxContainer = VBoxContainer.new() if stacked else HBoxContainer.new()
+	line.add_theme_constant_override("separation",6 if stacked else 16)
 	line.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(line)
 	# The outline carries focus; do not reserve a competing arrow column.
 	# Keep the changed-value dot outside the title's wrapping/layout bounds.
@@ -79,6 +82,7 @@ func configure(definition: Dictionary) -> void:
 		var slot_size: Vector2 = item.get("thumbnail_size",Vector2(64,48))
 		var slot := Control.new(); slot.custom_minimum_size=slot_size; slot.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 		slot.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(slot)
+		if stacked: slot.size_flags_horizontal=Control.SIZE_SHRINK_CENTER
 		if item.get("thumbnail_well", false):
 			# Game covers sit in a recessed well, so every row lines up whether or
 			# not it has art; without art the well shows the console instead.
@@ -103,6 +107,7 @@ func configure(definition: Dictionary) -> void:
 	words.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	words.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(words)
 	title_label=Label.new(); title_label.text=item.label
+	if stacked: title_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
 	title_label.add_theme_font_size_override("font_size",22 if item.has("disclosure") else 24); MenuSkin.weigh(title_label,MenuSkin.SEMIBOLD)
 	title_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	title_label.max_lines_visible=3
@@ -111,6 +116,7 @@ func configure(definition: Dictionary) -> void:
 	if emphasis in ["primary","danger"]: title_label.add_theme_color_override("font_color",tint)
 	if item.has("detail_getter"):
 		setting_detail_label = Label.new()
+		if stacked: setting_detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		setting_detail_label.add_theme_font_size_override("font_size",16)
 		setting_detail_label.add_theme_color_override("font_color",MenuSkin.MUTED)
 		setting_detail_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -216,7 +222,7 @@ func single_line_width(label: Label) -> float:
 	return ceilf(font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, label.get_theme_font_size("font_size")).x) + 4.0
 
 func sync_choice_width() -> void:
-	var line := words.get_parent() as HBoxContainer
+	var line := words.get_parent() as BoxContainer
 	var available := size.x - content_margin.get_theme_constant("margin_left") - content_margin.get_theme_constant("margin_right")
 	available -= line.get_theme_constant("separation") * (line.get_child_count() - 1)
 	available -= value_group.get_theme_constant("separation") * (value_group.get_child_count() - 1)
