@@ -803,6 +803,9 @@ func category_pages(category: int) -> Array:
 				{"id":"access.game_columns","label":"Game list columns","kind":"choice","choices":["1 column", "2 columns", "3 columns"],"default":0,"visual":false,
 					"getter":func(): return h.game_list_columns - 1,"setter":func(value): h.game_list_columns=int(value)+1,
 					"help":"Choose the layout for console, recent and favourite game lists. Left and right move between games in multi-column views."},
+				{"id":"access.menu_shortcut","label":"Menu shortcut","kind":"choice","choices":["L1 + R1 + Start","Also hold Select"],"default":0,"visual":false,
+					"getter":func(): return 1 if h.emulator.gamepad.menu_hold_select else 0,"setter":func(value): h.emulator.gamepad.menu_hold_select=int(value)==1; h.settings_dirty=true; menu.refresh(),
+					"help":"L1 + R1 + Start always opens the menu. Also hold Select lets you hold Select (View) for just over half a second instead; a quick press still goes to the game."},
 				toggle("access.tv","Menu on the TV",h,"menu_on_tv",true,"Shows the menu on the TV. Off floats it in front of the TV; adjusting with preview always floats.",func(): menu.refresh(),false),
 				unavailable(toggle("access.depth","Floating menu depth",h,"menu_depth",true,"In side-by-side 3D, places a floating menu in front of the TV and dims the room. Off gives a flat menu.",func(): menu.refresh(),false).merged({"disabled":h.menu_on_tv and not h.flat_screen},true),"Only when the menu floats: turn off Menu on the TV."),
 				],"Where the menu appears"),page("Screensaver",[

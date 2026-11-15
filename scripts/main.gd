@@ -753,6 +753,7 @@ func apply_settings(config: ConfigFile) -> void:
 	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
 	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
 	menu_screensaver = bool(config.get_value("accessibility","menu_screensaver",true))
+	emulator.gamepad.menu_hold_select = bool(config.get_value("accessibility","menu_hold_select",false))
 	# Test scripts see every row unless they turn Basic on, as they skip first-run setup.
 	settings_advanced = bool(config.get_value("accessibility","settings_advanced","--script" in OS.get_cmdline_args()))
 	var delay = config.get_value("accessibility","menu_screensaver_delay",120.0)
@@ -828,6 +829,9 @@ func apply_settings(config: ConfigFile) -> void:
 
 func _process(delta: float) -> void:
 	notice_time = maxf(0.0, notice_time - delta)
+	if emulator.gamepad.poll_hold_select():
+		if settings_panel.visible and menu.mode == "welcome": menu.welcome.menu_shortcut()
+		else: toggle_settings()
 	track_play_time(delta)
 	if video.loaded and not video.paused:
 		video_checkpoint += delta
@@ -1752,6 +1756,7 @@ func reset_all_options() -> void:
 	menu_screensaver = true
 	menu_screensaver_delay = 120.0
 	settings_advanced = false
+	emulator.gamepad.menu_hold_select = false
 	power_on.enabled=true; power_on.sound_level=.60; power_on.reduced_motion=false; power_on.apply()
 	tv_effects.channel_change=true; tv_effects.power_off_effect=true; tv_effects.reduced_motion=false
 	rebuild_settings()
@@ -1906,6 +1911,7 @@ func capture_settings() -> ConfigFile:
 	config.set_value("preferences","game_fps_visible",game_fps_visible)
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","library_group_versions","library_hide_extras","menu_screensaver","menu_screensaver_delay","settings_advanced"]: config.set_value("accessibility",key,get(key))
 	config.set_value("accessibility","menu_plain_picture_default",true)
+	config.set_value("accessibility","menu_hold_select",emulator.gamepad.menu_hold_select)
 	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
 	config.set_value("accessibility","menu_music_volume",menu_music_volume)
 	config.set_value("welcome","done",welcome_done)
