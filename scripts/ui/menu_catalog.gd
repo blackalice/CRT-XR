@@ -866,7 +866,7 @@ func category_pages(category: int) -> Array:
 			audio_rows.append(action("audio.preview","Preview sound",audio.preview_sample,"Plays a short sample through the selected sound mode while the game stays paused."))
 			var music = h.music
 			var visualiser: Array = [
-				{"id":"visualiser.preset","label":"Visualiser preset","kind":"choice","choices":h.visualizer.PRESETS,"default":0,"getter":func(): return h.visualizer.preset_index,"setter":h.visualizer.select_preset,"help":"Choose a bundled visualiser preset.","visual":false},
+				{"id":"visualiser.preset","label":"Visualiser preset","kind":"choice","choices":h.visualizer.preset_names(),"default":0,"getter":func(): return h.visualizer.preset_index,"setter":h.visualizer.select_preset,"help":"Three bundled presets, then your own: put projectM or MilkDrop .milk files in a folder called Visualiser presets inside your music folder.","visual":false},
 				toggle("visualiser.automatic","Automatic presets",h.visualizer,"automatic",true,"Change preset every 30 seconds. Reduced motion keeps the current preset.",h.visualizer.save_preferences,false),
 				number("visualiser.brightness","Visualiser brightness",h.visualizer,"brightness",0.3,1.5,0.1,1.0,"percent","Independent brightness for music visuals.",h.visualizer.save_preferences,false)]
 			visualiser[0]["section"] = "VISUALISER"

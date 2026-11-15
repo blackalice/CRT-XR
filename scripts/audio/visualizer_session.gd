@@ -17,20 +17,63 @@ var automatic := true
 func _ready() -> void:
  var config := ConfigFile.new()
  if config.load("user://visualiser.cfg")==OK:
+  # Kept by name, as your own presets come and go with the folder.
+  var named := str(config.get_value("visualiser","preset_name",""))
   preset_index=clampi(int(config.get_value("visualiser","preset",0)),0,PRESETS.size()-1)
+  if not named.is_empty() and preset_names().has(named): preset_index=preset_names().find(named)
   brightness=clampf(float(config.get_value("visualiser","brightness",1.0)),0.3,1.5)
   automatic=bool(config.get_value("visualiser","automatic",true))
 
 func save_preferences() -> void:
  var config := ConfigFile.new()
  config.set_value("visualiser","preset",preset_index)
+ config.set_value("visualiser","preset_name",preset_names()[preset_index] if preset_index<preset_names().size() else "")
  config.set_value("visualiser","brightness",brightness)
  config.set_value("visualiser","automatic",automatic)
  if config.save("user://visualiser.cfg")!=OK:host.show_notice("Visualiser preferences could not be saved.")
 const PRESETS := ["Amber orbit", "Blue current", "Green trace"]
+## Your own projectM / MilkDrop presets: .milk files in user://visualiser-presets,
+## or in a "Visualiser presets" (or "presets") folder inside your music folder.
+const USER_FOLDER := "user://visualiser-presets"
+const MUSIC_SUBFOLDERS := ["Visualiser presets", "Visualizer presets", "presets"]
+var user_presets: Array = [] # [name, path]
+var scanned_at := -100000
+
+static func preset_folders(music_folder: String) -> Array[String]:
+ var folders: Array[String] = [ProjectSettings.globalize_path(USER_FOLDER)]
+ if not music_folder.is_empty():
+  for sub in MUSIC_SUBFOLDERS: folders.append(music_folder.path_join(sub))
+ return folders
+
+## Bundled presets first, then yours by name. Rescanned at most every 10 s.
+func preset_names() -> Array:
+ if Time.get_ticks_msec()-scanned_at>10000: scan_user_presets()
+ var names: Array = PRESETS.duplicate()
+ for preset in user_presets: names.append(preset[0])
+ return names
+
+func scan_user_presets() -> void:
+ scanned_at=Time.get_ticks_msec()
+ user_presets.clear()
+ var music_folder: String = str(host.music_folder) if host != null and "music_folder" in host else ""
+ for folder in preset_folders(music_folder):
+  if not DirAccess.dir_exists_absolute(folder): continue
+  var files := Array(DirAccess.get_files_at(folder)).filter(func(file): return str(file).get_extension().to_lower()=="milk")
+  files.sort_custom(func(a, b): return str(a).naturalnocasecmp_to(str(b))<0)
+  for file in files: user_presets.append([str(file).get_basename().left(40), folder.path_join(file)])
+  if user_presets.size()>=200: break
+
+func preset_count() -> int:
+ return preset_names().size()
 
 func preset_data() -> String:
- return FileAccess.get_file_as_string("res://assets/visualizer/%d.milk" % preset_index)
+ if preset_index<PRESETS.size(): return FileAccess.get_file_as_string("res://assets/visualizer/%d.milk" % preset_index)
+ var mine: int=preset_index-PRESETS.size()
+ if mine<user_presets.size():
+  var text := FileAccess.get_file_as_string(str(user_presets[mine][1]))
+  if not text.is_empty(): return text
+ preset_index=0
+ return FileAccess.get_file_as_string("res://assets/visualizer/0.milk")
 
 func enter() -> bool:
  if active:
@@ -87,7 +130,7 @@ func leave(restore := true) -> void:
   host.pattern.set_process(not host.emulator.loaded and not host.video.loaded)
 
 func next(direction: int) -> void:
- preset_index=posmod(preset_index+direction,PRESETS.size());cycle=0.0
+ preset_index=posmod(preset_index+direction,preset_count());cycle=0.0
  if backend!=null:backend.select(preset_data())
  flash_controls()
 
@@ -95,7 +138,7 @@ func flash_controls() -> void:
  for bar in host.visualizer_bars:bar.flash()
 
 func select_preset(value: int) -> void:
- preset_index=posmod(value,PRESETS.size());cycle=0.0
+ preset_index=posmod(value,preset_count());cycle=0.0
  if backend!=null:backend.select(preset_data())
  save_preferences()
  flash_controls()
@@ -105,7 +148,7 @@ func _process(delta: float) -> void:
   for bar in host.visualizer_bars:bar.hide()
   return
  var playing_now: bool=host.music.player.playing and not host.music.player.stream_paused
- var caption := "%s - %d%% - %s" % [PRESETS[preset_index],roundi(brightness*100),"Auto" if automatic else "Manual"]
+ var caption := "%s - %d%% - %s" % [preset_names()[mini(preset_index,preset_count()-1)],roundi(brightness*100),"Auto" if automatic else "Manual"]
  for bar in host.visualizer_bars:
   bar.track(caption,host.music.position_seconds(),host.music.duration(),not playing_now,delta,not host.settings_panel.visible)
  var failure: String=backend.last_error()
