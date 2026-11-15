@@ -39,7 +39,7 @@ func run():
 	check(menu.help_frame.visible and menu.help_label.text==menu.rom_index.message,"Library scan warnings remain visible")
 	menu.rom_index.message=""; menu.refresh_labels(); await settle()
 	check(not menu.help_frame.visible and is_equal_approx(menu.scroll.size.y,library_height),"Library reclaims the space after a warning")
-	check(menu.items.size()==6 and menu.items.all(func(item): return item.get("layout")=="card") and not menu.items.any(func(item): return item.id in ["library.recent","library.favourites"]),"Home shows five system cards and one locations card; empty shortcuts stay hidden")
+	check(menu.items.size()==7 and menu.items.all(func(item): return item.get("layout")=="card") and not menu.items.any(func(item): return item.id in ["library.recent","library.favourites"]) and menu.items[-1].id=="library.random","Home shows five system cards, the locations card and Surprise me; empty shortcuts stay hidden")
 	check(not menu.items.any(func(item): return item.id in ["library.drives","library.sd","library.browse"]),"Folder management stays out of the game shelf")
 	menu.select("library.system.snes"); await press(menu,JOY_BUTTON_DPAD_UP)
 	check(menu.selected_id=="library.system.snes","Grid navigation skips empty quick-access cards and stops at the edge")

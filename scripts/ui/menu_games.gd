@@ -69,6 +69,9 @@ func library_items() -> Array:
 		result.push_front(menu.card(menu.catalog.action("library.setup","Set up your ROM library",open_library_tools,"Choose the folder containing snes, nes, megadrive and your other systems. Subfolders are included automatically."),"START HERE","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP"))
 	var detail := "Choose your main ROM folder" if h.default_rom_dir.is_empty() else "Folders · SD cards · Refresh"
 	result.append(menu.card(menu.catalog.action("library.locations","Library locations",open_library_tools,"Choose your main ROM folder.",false,detail),"MAKE YOURSELF AT HOME","locations",Color("aeb6bf"),"YOUR CONSOLES" if menu.rom_index.total()>0 else "LIBRARY"))
+	# A random pick, like flicking through the shelf, beside Library locations.
+	if menu.rom_index.total() > 1: result.append(
+		menu.card(menu.catalog.action("library.random","Surprise me",surprise,"Picks a game at random from your whole library.",false,"›"),"CAN'T DECIDE?","refresh",Color("9fd3c7"),"YOUR CONSOLES"))
 	return result
 
 func library_tool_items() -> Array:
@@ -82,6 +85,13 @@ func library_tool_items() -> Array:
 		result.append(menu.entry(menu.catalog.action("library.default","Change ROM folder",browse_folders,"Pick a different main ROM folder. Your files stay where they are.",false,"›"),rom,"folder","",menu.short_path(h.default_rom_dir)+(" · "+menu.count_caption(games,"game") if games>0 else "")))
 		result.append(menu.entry(menu.catalog.action("library.refresh","Refresh library",refresh_library,"Rescans the ROM folder for added or removed games.",false,""),rom,"refresh"))
 		result.append(menu.entry(menu.catalog.action("library.clear","Forget ROM folder",func(): set_default(""),"Forget the folder without changing any files.",false,""),rom,"clear","danger"))
+	if menu.rom_index.total() > 0:
+		var art := "BOX ART"
+		var fetch = box_art_fetcher()
+		var busy: bool = fetch.running
+		result.append(menu.entry(menu.catalog.action("library.boxart","Stop downloading box art" if busy else "Download missing box art",(func(): fetch.cancel(); menu.refresh()) if busy else download_box_art,
+			"For games your own scrapes don't cover, fetches front covers from the free libretro-thumbnails collection, matched by game name. They're kept in CRT XR's own folder; your ROM folders aren't touched. Needs an internet connection.",false,
+			("%d of %d" % [fetch.done, fetch.total]) if busy else ""),art,"search"))
 	var find := "FIND A FOLDER"
 	for candidate in menu.library.Locations.library_candidates(menu.library.home_folder(),menu.library.Locations.sd_cards()):
 		var path: String=candidate
@@ -110,6 +120,45 @@ func browser_items() -> Array:
 	if menu.library.entries.is_empty():
 		result.append(menu.entry(menu.catalog.unavailable(menu.catalog.action("folder.empty","No folders or games here",func(): pass,"",true),"Go up, or pick another place below."),menu.SECTION_INSIDE))
 	return result+menu.place_entries("folder",open_folder,enter_folder_path)
+
+## A random game from the whole library (versions grouped as the lists show them).
+func surprise() -> void:
+	var pool: Array = []
+	for system in menu.library.Registry.SYSTEMS:
+		pool.append_array(console_games(system))
+	if pool.is_empty(): return
+	var game: Dictionary = pool[randi() % pool.size()]
+	menu.notify("Tonight's pick: " + str(game.get("label", str(game.path).get_file())))
+	select_file(str(game.path), game.get("versions", []))
+
+func box_art_fetcher():
+	if not host.has_node("BoxArtFetch"):
+		var fetch = preload("res://scripts/content/box_art_fetch.gd").new()
+		fetch.name = "BoxArtFetch"
+		host.add_child(fetch)
+		fetch.progress.connect(func(done: int, total: int, _found: int):
+			if done % 10 == 0 and menu.mode == "library_tools": menu.refresh())
+		fetch.finished.connect(func(found: int, missing: int):
+			host.box_art.refresh()
+			host.show_notice("Box art: %d downloaded%s" % [found, (" · %d not in the collection" % missing) if missing > 0 else ""])
+			if menu.visible: menu.refresh())
+	return host.get_node("BoxArtFetch")
+
+## Queues every library game without art whose name the collection can match.
+func download_box_art() -> void:
+	var games: Array = []
+	for system in menu.library.Registry.SYSTEMS:
+		for game in menu.rom_index.games.get(system, []):
+			var path := str(game.path)
+			if not host.box_art.find(path).is_empty(): continue
+			var name := ""
+			if not str(GameTitle.parse(path.get_file()).variant).is_empty(): name = path.get_file().get_basename()
+			elif game.get("identified", false): name = menu.rom_index.identity.name_for(system, path)
+			if name.is_empty(): continue
+			games.append([system, path, name, host.box_art.console_folder(path)])
+	var queued: int = box_art_fetcher().start(games)
+	menu.notify(("Downloading box art for %s…" % menu.count_caption(queued, "game")) if queued > 0 else "Every game the collection can match already has box art.")
+	menu.refresh()
 
 func refresh_library() -> void:
 	var previous: String = menu.selected_id
