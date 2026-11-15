@@ -30,7 +30,23 @@ func run():
 	check(art.find(rom) == target, "Downloaded art is found for its game")
 	check(art.find(rom, BoxArt.COVER_TYPES, BoxArt.COVER_BESIDE) == target, "and printed on the box on the table")
 	var fetch = Fetch.new()
-	check(fetch.start([["snes", rom, "Super Mario World (USA)", "snes"]]) == 0, "Games that already have downloaded art are not fetched again")
+	check(fetch.start([["snes", rom, ["Super Mario World (USA)"], "snes"]]) == 0, "Games that already have downloaded art are not fetched again")
+	# The download is a .part file: its format comes from its bytes, not its name.
+	var part := target + ".part"
+	DirAccess.copy_absolute(target, part)
+	check(Fetch.valid_image(part), "A PNG saved as .part is recognised as a picture")
+	var junk := FileAccess.open(part, FileAccess.WRITE); junk.store_string("<html>Not found</html>"); junk.close()
+	check(not Fetch.valid_image(part), "An error page is not a picture")
+	# Spellings: file name, identified name, GoodTools written out, then without extra tags.
+	check(Fetch.from_goodtools("Kirby's Dream Land (UE) [!]") == "Kirby's Dream Land (USA, Europe)", "GoodTools (UE) becomes (USA, Europe)")
+	check(Fetch.from_goodtools("Super Mario Land (W) (V1.1)") == "Super Mario Land (World)", "GoodTools (W) becomes (World)")
+	var names: Array = Fetch.names_for("Donkey Kong Country (Europe) (En,Fr,De) (Rev 1).sfc", "")
+	check(names == ["Donkey Kong Country (Europe) (En,Fr,De) (Rev 1)", "Donkey Kong Country (Europe)"], "No-Intro names are tried whole, then without their tags: %s" % [names])
+	# Misses are remembered and skipped next time.
+	var other := roms.path_join("snes/Not A Real Game (USA).sfc")
+	fetch.misses_loaded = true
+	fetch.misses.set_value("missing", other.md5_text(), true)
+	check(fetch.known_missing(other) and fetch.start([["snes", other, ["Not A Real Game (USA)"], "snes"]]) == 0, "A game the collection didn't have is not asked for again")
 	fetch.free(); art.free()
 	print("BOX ART FETCH: %d failures" % failures)
 	quit(1 if failures else 0)

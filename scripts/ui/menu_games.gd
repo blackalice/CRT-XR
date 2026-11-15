@@ -129,6 +129,8 @@ func library_tool_items() -> Array:
 		result.append(menu.entry(menu.catalog.action("library.boxart","Stop downloading box art" if busy else "Download missing box art",(func(): fetch.cancel(); menu.refresh()) if busy else download_box_art,
 			"For games your own scrapes don't cover, fetches front covers from the free libretro-thumbnails collection, matched by game name. They're kept in CRT XR's own folder; your ROM folders aren't touched. Needs an internet connection.",false,
 			("%d of %d" % [fetch.done, fetch.total]) if busy else ""),art,"search"))
+		result.append(menu.entry(menu.catalog.action("library.boxart_retry","Try again for games not found",func(): download_box_art(false, true),
+			"Asks the collection again for games it had no cover for last time, for example after renaming files or a collection update.",busy,""),art,"refresh"))
 		result.append(menu.entry(menu.catalog.action("library.boxart_show","Show box art",func(): host.library_box_art = not host.library_box_art; host.settings_dirty = true; menu.refresh(),
 			"Box art beside games in your lists, on Continue and when you start a game: from your own scrapes and anything downloaded.",false,"On" if host.library_box_art else "Off"),art,"tv"))
 		result.append(menu.entry(menu.catalog.action("library.boxart_auto","Download for new games automatically",func(): host.library_box_art_auto = not host.library_box_art_auto; host.settings_dirty = true; auto_box_art_done = false; menu.refresh(),
@@ -188,21 +190,23 @@ func box_art_fetcher():
 
 ## Every library game without art whose name the collection can match:
 ## [system, path, name, console folder].
-func box_art_candidates() -> Array:
+func box_art_candidates(include_missing := false) -> Array:
 	var games: Array = []
 	for system in menu.library.Registry.SYSTEMS:
 		for game in menu.rom_index.games.get(system, []):
 			var path := str(game.path)
 			if not host.box_art.find(path).is_empty(): continue
-			var name := ""
-			if not str(GameTitle.parse(path.get_file()).variant).is_empty(): name = path.get_file().get_basename()
-			elif game.get("identified", false): name = menu.rom_index.identity.name_for(system, path)
-			if name.is_empty(): continue
-			games.append([system, path, name, host.box_art.console_folder(path)])
+			if not include_missing and box_art_fetcher().known_missing(path): continue
+			var identified: String = menu.rom_index.identity.name_for(system, path) if game.get("identified", false) else ""
+			var names: Array = box_art_fetcher().names_for(path.get_file(), identified)
+			# A name with no region is unlikely to be in the collection.
+			names = names.filter(func(name): return str(name).contains("("))
+			if names.is_empty(): continue
+			games.append([system, path, names, host.box_art.console_folder(path)])
 	return games
 
-func download_box_art(quiet := false) -> void:
-	var queued: int = box_art_fetcher().start(box_art_candidates())
+func download_box_art(quiet := false, retry := false) -> void:
+	var queued: int = box_art_fetcher().start(box_art_candidates(retry), retry)
 	missing_cache = [-1, 0]
 	if quiet and queued == 0: return
 	menu.notify(("Downloading box art for %s…" % menu.count_caption(queued, "game")) if queued > 0 else "Every game the collection can match already has box art.")
