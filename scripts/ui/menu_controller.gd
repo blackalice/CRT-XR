@@ -1786,7 +1786,7 @@ func decorate_launch() -> void:
 	var saves: Array = games.launch_saves(path)
 	if not saves.is_empty():
 		var pick: Dictionary = games.picked_save(path)
-		var frame := Panel.new(); frame.custom_minimum_size = Vector2(368, 276)
+		var frame := Panel.new(); frame.custom_minimum_size = Vector2(432, 324)
 		frame.add_theme_stylebox_override("panel", MenuSkin.box(Color("0b1640"), MenuSkin.AMBER, 3, 0))
 		var picture := TextureRect.new(); picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		picture.position = Vector2(4, 4); picture.size = frame.custom_minimum_size - Vector2(8, 8); picture.texture = play.state_picture(str(pick.path))

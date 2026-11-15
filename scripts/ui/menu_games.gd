@@ -754,12 +754,9 @@ func launch_items() -> Array:
 			var tile: Dictionary = menu.tile(menu.catalog.unavailable(menu.catalog.action("launch.save.%d" % (slot + 1), save_name(slot), func(): launch_pick = chosen; launch_game(path, true, chosen),
 				("Continue from this save.") if exists else "", not exists, ""), "Nothing saved here."), "", "primary" if slot == picked and exists else "", "saves", 5)
 			tile["detail_getter"] = (func(): return menu.saved_when(host.emulator.state_stamp(file)).replace("today at ", "").replace("yesterday at ", "Yest ").replace(" at ", " ")) if exists else (func(): return "Empty")
-			# Each save shows its picture above its name and time; empty slots keep
-			# the same shape, so the strip reads as five even cards.
-			tile["stacked"] = true; tile["min_height"] = 112
-			tile["thumbnail_path"] = file if exists else "empty-slot-%d" % slot
-			tile["thumbnail_size"] = Vector2(96, 54); tile["thumbnail_well"] = true; tile["thumbnail_icon"] = "save"
-			tile["thumbnail"] = menu.play.state_picture(file) if exists else null
+			# Compact cards: name over time. The big frame above already shows the
+			# picked save's picture, so the strip stays short enough to fit.
+			tile["stacked"] = true; tile["min_height"] = 64; tile["no_value"] = true
 			result.append(tile)
 	return result
 

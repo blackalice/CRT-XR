@@ -53,8 +53,9 @@ func configure(definition: Dictionary) -> void:
 	content=VBoxContainer.new(); content.add_theme_constant_override("separation",8)
 	content.mouse_filter=Control.MOUSE_FILTER_IGNORE; content_margin.add_child(content)
 	if item.get("hero",false): content.alignment=BoxContainer.ALIGNMENT_CENTER
-	# A "stacked" tile puts its picture above its words (the save strip).
-	var stacked: bool = item.get("stacked", false)
+	# A save card centres its name over its time; other stacked tiles (quick
+	# settings) keep their icon beside the name and put only the value below.
+	var stacked: bool = item.get("no_value", false)
 	var line: BoxContainer = VBoxContainer.new() if stacked else HBoxContainer.new()
 	line.add_theme_constant_override("separation",6 if stacked else 16)
 	line.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(line)
@@ -101,7 +102,7 @@ func configure(definition: Dictionary) -> void:
 		var inset: float = 3.0 if item.get("thumbnail_well", false) else 0.0
 		thumbnail.size=slot_size-Vector2(inset,inset)*2; thumbnail.position=Vector2(inset,inset); thumbnail.mouse_filter=Control.MOUSE_FILTER_IGNORE; slot.add_child(thumbnail)
 		set_thumbnail(item.get("thumbnail"))
-	elif item.has("row_icon"): line.add_child(RowIcon.new(str(item.row_icon),tint))
+	elif item.has("row_icon") and not stacked: line.add_child(RowIcon.new(str(item.row_icon),tint))
 	words=VBoxContainer.new(); words.add_theme_constant_override("separation",3)
 	words.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	words.size_flags_vertical=Control.SIZE_SHRINK_CENTER
@@ -143,6 +144,8 @@ func configure(definition: Dictionary) -> void:
 		value_group.alignment=BoxContainer.ALIGNMENT_CENTER
 		value_group.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 		content.add_theme_constant_override("separation",2)
+		# A stacked action (a save card) has no value line to keep room for.
+		if item.get("no_value", false): value_group.visible=false
 	for input in item.get("value_inputs", []): value_group.add_child(InputGlyph.new(input))
 	# A small mark in place of a value, such as the heart on a favourite game.
 	if item.has("value_icon"): value_group.add_child(RowIcon.new(str(item.value_icon), VALUE))
