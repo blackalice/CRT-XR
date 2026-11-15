@@ -9,7 +9,7 @@ Pick your setup:
 | Steam Deck | Any glasses XR Gaming supports (VITURE, XREAL, Rokid, RayNeo…) | [Steam Deck](STEAM-DECK.md) |
 | Windows | VITURE | [Windows with VITURE](WINDOWS-VITURE.md) |
 | Windows | XREAL, Rokid, RayNeo and others | [Windows with OpenTrack](WINDOWS-OPENTRACK.md) |
-| Anything | No glasses | Choose **This screen** in first-run setup, or **Flat view** beside Exit: the game fills your screen with the CRT picture, without the room. |
+| Anything | No glasses | Choose **This screen** in first-run setup, or press **Y** on Home for **Flat view**: the game fills your screen with the CRT picture, without the room. |
 
 ## What's been tested
 

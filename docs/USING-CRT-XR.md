@@ -115,7 +115,8 @@ Settings start with the everyday options. Fine-tuning rows (signal detail, lens 
 - **Saturday Morning TV** (Video Library): your videos as an always-on channel. Each day has its own running order from 6 am, so you tune in mid-programme. Up and Down change programme.
 - **Rewind and fast-forward** (Games → Input delay, off by default): hold L2 to rewind, R2 to fast-forward, on 8- and 16-bit consoles.
 - **Surprise me** on the Game Library picks a random game.
-- **Download missing box art** (Game Library → Library locations) fetches covers from libretro-thumbnails for games your scrapes don't cover. Art is kept in CRT XR's own folder.
+- **Box art**: **Get box art** on the Game Library (or **Download missing box art** in Library locations) fetches covers from libretro-thumbnails for games your scrapes don't cover, matched by game name. Art is kept in CRT XR's own folder and shows beside your games, on Continue, when you start a game and on the box on the table. Library locations also has **Show box art** and **Download for new games automatically**.
+- **Flat view**: press **Y** on Home or the pause menu to switch between the room and Flat view; the chip beside Exit shows which is in use.
 - **Sleep timer** (Sound → Music) and a screensaver that **switches the TV off** (Menu & access → Screensaver → Style).
 - **Your own visualiser presets**: put projectM / MilkDrop `.milk` files in a folder called `Visualiser presets` inside your music folder.
 - **Menu shortcut**: **Menu & access → Layout → Menu shortcut → Also hold Select** lets you hold Select instead of pressing L1 + R1 + Start.

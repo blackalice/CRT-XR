@@ -141,10 +141,10 @@ func flat_unused_now(id: String) -> bool:
 ## Why a page's rows are hidden in flat view, for its one-line note.
 static func flat_note_reason(ids: Array) -> String:
 	if ids.all(func(id): return str(id).begins_with("crt.")):
-		return "They shape the TV's curved glass, which flat view does not draw. Turn off Flat view (beside Exit, or View & glasses → Stereo & comfort) to change them."
+		return "They shape the TV's curved glass, which flat view does not draw. Turn off Flat view (Y on Home, or View & glasses → Stereo & comfort) to change them."
 	if ids.all(func(id): return id in FLAT_WHOLE_UNUSED):
 		return "The TV model has no effect while Screen shape is Whole display. Choose TV's shape (View & glasses → Stereo & comfort), or turn off Flat view, to change it."
-	return "They move the TV or change the room. Turn off Flat view (beside Exit, or View & glasses → Stereo & comfort) to change them."
+	return "They move the TV or change the room. Turn off Flat view (Y on Home, or View & glasses → Stereo & comfort) to change them."
 
 ## Where a picture value comes from, as a short line under the row's title.
 func picture_source(field: String) -> String:

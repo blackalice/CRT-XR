@@ -213,7 +213,7 @@ func view_items() -> Array:
 		"section": "HOW YOU PLAY", "row_icon": "glasses", "visual": false,
 		"getter": func(): return 1 if h.flat_screen else 0,
 		"setter": func(value): h.set_flat_screen(int(value) == 1); menu.refresh(),
-		"help": "This screen shows the game full-screen without the room (Flat view). Switch any time with Flat view beside Exit."})
+		"help": "This screen shows the game full-screen without the room (Flat view). Switch any time with {Y} on Home."})
 	# Flat view asks for its screen first; the TV models only shape it in TV's shape.
 	if h.flat_screen:
 		var shape: Dictionary = c.flat_shape_row("welcome.view.flat_shape")
@@ -541,7 +541,7 @@ func view_status() -> Control:
 	var dot := MenuSkin.MUTED
 	if host.flat_screen:
 		title_text = "Flat view: the game fills this screen"
-		detail = "No room and no TV around it. Switch any time with Flat view beside Exit."
+		detail = "No room and no TV around it. Switch any time with Y on Home."
 	elif tracking_working():
 		title_text = "Head tracking is on"; detail = str(host.provider.status); dot = Color("58d878")
 	elif host.provider.real:

@@ -164,7 +164,7 @@ var subtitle: Label
 var help_label: Control
 var hints: HFlowContainer
 var exit_footer: Button
-## Flat view, beside Exit on Home and the pause menu: switches flat screen mode.
+## The view chip beside Exit on Home and the pause menu: shows Flat view or Room view (Y switches; a click does too).
 var flat_footer: Button
 ## A footer button has the selection (Down past the last row); footer_flat says
 ## it is Flat view rather than Exit. Left and right move between them.
@@ -1788,8 +1788,15 @@ func playing_title() -> String:
 	if host.emulator.loaded: return GameTitle.of(host.emulator.rom_path)
 	return "Welcome to CRT XR"
 
-## Flat view in the footer: flat screen on or off, keeping the button selected
-## through the menu's rebuild so it can be pressed again to switch back.
+## Y on Home and the pause menu switches Flat view (not while a tile is being
+## adjusted or previewed, where Y resets the value).
+func flat_shortcut_available() -> bool:
+	if mode != "pause" or preview or sidebar_focus: return false
+	var row = selected_row()
+	return row == null or editing_id != str(row.item.id)
+
+## Flat view: flat screen on or off. Y on Home and the pause menu, F3, or the
+## footer chip (with a pointer); the chip shows which view is in use.
 func toggle_flat_view() -> void:
 	var keep := exit_selected and footer_flat
 	host.set_flat_screen(not host.flat_screen)
@@ -1832,10 +1839,11 @@ func refresh_hints(row) -> void:
 	exit_footer.add_theme_stylebox_override("normal",MenuSkin.box(Color("982830") if exit_lit else Color("701c28"),Color("ffc0a8") if exit_lit else Color("e87870"),2,6))
 	# Flat view: amber edge while flat screen is on, bright when selected.
 	flat_footer.visible=exit_footer.visible
-	flat_footer.text="Flat view · On" if host.flat_screen else "Flat view"
-	var flat_lit := exit_selected and footer_flat
+	# The chip is the indicator: which view is in use, amber while flat. Y switches.
+	flat_footer.text="Flat view · On" if host.flat_screen else "Room view"
+	var flat_lit := false
 	var flat_edge: Color = MenuSkin.AMBER if host.flat_screen else Color("88a8e8")
-	flat_footer.add_theme_stylebox_override("normal",MenuSkin.box(Color("2a3f8a") if flat_lit else Color("142852"),Color("ffffff") if flat_lit else flat_edge,2,6))
+	flat_footer.add_theme_stylebox_override("normal",MenuSkin.box(Color("4a3a10") if host.flat_screen else Color("142852"),Color("ffffff") if flat_lit else flat_edge,2,6))
 	flat_footer.add_theme_stylebox_override("hover",MenuSkin.box(Color("2a3f8a"),Color("ffffff"),2,6))
 	var back_caption := ("Return to visualiser" if host.visualizer.active else ("Return to game" if host.emulator.loaded else "Close menu")) if mode=="pause" else "Back"
 	back_button.text=back_caption+("" if pad else "  [Backspace]")
@@ -1886,6 +1894,7 @@ func refresh_hints(row) -> void:
 			elif row!=null and row.item.kind in ["choice","number"]: parts.append("←→ Adjust")
 			elif exit_selected: parts.append(("A " if pad else "Enter ") + ("Switch" if footer_flat else "Exit"))
 			else: parts.append(open)
+			if flat_shortcut_available(): parts.append("Y " + ("Room view" if host.flat_screen else "Flat view"))
 			parts.append(("B " if pad else "Backspace ")+back_caption)
 	elif mode=="launch":
 		parts.append_array(["A Select" if pad else "Enter Select", ("B " if pad else "Backspace ") + games.launch_return_label()])
@@ -1936,9 +1945,6 @@ func navigate(next: Vector2i) -> void:
 		return
 	if exit_selected:
 		if next.y<0: select(selected_id)
-		elif next.x!=0 and footer_flat != (next.x<0):
-			footer_flat = next.x<0
-			play_menu_sound(); refresh_labels()
 		return
 	if mode=="help": scroll.scroll_vertical+=next.y*80; return
 	if mode in ["library","alphabet"]: navigate_library(next); return
@@ -2099,6 +2105,9 @@ func toggle_preview() -> void:
 		remember(); keep_position_tile(); preview=false; clear_input(); render(); return
 	if not preview_available(): return
 	var row=selected_row()
+	# On Home and the pause menu, X previews only the tile you are on; it never
+	# jumps to another tile (it used to land on TV position from anywhere).
+	if mode=="pause" and (row==null or row.disabled or not row.item.get("quick_preview",false)): return
 	if row==null or row.disabled or not row.item.get("quick_preview" if mode in ["pause","welcome"] else "visual",false):
 		for candidate in rows:
 			if not candidate.disabled and candidate.item.get("quick_preview" if mode in ["pause","welcome"] else "visual",false):
@@ -2173,7 +2182,8 @@ func handle(event: InputEvent) -> bool:
 			JOY_BUTTON_A: activate()
 			JOY_BUTTON_B: back()
 			JOY_BUTTON_Y:
-				if mode=="browser": games.open_default()
+				if flat_shortcut_available(): toggle_flat_view()
+				elif mode=="browser": games.open_default()
 				elif mode in ["games","recent","favourites","most_played"]: games.game_title_action()
 				else: reset_option()
 			JOY_BUTTON_X:
@@ -2233,7 +2243,8 @@ func handle(event: InputEvent) -> bool:
 				KEY_ENTER,KEY_SPACE: activate()
 				KEY_BACKSPACE: back()
 				KEY_Y:
-					if mode in ["games","recent","favourites","most_played"]: games.game_title_action()
+					if flat_shortcut_available(): toggle_flat_view()
+					elif mode in ["games","recent","favourites","most_played"]: games.game_title_action()
 					else: reset_option()
 				KEY_X:
 					if mode=="welcome": welcome.skip()

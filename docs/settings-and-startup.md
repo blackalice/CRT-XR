@@ -111,7 +111,7 @@ and UI processing stop while closed.
 
 ## Flat screen mode
 
-**Flat view**, beside Exit at the foot of Home and the pause menu, **View & glasses → Stereo & comfort → Flat screen**, or F3 shows the TV's picture
+**Flat view**, switched with **Y** on Home and the pause menu (the chip beside Exit shows Flat view · On or Room view), **View & glasses → Stereo & comfort → Flat screen**, or F3 shows the TV's picture
 full-window without the room, for playing on a normal monitor, a TV or the Deck's
 own screen with no glasses. On the footer, Down past the last row reaches Exit, Left moves to Flat view and A switches it; it stays selected so A switches back, and reads Flat view · On with an amber edge while on. It is saved outside saved setups, separately for this screen
 (`[display] flat_screen`) and for glasses sessions (`[display] flat_screen_glasses`:

@@ -218,5 +218,5 @@ func view_tile(id: String) -> Dictionary:
 			host.set_flat_screen(false)
 			menu.notify("Flat view off · back in the room")
 			menu.select.call_deferred(id, false),
-			"Leaves Flat view for the room and the TV, for glasses. Flat view beside Exit comes back."),"glasses","","actions",3)
+			"Leaves Flat view for the room and the TV, for glasses. Y on Home comes back to Flat view."),"glasses","","actions",3)
 	return menu.tile(menu.catalog.action(id,"Recentre view",host.recenter,"Points the view straight ahead again. Also on {R3}, without opening the menu."),"view","","actions",3)
