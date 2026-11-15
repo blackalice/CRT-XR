@@ -23,7 +23,7 @@ func run():
   app.emulator.system_id = system
   # A real load fills in the console's controller layout; this pretend load must too.
   app.emulator.controls = preload("res://scripts/emulation/controller_layouts.gd").standard(system, app.emulator.Registry.SYSTEMS[system])
-  var row: Dictionary = catalog.pages(10)[2].rows[0]
+  var row: Dictionary = catalog.pages(10)[3].rows[0]
   check(row.disabled and row.disabled_reason.contains("unavailable"), "Input preview explains unsupported " + system)
  app.emulator.loaded = false
  app.menu.open_settings(); app.menu.category = 10; app.menu.subsection = 3; app.menu.render()

@@ -14,7 +14,7 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 | Picture | Looks (built-in and your linked looks: see below); Tube; Colour & signal; Fit & TV (scope, TV model, fitting, reset) |
 | Room | Rooms (presets and My rooms); Lighting (including lamp position and room edge); Furniture & props (floor, wide TV finish, props, finish); TV moments |
 | Sound | Volumes (game, music, menu music, TV moments, room sound and tube whine); TV speakers; Music (repeat, music space, visualiser look); Menu sounds |
-| Games | Console settings (with console names & icons); Controls; Input delay (with rewind & fast-forward); Info; Dreamcast VMU last, while a Dreamcast game is loaded |
+| Games | Console settings (with console names & icons); Library (columns, box art, which games); Controls; Play (input delay, rewind & fast-forward, game info); Dreamcast VMU last, while a Dreamcast game is loaded |
 | Videos | Picture (TV for videos, framing, lines, interlacing); VCR; Playback |
 | Menu & access | Accessibility (with Show advanced settings); Layout (with Menu shortcut); Screensaver (logo or switch the TV off); Vibration |
 | Scenes & help | Scenes; Help (with What's new); System (device status, diagnostics, credits, reset, updates) |
@@ -475,7 +475,7 @@ settings hidden · Show" row that turns it on. New users start Basic; settings
 from before it existed (and test scripts) keep every row.
 
 **Other additions**: Menu & access → Layout → Menu shortcut (`gamepad_input.gd`
-`poll_hold_select`); Games → Input delay → Rewind & fast-forward
+`poll_hold_select`); Games → Play → Rewind & fast-forward
 (`emulation_session.gd`, L2/R2, 8/16-bit consoles only); Sound → Music → Sleep
 timer and Screensaver → Style → Switch the TV off (`main.gd` `sleep_tv` /
 `wake_tv`); Video Library → Saturday Morning TV (`tv_channel.gd`); Library

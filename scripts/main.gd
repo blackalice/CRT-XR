@@ -64,7 +64,7 @@ var updates = preload("res://scripts/content/update_check.gd").new()
 ## Box art from the player's own scrapes, for game rows and Continue.
 var box_art: Node
 var menu_large_text := false
-var game_list_columns := 1
+var game_list_columns := 2
 ## Console collection (pal, ntsc, japan): console names and icons follow it.
 var console_region := "pal"
 ## Console lists show one row per game, playing the version for console_region.
@@ -765,7 +765,9 @@ func apply_settings(config: ConfigFile) -> void:
 	var menu_level = config.get_value("accessibility","menu_music_volume",0.10)
 	menu_music_volume = float(menu_level) if typeof(menu_level) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(menu_level)) else 0.10
 	apply_menu_music()
-	game_list_columns = clampi(int(config.get_value("accessibility", "game_list_columns", 1)), 1, 3)
+	game_list_columns = clampi(int(config.get_value("accessibility", "game_list_columns", 2)), 1, 3)
+	# Two columns, with covers, became the default; a list left on one column moves once.
+	if not bool(config.get_value("accessibility", "game_columns_v2", false)) and game_list_columns == 1: game_list_columns = 2
 	apply_console_region(str(config.get_value("accessibility", "console_region", "pal")))
 	library_group_versions = bool(config.get_value("accessibility", "library_group_versions", true))
 	library_hide_extras = bool(config.get_value("accessibility", "library_hide_extras", false))
@@ -1789,7 +1791,7 @@ func reset_all_options() -> void:
 	menu_music_enabled = true
 	menu_music_volume = 0.10
 	apply_menu_music()
-	game_list_columns = 1
+	game_list_columns = 2
 	apply_console_region("pal")
 	menu_depth = true
 	menu_on_tv = true
@@ -1991,6 +1993,7 @@ func capture_settings() -> ConfigFile:
 	config.set_value("preferences","game_fps_visible",game_fps_visible)
 	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","library_group_versions","library_hide_extras","menu_screensaver","menu_screensaver_delay","settings_advanced","menu_screensaver_style","library_box_art","library_box_art_auto"]: config.set_value("accessibility",key,get(key))
 	config.set_value("accessibility","menu_plain_picture_default",true)
+	config.set_value("accessibility","game_columns_v2",true)
 	config.set_value("accessibility","menu_hold_select",emulator.gamepad.menu_hold_select)
 	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
 	config.set_value("accessibility","menu_music_volume",menu_music_volume)

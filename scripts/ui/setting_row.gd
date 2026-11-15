@@ -79,10 +79,23 @@ func configure(definition: Dictionary) -> void:
 		var slot_size: Vector2 = item.get("thumbnail_size",Vector2(64,48))
 		var slot := Control.new(); slot.custom_minimum_size=slot_size; slot.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 		slot.mouse_filter=Control.MOUSE_FILTER_IGNORE; line.add_child(slot)
-		var placeholder := RowIcon.new(str(item.get("thumbnail_icon","video")),tint); placeholder.position=(slot_size-Vector2(30,30))*0.5; slot.add_child(placeholder)
+		if item.get("thumbnail_well", false):
+			# Game covers sit in a recessed well, so every row lines up whether or
+			# not it has art; without art the well shows the console instead.
+			var well := Panel.new(); well.size=slot_size; well.mouse_filter=Control.MOUSE_FILTER_IGNORE
+			well.add_theme_stylebox_override("panel",MenuSkin.box(Color(0.02,0.04,0.12,0.75),Color(0.45,0.55,0.85,0.35),1,0))
+			slot.add_child(well)
+		if item.has("thumbnail_console"):
+			var glyph = preload("res://scripts/ui/console_glyph.gd").new()
+			glyph.kind=str(item.thumbnail_console); glyph.custom_minimum_size=Vector2(48,48); glyph.size=Vector2(48,48)
+			glyph.position=(slot_size-Vector2(48,48))*0.5; glyph.modulate=Color(1,1,1,0.55); glyph.mouse_filter=Control.MOUSE_FILTER_IGNORE
+			slot.add_child(glyph)
+		else:
+			var placeholder := RowIcon.new(str(item.get("thumbnail_icon","video")),tint); placeholder.position=(slot_size-Vector2(30,30))*0.5; slot.add_child(placeholder)
 		thumbnail=TextureRect.new(); thumbnail.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
 		thumbnail.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED if item.has("thumbnail_size") else TextureRect.STRETCH_SCALE
-		thumbnail.size=slot_size; thumbnail.mouse_filter=Control.MOUSE_FILTER_IGNORE; slot.add_child(thumbnail)
+		var inset: float = 3.0 if item.get("thumbnail_well", false) else 0.0
+		thumbnail.size=slot_size-Vector2(inset,inset)*2; thumbnail.position=Vector2(inset,inset); thumbnail.mouse_filter=Control.MOUSE_FILTER_IGNORE; slot.add_child(thumbnail)
 		set_thumbnail(item.get("thumbnail"))
 	elif item.has("row_icon"): line.add_child(RowIcon.new(str(item.row_icon),tint))
 	words=VBoxContainer.new(); words.add_theme_constant_override("separation",3)
@@ -330,3 +343,6 @@ func set_thumbnail(texture: Texture2D) -> void:
 	if thumbnail == null: return
 	thumbnail.texture = texture
 	thumbnail.visible = texture != null
+	# The console placeholder steps aside once the cover arrives.
+	for child in thumbnail.get_parent().get_children():
+		if child != thumbnail and not child is Panel: child.visible = texture == null

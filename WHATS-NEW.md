@@ -18,7 +18,7 @@
 - CRT XR warns when SpaceWalker is holding the glasses' tracking.
 ## Something always on
 - Saturday Morning TV (Video Library) plays your videos as a channel. Each day has its own running order from 6 am, so you tune in mid-programme; Up and Down change programme.
-- Rewind and fast-forward for 8- and 16-bit games: turn them on in Games › Input delay, then hold L2 to rewind and R2 to speed up.
+- Rewind and fast-forward for 8- and 16-bit games: turn them on in Games › Play, then hold L2 to rewind and R2 to speed up.
 - Surprise me on the Game Library picks a random game. Get box art fetches covers for games your scrapes don't cover; they show in your lists, on Continue and when you start a game. It can also run by itself for new games (Library locations).
 - Y on Home switches Flat view on and off; the chip beside Exit shows which view you're in.
 - A sleep timer in Sound › Music, and a screensaver that switches the TV off (Menu & access › Screensaver › Style).

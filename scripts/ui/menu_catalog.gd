@@ -364,10 +364,6 @@ func core_option_pages() -> Array:
 		rows[0]["section"] = "Console defaults"
 		rows[0]["section_detail"] = "Applies next time you load a game."
 	rows.append(region_row())
-	var grouped := toggle("library.group_versions","One row per game",host,"library_group_versions",true,"Lists each game once and plays your region's version, or the one you last played. Pick another version when you start it.",func(): menu.games.list_changed(),false)
-	grouped["section"] = "GAME LISTS"
-	rows.append(grouped)
-	rows.append(toggle("library.hide_extras","Hide betas, demos & hacks",host,"library_hide_extras",false,"Leaves betas, prototypes, demos, hacks and bad dumps out of console lists; translations stay. Favourites and Recently played still show them.",func(): menu.games.list_changed(),false))
 	var scope := games_scope()
 	if playing.is_empty() or game_scope != 0:
 		return [page("Console settings", rows, "Defaults for each console" if playing.is_empty() else "Defaults for every %s game" % console_short(playing), scope)]
@@ -472,6 +468,28 @@ func emulation_bios_info() -> String:
 	lines.append("## Searched folders")
 	for folder in registry.bios_sources(): lines.append("- " + folder)
 	return "\n".join(lines)
+
+## Games → Library: how game lists look and where box art comes from.
+func library_page() -> Dictionary:
+	var h = host
+	var refresh_lists := func(): menu.games.list_changed(); h.settings_dirty = true
+	var columns := {"id":"access.game_columns","label":"Game list columns","kind":"choice","choices":["1 column", "2 columns", "3 columns"],"default":1,"visual":false,"section":"GAME LISTS",
+		"getter":func(): return h.game_list_columns - 1,"setter":func(value): h.game_list_columns=int(value)+1,
+		"help":"Console, recent and favourite lists. Two columns shows the most covers and names together. Left and right move between games."}
+	var art := toggle("library.box_art","Show box art",h,"library_box_art",true,"Covers beside your games, on Continue and when you start a game: from your own scrapes and anything downloaded. Off gives plain lists.",refresh_lists,false)
+	art["section"] = "BOX ART"
+	var fetch = menu.games.box_art_fetcher()
+	var busy: bool = fetch.running
+	var missing: int = menu.games.missing_box_art() if menu.rom_index.total() > 0 and not menu.rom_index.scanning else 0
+	var download := action("library.box_art_download", "Stop downloading box art" if busy else "Download missing box art", (func(): fetch.cancel(); menu.refresh()) if busy else (func(): menu.games.download_box_art()),
+		"Fetches front covers from the free libretro-thumbnails collection for games without art, matched by name. Kept in CRT XR's own folder; your ROM folders aren't touched.",
+		not busy and missing == 0, ("%d of %d" % [fetch.done, fetch.total]) if busy else (("%d without art" % missing) if missing > 0 else "Up to date"))
+	var auto := toggle("library.box_art_auto","Download for new games automatically",h,"library_box_art_auto",false,"When the Game Library opens, fetches covers for games that still have none, once a session. Needs an internet connection.",func(): menu.games.auto_box_art_done = false; h.settings_dirty = true,false)
+	var retry := action("library.box_art_retry","Try again for games not found",func(): menu.games.download_box_art(false, true),"Asks the collection again for games it had no cover for, for example after renaming files.",busy,"")
+	var grouped := toggle("library.group_versions","One row per game",h,"library_group_versions",true,"Lists each game once and plays your region's version, or the one you last played. Pick another version when you start it.",refresh_lists,false)
+	grouped["section"] = "WHICH GAMES"
+	var extras := toggle("library.hide_extras","Hide betas, demos & hacks",h,"library_hide_extras",false,"Leaves betas, prototypes, demos, hacks and bad dumps out of console lists; translations stay. Favourites and Recently played still show them.",refresh_lists,false)
+	return page("Library", [columns, art, download, auto, retry, grouped, extras], "How your game lists look")
 
 ## Scenes & help → System → Updates: opt-in, and only ever a look at GitHub's
 ## public release list. Nothing is downloaded or installed.
@@ -771,11 +789,12 @@ func category_pages(category: int) -> Array:
 				rewind["help"] += " Not for this game: " + ("its controls use the triggers." if h.emulator.triggers_bound() else ("rewind needs more memory than this console allows." if h.emulator.rewind_unsupported else "this console isn't supported yet."))
 			var game_fps := toggle("emulation.game_fps","Show game frame rate",h,"game_fps_visible",false,"Shows the game's own frame rate and speed in the top corner while you play. Unlike Steam's counter, it measures the emulator, not the room.",unchanged,false)
 			var result: Array = core_option_pages()
+			result.append(library_page())
 			result.append(page("Controls",menu.controls.rows(),controls_subtitle(),games_scope()))
-			result.append(page("Input delay",[input_delay,separate_preview,rewind,game_fps],"For the games you play"))
-			result.append(page("Info",[
-				action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate.",false,GameTitle.of(h.emulator.rom_path) if h.emulator.loaded else ""),
-				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")],"Read-only"))
+			var info: Array = [action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate.",false,GameTitle.of(h.emulator.rom_path) if h.emulator.loaded else ""),
+				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")]
+			info[0]["section"] = "ABOUT THIS GAME"
+			result.append(page("Play",[input_delay,separate_preview,rewind,game_fps]+info,"For the games you play"))
 			# Last, so the other tabs keep their places whether or not a Dreamcast game is loaded.
 			if h.emulator.loaded and h.emulator.system_id == "dreamcast": result.append(vmu_page())
 			return result
@@ -803,9 +822,6 @@ func category_pages(category: int) -> Array:
 				advanced_row(),
 				toggle("access.clean_feed","Plain picture behind menus",h,"menu_clean_feed",true,"On: menus stay plain and readable in every game. Off: they take the game's own colour, signal and CRT effects.",unchanged,false),
 				],"How the menus look and move"),page("Layout",[
-				{"id":"access.game_columns","label":"Game list columns","kind":"choice","choices":["1 column", "2 columns", "3 columns"],"default":0,"visual":false,
-					"getter":func(): return h.game_list_columns - 1,"setter":func(value): h.game_list_columns=int(value)+1,
-					"help":"Choose the layout for console, recent and favourite game lists. Left and right move between games in multi-column views."},
 				{"id":"access.menu_shortcut","label":"Menu shortcut","kind":"choice","choices":["L1 + R1 + Start","Also hold Select"],"default":0,"visual":false,
 					"getter":func(): return 1 if h.emulator.gamepad.menu_hold_select else 0,"setter":func(value): h.emulator.gamepad.menu_hold_select=int(value)==1; h.settings_dirty=true; menu.refresh(),
 					"help":"L1 + R1 + Start always opens the menu. Also hold Select lets you hold Select (View) for just over half a second instead; a quick press still goes to the game."},

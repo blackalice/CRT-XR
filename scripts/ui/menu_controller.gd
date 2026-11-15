@@ -1350,7 +1350,7 @@ func _render(incremental: bool) -> void:
 				parent = game_grid
 				item["game_grid"] = true; item["tile_index"] = game_grid_index
 				item["tile_count"] = game_grid_count; item["tile_columns"] = host.game_list_columns
-				item["min_height"] = 108 if host.game_list_columns == 2 else 124
+				item["min_height"] = 104 if host.game_list_columns == 2 else 96
 				game_grid_index += 1
 			if item.get("layout","") in ["letter","key"]:
 				if grid==null:
@@ -1901,6 +1901,7 @@ func refresh_hints(row) -> void:
 	elif mode=="confirm": parts.append_array(["A Choose" if pad else "Enter Choose","B Cancel" if pad else "Backspace Cancel"])
 	elif mode=="welcome": parts=welcome.hints(row,pad)
 	elif mode in ["folder_path","rename","radio_url"]: parts=["D-pad Keys","A Type",go_back] if pad else ["Type or click keys","Enter Submit",go_back]
+	elif mode=="videos" and row!=null and row.item.has("continue_path"): parts.append_array([open,"Y Remove",go_back])
 	else: parts.append_array([open,go_back])
 	hints.text=" · ".join(parts)
 
@@ -2182,7 +2183,8 @@ func handle(event: InputEvent) -> bool:
 			JOY_BUTTON_A: activate()
 			JOY_BUTTON_B: back()
 			JOY_BUTTON_Y:
-				if flat_shortcut_available(): toggle_flat_view()
+				if mode=="videos" and selected_row()!=null and selected_row().item.has("continue_path"): videos.remove_continue(str(selected_row().item.continue_path))
+				elif flat_shortcut_available(): toggle_flat_view()
 				elif mode=="browser": games.open_default()
 				elif mode in ["games","recent","favourites","most_played"]: games.game_title_action()
 				else: reset_option()
@@ -2243,7 +2245,8 @@ func handle(event: InputEvent) -> bool:
 				KEY_ENTER,KEY_SPACE: activate()
 				KEY_BACKSPACE: back()
 				KEY_Y:
-					if flat_shortcut_available(): toggle_flat_view()
+					if mode=="videos" and selected_row()!=null and selected_row().item.has("continue_path"): videos.remove_continue(str(selected_row().item.continue_path))
+					elif flat_shortcut_available(): toggle_flat_view()
 					elif mode in ["games","recent","favourites","most_played"]: games.game_title_action()
 					else: reset_option()
 				KEY_X:

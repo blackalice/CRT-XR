@@ -129,12 +129,8 @@ func library_tool_items() -> Array:
 		result.append(menu.entry(menu.catalog.action("library.boxart","Stop downloading box art" if busy else "Download missing box art",(func(): fetch.cancel(); menu.refresh()) if busy else download_box_art,
 			"For games your own scrapes don't cover, fetches front covers from the free libretro-thumbnails collection, matched by game name. They're kept in CRT XR's own folder; your ROM folders aren't touched. Needs an internet connection.",false,
 			("%d of %d" % [fetch.done, fetch.total]) if busy else ""),art,"search"))
-		result.append(menu.entry(menu.catalog.action("library.boxart_retry","Try again for games not found",func(): download_box_art(false, true),
-			"Asks the collection again for games it had no cover for last time, for example after renaming files or a collection update.",busy,""),art,"refresh"))
-		result.append(menu.entry(menu.catalog.action("library.boxart_show","Show box art",func(): host.library_box_art = not host.library_box_art; host.settings_dirty = true; menu.refresh(),
-			"Box art beside games in your lists, on Continue and when you start a game: from your own scrapes and anything downloaded.",false,"On" if host.library_box_art else "Off"),art,"tv"))
-		result.append(menu.entry(menu.catalog.action("library.boxart_auto","Download for new games automatically",func(): host.library_box_art_auto = not host.library_box_art_auto; host.settings_dirty = true; auto_box_art_done = false; menu.refresh(),
-			"When the Game Library opens, fetches covers for games that still have none, once a session. Needs an internet connection.",false,"On" if host.library_box_art_auto else "Off"),art,"refresh"))
+		result.append(menu.entry(menu.catalog.action("library.boxart_settings","Box art and list settings",func(): menu.open_settings_section(10, "Library"),
+			"Show or hide box art, download it automatically, choose list columns and which games are listed.",false,"›"),art,"gear"))
 	var find := "FIND A FOLDER"
 	for candidate in menu.library.Locations.library_candidates(menu.library.home_folder(),menu.library.Locations.sd_cards()):
 		var path: String=candidate
@@ -423,7 +419,18 @@ func game_item(path: String, label: String, shared: Dictionary = {}, versions: A
 		var kind := str(named.get("genre",named.get("publisher","")))
 		if not kind.is_empty(): parts.append(kind)
 	item["detail"]=" · ".join(parts)
-	with_box_art(item,path)
+	# Covers get a fixed, generous slot sized to the list's columns; a game
+	# without art keeps the slot, showing its console, so titles line up.
+	if host.library_box_art:
+		var cover_size: Vector2 = {1: Vector2(112, 84), 2: Vector2(92, 84), 3: Vector2(64, 72)}.get(clampi(host.game_list_columns, 1, 3), Vector2(92, 84))
+		var system_id: String = menu.library.Registry.identify(path)
+		if system_id.is_empty(): system_id = RomIndex.Folders.system(folder)
+		if system_id.is_empty(): system_id = library_system
+		item["thumbnail_path"]=path; item["thumbnail_size"]=cover_size; item["thumbnail_well"]=true
+		item["thumbnail_console"]=str(menu.library.Registry.SYSTEMS.get(system_id, {}).get("icon", system_id))
+		item["thumbnail"]=null
+		host.box_art.set_root(host.default_rom_dir)
+		if not host.box_art.find(path).is_empty(): item["thumbnail"]=host.box_art.texture(path)
 	return item
 
 ## A game's total play time, "3h 20m played", or empty under a minute.

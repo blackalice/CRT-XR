@@ -92,7 +92,8 @@ func video_items() -> Array:
 			var row: Dictionary=video_row(path,path.get_file().get_basename(),"CONTINUE WATCHING",video_place(path))
 			row["id"]="video.continue:"+path
 			row["action"]=func(): play_video(path,seconds)
-			row["help"]="Carry on from "+VideoLibrary.clock(seconds)+"."
+			row["help"]="Carry on from "+VideoLibrary.clock(seconds)+". {Y} removes it from Continue watching."
+			row["continue_path"]=path
 			result.append(row)
 		if menu.input_kind!="keyboard": result.append(menu.entry(menu.catalog.action("videos.search","Search videos…",open_video_search,"Find a video anywhere in your video folder. With a keyboard, Ctrl+F searches as you type.",false,""),"FIND","search","","",true))
 	if video_view_dir!=host.video_dir: result.append_array(menu.up_entry("videos.up",video_view_dir,open_videos))
@@ -145,6 +146,13 @@ func select_video(path: String) -> void:
 	if host.video_library.position(path)>0.0:
 		menu.remember(); video_launch_path=path; menu.clear_input(); menu.mode="video_launch"; menu.render()
 	else: play_video(path,0.0)
+
+## Y on a Continue watching row: forget its place, so it leaves the list.
+func remove_continue(path: String) -> void:
+	if host.video_library.forget_position(path) != OK:
+		menu.show_error("Couldn't update Continue watching. Check CRT XR can write to its settings folder."); return
+	menu.notify("Removed from Continue watching · it starts from the beginning next time")
+	menu.render()
 
 func watch_channel() -> void:
 	host.channel.host = host
