@@ -184,7 +184,12 @@ func box_art_fetcher():
 		fetch.finished.connect(func(found: int, missing: int):
 			host.box_art.refresh()
 			missing_cache = [-1, 0]
-			host.show_notice("Box art: %d downloaded%s" % [found, (" · %d not in the collection" % missing) if missing > 0 else ""])
+			var tail := ""
+			match str(fetch.stopped):
+				"limit": tail = " · more next time (the download is spread over a few sessions)"
+				"busy": tail = " · the server is busy, so the rest will wait: try again later"
+				_: tail = (" · %d not in the collection" % missing) if missing > 0 else ""
+			host.show_notice("Box art: %d downloaded%s" % [found, tail])
 			if menu.visible: menu.refresh())
 	return host.get_node("BoxArtFetch")
 

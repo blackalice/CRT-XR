@@ -47,6 +47,14 @@ func run():
 	fetch.misses_loaded = true
 	fetch.misses.set_value("missing", other.md5_text(), true)
 	check(fetch.known_missing(other) and fetch.start([["snes", other, ["Not A Real Game (USA)"], "snes"]]) == 0, "A game the collection didn't have is not asked for again")
+	# Politeness: a named User-Agent, Retry-After obeyed, a per-session ceiling.
+	check(Fetch.user_agent().begins_with("CRT-XR/") and Fetch.user_agent().contains("github.com/blackalice/CRT-XR"), "Requests name CRT XR")
+	check(is_equal_approx(Fetch.retry_after(PackedStringArray(["Content-Type: text/html", "Retry-After: 12"])), 12.0), "Retry-After in seconds is obeyed")
+	check(is_equal_approx(Fetch.retry_after(PackedStringArray(["Retry-After: 99999"])), Fetch.MAX_RETRY_AFTER) and is_equal_approx(Fetch.retry_after(PackedStringArray()), Fetch.DEFAULT_RETRY_AFTER), "Long or missing Retry-After uses the cap or a default")
+	Fetch.session_requests = Fetch.SESSION_LIMIT
+	var later := roms.path_join("snes/Later Game (USA).sfc")
+	check(fetch.start([["snes", later, ["Later Game (USA)"], "snes"]], true) == 0 and fetch.stopped == "limit", "Past the session's share, the rest waits for next time")
+	Fetch.session_requests = 0
 	fetch.free(); art.free()
 	print("BOX ART FETCH: %d failures" % failures)
 	quit(1 if failures else 0)

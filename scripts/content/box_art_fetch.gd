@@ -7,6 +7,12 @@ extends Node
 ## is kept. Art is saved in CRT XR's own folder (user://boxart/<console
 ## folder>/<ROM name>.png), never beside your ROMs. Games the collection
 ## doesn't have are remembered, so they aren't asked for again every time.
+##
+## Politeness towards libretro's server: one request at a time with a short
+## gap between them, a User-Agent naming CRT XR, the server's Retry-After obeyed
+## on 429 or 503 (and the run stopped if it keeps asking), no other spellings
+## tried after a server error, and at most SESSION_LIMIT requests per session,
+## so a large first fetch is spread over a few sessions.
 
 signal progress(done: int, total: int, found: int)
 signal finished(found: int, missing: int)
@@ -50,6 +56,19 @@ var running := false
 var request: HTTPRequest
 var misses := ConfigFile.new()
 var misses_loaded := false
+const REQUEST_GAP := 0.25
+const DEFAULT_RETRY_AFTER := 30.0
+const MAX_RETRY_AFTER := 120.0
+const MAX_THROTTLES := 3
+const SESSION_LIMIT := 600
+## Requests made this session, across runs.
+static var session_requests := 0
+var throttles := 0
+## Why the last run ended early: "", "limit" (the session's share is used) or
+## "busy" (the server kept asking us to slow down).
+var stopped := ""
+## Seconds to wait before the next request (Retry-After), set on 429 / 503.
+var wait_before := 0.0
 
 ## The libretro playlist a ROM belongs to: Game Boy Color and Neo Geo Pocket
 ## (mono) have their own, though CRT XR plays them on one console entry.
@@ -135,8 +154,12 @@ func start(games: Array, retry := false) -> int:
 		var key := str(game[1]).md5_text()
 		if not retry and misses.has_section_key("missing", key): continue
 		queue.append([urls, target, key])
-	total = queue.size(); done = 0; found = 0
+	total = queue.size(); done = 0; found = 0; throttles = 0; stopped = ""; wait_before = 0.0
 	if total == 0:
+		finished.emit(0, 0)
+		return 0
+	if session_requests >= SESSION_LIMIT:
+		stopped = "limit"; queue.clear()
 		finished.emit(0, 0)
 		return 0
 	running = true
@@ -149,24 +172,45 @@ func start(games: Array, retry := false) -> int:
 	return total
 
 func cancel() -> void:
-	queue.clear()
 	if request != null: request.cancel_request()
-	if running:
-		running = false
-		misses.save(MISSES)
-		finished.emit(found, done - found)
+	if running: _stop()
+	queue.clear()
+
+static func user_agent() -> String:
+	return "CRT-XR/%s (+https://github.com/blackalice/CRT-XR)" % str(ProjectSettings.get_setting("application/config/version", "dev"))
 
 func _next() -> void:
-	if queue.is_empty():
-		running = false
-		misses.save(MISSES)
-		finished.emit(found, done - found)
+	if not running: return
+	if queue.is_empty() or session_requests >= SESSION_LIMIT:
+		if not queue.is_empty(): stopped = "limit"
+		_stop()
 		return
+	# A short gap between requests, or as long as the server asked.
+	var gap := maxf(REQUEST_GAP, wait_before)
+	wait_before = 0.0
+	if is_inside_tree() and gap > 0.0 and done + throttles > 0:
+		await get_tree().create_timer(gap).timeout
+		if not running or queue.is_empty(): return
 	var job: Array = queue.front()
 	DirAccess.make_dir_recursive_absolute(str(job[1]).get_base_dir())
 	request.download_file = str(job[1]) + ".part"
-	if request.request(str(job[0][0])) != OK:
+	session_requests += 1
+	if request.request(str(job[0][0]), PackedStringArray(["User-Agent: " + user_agent()])) != OK:
 		_finish_job(false)
+
+func _stop() -> void:
+	running = false
+	queue.clear()
+	misses.save(MISSES)
+	finished.emit(found, done - found)
+
+## Seconds from a Retry-After header (seconds form), else the default; capped.
+static func retry_after(headers: PackedStringArray) -> float:
+	for header in headers:
+		if header.to_lower().begins_with("retry-after:"):
+			var value := header.substr(12).strip_edges()
+			if value.is_valid_float(): return clampf(float(value), 1.0, MAX_RETRY_AFTER)
+	return DEFAULT_RETRY_AFTER
 
 ## A real picture? Read from the bytes: the .part name says nothing of its format.
 static func valid_image(path: String) -> bool:
@@ -175,23 +219,36 @@ static func valid_image(path: String) -> bool:
 	var image := Image.new()
 	return image.load_png_from_buffer(bytes) == OK or image.load_jpg_from_buffer(bytes) == OK or image.load_webp_from_buffer(bytes) == OK
 
-func _on_completed(result: int, code: int, _headers: PackedStringArray, _body: PackedByteArray) -> void:
-	if queue.is_empty(): return
+func _on_completed(result: int, code: int, headers: PackedStringArray, _body: PackedByteArray) -> void:
+	if queue.is_empty() or not running: return
 	var job: Array = queue.front()
 	var part := str(job[1]) + ".part"
+	# Asked to slow down: wait as told and try the same address again; stop if it keeps asking.
+	if result == HTTPRequest.RESULT_SUCCESS and code in [429, 503]:
+		if FileAccess.file_exists(part): DirAccess.remove_absolute(part)
+		throttles += 1
+		if throttles >= MAX_THROTTLES:
+			stopped = "busy"
+			_stop()
+			return
+		wait_before = retry_after(headers)
+		_next.call_deferred()
+		return
 	if result == HTTPRequest.RESULT_SUCCESS and code == 200 and valid_image(part):
 		if FileAccess.file_exists(str(job[1])): DirAccess.remove_absolute(str(job[1]))
 		DirAccess.rename_absolute(part, str(job[1]))
 		_finish_job(true)
 		return
 	if FileAccess.file_exists(part): DirAccess.remove_absolute(part)
-	# Not under this name: try the next spelling, if any.
+	# Not under this name: try the next spelling, if any. Only a plain "not
+	# found" moves on; a server or network error ends this game's turn.
+	var not_found := result == HTTPRequest.RESULT_SUCCESS and code == 404
 	var urls: Array = job[0]
 	urls.pop_front()
-	if not urls.is_empty() and result == HTTPRequest.RESULT_SUCCESS:
+	if not urls.is_empty() and not_found:
 		_next.call_deferred()
 		return
-	_finish_job(false, result == HTTPRequest.RESULT_SUCCESS and code == 404)
+	_finish_job(false, not_found)
 
 func _finish_job(ok: bool, missing := false) -> void:
 	var job: Array = queue.pop_front() if not queue.is_empty() else []
