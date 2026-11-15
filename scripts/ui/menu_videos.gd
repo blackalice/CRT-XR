@@ -84,6 +84,8 @@ func video_items() -> Array:
 		if found.is_empty(): result.append(menu.entry(menu.catalog.unavailable(menu.catalog.action("videos.none","No videos match",func(): pass,"",true),"Try fewer letters, or clear the search."),section))
 		return result
 	if video_view_dir==host.video_dir:
+		result.append(menu.entry(menu.catalog.action("videos.channel","Saturday Morning TV",watch_channel,
+			"Your videos as a channel that's always on: today's running order started at 6 am, so you tune in mid-programme. Up and Down change programme; the next starts by itself.",false,"›"),"ON AIR NOW","video","primary","Tune in to your own channel"))
 		for resume in host.video_library.continue_watching(5):
 			var path: String=resume.path
 			var seconds: float=resume.position
@@ -143,6 +145,12 @@ func select_video(path: String) -> void:
 	if host.video_library.position(path)>0.0:
 		menu.remember(); video_launch_path=path; menu.clear_input(); menu.mode="video_launch"; menu.render()
 	else: play_video(path,0.0)
+
+func watch_channel() -> void:
+	host.channel.host = host
+	if not host.channel.tune_in(): menu.show_error("Saturday Morning TV needs MP4, M4V or MKV videos in your video folder."); return
+	host.video_was_paused_before_menu=false
+	host.close_settings()
 
 func play_video(path: String, from_seconds: float) -> void:
 	if not host.play_video(path,from_seconds): menu.show_error(host.startup_message); return

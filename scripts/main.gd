@@ -57,6 +57,8 @@ var picture_preset_signature := ""
 var room_preset_id := ""
 var room_preset_signature := ""
 var rooms = preload("res://scripts/ui/room_presets.gd").new()
+## Saturday Morning TV: the video folder as an always-on channel.
+var channel = preload("res://scripts/video/tv_channel.gd").new()
 ## Opt-in update check and the once-per-version What's new note.
 var updates = preload("res://scripts/content/update_check.gd").new()
 ## Box art from the player's own scrapes, for game rows and Continue.
@@ -600,6 +602,7 @@ func start_application() -> void:
 	video.finished.connect(func():
 		# Watched to the end: the next play starts from the beginning.
 		video_library.remember(video.path, float(video.info.duration), float(video.info.duration), video.style)
+		if channel.active: channel.programme_ended.call_deferred(); return
 		flash_video_bar("Finished · A plays it again · B opens the menu"))
 	emulator.status_changed.connect(func(_message): refresh_startup_status())
 	emulator.speed_mode_changed.connect(func(mode: String):
@@ -1448,6 +1451,8 @@ func stop_for_disc(path: String, background := false) -> bool:
 	return true
 
 func play_video(path: String, from_seconds := 0.0) -> bool:
+	channel.host = self
+	channel.leave()
 	if loading_game or emulator.transition_busy:
 		startup_message = "A game operation is still running. Please wait for it to finish."
 		return false
@@ -1528,6 +1533,9 @@ func video_input(event: InputEvent) -> bool:
 			if video.ended: video.seek_to(0.0)
 			else: video.set_paused(not video.paused)
 			flash_video_bar()
+		"back_long", "forward_long" when channel.active:
+			# On the channel, up and down change programme.
+			channel.next_programme(1 if action == "forward_long" else -1)
 		"back", "forward", "back_long", "forward_long":
 			video.seek_by({"back":-10.0,"forward":10.0,"back_long":-60.0,"forward_long":60.0}[action])
 			flash_video_bar()
