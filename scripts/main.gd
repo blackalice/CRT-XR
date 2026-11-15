@@ -572,7 +572,8 @@ func start_application() -> void:
 		play_clock = 0.0
 		if active:
 			last_game_path = emulator.rom_path
-			profile_boot_action("history", func():
+			# Demo games never join Recent, so the shelf leaves no trace in your library.
+			if not preload("res://scripts/content/demo_shelf.gd").is_demo(last_game_path): profile_boot_action("history", func():
 				if not play_history.played(last_game_path): show_notice("Could not save recently played games"))
 			profile_boot_action("library", func():
 				if save_library() != OK: show_notice("Could not save the recent game location")))

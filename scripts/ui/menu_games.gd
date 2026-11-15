@@ -49,6 +49,15 @@ func library_items() -> Array:
 	var h=host
 	if menu.rom_index.total()==0:
 		var setup: Array = [menu.card(menu.catalog.action("library.setup","Set up your ROM library" if h.default_rom_dir.is_empty() else "Choose a ROM folder",open_library_tools,"Choose your ROM folder or SD card. Supported games are found automatically."),"CHOOSE A FOLDER TO GET STARTED","locations",menu.MenuSkin.AMBER,"LIBRARY SETUP")]
+		# Free demo games, until your own library has some: separate from your ROMs.
+		var DemoShelf = preload("res://scripts/content/demo_shelf.gd")
+		if not menu.rom_index.scanning:
+			for game in DemoShelf.games():
+				var path: String = game.path
+				var spec: Dictionary = menu.library.Registry.SYSTEMS[game.system]
+				setup.append(menu.card(menu.catalog.action("library.demo:"+path,str(game.title),func(): select_file(path),
+					"A free game included with CRT XR to try the TV with. " + DemoShelf.credit(game) + ". It goes away once your own games are set up.",false,str(spec.get("short",spec.name))),
+					"TRY A DEMO",spec.get("icon",game.system),Color("9fd3c7"),"TRY THE TV"))
 		return setup
 	var result: Array = []
 	# Quick-access shelves appear once they hold something.
