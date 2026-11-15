@@ -1007,6 +1007,11 @@ static func auto_path_for(path: String) -> String:
 	var hash := Registry.content_hash(path)
 	return "" if hash.is_empty() else folder.path_join(hash+".auto.rst")
 
+## A save-state slot's file for a game that need not be loaded.
+static func state_path_for(path: String, slot: int) -> String:
+	var auto := auto_path_for(path)
+	return "" if auto.is_empty() else auto.trim_suffix(".auto.rst") + ".slot%d.rst" % slot
+
 static func state_details(path: String) -> Dictionary:
 	return StateStore.read_state(path)
 

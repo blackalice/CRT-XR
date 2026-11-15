@@ -1464,7 +1464,7 @@ func _render(incremental: bool) -> void:
 		heading.text = CATEGORIES[category]
 		tab_position.text = "%d / %d" % [subsection + 1, pages.size()]
 		tab_position.visible = pages.size() > 1
-	else: heading.text = {"help":help_title,"launch":("Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing") if games.has_resume(games.launch_path) else "Choose a version","recent":"Recently played","favourites":"Favourites","most_played":"Most played","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state","changed":"Changed settings"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":("Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing") if games.has_saves(games.launch_path) else "Choose a version","recent":"Recently played","favourites":"Favourites","most_played":"Most played","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state","changed":"Changed settings"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm":
 		state_previews.request(confirmation.get("preview", ""))
@@ -1521,36 +1521,7 @@ func _render(incremental: bool) -> void:
 	# With the sidebar focused the page keeps its place but shows no selection.
 	if mode=="settings" and sidebar_focus:
 		for row in rows: row.set_selected(false)
-	if mode=="launch":
-		var title := Label.new()
-		title.text = GameTitle.of(games.launch_path)
-		title.add_theme_font_size_override("font_size",28)
-		MenuSkin.weigh(title,MenuSkin.BOLD)
-		title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		column.add_child(title)
-		var console := Label.new()
-		var system: String = library.Registry.identify(games.launch_path)
-		console.text = library.Registry.SYSTEMS.get(system, {}).get("name", "Game")
-		var played: String = games.play_label(games.launch_path)
-		if not played.is_empty(): console.text += " · " + played
-		console.add_theme_font_size_override("font_size",16)
-		console.add_theme_color_override("font_color",MenuSkin.MUTED)
-		column.add_child(console)
-		var gap := Control.new(); gap.custom_minimum_size.y=8; column.add_child(gap)
-		var hero := HBoxContainer.new(); hero.add_theme_constant_override("separation",24)
-		column.add_child(hero)
-		# The game's cover, as on its page and in the lists.
-		if host.library_box_art: hero.add_child(games.cover_panel(games.launch_path, Vector2(150, 170)))
-		# A version never played has no resume point to picture.
-		if games.has_resume(games.launch_path):
-			var preview_panel := ResumePreview.new(); hero.add_child(preview_panel)
-			var auto: String=host.emulator.auto_path_for(games.launch_path)
-			state_previews.request(auto)
-			preview_panel.describe(auto,"Saved " + saved_when(host.emulator.state_stamp(auto)))
-		var actions := VBoxContainer.new(); actions.size_flags_horizontal=Control.SIZE_EXPAND_FILL; actions.alignment=BoxContainer.ALIGNMENT_CENTER
-		actions.add_theme_constant_override("separation",12); hero.add_child(actions)
-		for row in rows: column.remove_child(row); actions.add_child(row)
-		select(selected_id,false)
+	if mode=="launch": decorate_launch()
 	if mode=="help":
 		column.add_child(HelpArticle.build(help_copy,host.menu_large_text))
 	if mode=="welcome": welcome.decorate()
@@ -1790,6 +1761,68 @@ func preview_available() -> bool:
 func count_caption(count: int, noun: String) -> String:
 	return "%d %s%s" % [count,noun,"" if count==1 else "s"]
 
+## Welcome back: the picked save large beside the buttons, the game above, and
+## the strip of saves below (L1 / R1 picks; A on one continues from it).
+func decorate_launch() -> void:
+	var path: String = games.launch_path
+	var header := HBoxContainer.new(); header.add_theme_constant_override("separation",16)
+	if host.library_box_art: header.add_child(games.cover_panel(path, Vector2(88, 64)))
+	var words := VBoxContainer.new(); words.add_theme_constant_override("separation",0); words.size_flags_vertical=Control.SIZE_SHRINK_CENTER; words.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	var title := Label.new(); title.text = GameTitle.of(path)
+	title.add_theme_font_size_override("font_size",30 + (3 if host.menu_large_text else 0)); MenuSkin.weigh(title,MenuSkin.BOLD)
+	title.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; title.max_lines_visible = 2
+	words.add_child(title)
+	var meta := Label.new()
+	var system: String = library.Registry.identify(path)
+	var parts: Array = [str(library.Registry.SYSTEMS.get(system, {}).get("name", "Game"))]
+	var played: String = games.play_label(path)
+	if not played.is_empty(): parts.append(played)
+	var last: int = host.play_history.last_played(path)
+	if last > 0: parts.append("last played " + ago(last))
+	meta.text = " · ".join(parts)
+	meta.add_theme_font_size_override("font_size",17); meta.add_theme_color_override("font_color",MenuSkin.MUTED)
+	words.add_child(meta); header.add_child(words)
+	var hero := HBoxContainer.new(); hero.add_theme_constant_override("separation",22)
+	var saves: Array = games.launch_saves(path)
+	if not saves.is_empty():
+		var pick: Dictionary = games.picked_save(path)
+		var frame := Panel.new(); frame.custom_minimum_size = Vector2(400, 300)
+		frame.add_theme_stylebox_override("panel", MenuSkin.box(Color("0b1640"), MenuSkin.AMBER, 3, 0))
+		var picture := TextureRect.new(); picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE; picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		picture.position = Vector2(4, 4); picture.size = frame.custom_minimum_size - Vector2(8, 8); picture.texture = play.state_picture(str(pick.path))
+		frame.add_child(picture)
+		if picture.texture == null:
+			var none := Label.new(); none.text = "No picture with this save"; none.add_theme_color_override("font_color",MenuSkin.MUTED)
+			none.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER; none.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			none.position = Vector2.ZERO; none.size = frame.custom_minimum_size; frame.add_child(none)
+		var tag := Label.new(); tag.text = "%s · %s" % [games.save_name(int(pick.slot)), saved_when(int(pick.stamp))]
+		tag.add_theme_font_size_override("font_size",18); tag.add_theme_color_override("font_color",Color("ffd27a"))
+		tag.add_theme_stylebox_override("normal", MenuSkin.box(Color(0.02,0.04,0.14,0.85), Color.TRANSPARENT, 0, 6))
+		tag.position = Vector2(10, frame.custom_minimum_size.y - 40); frame.add_child(tag)
+		hero.add_child(frame)
+	elif host.library_box_art:
+		hero.add_child(games.cover_panel(path, Vector2(200, 228)))
+	var actions := VBoxContainer.new(); actions.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	actions.add_theme_constant_override("separation",10); hero.add_child(actions)
+	var strip: Control = null
+	for row in rows.duplicate():
+		if str(row.item.id).begins_with("launch.save."):
+			strip = row.get_parent(); continue
+		row.get_parent().remove_child(row); actions.add_child(row)
+	if not saves.is_empty():
+		var note := Label.new(); note.text = "Continue starts from the save picked below. Fresh boot keeps in-game saves."
+		note.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; note.add_theme_font_size_override("font_size",16); note.add_theme_color_override("font_color",MenuSkin.MUTED)
+		actions.add_child(note)
+	var top: Array[Control] = [header, hero]
+	if strip != null:
+		var heading_label := Label.new(); heading_label.text = "YOUR SAVES · L1 / R1 TO PICK" if input_kind=="controller" else "YOUR SAVES · Q / E TO PICK"
+		heading_label.add_theme_font_size_override("font_size",15); MenuSkin.weigh(heading_label,MenuSkin.BOLD); heading_label.add_theme_color_override("font_color",MenuSkin.MUTED)
+		strip.get_parent().remove_child(strip)
+		top.append_array([heading_label, strip])
+	for i in range(top.size()):
+		column.add_child(top[i]); column.move_child(top[i], i)
+	select(selected_id,false)
+
 ## The pause menu's heading: the game or video by name, or a welcome.
 func playing_title() -> String:
 	if host.video.loaded: return host.video.path.get_file().get_basename()
@@ -1905,7 +1938,9 @@ func refresh_hints(row) -> void:
 			if flat_shortcut_available(): parts.append("Y " + ("Room view" if host.flat_screen else "Flat view"))
 			parts.append(("B " if pad else "Backspace ")+back_caption)
 	elif mode=="launch":
-		parts.append_array(["A Select" if pad else "Enter Select", ("B " if pad else "Backspace ") + games.launch_return_label()])
+		parts.append_array(["A Select" if pad else "Enter Select"])
+		if games.launch_saves(games.launch_path).size() > 1: parts.append("L1/R1 Pick save" if pad else "Q/E Pick save")
+		parts.append(("B " if pad else "Backspace ") + games.launch_return_label())
 	elif mode=="confirm": parts.append_array(["A Choose" if pad else "Enter Choose","B Cancel" if pad else "Backspace Cancel"])
 	elif mode=="welcome": parts=welcome.hints(row,pad)
 	elif mode in ["folder_path","rename","radio_url"]: parts=["D-pad Keys","A Type",go_back] if pad else ["Type or click keys","Enter Submit",go_back]
@@ -2211,11 +2246,13 @@ func handle(event: InputEvent) -> bool:
 					default_armed=false; games.open_folder(library.current_dir.get_base_dir())
 					if library.current_dir != before: play_navigation_click()
 				elif mode=="games": games.change_game_page(-1)
+				elif mode=="launch": games.pick_save(-1)
 				else: switch_category(-1)
 			JOY_BUTTON_RIGHT_SHOULDER:
 				if mode=="browser": default_armed=not held.get(JOY_BUTTON_LEFT_SHOULDER,false)
 				elif mode=="games": games.change_game_page(1)
 				elif mode=="library": games.refresh_library(); play_navigation_click()
+				elif mode=="launch": games.pick_save(1)
 				else: switch_category(1)
 		return true
 	if event is InputEventJoypadMotion:
@@ -2268,9 +2305,11 @@ func handle(event: InputEvent) -> bool:
 				KEY_TAB:
 					switch_category(-1 if event.shift_pressed else 1)
 				KEY_Q:
-					switch_category(-1)
+					if mode=="launch": games.pick_save(-1)
+					else: switch_category(-1)
 				KEY_E:
-					switch_category(1)
+					if mode=="launch": games.pick_save(1)
+					else: switch_category(1)
 				KEY_S:
 					change_scope(-1 if event.shift_pressed else 1)
 				KEY_F:

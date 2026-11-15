@@ -299,13 +299,14 @@ func set_default(path: String) -> bool:
 func select_file(path: String, versions: Array = []) -> void:
 	if not FileAccess.file_exists(path): menu.show_error("Game unavailable. Reconnect its SD card and try again."); return
 	launch_versions = versions if versions.size()>1 else []
-	var automatic: String = host.emulator.auto_path_for(path)
-	if FileAccess.file_exists(automatic) or not launch_versions.is_empty():
-		menu.remember(); launch_origin=menu.snapshot(); launch_path=path
-		menu.clear_input(); menu.mode="launch"; menu.memory["launch"]={"id":"launch.continue" if FileAccess.file_exists(automatic) else "launch.play","scroll":0}; menu.render()
+	var saved := has_saves(path)
+	if saved or not launch_versions.is_empty():
+		menu.remember(); launch_origin=menu.snapshot(); launch_path=path; launch_pick=-1
+		launch_pick=int(picked_save(path).get("slot", -1))
+		menu.clear_input(); menu.mode="launch"; menu.memory["launch"]={"id":"launch.continue" if saved else "launch.play","scroll":0}; menu.render()
 	else: launch_game(path,false)
 
-func launch_game(path: String, continuing: bool) -> void:
+func launch_game(path: String, continuing: bool, slot := -1) -> void:
 	launch_generation += 1
 	var generation := launch_generation
 	# A zipped disc is hundreds of megabytes: unpack it in the background while
@@ -341,7 +342,7 @@ func launch_game(path: String, continuing: bool) -> void:
 	if not opened: menu.show_error(host.startup_message); return
 	if continuing:
 		host.loading_game = true
-		var resumed: bool = await host.emulator.load_auto_async()
+		var resumed: bool = await (host.emulator.load_state_async(slot) if slot >= 0 else host.emulator.load_auto_async())
 		host.loading_game = false
 		if generation != launch_generation: return
 		if not resumed:
@@ -722,13 +723,15 @@ func launch_return_label() -> String:
 func launch_items() -> Array:
 	var path := launch_path
 	var result: Array = []
-	if has_resume(path):
-		var continuing: Dictionary = menu.catalog.action("launch.continue","Continue",func(): launch_game(path,true),"",false,"")
+	var saves := launch_saves(path)
+	if not saves.is_empty():
+		var pick := picked_save(path)
+		var slot := int(pick.get("slot", -1))
+		var continuing: Dictionary = menu.catalog.action("launch.continue","Continue" if slot < 0 else "Continue from %s" % save_name(slot),func(): launch_game(path,true,slot),"",false,"")
 		continuing["emphasis"] = "primary"
 		continuing["row_icon"] = "play"
-		continuing["min_height"] = 84
-		var fresh: Dictionary = menu.catalog.action("launch.fresh","Start from a fresh boot",func(): launch_game(path,false),"In-game saves are kept.",false,"")
-		fresh["detail_getter"] = func(): return "In-game saves are kept."
+		continuing["min_height"] = 72
+		var fresh: Dictionary = menu.catalog.action("launch.fresh","Fresh boot",func(): launch_game(path,false),"From the console's start-up. In-game saves are kept.",false,"")
 		result.append_array([continuing, fresh])
 	else:
 		var play: Dictionary = menu.catalog.action("launch.play","Play",func(): launch_game(path,false),"",false,"")
@@ -741,6 +744,18 @@ func launch_items() -> Array:
 			"setter":func(value): choose_version(int(value)),
 			"help":"Each version keeps its own saves and resume point."})
 	result.append(menu.catalog.action("launch.cancel",launch_return_label(),menu.back,"",false,""))
+	# The save strip: the resume point and the four slots, A continues from one.
+	if not saves.is_empty():
+		var picked := int(picked_save(path).get("slot", -1))
+		for slot in [-1, 0, 1, 2, 3]:
+			var file: String = host.emulator.auto_path_for(path) if slot < 0 else host.emulator.state_path_for(path, slot)
+			var exists := not file.is_empty() and FileAccess.file_exists(file)
+			var chosen: int = slot
+			var tile: Dictionary = menu.tile(menu.catalog.unavailable(menu.catalog.action("launch.save.%d" % (slot + 1), save_name(slot), func(): launch_pick = chosen; launch_game(path, true, chosen),
+				("Continue from this save.") if exists else "", not exists, ""), "Nothing saved here."), "", "primary" if slot == picked and exists else "", "saves", 5)
+			tile["detail_getter"] = (func(): return menu.saved_when(host.emulator.state_stamp(file)).replace("today at ", "").replace("yesterday at ", "Yest ").replace(" at ", " ")) if exists else (func(): return "Empty")
+			# The picked save is shown large above; the strip stays text, so five fit.
+			result.append(tile)
 	return result
 
 ## The launch page switches to another version of the game.
@@ -752,6 +767,44 @@ func choose_version(index: int) -> void:
 ## True when the game has an automatic resume point to continue from.
 func has_resume(path: String) -> bool:
 	return FileAccess.file_exists(host.emulator.auto_path_for(path))
+
+# ── Welcome back: the saves to continue from (resume point and four slots) ───
+
+## Which save Continue starts from: -1 the resume point, 0–3 a slot.
+var launch_pick := -1
+
+## The game's saves, resume point first: [{slot, path, stamp}] for those that exist.
+func launch_saves(path: String) -> Array:
+	var saves: Array = []
+	var auto: String = host.emulator.auto_path_for(path)
+	if FileAccess.file_exists(auto): saves.append({"slot": -1, "path": auto, "stamp": host.emulator.state_stamp(auto)})
+	for slot in range(menu.play.STATE_SLOTS):
+		var file: String = host.emulator.state_path_for(path, slot)
+		if not file.is_empty() and FileAccess.file_exists(file): saves.append({"slot": slot, "path": file, "stamp": host.emulator.state_stamp(file)})
+	return saves
+
+func has_saves(path: String) -> bool:
+	return not launch_saves(path).is_empty()
+
+func save_name(slot: int) -> String:
+	return "Resume" if slot < 0 else "Slot %d" % (slot + 1)
+
+func picked_save(path: String) -> Dictionary:
+	for save in launch_saves(path):
+		if int(save.slot) == launch_pick: return save
+	var saves := launch_saves(path)
+	return saves[0] if not saves.is_empty() else {}
+
+## L1 / R1 on Welcome back: the previous or next save.
+func pick_save(step: int) -> void:
+	var saves := launch_saves(launch_path)
+	if saves.size() < 2: return
+	var at := 0
+	for i in range(saves.size()):
+		if int(saves[i].slot) == int(picked_save(launch_path).get("slot", -1)): at = i
+	launch_pick = int(saves[posmod(at + step, saves.size())].slot)
+	menu.play_menu_sound()
+	menu.render()
 
 ## How each version is told apart: its region and revision, then any tags,
 ## or its file name when those say nothing new.
