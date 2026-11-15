@@ -98,6 +98,7 @@ var scan_icon: Control
 ## Each category's icon in the sidebar, by CATEGORIES order.
 const CATEGORY_ICONS := ["fit","tv","audio","lamp","gamepad","save","help","sliders","play","sliders","gear"]
 var pictures := preload("res://scripts/ui/menu_pictures.gd").new()
+var looks := preload("res://scripts/ui/menu_looks.gd").new()
 var videos := preload("res://scripts/ui/menu_videos.gd").new()
 var music := preload("res://scripts/ui/menu_music.gd").new()
 var games := preload("res://scripts/ui/menu_games.gd").new()
@@ -119,7 +120,7 @@ var location_bar: PanelContainer
 ## Category IDs are stable (navigation memory, shortcuts, tests); the sidebar
 ## shows SETTINGS_ORDER. Controls (4), Saved setups (5) and Quick settings (7)
 ## live inside other categories now and stay as hidden aliases.
-const CATEGORIES := ["View & glasses","Picture","Sound","Room","Controls","Saved setups","Setups & help","Quick settings","Videos","Menu & access","Games"]
+const CATEGORIES := ["View & glasses","Picture","Sound","Room","Controls","Saved setups","Scenes & help","Quick settings","Videos","Menu & access","Games"]
 const SETTINGS_ORDER := [0, 1, 3, 2, 10, 8, 9, 6]
 const HIDDEN_CATEGORIES := [4, 5, 7]
 var host
@@ -224,6 +225,8 @@ var confirmation: Dictionary = {}
 var return_state: Dictionary = {}
 var draft_names: Dictionary = {}
 var rename_preset := -1
+## The look being renamed ("" when none).
+var rename_look := ""
 ## Your own room being looked at or renamed (-1 when none).
 var my_room := -1
 var rename_room := -1
@@ -304,7 +307,7 @@ func _ready() -> void:
 	state_previews.ready_for.connect(func(path):
 		if not visible: return
 		if items.any(func(item): return item.get("thumbnail_path", "") == path) or (mode == "launch" and host.emulator.auto_path_for(games.launch_path) == path) or (mode == "confirm" and confirmation.get("preview", "") == path): refresh())
-	for helper in [pictures,videos,music,games,play,keys,controls,welcome]: helper.host=host; helper.menu=self
+	for helper in [pictures,looks,videos,music,games,play,keys,controls,welcome]: helper.host=host; helper.menu=self
 	# The menu stops processing once hidden, so the screensaver is put away here.
 	visibility_changed.connect(func(): if not visible: end_screensaver())
 	theme = MenuSkin.create()
@@ -638,6 +641,8 @@ func state_key() -> String:
 		"games": return "games:%s:%s:%d" % [host.default_rom_dir,games.library_system,games.game_page]
 		"slot": return "slot:%d" % host.selected_profile
 		"my_preset": return "my_preset:%d" % pictures.my_preset
+		"look": return "look:" + looks.look
+		"look_games": return "look_games:%s:%s:%d" % [looks.look, looks.choose_system, looks.choose_page]
 		"my_room": return "my_room:%d" % my_room
 		"states": return "states:%s" % play.states_saving
 		"welcome": return "welcome:"+welcome.step
@@ -866,9 +871,11 @@ func back() -> void:
 		"slot": mode="settings"; render()
 		"folder_path": restore(games.folder_path_origin)
 		"rename":
-			mode="my_room" if rename_room>=0 else ("my_preset" if rename_preset>=0 else "slot")
+			mode="my_room" if rename_room>=0 else ("my_preset" if rename_preset>=0 else ("look" if not rename_look.is_empty() else "slot"))
 			# The targets belong to this rename only; a later rename sets its own.
-			rename_room=-1; rename_preset=-1; render()
+			rename_room=-1; rename_preset=-1; rename_look=""; render()
+		"look": mode="settings"; render()
+		"look_games": looks.chooser_back()
 		"my_preset", "my_room": mode="settings"; render()
 		"states": mode="pause"; render()
 		"music_browser": restore(music.music_origin)
@@ -1003,6 +1010,11 @@ func setup_name() -> String:
 	return str(config.get_value("meta","name",host.PROFILE_NAMES[host.selected_profile]))
 
 func save_draft_name() -> void:
+	if not rename_look.is_empty():
+		host.display_settings.rename_look(rename_look, rename_field.text)
+		host.settings_dirty = true
+		var renamed: String = host.display_settings.look_name(rename_look)
+		rename_look=""; mode="look"; clear_input(); render(); notify("Renamed · "+renamed); return
 	if rename_room>=0:
 		if host.rooms.rename(rename_room,rename_field.text)!=OK: show_error("Room could not be renamed. Check user-folder permissions."); return
 		var title: String=host.rooms.name(rename_room)
@@ -1187,12 +1199,14 @@ func get_items() -> Array:
 				catalog.unavailable(catalog.action("room_mine.delete","Delete",func(): delete_my_room(my_room),"Removes this room. The room you're in does not change.",not saved),"Nothing is saved here yet.")]
 		"slot":
 			var saved := FileAccess.file_exists(h.profile_path()) or FileAccess.file_exists(h.profile_path()+".bak")
-			return [catalog.action("slot.save","Save current setup",save_setup,"Stores current room, view and picture in this slot."),
-				catalog.unavailable(catalog.action("slot.load","Load setup",h.load_profile,"Applies this setup's view, room and picture. Display mode, tracking and input delay stay as they are; games with their own picture keep it.",not saved),"Save a setup to this slot first."),
+			return [catalog.action("slot.save","Save this scene here",save_setup,"Stores the current room, view and picture in this slot."),
+				catalog.unavailable(catalog.action("slot.load","Load scene",h.load_profile,"Applies this scene's view, room and picture. Display mode, tracking and input delay stay as they are; games with their own picture or look keep it.",not saved),"Save a scene to this slot first."),
 				catalog.action("slot.rename","Rename slot",func(): rename_preset=-1; rename_room=-1; mode="rename"; entry_initialized=false; clear_input(); render(); keys.focus_entry(),"Use the on-screen keys or a physical keyboard."),
-				catalog.unavailable(catalog.action("slot.undo","Undo last setup load",h.undo_profile,"Restores the settings from before the last setup load.",h.profile_undo==null),"Available after loading a setup.")]
+				catalog.unavailable(catalog.action("slot.undo","Undo last scene load",h.undo_profile,"Restores the settings from before the last scene load.",h.profile_undo==null),"Available after loading a scene.")]
 		"folder_path": return keys.text_keys()+[catalog.action("folder_path.open","Open folder",games.submit_folder_path,"Opens a local folder or a network share you can access in Windows."),catalog.action("folder_path.cancel","Cancel",back)]
 		"my_preset": return pictures.items()
+		"look": return looks.items()
+		"look_games": return looks.chooser_items()
 		"rename": return keys.text_keys()+[catalog.action("rename.save","Use this name",save_draft_name,"Renames this preset now." if rename_preset>=0 else "The new name is stored when you save the setup."),catalog.action("rename.cancel","Cancel",back,"Leave the name unchanged.")]
 		# Dialog titles lead with their verb ("Overwrite this setup?"), which names the button.
 		"confirm":
@@ -1456,10 +1470,13 @@ func _render(incremental: bool) -> void:
 	rename_field.max_length=2048 if mode in ["radio_url","folder_path"] else (64 if mode=="video_search" else 32)
 	rename_field.placeholder_text="D:/roms or //server/share/roms" if mode=="folder_path" else "Direct MP3 stream URL" if mode=="radio_url" else ("Part of a video's name" if mode=="video_search" else "Name · Use on-screen keys or type")
 	if mode=="rename" and not entry_initialized:
-		rename_field.text = host.rooms.name(rename_room) if rename_room>=0 else (pictures.my_preset_name(rename_preset) if rename_preset>=0 else str(draft_names.get(host.selected_profile,setup_name()))); entry_initialized=true
+		rename_field.text = host.display_settings.look_name(rename_look) if not rename_look.is_empty() else (host.rooms.name(rename_room) if rename_room>=0 else (pictures.my_preset_name(rename_preset) if rename_preset>=0 else str(draft_names.get(host.selected_profile,setup_name())))); entry_initialized=true
 	if mode=="rename" and rename_preset>=0: heading.text="Name your preset"
 	if mode=="rename" and rename_room>=0: heading.text="Name your room"
 	if mode=="my_preset": heading.text=pictures.my_preset_name(pictures.my_preset)
+	if mode=="rename" and not rename_look.is_empty(): heading.text="Name your look"
+	if mode=="look": heading.text=looks.heading()
+	if mode=="look_games": heading.text=looks.chooser_heading()
 	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites","most_played","videos"] and (mode!="videos" or videos.videos_shown()) and not preview
 	search_field.placeholder_text="Search videos…  (Ctrl+F)" if mode=="videos" else "Search games…  (Ctrl+F)"
 	if not search_field.visible and search_field.has_focus(): search_field.release_focus()
@@ -1716,9 +1733,11 @@ func refresh_labels() -> void:
 		subtitle.text = count_caption(count, "setting") + " changed from their defaults"
 	elif mode=="states": subtitle.text = GameTitle.of(host.emulator.rom_path)+" · %d slots" % play.STATE_SLOTS
 	elif mode=="my_room": subtitle.text = "Room %d · %s" % [my_room+1,"✓ In use" if host.rooms.active()=="mine.%d" % my_room else ("Saved" if host.rooms.saved(my_room) else "Empty")]
+	elif mode=="look": subtitle.text = looks.subtitle()
+	elif mode=="look_games": subtitle.text = looks.chooser_subtitle()
 	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [pictures.my_preset+1,"✓ Active" if pictures.applied_preset()=="mine.%d" % pictures.my_preset else ("Saved" if pictures.my_preset_saved(pictures.my_preset) else "Empty")]
 	elif mode=="welcome": subtitle.text = welcome.subtitle()
-	elif mode=="slot": subtitle.text = "Setup slot %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
+	elif mode=="slot": subtitle.text = "Scene %d  ·  %s" % [host.selected_profile+1,str(draft_names.get(host.selected_profile,setup_name()))]
 	else: subtitle.text = ""
 	# Highlighted when Picture changes belong to one game or to videos, not everything.
 	subtitle.add_theme_color_override("font_color",MenuSkin.AMBER if mode=="settings" and category==1 and not host.display_settings.content.is_empty() else MenuSkin.MUTED)

@@ -109,6 +109,24 @@ const FLAT_ROOM_KEPT := ["room.preset","room.custom","room.ambience","room.ambie
 ## The TV model only shapes the flat screen in TV's shape; on the whole display
 ## it changes nothing.
 const FLAT_WHOLE_UNUSED := ["picture.cabinet","picture.tv_policy","picture.video_policy"]
+## Rows that Basic settings leave out: fine-tuning most people never need. They
+## keep working at their current values; Show advanced settings brings them back.
+const ADVANCED := ["tracking.diagnostics","view.tv_scale","view.distance_speed","view.edge_fade","view.scene_msaa",
+	"view.ipd","view.convergence","view.vertical_fov","view.smoothing","view.motion_predict",
+	"picture.beam_softness","picture.vignette","picture.gamma","picture.hue","picture.composite_strength","picture.artifact_strength","picture.phase_noise","picture.signal_motion",
+	"picture.width","picture.height","picture.shift_x","picture.shift_y","picture.safe_border","picture.guides",
+	"room.screen_bloom","room.ambient","room.key_energy","room.fill_energy","room.shadow_strength","room.lamp_height","room.lamp_side","room.fade_begin","room.fade_end",
+	"room.cabinet_ao_strength","room.cabinet_grain_strength","room.floor_brightness",
+	"music.duck_amount","audio.room_amount","audio.speaker_character","audio.directional_strength","music.directional","music.side",
+	"controls.separate_preview","emulation.game_fps","access.haptic_strength"]
+
+func advanced_hidden(id: String) -> bool:
+	return not bool(host.get("settings_advanced")) and id in ADVANCED
+
+## The Accessibility row that switches between Basic and all settings.
+func advanced_row() -> Dictionary:
+	return toggle("access.advanced","Show advanced settings",host,"settings_advanced",false,"Off keeps settings to the everyday ones. On adds fine-tuning: signal detail, lamp and lens calibration, picture position and more. Hidden settings keep working.",func(): menu.refresh(),false)
+
 const FLAT_REASON := "Not used in flat screen mode. Turn off View & glasses → Stereo & comfort → Flat screen to use it."
 
 static func flat_unused(id: String) -> bool:
@@ -133,6 +151,7 @@ func picture_source(field: String) -> String:
 	match host.display_settings.field_source(field):
 		"Custom at this scope": return "Changed here"
 		"Using console default": return "From console"
+		"Using look": return "From look"
 		"Using TV default": return "From defaults"
 	return "Default"
 
@@ -164,6 +183,25 @@ func page(title: String, rows: Array, subtitle := "", scope := {}, hide_flat := 
 				flat_note_reason(hidden))
 			kept.push_front(note)
 		rows = kept
+	if not bool(host.get("settings_advanced")):
+		var shown: Array = []
+		var hidden_count := 0
+		var carried := ""
+		for row in rows:
+			if row is Dictionary and str(row.get("id","")) in ADVANCED:
+				hidden_count += 1
+				if row.has("section"): carried = str(row.section)
+				continue
+			if not carried.is_empty() and row is Dictionary:
+				if not row.has("section"): row["section"] = carried
+				carried = ""
+			shown.append(row)
+		if hidden_count > 0:
+			# The note is also the way back: A shows every setting.
+			shown.append(action("advanced.note." + title.to_lower().replace(" ", "_"), "%d advanced %s hidden" % [hidden_count, "setting" if hidden_count == 1 else "settings"],
+				func(): host.settings_advanced = true; host.settings_dirty = true; menu.refresh(),
+				"Fine-tuning most people never need. Select to show every setting; turn them off again in Menu & access › Accessibility.", false, "Show ›"))
+		rows = shown
 	for row in rows:
 		if row is Dictionary and ROW_ICONS.has(row.get("id","")) and not row.has("row_icon"): row["row_icon"]=ROW_ICONS[row.id]
 		if not row is Dictionary: continue
@@ -195,6 +233,7 @@ func picture_scope_row() -> Dictionary:
 ## Changing scope only changes what is edited; it never removes anything.
 func picture_scope() -> Dictionary:
 	var prefs = host.display_settings
+	if not prefs.editing_look.is_empty(): return {}
 	if prefs.content.is_empty() and prefs.system.is_empty():
 		if host.emulator.loaded or host.video.loaded: return {}
 		return {"choices":["Game defaults","Video defaults"],"index":1 if prefs.kind == "video" else 0,
@@ -434,7 +473,7 @@ func emulation_bios_info() -> String:
 	for folder in registry.bios_sources(): lines.append("- " + folder)
 	return "\n".join(lines)
 
-## Setups & help → System → Updates: opt-in, and only ever a look at GitHub's
+## Scenes & help → System → Updates: opt-in, and only ever a look at GitHub's
 ## public release list. Nothing is downloaded or installed.
 func update_rows() -> Array:
 	var h = host
@@ -641,13 +680,11 @@ func category_pages(category: int) -> Array:
 			presets[0]["section"] = "BUILT-IN LOOKS"
 			if menu.pictures.has_custom_picture():
 				presets.append(unavailable(action("preset.custom","Restore my custom picture",menu.pictures.restore_custom_picture,"Brings back the picture you had tuned yourself before choosing a look.",menu.pictures.applied_preset().is_empty()),"Your custom picture is already in use."))
-			for i in range(menu.pictures.MY_PRESET_COUNT):
-				var index: int = i
-				var state := "✓ Active" if menu.pictures.applied_preset()=="mine.%d" % index else ("Saved" if menu.pictures.my_preset_saved(index) else "Empty")
-				var mine := action("preset.mine.%d" % index,menu.pictures.my_preset_name(index),func(): menu.pictures.open_my_preset(index),"Your own saved look: apply it, save the current picture here, rename or delete.",false,state)
-				if i == 0: mine["section"] = "MY LOOKS"
-				presets.append(mine)
 			if menu.pictures.picture_undo!=null: presets.append(action("preset.undo","Undo picture look",menu.pictures.undo_picture_preset,"Restores the picture from before the last look."))
+			# Your own looks are linked: give one to games or consoles, edit it once.
+			var mine: Array = menu.looks.rows()
+			if not h.display_settings.editing_look.is_empty(): presets = mine + presets
+			else: presets.append_array(mine)
 			var signal_rows: Array = [{"id":"picture.connection","label":"Signal","kind":"choice","choices":["RGB","Composite (NTSC)","Composite (PAL)","Composite (auto)"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite adds colour bleed and artefacts. Auto picks NTSC or PAL from the game's frame rate."}]
 			var colour: Array = picture_fields(w.picture.COLOR_FIELDS.slice(0,6))
 			colour[0]["section"] = "COLOUR"
@@ -760,6 +797,7 @@ func category_pages(category: int) -> Array:
 				toggle("access.large","Larger menu text",h,"menu_large_text",false,"Larger text and taller rows; lists scroll to keep focus visible.",menu.apply_accessibility,false),
 				toggle("access.contrast","Stronger menu contrast",h,"menu_high_contrast",false,"Brighter text and clearer borders on a dark background.",menu.apply_accessibility,false),
 				toggle("access.motion","Reduced animation",h,"menu_reduced_motion",false,"Instant focus changes and no TV warm-up animation.",menu.apply_accessibility,false),
+				advanced_row(),
 				toggle("access.clean_feed","Plain picture behind menus",h,"menu_clean_feed",true,"On: menus stay plain and readable in every game. Off: they take the game's own colour, signal and CRT effects.",unchanged,false),
 				],"How the menus look and move"),page("Layout",[
 				{"id":"access.game_columns","label":"Game list columns","kind":"choice","choices":["1 column", "2 columns", "3 columns"],"default":0,"visual":false,
@@ -839,7 +877,7 @@ func category_pages(category: int) -> Array:
 			return [page("Volumes",volume_rows(),"Every level in one place"),page("TV speakers",audio_rows,"How the game sounds from the TV"),page("Music",music_rows,"Music preferences · play albums and radio from the music browser"),page("Menu sounds",menu_rows,"Sounds the menu itself makes")]
 	return []
 
-## Saved setups: three slots holding the view, the room and the picture together.
+## Scenes (saved setups): three slots holding the view, the room and the picture together.
 func saved_setups_page() -> Dictionary:
 	var h = host
 	var slots: Array = []
@@ -847,9 +885,9 @@ func saved_setups_page() -> Dictionary:
 		var slot := i
 		var config = h.settings_store.read("user://presets/slot-%d.cfg" % i)
 		var saved: bool = config.has_section("view")
-		slots.append(action("slot.%d" % i,str(config.get_value("meta","name",h.PROFILE_NAMES[i])),func(): menu.open_slot(slot),"Stores TV placement, the room and the picture. Games with their own picture keep it; input delay stays as it is.",false,"Saved" if saved else "Empty"))
-	if h.profile_undo!=null: slots.append(action("setups.undo","Undo last setup load",h.undo_profile,"Restore the view, room and picture from before the last setup load."))
-	return page("Saved setups",slots,"View, room and picture, saved together")
+		slots.append(action("slot.%d" % i,str(config.get_value("meta","name",h.PROFILE_NAMES[i])),func(): menu.open_slot(slot),"A scene is a whole mood: where the TV sits, the room and the picture. Games with their own picture or look keep it; input delay stays as it is.",false,"Saved" if saved else "Empty"))
+	if h.profile_undo!=null: slots.append(action("setups.undo","Undo last scene load",h.undo_profile,"Restore the view, room and picture from before the last scene load."))
+	return page("Scenes",slots,"A look, a room and your view, saved together")
 
 ## Games → Consoles: console names and icons as they were sold in your region.
 func region_row() -> Dictionary:

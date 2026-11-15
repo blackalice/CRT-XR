@@ -2,7 +2,7 @@ extends RefCounted
 ## First-run setup: a short run of pages, in the menu's own look, that teaches
 ## the menu shortcut and sets up the view, the game library (with console names),
 ## optional videos and music, and comfort options. New users see it once, straight
-## from the boot animation; Setups & help → Help → Run setup again shows it any time.
+## from the boot animation; Scenes & help → Help → Run setup again shows it any time.
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
@@ -192,7 +192,7 @@ func items() -> Array:
 		"media": return media_items()
 		"comfort": return comfort_items()
 		"done":
-			var again := "Run this setup again from Settings › Setups & help › Help › Run setup again."
+			var again := "Run this setup again from Settings › Scenes & help › Help › Run setup again."
 			var has_games: bool = menu.rom_index.total() > 0
 			var library: Dictionary = menu.tile(c.action("welcome.library", "Pick a game" if has_games else "Open Game Library", func(): finish(true), again, false, ""), "gamepad", "", "finish", 2)
 			var home: Dictionary = menu.tile(c.action("welcome.home", "Go to Home", func(): finish(false), again, false, ""), "home", "", "finish", 2)

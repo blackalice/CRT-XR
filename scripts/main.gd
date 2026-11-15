@@ -28,7 +28,7 @@ const PICTURE_SECTIONS := ["crt", "picture"]
 const VIDEO_PROFILE := "video"
 const VIDEO_CHECKPOINT_SECONDS := 30.0
 ## Names for setup slots until you name them yourself.
-const PROFILE_NAMES := ["Setup 1", "Setup 2", "Setup 3"]
+const PROFILE_NAMES := ["Scene 1", "Scene 2", "Scene 3"]
 ## What a saved setup holds: TV placement, the room and the base picture.
 const SETUP_SECTIONS := ["view", "room", "crt", "picture"]
 var settings_store := SettingsStore.new()
@@ -74,6 +74,9 @@ var menu_reduced_motion := false
 ## The menu screensaver: on/off, and seconds without input before it starts.
 var menu_screensaver := true
 var menu_screensaver_delay := 120.0
+## Settings show every row (true) or only the everyday ones (false, Basic). New
+## users start Basic; people set up before it existed keep seeing everything.
+var settings_advanced := false
 const SCREENSAVER_DELAYS := [30.0, 60.0, 120.0, 300.0, 600.0, 900.0]
 var menu_sounds := false
 var menu_boot_sound := true
@@ -600,6 +603,9 @@ func start_application() -> void:
 	# [welcome] entry, belong to someone already set up.
 	var stored: ConfigFile = settings_store.read("user://settings.cfg")
 	welcome_done = bool(stored.get_value("welcome", "done", not stored.get_sections().is_empty()))
+	# Basic settings arrived after people had learnt the full set: keep it for them.
+	if welcome_done and stored.has_section("accessibility") and not stored.has_section_key("accessibility", "settings_advanced"): settings_advanced = true
+	if "--script" in OS.get_cmdline_args() and not stored.has_section_key("accessibility", "settings_advanced"): settings_advanced = true
 	start_flat_on_deck_screen()
 	var recent := settings_store.read("user://recent.cfg")
 	if recent.has_section("library"):
@@ -747,6 +753,8 @@ func apply_settings(config: ConfigFile) -> void:
 	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
 	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
 	menu_screensaver = bool(config.get_value("accessibility","menu_screensaver",true))
+	# Test scripts see every row unless they turn Basic on, as they skip first-run setup.
+	settings_advanced = bool(config.get_value("accessibility","settings_advanced","--script" in OS.get_cmdline_args()))
 	var delay = config.get_value("accessibility","menu_screensaver_delay",120.0)
 	menu_screensaver_delay = float(delay) if typeof(delay) in [TYPE_INT, TYPE_FLOAT] and float(delay) in SCREENSAVER_DELAYS else 120.0
 	for key in music.DEFAULTS: music.set(key,config.get_value("music",key,music.DEFAULTS[key]))
@@ -1615,7 +1623,7 @@ func load_profile() -> void:
 	validator.parse(merged.encode_to_text())
 	apply_settings(validated_settings(validator,profile_undo))
 	rebuild_settings()
-	show_notice("Setup loaded. Undo is available in Saved setups." + (" " + reader.warning if not reader.warning.is_empty() else ""))
+	show_notice("Scene loaded. Undo is available in Scenes & help › Scenes." + (" " + reader.warning if not reader.warning.is_empty() else ""))
 
 func validated_settings(config: ConfigFile, fallback: ConfigFile) -> ConfigFile:
 	for section in fallback.get_sections():
@@ -1743,6 +1751,7 @@ func reset_all_options() -> void:
 	haptic_strength = 0.8
 	menu_screensaver = true
 	menu_screensaver_delay = 120.0
+	settings_advanced = false
 	power_on.enabled=true; power_on.sound_level=.60; power_on.reduced_motion=false; power_on.apply()
 	tv_effects.channel_change=true; tv_effects.power_off_effect=true; tv_effects.reduced_motion=false
 	rebuild_settings()
@@ -1804,10 +1813,10 @@ func start_update_notes(scripted: bool) -> void:
 	if updates.get_parent() == null: add_child(updates)
 	if scripted: return
 	updates.finished.connect(func(result: Dictionary):
-		if result.get("newer", false) and not updates.checking: show_notice("CRT XR %s is available · Setups & help › System › Updates" % updates.pretty(str(result.tag))))
+		if result.get("newer", false) and not updates.checking: show_notice("CRT XR %s is available · Scenes & help › System › Updates" % updates.pretty(str(result.tag))))
 	await get_tree().create_timer(6.0).timeout
 	if updates.should_show_whats_new(welcome_done):
-		show_notice("Updated to CRT XR %s · What's new is in Setups & help › Help" % updates.current_version())
+		show_notice("Updated to CRT XR %s · What's new is in Scenes & help › Help" % updates.current_version())
 		updates.mark_whats_new_seen()
 	elif not welcome_done:
 		# A new user has nothing to catch up on.
@@ -1895,7 +1904,7 @@ func capture_settings() -> ConfigFile:
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
 	config.set_value("preferences","game_fps_visible",game_fps_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","library_group_versions","library_hide_extras","menu_screensaver","menu_screensaver_delay"]: config.set_value("accessibility",key,get(key))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","library_group_versions","library_hide_extras","menu_screensaver","menu_screensaver_delay","settings_advanced"]: config.set_value("accessibility",key,get(key))
 	config.set_value("accessibility","menu_plain_picture_default",true)
 	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
 	config.set_value("accessibility","menu_music_volume",menu_music_volume)

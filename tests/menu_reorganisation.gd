@@ -41,7 +41,7 @@ func run() -> void:
 	var shown: Array = []
 	for button_node in m.sidebar.get_children():
 		if button_node is Button and button_node.visible: shown.append(m.CATEGORIES[m.sidebar_buttons.find(button_node)])
-	check(shown == ["View & glasses", "Picture", "Room", "Sound", "Games", "Videos", "Menu & access", "Setups & help"], "The sidebar reads in task order: %s" % [shown])
+	check(shown == ["View & glasses", "Picture", "Room", "Sound", "Games", "Videos", "Menu & access", "Scenes & help"], "The sidebar reads in task order: %s" % [shown])
 	m.open_settings(); m.category = 0; m.subsection = 0; m.render(); await settle()
 	check(m.tab_position.visible and m.tab_position.text == "1 / 4", "The tab marker shows where this tab sits")
 	app.world.set_widescreen(true); m.render(); await settle()
@@ -120,7 +120,7 @@ func run() -> void:
 
 	# Empty setup slots are numbered, not named as if something were saved.
 	var slots: Array = m.catalog.saved_setups_page().rows
-	check(slots[0].label == "Setup 1" and slots[0].value == "Empty", "An empty slot reads Setup 1 · Empty")
+	check(slots[0].label == "Scene 1" and slots[0].value == "Empty", "An empty slot reads Scene 1 · Empty")
 
 	# Picture rows say where their value comes from, on the row.
 	var gamma: Dictionary = m.catalog.pages(1)[2].rows.filter(func(row): return row.id == "picture.gamma")[0]
