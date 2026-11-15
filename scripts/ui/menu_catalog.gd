@@ -869,10 +869,6 @@ func category_pages(category: int) -> Array:
 			audio_rows.append(action("audio.preview","Preview sound",audio.preview_sample,"Plays a short sample through the selected sound mode while the game stays paused."))
 			var music = h.music
 			var visualiser: Array = [
-				{"id":"music.sleep","label":"Sleep timer","kind":"choice","choices":h.SLEEP_CHOICES.map(func(m): return "Off" if m == 0 else "%d minutes" % m),"default":0,"visual":false,"section":"SLEEP",
-					"getter":func(): return maxi(0,h.SLEEP_CHOICES.find(h.sleep_minutes)),"setter":func(value): h.set_sleep_timer(h.SLEEP_CHOICES[int(value)]); menu.refresh(),
-					"detail_getter":func(): return ("%d min left" % ceili(h.sleep_left / 60.0)) if h.sleep_left > 0.0 else "",
-					"help":"Stops the music, pauses the game or video (saving its resume point) and switches the TV off after this long. For this session only."},
 				{"id":"visualiser.preset","label":"Visualiser preset","kind":"choice","choices":h.visualizer.preset_names(),"default":0,"getter":func(): return h.visualizer.preset_index,"setter":h.visualizer.select_preset,"help":"Three bundled presets, then your own: put projectM or MilkDrop .milk files in a folder called Visualiser presets inside your music folder.","visual":false},
 				toggle("visualiser.automatic","Automatic presets",h.visualizer,"automatic",true,"Change preset every 30 seconds. Reduced motion keeps the current preset.",h.visualizer.save_preferences,false),
 				number("visualiser.brightness","Visualiser brightness",h.visualizer,"brightness",0.3,1.5,0.1,1.0,"percent","Independent brightness for music visuals.",h.visualizer.save_preferences,false)]
@@ -883,6 +879,10 @@ func category_pages(category: int) -> Array:
 				number("music.directional","Stays beside the TV",music,"directional",0,1,.05,.8,"percent","Music stays put as you turn your head. Zero keeps normal stereo.",music.apply,false),
 				number("music.side","Radio position",music,"side",-2,2,.1,-1.1,"m","Left or right of the TV, independent of the game's sound.",music.apply,false)]
 			music_rows.append_array(visualiser)
+			music_rows.append({"id":"music.sleep","label":"Sleep timer","kind":"choice","choices":h.SLEEP_CHOICES.map(func(m): return "Off" if m == 0 else "%d minutes" % m),"default":0,"visual":false,"section":"SLEEP",
+					"getter":func(): return maxi(0,h.SLEEP_CHOICES.find(h.sleep_minutes)),"setter":func(value): h.set_sleep_timer(h.SLEEP_CHOICES[int(value)]); menu.refresh(),
+					"detail_getter":func(): return ("%d min left" % ceili(h.sleep_left / 60.0)) if h.sleep_left > 0.0 else "",
+					"help":"Stops the music, pauses the game or video (saving its resume point) and switches the TV off after this long. For this session only."})
 			var menu_rows: Array = [
 				toggle("access.menu_music","Menu music",h,"menu_music_enabled",true,"Quiet background music while menus are open. Waits for the boot sound to tail off and yields to your own music. Its volume is on Volumes.",h.apply_menu_music,false),
 				toggle("access.boot_sound","Boot sound",h,"menu_boot_sound",true,"Plays the startup sound when the boot screen appears. Turn off for a quiet launch.",h.apply_boot_sound,false),
