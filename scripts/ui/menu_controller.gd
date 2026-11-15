@@ -642,6 +642,7 @@ func state_key() -> String:
 		"slot": return "slot:%d" % host.selected_profile
 		"my_preset": return "my_preset:%d" % pictures.my_preset
 		"look": return "look:" + looks.look
+		"game_info": return "game_info:" + games.info_path
 		"look_games": return "look_games:%s:%s:%d" % [looks.look, looks.choose_system, looks.choose_page]
 		"my_room": return "my_room:%d" % my_room
 		"states": return "states:%s" % play.states_saving
@@ -875,6 +876,7 @@ func back() -> void:
 			# The targets belong to this rename only; a later rename sets its own.
 			rename_room=-1; rename_preset=-1; rename_look=""; render()
 		"look": mode="settings"; render()
+		"game_info": restore(games.info_origin)
 		"look_games": looks.chooser_back()
 		"my_preset", "my_room": mode="settings"; render()
 		"states": mode="pause"; render()
@@ -1206,6 +1208,7 @@ func get_items() -> Array:
 		"folder_path": return keys.text_keys()+[catalog.action("folder_path.open","Open folder",games.submit_folder_path,"Opens a local folder or a network share you can access in Windows."),catalog.action("folder_path.cancel","Cancel",back)]
 		"my_preset": return pictures.items()
 		"look": return looks.items()
+		"game_info": return games.info_items()
 		"look_games": return looks.chooser_items()
 		"rename": return keys.text_keys()+[catalog.action("rename.save","Use this name",save_draft_name,"Renames this preset now." if rename_preset>=0 else "The new name is stored when you save the setup."),catalog.action("rename.cancel","Cancel",back,"Leave the name unchanged.")]
 		# Dialog titles lead with their verb ("Overwrite this setup?"), which names the button.
@@ -1476,6 +1479,7 @@ func _render(incremental: bool) -> void:
 	if mode=="my_preset": heading.text=pictures.my_preset_name(pictures.my_preset)
 	if mode=="rename" and not rename_look.is_empty(): heading.text="Name your look"
 	if mode=="look": heading.text=looks.heading()
+	if mode=="game_info": heading.text=games.info_heading()
 	if mode=="look_games": heading.text=looks.chooser_heading()
 	search_field.visible = input_kind=="keyboard" and mode in ["games","recent","favourites","most_played","videos"] and (mode!="videos" or videos.videos_shown()) and not preview
 	search_field.placeholder_text="Search videos…  (Ctrl+F)" if mode=="videos" else "Search games…  (Ctrl+F)"
@@ -1487,7 +1491,7 @@ func _render(incremental: bool) -> void:
 	if location_bar.visible: location_bar.show_path(place,library.home_folder(),library.cards())
 	subtitle.visible = not preview and not location_bar.visible
 	fit_panel()
-	help_label.visible = not preview and not mode in ["help","library","games","launch"] and not (mode=="welcome" and welcome.step=="welcome") # These pages use the room for content.
+	help_label.visible = not preview and not mode in ["help","library","games","launch","game_info"] and not (mode=="welcome" and welcome.step=="welcome") # These pages use the room for content.
 	# The Welcome page is the boot logo's landing place: no title bar above it.
 	heading.get_parent().visible = not (mode=="welcome" and welcome.step=="welcome")
 	help_frame.visible = help_label.visible
@@ -1535,6 +1539,8 @@ func _render(incremental: bool) -> void:
 		var gap := Control.new(); gap.custom_minimum_size.y=8; column.add_child(gap)
 		var hero := HBoxContainer.new(); hero.add_theme_constant_override("separation",24)
 		column.add_child(hero)
+		# The game's cover, as on its page and in the lists.
+		if host.library_box_art: hero.add_child(games.cover_panel(games.launch_path, Vector2(150, 170)))
 		# A version never played has no resume point to picture.
 		if games.has_resume(games.launch_path):
 			var preview_panel := ResumePreview.new(); hero.add_child(preview_panel)
@@ -1548,6 +1554,7 @@ func _render(incremental: bool) -> void:
 	if mode=="help":
 		column.add_child(HelpArticle.build(help_copy,host.menu_large_text))
 	if mode=="welcome": welcome.decorate()
+	if mode=="game_info": games.decorate_info(column); select(selected_id,false)
 	pinned.visible = pinned.get_child_count()>0 and not preview
 	if mode=="library" and not rom_index.scanning: scan_preferred_id=""
 	if saved.has("scroll") and not preview: restore_scroll.call_deferred(int(saved.scroll),layout_revision)
@@ -1734,6 +1741,7 @@ func refresh_labels() -> void:
 	elif mode=="states": subtitle.text = GameTitle.of(host.emulator.rom_path)+" · %d slots" % play.STATE_SLOTS
 	elif mode=="my_room": subtitle.text = "Room %d · %s" % [my_room+1,"✓ In use" if host.rooms.active()=="mine.%d" % my_room else ("Saved" if host.rooms.saved(my_room) else "Empty")]
 	elif mode=="look": subtitle.text = looks.subtitle()
+	elif mode=="game_info": subtitle.text = games.info_subtitle()
 	elif mode=="look_games": subtitle.text = looks.chooser_subtitle()
 	elif mode=="my_preset": subtitle.text = "Picture preset %d · %s" % [pictures.my_preset+1,"✓ Active" if pictures.applied_preset()=="mine.%d" % pictures.my_preset else ("Saved" if pictures.my_preset_saved(pictures.my_preset) else "Empty")]
 	elif mode=="welcome": subtitle.text = welcome.subtitle()
@@ -1878,7 +1886,7 @@ func refresh_hints(row) -> void:
 		parts.append(("B Settings" if pad else "Backspace Settings") if preview else go_back)
 	elif mode in ["games","recent","favourites","most_played"]:
 		parts.append(open)
-		if row!=null and row.item.has("rom_path"): parts.append_array(["X Favourite","Y Full title" if search_query.is_empty() else "Y Clear search"])
+		if row!=null and row.item.has("rom_path"): parts.append_array(["X Favourite","Y Details" if search_query.is_empty() else "Y Clear search"])
 		parts.append(go_back)
 	elif mode=="browser": parts.append_array([open,go_back,"R1 Use folder"] if pad else [open,go_back])
 	elif mode=="help": parts=["↑↓ Scroll",go_back]

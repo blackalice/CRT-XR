@@ -116,6 +116,8 @@ Settings start with the everyday options. Fine-tuning rows (signal detail, lens 
 - **Rewind and fast-forward** (Games → Play, off by default): hold L2 to rewind, R2 to fast-forward, on 8- and 16-bit consoles.
 - **Surprise me** on the Game Library picks a random game.
 - **Box art**: **Get box art** on the Game Library (or **Download missing box art** in Library locations) fetches covers from libretro-thumbnails for games your scrapes don't cover, matched by game name. Art is kept in CRT XR's own folder and shows beside your games, on Continue, when you start a game and on the box on the table. Library locations also has **Show box art** and **Download for new games automatically**.
+- **A game's page**: press **Y** on a game for its cover, details (release year, genre, players, developer, publisher from your gamelist; play time) and description, with Play and Favourite. With no description in your gamelist, **Look up a description online** fetches a short Wikipedia summary (only the game's name is sent); **Games → Library → Look up descriptions online** does it automatically.
+- **Continue watching**: press **Y** on a video under Continue watching to remove it.
 - **Flat view**: press **Y** on Home or the pause menu to switch between the room and Flat view; the chip beside Exit shows which is in use.
 - **Sleep timer** (Sound → Music) and a screensaver that **switches the TV off** (Menu & access → Screensaver → Style).
 - **Your own visualiser presets**: put projectM / MilkDrop `.milk` files in a folder called `Visualiser presets` inside your music folder.

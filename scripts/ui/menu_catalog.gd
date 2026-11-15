@@ -486,10 +486,12 @@ func library_page() -> Dictionary:
 		not busy and missing == 0, ("%d of %d" % [fetch.done, fetch.total]) if busy else (("%d without art" % missing) if missing > 0 else "Up to date"))
 	var auto := toggle("library.box_art_auto","Download for new games automatically",h,"library_box_art_auto",false,"When the Game Library opens, fetches covers for games that still have none, once a session. Needs an internet connection.",func(): menu.games.auto_box_art_done = false; h.settings_dirty = true,false)
 	var retry := action("library.box_art_retry","Try again for games not found",func(): menu.games.download_box_art(false, true),"Asks the collection again for games it had no cover for, for example after renaming files.",busy,"")
+	var online := toggle("library.info_online","Look up descriptions online",h,"library_info_online",false,"When a game's page ({Y} on a game) has no description from your gamelist, fetches a short summary from Wikipedia. Only the game's name is sent; each game is looked up once.",func(): h.settings_dirty = true,false)
+	online["section"] = "GAME DETAILS"
 	var grouped := toggle("library.group_versions","One row per game",h,"library_group_versions",true,"Lists each game once and plays your region's version, or the one you last played. Pick another version when you start it.",refresh_lists,false)
 	grouped["section"] = "WHICH GAMES"
 	var extras := toggle("library.hide_extras","Hide betas, demos & hacks",h,"library_hide_extras",false,"Leaves betas, prototypes, demos, hacks and bad dumps out of console lists; translations stay. Favourites and Recently played still show them.",refresh_lists,false)
-	return page("Library", [columns, art, download, auto, retry, grouped, extras], "How your game lists look")
+	return page("Library", [columns, art, download, auto, retry, online, grouped, extras], "How your game lists look")
 
 ## Scenes & help → System → Updates: opt-in, and only ever a look at GitHub's
 ## public release list. Nothing is downloaded or installed.

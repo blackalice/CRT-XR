@@ -421,16 +421,9 @@ func game_item(path: String, label: String, shared: Dictionary = {}, versions: A
 	item["detail"]=" · ".join(parts)
 	# Covers get a fixed, generous slot sized to the list's columns; a game
 	# without art keeps the slot, showing its console, so titles line up.
-	if host.library_box_art:
-		var cover_size: Vector2 = {1: Vector2(112, 84), 2: Vector2(92, 84), 3: Vector2(64, 72)}.get(clampi(host.game_list_columns, 1, 3), Vector2(92, 84))
-		var system_id: String = menu.library.Registry.identify(path)
-		if system_id.is_empty(): system_id = RomIndex.Folders.system(folder)
-		if system_id.is_empty(): system_id = library_system
-		item["thumbnail_path"]=path; item["thumbnail_size"]=cover_size; item["thumbnail_well"]=true
-		item["thumbnail_console"]=str(menu.library.Registry.SYSTEMS.get(system_id, {}).get("icon", system_id))
-		item["thumbnail"]=null
-		host.box_art.set_root(host.default_rom_dir)
-		if not host.box_art.find(path).is_empty(): item["thumbnail"]=host.box_art.texture(path)
+	var cover_size: Vector2 = {1: Vector2(112, 84), 2: Vector2(92, 84), 3: Vector2(64, 72)}.get(clampi(host.game_list_columns, 1, 3), Vector2(92, 84))
+	with_box_art(item, path, cover_size)
+	item["help"]="{A} plays it, {Y} shows its cover and details, {X} makes it a favourite."
 	return item
 
 ## A game's total play time, "3h 20m played", or empty under a minute.
@@ -439,13 +432,56 @@ func play_label(path: String) -> String:
 	return "" if total.is_empty() else total + " played"
 
 ## Shows a game's box art in its row, when the player's scrapes have some.
-func with_box_art(item: Dictionary, rom_path: String, size := Vector2(56,64)) -> Dictionary:
+## A row's cover: the same recessed slot everywhere (game lists, Continue,
+## Recent), holding the box art, or the console when there is none.
+func with_box_art(item: Dictionary, rom_path: String, size := Vector2(72,64)) -> Dictionary:
 	if not host.library_box_art: return item
 	host.box_art.set_root(host.default_rom_dir)
-	if host.box_art.find(rom_path).is_empty(): return item
-	item["thumbnail_path"]=rom_path; item["thumbnail"]=host.box_art.texture(rom_path)
-	item["thumbnail_icon"]="cartridge"; item["thumbnail_size"]=size
+	item["thumbnail_path"]=rom_path; item["thumbnail_size"]=size; item["thumbnail_well"]=true
+	item["thumbnail_console"]=console_icon(rom_path)
+	item["thumbnail"]=host.box_art.texture(rom_path) if not host.box_art.find(rom_path).is_empty() else null
 	return item
+
+## The console icon for a game, for covers that have no art.
+func console_icon(rom_path: String) -> String:
+	var system: String = menu.library.Registry.identify(rom_path)
+	if system.is_empty(): system = RomIndex.Folders.system(rom_path.get_base_dir().get_file())
+	if system.is_empty(): system = library_system
+	return str(menu.library.Registry.SYSTEMS.get(system, {}).get("icon", system))
+
+## A large cover for a page (game info, starting a game): the large front
+## cover when there is one, else the list art, else the console.
+func cover_panel(rom_path: String, size: Vector2) -> Control:
+	var well := Panel.new(); well.custom_minimum_size=size; well.size_flags_vertical=Control.SIZE_SHRINK_BEGIN
+	well.add_theme_stylebox_override("panel",menu.MenuSkin.box(Color(0.02,0.04,0.12,0.8),Color(0.45,0.55,0.85,0.45),2,0))
+	well.mouse_filter=Control.MOUSE_FILTER_IGNORE
+	var glyph = preload("res://scripts/ui/console_glyph.gd").new()
+	glyph.kind=console_icon(rom_path); glyph.size=Vector2(96,96); glyph.position=(size-Vector2(96,96))*0.5
+	glyph.modulate=Color(1,1,1,0.5); glyph.mouse_filter=Control.MOUSE_FILTER_IGNORE; well.add_child(glyph)
+	var picture := TextureRect.new(); picture.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+	picture.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED; picture.position=Vector2(6,6); picture.size=size-Vector2(12,12)
+	picture.mouse_filter=Control.MOUSE_FILTER_IGNORE; well.add_child(picture)
+	var show := func(texture: Texture2D):
+		if texture == null or not is_instance_valid(picture): return
+		picture.texture=texture; glyph.visible=false
+	if host.library_box_art:
+		host.box_art.set_root(host.default_rom_dir)
+		var big: Texture2D = host.box_art.cover(rom_path)
+		if big != null: show.call(big)
+		else:
+			var small: Texture2D = host.box_art.texture(rom_path) if not host.box_art.find(rom_path).is_empty() else null
+			if small != null: show.call(small)
+			var arrived := func(path: String, texture: Texture2D, large: bool):
+				if path == rom_path and (large or picture.texture == null): show.call(texture)
+			var on_cover := func(path, texture): arrived.call(path, texture, true)
+			var on_art := func(path, texture): arrived.call(path, texture, false)
+			host.box_art.cover_ready.connect(on_cover)
+			host.box_art.art_ready.connect(on_art)
+			# The page is rebuilt often: stop listening when this cover goes.
+			well.tree_exiting.connect(func():
+				if host.box_art.cover_ready.is_connected(on_cover): host.box_art.cover_ready.disconnect(on_cover)
+				if host.box_art.art_ready.is_connected(on_art): host.box_art.art_ready.disconnect(on_art))
+	return well
 
 func toggle_favourite() -> void:
 	var row = menu.selected_row()
@@ -515,10 +551,152 @@ func game_title_action() -> void:
 	if not menu.search_query.is_empty():
 		menu.search_field.text=""; menu.update_search(""); return
 	var row=menu.selected_row()
-	if row!=null and row.item.has("rom_path"):
-		menu.open_help("Full game title",str(row.item.label)+"
+	if row!=null and row.item.has("rom_path"): open_info(str(row.item.rom_path), row.item.get("versions", []), str(row.item.label))
 
-File: "+str(row.item.rom_path).get_file())
+# ── A game's page: its cover, details and description (Y on a game) ─────────
+
+var info_path := ""
+var info_versions: Array = []
+## The name the list showed (gamelist or identified name), used as the page's title.
+var info_label := ""
+var info_origin: Dictionary = {}
+var info_online: Dictionary = {}
+var info_status := ""
+
+func info_source():
+	if not host.has_node("GameInfo"):
+		var source = preload("res://scripts/content/game_info.gd").new()
+		source.name = "GameInfo"
+		host.add_child(source)
+		source.looked_up.connect(func(path: String, result: Dictionary):
+			if path != info_path: return
+			info_online = result if not result.has("error") else {}
+			info_status = str(result.get("error", ""))
+			if menu.mode == "game_info": menu.render())
+	return host.get_node("GameInfo")
+
+func open_info(path: String, versions: Array = [], label := "") -> void:
+	menu.remember(); info_origin = menu.snapshot()
+	info_path = path; info_versions = versions; info_status = ""
+	info_label = label if not label.is_empty() else GameTitle.of(path)
+	info_online = preload("res://scripts/content/game_info.gd").cached(path)
+	menu.clear_input(); menu.mode = "game_info"; menu.render()
+	if info_online.is_empty() and host.library_info_online and local_info().get("description", "").is_empty(): look_up_info()
+
+var local_cache := ["", {}]
+func local_info() -> Dictionary:
+	if local_cache[0] != info_path:
+		local_cache = [info_path, preload("res://scripts/content/game_info.gd").from_gamelist(info_path, host.default_rom_dir)]
+	return local_cache[1]
+
+## Words that tell same-named articles apart: the console's names.
+func console_words(path: String) -> Array:
+	var system: String = menu.library.Registry.identify(path)
+	if system.is_empty(): system = RomIndex.Folders.system(path.get_base_dir().get_file())
+	var spec: Dictionary = menu.library.Registry.SYSTEMS.get(system, {})
+	var words: Array = [str(spec.get("name", "")), str(spec.get("short", ""))]
+	words.append_array({"snes": ["Super Nintendo", "Super NES"], "nes": ["Nintendo Entertainment System"], "megadrive": ["Mega Drive", "Genesis"],
+		"psx": ["PlayStation"], "n64": ["Nintendo 64"], "gameboy": ["Game Boy"], "gba": ["Game Boy Advance"], "pcengine": ["TurboGrafx", "PC Engine"],
+		"mastersystem": ["Master System"], "gamegear": ["Game Gear"], "segacd": ["Sega CD", "Mega-CD"]}.get(system, []))
+	return words.filter(func(word): return not str(word).is_empty())
+
+func look_up_info() -> void:
+	info_status = "Looking it up on Wikipedia…"
+	info_source().look_up(info_path, str(GameTitle.parse(info_label + ".x").title) if not info_label.is_empty() else GameTitle.of(info_path), console_words(info_path))
+	if menu.mode == "game_info": menu.render()
+
+func info_items() -> Array:
+	var c = menu.catalog
+	var path := info_path
+	var result: Array = []
+	var play: Dictionary = c.action("game_info.play", "Play", func(): select_file(path, info_versions), "", not FileAccess.file_exists(path), "")
+	play["emphasis"] = "primary"; play["row_icon"] = "play"
+	result.append(play)
+	var favourite: bool = path in host.play_history.favourites
+	result.append(c.action("game_info.favourite", "Remove from favourites" if favourite else "Add to favourites", func():
+		if not host.play_history.toggle(path): menu.show_error("Favourite could not be saved. Check user-folder permissions."); return
+		menu.render(), "", false, ""))
+	var has_text: bool = not str(local_info().get("description", "")).is_empty() or not info_online.is_empty()
+	if not has_text or not info_online.is_empty():
+		var label := "Look it up again" if not info_online.is_empty() else "Look up a description online"
+		result.append(c.action("game_info.lookup", label, look_up_info,
+			"Finds this game's Wikipedia article and keeps a short summary here. Only the game's name is sent. Turn on automatic look-ups in Games › Library.", info_source().busy == path, ""))
+	return result
+
+func info_heading() -> String:
+	return info_label
+
+func info_subtitle() -> String:
+	var system: String = menu.library.Registry.identify(info_path)
+	if system.is_empty(): system = RomIndex.Folders.system(info_path.get_base_dir().get_file())
+	return str(menu.library.Registry.SYSTEMS.get(system, {}).get("name", "Game"))
+
+## The page around its buttons: cover and facts side by side, then the description.
+func decorate_info(column: VBoxContainer) -> void:
+	var path := info_path
+	var named: Dictionary = GameTitle.info(path)
+	var local := local_info()
+	var hero := HBoxContainer.new(); hero.add_theme_constant_override("separation", 22)
+	hero.add_child(cover_panel(path, Vector2(220, 248)))
+	var facts := VBoxContainer.new(); facts.add_theme_constant_override("separation", 6); facts.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var lines: Array = []
+	var variant := str(named.get("variant", ""))
+	if not variant.is_empty(): lines.append(["Version", variant])
+	for pair in [["year", "Released"], ["genre", "Genre"], ["players", "Players"], ["developer", "Developer"], ["publisher", "Publisher"]]:
+		var value := str(local.get(pair[0], named.get(pair[0], "")))
+		if not value.is_empty(): lines.append([pair[1], value])
+	var played := play_label(path)
+	if not played.is_empty(): lines.append(["Played", played.trim_suffix(" played")])
+	var last: int = host.play_history.last_played(path)
+	if last > 0: lines.append(["Last played", menu.ago(last)])
+	if info_versions.size() > 1: lines.append(["Versions", str(info_versions.size())])
+	if lines.size() < 6: lines.append(["File", path.get_file()])
+	for line in lines:
+		var row := HBoxContainer.new(); row.add_theme_constant_override("separation", 12)
+		var key := Label.new(); key.text = line[0]; key.custom_minimum_size.x = 130
+		key.add_theme_font_size_override("font_size", 17 + (2 if host.menu_large_text else 0)); key.add_theme_color_override("font_color", menu.MenuSkin.MUTED)
+		var value := Label.new(); value.text = line[1]; value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		# One line each, trimmed: a wrapping label beside another shrinks to nothing.
+		value.autowrap_mode = TextServer.AUTOWRAP_OFF; value.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS; value.clip_text = true
+		value.add_theme_font_size_override("font_size", 18 + (2 if host.menu_large_text else 0))
+		row.add_child(key); row.add_child(value); facts.add_child(row)
+	hero.add_child(facts)
+	# Play, Favourite and Look up sit under the facts, beside the cover.
+	var actions := VBoxContainer.new(); actions.add_theme_constant_override("separation", 8)
+	var gap := Control.new(); gap.custom_minimum_size.y = 6; facts.add_child(gap)
+	facts.add_child(actions)
+	for row in menu.rows:
+		row.get_parent().remove_child(row); actions.add_child(row)
+	var top: Array[Control] = [hero]
+	# A long name is trimmed in the heading: the page spells it out in full.
+	var full := info_label
+	if full.length() > 26:
+		var whole := Label.new(); whole.text = full; whole.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		whole.add_theme_font_size_override("font_size", 22 + (3 if host.menu_large_text else 0))
+		menu.MenuSkin.weigh(whole, menu.MenuSkin.SEMIBOLD); menu.MenuSkin.shadow(whole)
+		top.push_front(whole)
+	# The description: from your gamelist, else from Wikipedia when looked up.
+	var text := str(local.get("description", ""))
+	var source := "From your gamelist" if not text.is_empty() else ""
+	if text.is_empty() and not info_online.is_empty():
+		text = str(info_online.get("description", ""))
+		source = "From Wikipedia, “%s” · CC BY-SA" % str(info_online.get("title", ""))
+	if not text.is_empty() or not info_status.is_empty():
+		var about := Label.new(); about.text = text if not text.is_empty() else info_status
+		about.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		about.max_lines_visible = 4 if host.menu_large_text else 5; about.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+		about.add_theme_font_size_override("font_size", 19 + (3 if host.menu_large_text else 0))
+		about.add_theme_color_override("font_color", menu.MenuSkin.TEXT if not text.is_empty() else menu.MenuSkin.MUTED)
+		var box := PanelContainer.new(); box.add_theme_stylebox_override("panel", menu.MenuSkin.box(Color("0b1a48"), Color("3858a0"), 2, 14))
+		var inner := VBoxContainer.new(); inner.add_theme_constant_override("separation", 6); box.add_child(inner)
+		inner.add_child(about)
+		if not source.is_empty():
+			var credit := Label.new(); credit.text = source; credit.add_theme_font_size_override("font_size", 14); credit.add_theme_color_override("font_color", menu.MenuSkin.MUTED)
+			credit.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			inner.add_child(credit)
+		top.append(box)
+	for i in range(top.size()):
+		column.add_child(top[i]); column.move_child(top[i], i)
 
 ## Name the actual return destination: startup has no preceding page to go back to.
 func launch_return_label() -> String:
@@ -539,14 +717,12 @@ func launch_items() -> Array:
 		continuing["emphasis"] = "primary"
 		continuing["row_icon"] = "play"
 		continuing["min_height"] = 84
-		with_box_art(continuing, path, Vector2(64, 76))
 		var fresh: Dictionary = menu.catalog.action("launch.fresh","Start from a fresh boot",func(): launch_game(path,false),"In-game saves are kept.",false,"")
 		fresh["detail_getter"] = func(): return "In-game saves are kept."
 		result.append_array([continuing, fresh])
 	else:
 		var play: Dictionary = menu.catalog.action("launch.play","Play",func(): launch_game(path,false),"",false,"")
 		play["emphasis"] = "primary"; play["row_icon"] = "play"; play["min_height"] = 84
-		with_box_art(play, path, Vector2(64, 76))
 		result.append(play)
 	if launch_versions.size()>1:
 		var names := version_names(launch_versions)

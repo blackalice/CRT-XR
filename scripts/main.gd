@@ -75,6 +75,8 @@ var library_hide_extras := false
 var library_box_art := true
 ## Download missing box art by itself when the library has new games.
 var library_box_art_auto := false
+## Look up a game's description on Wikipedia when its page opens without one.
+var library_info_online := false
 var menu_high_contrast := false
 var menu_reduced_motion := false
 ## The menu screensaver: on/off, and seconds without input before it starts.
@@ -773,6 +775,7 @@ func apply_settings(config: ConfigFile) -> void:
 	library_hide_extras = bool(config.get_value("accessibility", "library_hide_extras", false))
 	library_box_art = bool(config.get_value("accessibility", "library_box_art", true))
 	library_box_art_auto = bool(config.get_value("accessibility", "library_box_art_auto", false))
+	library_info_online = bool(config.get_value("accessibility", "library_info_online", false))
 	menu_depth = bool(config.get_value("accessibility","menu_depth",true))
 	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
 	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
@@ -1991,7 +1994,7 @@ func capture_settings() -> ConfigFile:
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
 	config.set_value("preferences","game_fps_visible",game_fps_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","library_group_versions","library_hide_extras","menu_screensaver","menu_screensaver_delay","settings_advanced","menu_screensaver_style","library_box_art","library_box_art_auto"]: config.set_value("accessibility",key,get(key))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","library_group_versions","library_hide_extras","menu_screensaver","menu_screensaver_delay","settings_advanced","menu_screensaver_style","library_box_art","library_box_art_auto","library_info_online"]: config.set_value("accessibility",key,get(key))
 	config.set_value("accessibility","menu_plain_picture_default",true)
 	config.set_value("accessibility","game_columns_v2",true)
 	config.set_value("accessibility","menu_hold_select",emulator.gamepad.menu_hold_select)
