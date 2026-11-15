@@ -766,10 +766,13 @@ func category_pages(category: int) -> Array:
 				elif h.emulator.separate_preview: input_delay.disabled_reason="The second emulator copy could not start for %s." % console
 				else: input_delay.disabled_reason="%s needs Use a second emulator copy: its sound buzzes otherwise." % console
 			var separate_preview := toggle("controls.separate_preview","Use a second emulator copy",h.emulator,"separate_preview",true,"Keeps sound clean while reducing input delay. Uses more memory. Not available for PS1 or N64; SNES can work without it.",func(): h.emulator.set_separate_preview(h.emulator.separate_preview); menu.refresh(),false)
+			var rewind := toggle("emulation.rewind","Rewind & fast-forward",h.emulator,"rewind_enabled",false,"Hold L2 to go back a few seconds, R2 to play three times as fast ([ and ] on a keyboard). For consoles whose controls leave the triggers free: NES, SNES, Mega Drive, Game Boy, GBA and other 8- and 16-bit systems.",func(): h.emulator.clear_rewind(); menu.refresh(),false)
+			if h.emulator.loaded and h.emulator.rewind_enabled and not h.emulator.speed_available():
+				rewind["help"] += " Not for this game: " + ("its controls use the triggers." if h.emulator.triggers_bound() else ("rewind needs more memory than this console allows." if h.emulator.rewind_unsupported else "this console isn't supported yet."))
 			var game_fps := toggle("emulation.game_fps","Show game frame rate",h,"game_fps_visible",false,"Shows the game's own frame rate and speed in the top corner while you play. Unlike Steam's counter, it measures the emulator, not the room.",unchanged,false)
 			var result: Array = core_option_pages()
 			result.append(page("Controls",menu.controls.rows(),controls_subtitle(),games_scope()))
-			result.append(page("Input delay",[input_delay,separate_preview,game_fps],"For the games you play"))
+			result.append(page("Input delay",[input_delay,separate_preview,rewind,game_fps],"For the games you play"))
 			result.append(page("Info",[
 				action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate.",false,GameTitle.of(h.emulator.rom_path) if h.emulator.loaded else ""),
 				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")],"Read-only"))

@@ -63,6 +63,11 @@ func handle_event(event: InputEvent) -> bool:
 		return true
 	return false
 
+## How far the active controller's trigger is pressed (0 to 1).
+func trigger(axis: int) -> float:
+	if menu_active or not devices.has(active_device): return 0.0
+	return float(devices[active_device].triggers.get(axis, 0.0))
+
 ## True once when Select has been held long enough to open or close the menu.
 func poll_hold_select(now := -1) -> bool:
 	if not menu_hold_select: return false

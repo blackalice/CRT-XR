@@ -103,6 +103,23 @@ var unpack_thread: Thread
 var unpacking := ""
 var unpack_cancelled := false
 var unpack_reported := 0
+## Rewind and fast-forward (opt-in): hold L2 to go back, R2 to speed up, on
+## consoles whose controls leave the triggers free. Rewind keeps a ring of
+## recent save states in memory, one every REWIND_EVERY frames, within
+## REWIND_BYTES; a state too big for that (later consoles) turns rewind off.
+var rewind_enabled := false
+signal speed_mode_changed(mode: String)
+var speed_mode := "" # "", "rewind" or "fast"
+var rewind_states: Array[PackedByteArray] = []
+var rewind_bytes := 0
+var rewind_counter := 0
+var rewind_unsupported := false
+const REWIND_EVERY := 3
+const REWIND_BYTES := 96 * 1024 * 1024
+const REWIND_STATE_LIMIT := 4 * 1024 * 1024
+const FAST_FORWARD := 3
+## Consoles whose standard controls never use L2/R2.
+const SPEED_SYSTEMS := ["nes", "snes", "megadrive", "mastersystem", "gamegear", "segacd", "gameboy", "gba", "pcengine", "atari2600", "atarilynx", "ngpc", "vectrex"]
 
 func _ready() -> void:
 	# Poll close to frame execution, after ordinary scene/UI processing.
@@ -214,6 +231,8 @@ func load_state_async(slot := 0) -> bool:
 	return await load_from_async(state_path(slot), "Loaded • Slot %d" % (slot + 1))
 
 func load_from_async(path: String, description: String) -> bool:
+	# Rewind goes back within this timeline only.
+	clear_rewind()
 	if transition_busy or not loaded: return false
 	transition_busy = true
 	await drain_transition_frame()
@@ -418,6 +437,15 @@ func _process(delta: float) -> void:
 	var rendered := false
 	var input := read_input()
 	var buttons: int = input.mask
+	var mode := speed_input()
+	if mode != speed_mode:
+		speed_mode = mode
+		speed_mode_changed.emit(mode)
+	if mode == "rewind":
+		rewind_step()
+		count_game_frames(0, delta)
+		return
+	if mode == "fast": due = mini(due * FAST_FORWARD, 8)
 	var sticks: PackedInt32Array = input.analog
 	core.set_analog(sticks[0], sticks[1], sticks[2], sticks[3])
 	var pressure: PackedInt32Array = input.pressure
@@ -436,8 +464,11 @@ func _process(delta: float) -> void:
 				"audio_frames": info.audio_frames, "video_changed": info.video_changed})
 		frames += 1
 		auto_saved = false
+		if mode != "fast": record_rewind()
 		rendered = rendered or core.video_changed()
 		var audio_start := Time.get_ticks_usec() if profile_frames else 0
+		# Fast-forward is silent: sped-up sound would only overflow the queue.
+		if mode == "fast": continue
 		if playback != null and core.push_audio(playback) < 0:
 			audio_overflows += 1
 			if audio_overflows == 1 or audio_overflows % 300 == 0:
@@ -468,6 +499,53 @@ func _process(delta: float) -> void:
 			"process_us": Time.get_ticks_usec() - profile_start, "steps": profile_steps,
 			"audio_us": profile_audio, "present_us": present_us,
 			"audio_overflows": audio_overflows, "slow_frames": slow_frames})
+
+## Whether the speed controls can act on this game, and why not.
+func speed_available() -> bool:
+	return rewind_enabled and loaded and not uses_async() and system_id in SPEED_SYSTEMS and not triggers_bound()
+
+func triggers_bound() -> bool:
+	var bindings: Dictionary = controls.get("buttons", {}) if not controls.is_empty() else {}
+	return bindings.has("l2") or bindings.has("r2")
+
+## "rewind", "fast" or "" from the held triggers (or [ and ] on a keyboard).
+func speed_input() -> String:
+	if not speed_available(): return ""
+	if (gamepad.trigger(JOY_AXIS_TRIGGER_LEFT) > 0.5 or Input.is_physical_key_pressed(KEY_BRACKETLEFT)) and not rewind_states.is_empty() and not rewind_unsupported: return "rewind"
+	if gamepad.trigger(JOY_AXIS_TRIGGER_RIGHT) > 0.5 or Input.is_physical_key_pressed(KEY_BRACKETRIGHT): return "fast"
+	return ""
+
+## Keeps a state every few frames, oldest dropped past the memory budget.
+func record_rewind() -> void:
+	if not speed_available() or rewind_unsupported: return
+	rewind_counter += 1
+	if rewind_counter < REWIND_EVERY: return
+	rewind_counter = 0
+	var state: PackedByteArray = core.save_state()
+	if state.is_empty(): return
+	if state.size() > REWIND_STATE_LIMIT:
+		rewind_unsupported = true
+		clear_rewind()
+		return
+	rewind_states.append(state)
+	rewind_bytes += state.size()
+	while rewind_bytes > REWIND_BYTES and rewind_states.size() > 1:
+		rewind_bytes -= rewind_states[0].size()
+		rewind_states.pop_front()
+
+## One step back: the newest kept state, shown at once and then dropped.
+func rewind_step() -> void:
+	if rewind_states.is_empty(): return
+	var state: PackedByteArray = rewind_states.pop_back()
+	rewind_bytes -= state.size()
+	if core.load_state(state) and core.run_frame(0):
+		auto_saved = false
+		update_texture(true)
+
+func clear_rewind() -> void:
+	rewind_states.clear()
+	rewind_bytes = 0
+	rewind_counter = 0
 
 ## The game's own frame rate: emulated frames per second over the last two
 ## seconds (independent of the room's rendering rate). A rolling window keeps
@@ -975,6 +1053,8 @@ func save_state_async(slot := 0) -> bool:
 	return true
 
 func reset_game_async() -> bool:
+	# Rewind goes back within this timeline only.
+	clear_rewind()
 	if transition_busy or not loaded: return false
 	transition_busy = true
 	await drain_transition_frame()
@@ -1025,6 +1105,8 @@ func save_to(path: String, description: String) -> bool:
 
 ## The console's reset button: the game restarts; battery saves and states are kept.
 func reset_game() -> bool:
+	# Rewind goes back within this timeline only.
+	clear_rewind()
 	if transition_busy:
 		report("Please wait for the current game operation to finish.", true)
 		return false
@@ -1047,6 +1129,8 @@ func load_auto() -> bool:
 	return load_from(auto_path(),"Continued automatic save")
 
 func load_from(path: String, description: String) -> bool:
+	# Rewind goes back within this timeline only.
+	clear_rewind()
 	if transition_busy:
 		report("Please wait for the current game operation to finish.", true)
 		return false
@@ -1077,6 +1161,7 @@ func load_from(path: String, description: String) -> bool:
 ## that is no longer loaded.
 func clear_game() -> void:
 	drain_async()
+	clear_rewind(); rewind_unsupported = false; speed_mode = ""
 	# Explicitly close/deinit before changing libraries: callbacks have one owner.
 	if core != null: core.close()
 	core = null
