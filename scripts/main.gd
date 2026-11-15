@@ -57,6 +57,8 @@ var picture_preset_signature := ""
 var room_preset_id := ""
 var room_preset_signature := ""
 var rooms = preload("res://scripts/ui/room_presets.gd").new()
+## Opt-in update check and the once-per-version What's new note.
+var updates = preload("res://scripts/content/update_check.gd").new()
 ## Box art from the player's own scrapes, for game rows and Continue.
 var box_art: Node
 var menu_large_text := false
@@ -684,6 +686,7 @@ func start_application() -> void:
 	if (not welcome_done or welcome_forced) and settings_panel.visible and not emulator.loaded and not video.loaded and not "--capture" in arguments and (welcome_forced or not "--script" in OS.get_cmdline_args()):
 		menu.welcome.open()
 	refresh_startup_status()
+	start_update_notes("--script" in OS.get_cmdline_args() or "--capture" in arguments)
 	if "--capture" in arguments:
 		power_on.started=true; power_on.set_progress(1.0)
 	elif not settings_panel.visible and not is_instance_valid(sbs_prompt): power_on.begin()
@@ -1794,6 +1797,22 @@ func update_game_fps(eye: int) -> void:
 	label.add_theme_color_override("font_color", Color.WHITE if emulator.game_fps >= target * 0.97 else Color("ffd060"))
 	label.reset_size()
 	label.position = Vector2(panels[eye].size.x - label.size.x - 22.0, 18.0)
+
+## After start-up settles (past the boot sequence): tell someone who has just
+## updated where What's new is, and run the daily check if they turned it on.
+func start_update_notes(scripted: bool) -> void:
+	if updates.get_parent() == null: add_child(updates)
+	if scripted: return
+	updates.finished.connect(func(result: Dictionary):
+		if result.get("newer", false) and not updates.checking: show_notice("CRT XR %s is available · Setups & help › System › Updates" % updates.pretty(str(result.tag))))
+	await get_tree().create_timer(6.0).timeout
+	if updates.should_show_whats_new(welcome_done):
+		show_notice("Updated to CRT XR %s · What's new is in Setups & help › Help" % updates.current_version())
+		updates.mark_whats_new_seen()
+	elif not welcome_done:
+		# A new user has nothing to catch up on.
+		updates.mark_whats_new_seen()
+	updates.startup_check()
 
 func show_notice(message: String) -> void:
 	for notice in notices: notice.text = message

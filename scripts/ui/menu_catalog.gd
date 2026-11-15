@@ -434,6 +434,27 @@ func emulation_bios_info() -> String:
 	for folder in registry.bios_sources(): lines.append("- " + folder)
 	return "\n".join(lines)
 
+## Setups & help → System → Updates: opt-in, and only ever a look at GitHub's
+## public release list. Nothing is downloaded or installed.
+func update_rows() -> Array:
+	var h = host
+	var u = h.updates
+	var auto := {"id":"system.update_auto","label":"Check for updates automatically","kind":"toggle","default":false,"visual":false,"section":"UPDATES",
+		"getter":func(): return u.auto,"setter":func(value): u.auto=bool(value); u.save_state(); menu.refresh(),
+		"help":"Once a day at start-up, asks GitHub whether a newer CRT XR has been released. Off by default; nothing else is sent."}
+	var now := action("system.update_check","Check now",func():
+		if u.checking: return
+		var done := func(result: Dictionary): menu.notify(str(result.message)); menu.refresh()
+		u.finished.connect(done, CONNECT_ONE_SHOT)
+		u.check_now(); menu.refresh(),
+		"Asks GitHub's public release list for the newest version. Updating is still your choice: download it from github.com/blackalice/CRT-XR/releases.",false,u.summary())
+	var result: Array = [auto, now]
+	if u.update_available():
+		result.append(action("system.update_open","Open the download page",func():
+			if OS.shell_open(u.latest_url if not u.latest_url.is_empty() else u.RELEASES_PAGE) != OK: menu.notify("Open github.com/blackalice/CRT-XR/releases on your computer."),
+			"Opens the release page in your browser (on the Deck, switch to Desktop Mode to download). Run the new package's installer, or extract it to a new folder on Windows; settings and saves are kept.",false,u.pretty(u.latest_tag)))
+	return result
+
 ## Tracking rows show what is happening: whether the glasses are tracking, and
 ## whether the fixed view is in use.
 func tracking_status() -> String:
@@ -725,6 +746,7 @@ func category_pages(category: int) -> Array:
 				action("system.glasses","Using glasses",func(): menu.open_help("Using glasses",menu.play.glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),
 				action("system.controls","Controls",func(): menu.open_help("Controls",CONTROLS_GUIDE),"Controller and keyboard shortcuts."),
 				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting",TROUBLESHOOTING_GUIDE),"Help with glasses, games, audio and saving."),
+				action("system.whats_new","What's new",func(): h.updates.mark_whats_new_seen(); menu.open_help("What's new in " + h.updates.current_version(),h.updates.whats_new_text()),"What changed in this version of CRT XR.",false,h.updates.current_version()),
 				action("system.setup","Run setup again",func(): menu.welcome.open(),"The first-run setup: the menu shortcut, your view, console region, game library, videos and music, and comfort options."),
 				action("system.version","About CRT XR",func(): menu.open_help("About CRT XR",about_page()),"A little CRT room for your XR glasses. About CRT XR, its maker and website.",false,str(ProjectSettings.get_setting("application/config/version")))],"Guides and setup"),
 				page("System",[
@@ -732,7 +754,7 @@ func category_pages(category: int) -> Array:
 				action("system.diagnostics","Copy diagnostics",func():
 					DisplayServer.clipboard_set("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))+" | "+OS.get_name()+" | Godot "+str(Engine.get_version_info().string)+" | "+DisplayServer.get_name()); menu.notify("Version and platform details copied; no ROM or music paths included."),"Copies version and platform details for a bug report."),
 				action("system.credits","Credits & licences",func(): menu.open_help("Credits & licences",FileAccess.get_file_as_string("res://THIRD_PARTY.md")),"Godot, libretro, and the artists and developers behind CRT XR."),
-				action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")],"Version " + str(ProjectSettings.get_setting("application/config/version")))]
+				action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")]+update_rows(),"Version " + str(ProjectSettings.get_setting("application/config/version")))]
 		9:
 			return [page("Accessibility",[
 				toggle("access.large","Larger menu text",h,"menu_large_text",false,"Larger text and taller rows; lists scroll to keep focus visible.",menu.apply_accessibility,false),
