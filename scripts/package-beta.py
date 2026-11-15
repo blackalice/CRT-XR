@@ -21,7 +21,7 @@ desktop=target=='linux-desktop'
 platform='linux' if desktop else target
 assert folder.is_dir() and platform in ["linux","windows"]
 PAYLOAD="CRT XR files"
-GUIDES={"linux":["GETTING-STARTED.md","PLAYING.md","GAMING-MODE.md","DISPLAY-SETUP.md"],"windows":["GETTING-STARTED.md","PLAYING.md","WINDOWS-SETUP.md"]}[platform]
+GUIDES={"linux":["GETTING-STARTED.md","PLAYING.md","GAMING-MODE.md","DISPLAY-SETUP.md","GLASSES.md"],"windows":["GETTING-STARTED.md","PLAYING.md","WINDOWS-SETUP.md","GLASSES-VITURE.md","GLASSES-OTHER.md"]}[platform]
 if desktop:GUIDES=["LINUX-DESKTOP.md","PLAYING.md","DISPLAY-SETUP.md"]
 NOTICES=["LICENSE","LICENSING.md","THIRD_PARTY.md","CORE-DISTRIBUTION.md","SOURCE-ACCESS.md","godot-cpp-LICENSE.md"]
 DEVELOPER_NOTES=["BETA-REVIEW.md","BETA-QUICKSTART.md","PRE-LAUNCH-CHECKLIST.md","LICENCE-PROPOSAL.md","AUDIO.md","CRT-PERFORMANCE.md","INPUT-LATENCY.md","PICTURE-CONTROLS.md","ROOM-AND-VIEW.md","SCREEN-LIGHT.md","SETTINGS-AND-STARTUP.md","MENU-AND-SETTINGS.md"]

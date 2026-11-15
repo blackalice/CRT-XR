@@ -91,7 +91,7 @@ Each sets every lighting value (screen glow, ambient, lamp, front fill, warmth,
 shadow darkness, floor brightness and fade), so a mood always looks the same;
 the brighter the room, the less the screen's glow stands out. A room is
 recognised as its mood by its lighting alone, so switching a prop or the floor
-doesn't turn it into Custom. These moods change lighting only. **Room → Presets** also
+doesn't turn it into Custom. These moods change lighting only. **Room → Rooms** also
 keeps three rooms of your own (lighting, shadows, floor and props): save the current room
 into a slot, rename or delete it. The **Room** switch in the pause menus and Quick settings
 moves through Custom, the moods and your rooms with left/right; Custom brings back the room
@@ -133,7 +133,7 @@ its proportions, supports the full CRT depth, and moves the floor island down
 to its feet without moving the viewing position. The original rounded oak-style
 shelf unit remains as a fallback. Its open shelves contain
 four unbranded game cases and a small console-shaped prop. The floor provides
-colour without surrounding the viewer with walls: **Room → Materials → Floor**
+colour without surrounding the viewer with walls: **Room → Furniture & props → Floor**
 offers a 90s confetti carpet (default), a wool carpet with large-scale
 patches and a worn path, or wooden floorboards. At 2–3 m a carpet's pile is far
 below a pixel, so each style adds detail that reads at that distance; the
@@ -143,7 +143,7 @@ carpet texture reads (floorboards read none). The former woven rug was removed.
 
 ### Table props
 
-**Room → Props** toggles three original, procedurally built props (no external
+**Room → Furniture & props** toggles three original, procedurally built props (no external
 models or textures; `scripts/rendering/room_props.gd`, `shaders/prop_*.gdshader`):
 
 - A **clock radio** left of the TV: charcoal plastic, speaker grille, snooze bar
@@ -167,7 +167,7 @@ models or textures; `scripts/rendering/room_props.gd`, `shaders/prop_*.gdshader`
 
 ### Room sound and time of day
 
-**Room → Sound** adds quiet sound around the TV, off by default: *Quiet room*
+**Sound → Volumes → Room sound type** adds quiet sound around the TV, off by default: *Quiet room*
 (soft air), *Rain on the window*, or *Rain and a ticking clock* (ticking on the
 real second), with its own volume kept well under the programme. **Tube whine**
 adds the line transformer's 15.7 kHz whine, very quietly; many people can't hear
@@ -181,7 +181,7 @@ the room exactly. These are room settings, so room presets keep them.
 **Audio → TV sound** has the TV's own effects beside the power-on: a **channel
 change** (static, a click and a rolling picture for under half a second when a
 game or video starts after the first) and a **power-off** (the picture collapses
-to a line and a fading dot as CRT XR closes). **Picture → CRT → Degauss** closes
+to a line and a fading dot as CRT XR closes). **Picture → Tube → Degauss** closes
 the menu and plays the coil's wobble, colour swirl and thunk. One **TV effect
 sounds** level covers them all. Reduced motion keeps the degauss colour without
 the wobble, settles the channel change without the roll, and skips the power-off.

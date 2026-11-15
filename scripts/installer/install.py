@@ -448,7 +448,7 @@ def xr_prerequisites(home):
     plugins=homebrew/'plugins'
     plugin=plugins.is_dir() and any(p.is_dir() and p.name.lower().replace(' ','').replace('-','') in ['xrgaming','deckyxrgaming'] for p in plugins.iterdir())
     driver=(home/'.local/bin/xrDriver').is_file()
-    guide='See docs/glasses/STEAM-DECK.md for a step-by-step guide.'
+    guide='Step-by-step: docs/GLASSES.md in the CRT XR files folder, or github.com/blackalice/CRT-XR/blob/main/docs/glasses/STEAM-DECK.md'
     if driver and plugin:
         return {'state':'ready','message':'Head tracking: ready. XR Gaming is installed; connect your glasses and turn it on in Decky before you play.'}
     if not decky:

@@ -10,214 +10,73 @@
 </p>
 
 <p align="center">
+  <a href="#get-started">Get started</a> ·
   <a href="#features">Features</a> ·
-  <a href="#new-in-development-builds">Development builds</a> ·
   <a href="https://github.com/blackalice/CRT-XR/releases">Downloads</a> ·
-  <a href="#install-on-steam-deck">Steam Deck setup</a> ·
-  <a href="docs/GETTING-STARTED.md">Getting started</a> ·
+  <a href="docs/glasses/README.md">Glasses guides</a> ·
+  <a href="docs/USING-CRT-XR.md">Using CRT XR</a> ·
   <a href="THIRD_PARTY.md">Credits</a>
 </p>
 
 > [!NOTE]
-> CRT XR is an **early public beta**. VITURE Pro 2 has been tested on Steam Deck and Windows with an Xbox controller. Feedback and compatibility reports are welcome; see the [known limitations and remaining checks](docs/PRE-LAUNCH-CHECKLIST.md).
+> CRT XR is an **early public beta**. VITURE Pro 2 is tested on Steam Deck and Windows; other glasses are expected to work and reports are welcome. See [known limitations](docs/PRE-LAUNCH-CHECKLIST.md).
 
 ![Four Steam Deck screenshots of CRT XR: the home menu, Crash Bandicoot on the CRT, picture settings and the game library](docs/images/crt-xr-preview.png)
 
-*Captured on Steam Deck: the home menu, a game on the tube, picture controls and the console library. Bring your own games; no games are included.*
+*Bring your own games; no games are included.*
+
+## Get started
+
+Download **one** package from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases):
+
+| You have | Download | Then |
+|---|---|---|
+| **Steam Deck** | `CRT-XR-<version>-SteamDeck.tar.gz` | In Desktop Mode, extract it and double-click **Install CRT XR**. It adds CRT XR to Steam and can take you back to Gaming Mode. |
+| **Windows PC** | `CRT-XR-<version>-Windows.zip` | Extract it and double-click **CRT-XR.exe**. Nothing to install. If Windows warns, choose **More info → Run anyway** (the app is unsigned). |
+
+Then, in CRT XR:
+
+1. **First-run setup** (four short steps) teaches the menu shortcut, sets up your view and finds your ROM folder. EmuDeck, RetroDECK and plain `roms` folders are found automatically.
+2. **Playing with glasses?** Follow the guide for your setup: [Steam Deck](docs/glasses/STEAM-DECK.md) · [Windows with VITURE](docs/glasses/WINDOWS-VITURE.md) · [Windows with XREAL, Rokid, RayNeo and others](docs/glasses/WINDOWS-OPENTRACK.md).
+3. **No glasses?** Choose **This screen**: the game fills your screen with the CRT picture.
+
+**L1 + R1 + Start** (LB + RB + Start, or Escape) opens the menu; **R3** recentres. The `…-source-code.tar.gz` download is for rebuilding and licence compliance, not an app.
 
 ## Features
 
 - **A CRT in your space.** A detailed television, wooden table and baked contact shadows, with a dim red clock radio showing the real time, a VCR on a shelf and a stack of game boxes. Switch props off individually and choose 90s confetti carpet (the default), wool carpet or wooden floorboards. Light the room by the TV alone, add rain on the window or a ticking clock, and see the playing game's cover on the table. The surroundings fade into black to suit XR glasses.
 - **Stereo and head tracking.** Full side-by-side rendering and rotational **3DoF** tracking let you look around an anchored screen. Adjust its distance, height, size and curvature, then recenter with a stick click.
-- **A picture you can tune and keep.** Scanlines, phosphor detail, glass reflections, PAL/NTSC-inspired signal effects and colour controls. Trying a preset preserves your custom picture; restore it with **Custom**, or save up to three named picture presets. Screen-fitting options keep the full game image inside the tube.
+- **A picture you can tune and keep.** Scanlines, phosphor detail, glass reflections, PAL/NTSC-inspired signal effects and colour controls. Save your own **looks** and give them to a game, a whole console or a hand-picked set of games: edit a look once and they all change. Share looks as short codes. Screen-fitting options keep the full game image inside the tube.
 - **Fifteen classic systems.** SNES, NES, Mega Drive / Genesis, Master System, Game Gear, Game Boy / Game Boy Color, Game Boy Advance, PC Engine / TurboGrafx-16, Sega CD / Mega-CD, PlayStation, Nintendo 64, Atari 2600, Atari Lynx, Neo Geo Pocket / Color and Vectrex, powered by libretro cores. PlayStation games can stay zipped: they unpack in the background behind a spinning-disc loading screen on the TV. The Nintendo 64 draws with the GPU at its own 320×240, so it gets the same CRT picture.
 - **Your videos on the tube.** Choose a video folder and your MP4, M4V and MKV files play on the CRT with the same picture, light and sound as games: letterbox, 14:9 or fill for widescreen, subtitles, resume and Continue watching. The VCR joins in with green on-screen text, an optional VHS or worn-tape look and its mechanism sounds. The Steam Deck uses SteamOS's own FFmpeg; Windows downloads FFmpeg's video libraries once, on request.
-- **A library that understands your folders.** Pick your ROM root or SD card and browse supported systems, Recent and Favourites. Unrelated console folders stay out of the way. If you've scraped box art with EmuDeck, ES-DE or RetroDECK, CRT XR shows it from your existing `downloaded_media` (or `media` folders beside your ROMs); nothing is downloaded.
+- **A library that understands your folders.** Pick your ROM root or SD card and browse supported systems, Recent and Favourites. Unrelated console folders stay out of the way. If you've scraped box art with EmuDeck, ES-DE or RetroDECK, CRT XR shows it from your existing `downloaded_media` (or `media` folders beside your ROMs). For anything missing, you can choose to download covers from libretro-thumbnails.
 - **Your music, in the room.** Play MP3 albums or direct MP3 web radio with positional sound and optional room reverb. Use the pause-menu transport and seek bar, and optionally lower game audio while music plays. The last track and position are restored, ready for you to press Play.
-- **Music visuals on the tube.** A projectM-powered visualiser responds to your albums or radio on the CRT, with three bundled presets, adjustable brightness and optional automatic preset changes. Return to the menu without stopping the music or visuals, then restore your previous game or video when you're done.
+- **Music visuals on the tube.** A projectM-powered visualiser responds to your albums or radio on the CRT, with three bundled presets (or your own), adjustable brightness and optional automatic preset changes. Return to the menu without stopping the music or visuals, then restore your previous game or video when you're done.
 - **Responsive play.** Optional input preview in a separate copy of the emulator reduces input delay while keeping game audio intact. **Reset game** in the pause menu emulates the console's reset button and keeps battery saves and save states.
 - **Your controls, your way.** Put any console button on any control: pick a layout, then press the button you want. Each console keeps its layout and any game can have its own, with presets such as Smash Bros. and twin-stick shooting for the N64. Buttons are drawn the same way throughout the menus, by position, so they read right on any pad.
 - **A 90s console-style menu.** Pixel lettering, a moving planet and stars, and an animated three-diamond boot logo with startup sound and optional menu music. Menus appear on the CRT with your current picture settings by default; choose a clean menu feed for readability or float the menu in front of the TV. Games and videos share library shortcuts, quick settings and screenshot/recenter actions.
-- **Controller-first adjustments.** Quick settings put room and picture presets, TV distance, screen height and volume within reach, with compact placement previews. Organised settings pages, controller text entry, per-option resets, saved setups and per-game picture preferences keep adjustments simple. **Games & controls → Consoles / This game** offers supported console defaults and per-game overrides, applied when the game next loads. Accessibility options include larger text, stronger contrast and reduced animation. Four save-state slots per game with pictures, automatic resume points and clean screenshots are built in. The menu header shows the time, and the Deck's battery.
+- **Controller-first adjustments.** Quick settings put room and picture presets, TV distance, screen height and volume within reach, with compact placement previews. Organised settings pages, controller text entry, per-option resets, scenes and per-game picture preferences keep adjustments simple. **Games → Console settings** offers console defaults and per-game overrides, applied when the game next loads. Settings start simple, with fine-tuning one press away. Accessibility options include larger text, stronger contrast and reduced animation. Four save-state slots per game with pictures, automatic resume points and clean screenshots are built in. The menu header shows the time, and the Deck's battery.
+- **Always something on.** Saturday Morning TV turns your video folder into a channel with its own daily running order, so you tune in mid-programme. Rewind and fast-forward for 8- and 16-bit games, Surprise me for a random pick, optional box art downloads, a sleep timer and your own visualiser presets.
 
 Bring your own games and music. Cartridges can be plain files or sit alone in a ZIP (Deflate or stored; 7z and RAR are not read). Sega CD discs can be a `.cue` sheet, a `.bin` carrying the Sega CD header, or a CHD in a Sega CD folder (`segacd`, `megacd`, or a folder inside one). A zipped game shares its saves with the same game unzipped. Sega CD and Atari Lynx need their hardware's own files: the Sega CD BIOS (`bios_CD_U.bin` and friends) and the Lynx boot ROM (`lynxboot.img`). CRT XR finds them in the `bios` folder next to your `roms` folder (the EmuDeck layout), in `~/Applications/CRT-XR/bios` on the Deck, or in a `bios` folder next to `CRT-XR.exe` on Windows. The game library names anything still missing.
 
-## New in development builds
-
-Development builds add five consoles beyond the 15 systems in beta.15. GameCube, Wii, PlayStation 2 and PSP are experimental Steam Deck integrations. Each requires the matching Linux core and a development opt-in. Dreamcast uses Flycast and is also available in Windows development builds.
-
-| Console | Core | Game folder | Setup and compatibility |
-|---|---|---|---|
-| Dreamcast | Flycast | `dreamcast/` | CHD, GDI and CDI, with M3U playlists for multi-disc games. The first player's VMU can appear as a floating LCD below the TV. [Dreamcast guide](docs/emulation.md#dreamcast-development) |
-| GameCube | Dolphin | `gamecube/` | ISO, GCM, RVZ and WIA. Includes C-stick and analogue trigger mappings. [GameCube guide](docs/gamecube-integration.md) |
-| Wii | Dolphin | `wii/` | ISO, RVZ, WIA and WBFS. Uses a Wii Remote with Classic Controller layout. [Wii setup](docs/wii-ps2-psp.md) |
-| PlayStation 2 | LRPS2 | `ps2/` | ISO, supported cue sheets and CHD. Requires a PS2 BIOS. Internal resolution and EE cycle rate can be set per console or game. [PS2 setup](docs/wii-ps2-psp.md) |
-| PlayStation Portable (PSP) | PPSSPP | `psp/` | ISO, CSO and PSP PBP eboots. Plays at the PSP's native widescreen resolution by default. [PSP setup](docs/wii-ps2-psp.md) |
-
-- **Choose your TV.** Use the standard 4:3 CRT or a wider 16:9 cabinet in silver or black. First-run setup lets you choose one TV for all consoles or start with choices by console. Videos have their own starting TV. Each cabinet remembers its placement for desktop and XR use.
-- **Fit the game to either TV.** A 4:3 game can play on the wide CRT with side borders, and a widescreen game can play on the standard CRT with borders above and below. **Fit** preserves the whole image and its shape, **Fill** crops the edges, and **Stretch** fills the screen by changing the shape. **Quick settings → TV & fit** adjusts both for the current game or video. [Picture controls](docs/picture-controls.md)
-- **Know what you’re editing.** The settings sidebar has eight categories. **TV & picture** shows whether changes apply to this game or video, the console, or the TV defaults. **Games & controls** groups mappings and emulator options. Video Library and the music browser open their own settings, and Back returns to the same selection.
-- **Read and adjust in place.** The settings frame stays put as you move between pages. Long choices use the space beside their labels before wrapping. **Clearer menus**, larger text, higher contrast and reduced animation are in **Menu & access → Accessibility**. The idle menu can show a drifting logo screensaver. [Settings and startup](docs/settings-and-startup.md)
-
-The menu paths below describe the development build. The public beta.15 packages listed next contain the features described in their release notes.
-
-## Download the beta
-
-**Beta.15 (0.1.0-beta.15)** adds PlayStation and Nintendo 64, controller layouts with per-game overrides, a 90s console-style menu and animated startup, expanded quick settings, console settings and projectM music visuals. It includes the updated Steam artwork and all beta.14.1 fixes. See the [beta.15 release notes](docs/RELEASE-NOTES-beta.15.md). **Testers with XREAL, Rokid, RayNeo or other glasses are still wanted**, along with reports from other Windows and Linux systems; only VITURE Pro 2 has been tested for XR use.
-
-Download from [GitHub Releases](https://github.com/blackalice/CRT-XR/releases). Pick **one** app package:
-
-| You have | Download | Then |
-|---|---|---|
-| **Steam Deck** | `CRT-XR-0.1.0-beta.15-SteamDeck.tar.gz` | Extract it in Desktop Mode and double-click **Install CRT XR** |
-| **Windows PC** | `CRT-XR-0.1.0-beta.15-Windows.zip` | Extract it and double-click **CRT-XR.exe** |
-
-Each download opens with a short **HOW TO INSTALL** / **HOW TO START** file. The `…-source-code.tar.gz` file and GitHub's automatic "Source code" links are not apps: they are for rebuilding and licence compliance.
-
-The app is free and early: please [report bugs](https://github.com/blackalice/CRT-XR/issues), suggest improvements and share compatibility results. This project has been built with substantial AI coding assistance (“vibe coded”); code reviews and contributions are welcome.
-
 ## What you need
 
-| Platform | Current use |
+| Platform | Notes |
 |---|---|
-| **Steam Deck + VITURE Pro 2** | The tested XR setup, including Gaming Mode mono-to-SBS startup. **Decky Loader and XR Gaming with Pro 2 support must already be installed**. Tracking compatibility is checked at runtime rather than restricted to one driver binary. |
-| **Steam Deck without glasses** | Mono play. The latest automatic launcher includes this path; final hardware acceptance is still pending. |
-| **Windows** | Portable app for normal-monitor play or SBS glasses. VITURE tracking has been tested locally on Pro 2 and needs the separately supplied VITURE Windows SDK; monitor play does not need it. Vendor SDK DLLs are not bundled. |
+| **Steam Deck + glasses** | Head tracking needs Decky Loader and its XR Gaming plugin ([guide](docs/glasses/STEAM-DECK.md)). The installer checks for both. |
+| **Windows + glasses** | VITURE tracking uses VITURE's free Windows SDK, which you choose once in CRT XR ([guide](docs/glasses/WINDOWS-VITURE.md)). Other glasses track through OpenTrack ([guide](docs/glasses/WINDOWS-OPENTRACK.md)). |
+| **Deck screen, monitor or TV** | Nothing extra: play in Flat view. |
 
-The intended setup is XR glasses with **SBS and 3DoF tracking exposed through a compatible XR Gaming driver**. We expect other compatible glasses to work, but **only VITURE Pro 2 has been tested**. On the Deck, tracking comes from XR Gaming, so glasses it supports should track; CRT XR recognises VITURE, XREAL, Rokid and RayNeo displays by name (only VITURE confirmed on hardware). Other models may need manual display/profile setup. SBS and built-in 3DoF alone do not guarantee that CRT XR can access tracking. See [display setup](docs/display-setup.md) and [Gaming Mode handoff notes](docs/SBS-HANDOFF-TEST.md).
-
-## Install on Steam Deck
-
-1. In **Desktop Mode**, download `CRT-XR-0.1.0-beta.15-SteamDeck.tar.gz` and extract it (right-click → Extract). Sign in to Steam at least once beforehand.
-2. In the extracted folder, double-click **Install CRT XR**. Choose **Trust and Launch** if asked. Pick the VITURE Full SBS profile, or Deck / monitor only.
-3. Let setup close Steam. It installs CRT XR, adds or updates its Steam shortcut and artwork, and keeps your settings, saves and custom artwork.
-4. Restart Steam, then **Return to Gaming Mode → Library → Non-Steam → CRT XR**. You can delete the extracted folder.
-
-For head tracking, **Decky Loader → XR Gaming** must already be installed and recognise your glasses (VITURE Pro 2 currently needs an XR Gaming release with Pro 2 support, which may be the testing channel). CRT XR does not install the plugin or replace your driver; without it you get a fixed view.
-
-No SSH, Steam developer interface or administrator password is needed for CRT XR's app installer. The separately installed XR Gaming prerequisite has its own setup requirements. If the script opens as text, or you have several Steam accounts, follow the [full installation guide](docs/GETTING-STARTED.md).
-
-### First launch with glasses
-
-Leave XR Gaming’s **virtual display off** for CRT XR. Gaming Mode temporarily enables tracking-only output with compositor effects disabled, then restores the previous driver settings on exit. CRT XR supplies its own SBS rendering and head tracking.
-
-Connect the glasses in **mono**, then launch CRT XR. Put them on and press their **SBS** button: nothing else to press. The view goes dark during the change and the room appears by itself. When you exit, switch them back to 2D and CRT XR closes. Glasses the XR Gaming driver can switch go into SBS and back by themselves.
-
-The tested VITURE profile uses an explicit **3840 × 1080** Steam game resolution; **Native alone did not work on our test Deck**. Setup prepares that profile. If the view stays black, X retries; return the glasses to mono before using B / Escape to leave.
-
-Open **Game Library → Library locations** to choose your ROM folder or SD card. You can explore the built-in test signal before loading a game.
-
-## Install on Windows
-
-1. Extract `CRT-XR-0.1.0-beta.15-Windows.zip` to a folder (not inside the ZIP) and double-click **CRT-XR.exe**. It is portable and unsigned: if Windows warns, choose **More info → Run anyway**. Keep the files and folders next to the EXE together. For normal-monitor play, choose **Play on this screen without glasses**; the remaining steps are for glasses.
-2. For glasses tracking, obtain the **VITURE Windows x86_64 SDK separately** and copy the contents of its `x86_64` folder into a folder named `sdk` beside the EXE. The beta does **not** include proprietary VITURE SDK DLLs; installing SpaceWalker alone does not configure this step. See [Windows setup](docs/WINDOWS-SETUP.md).
-3. Close SpaceWalker so it does not compete for tracking. **Switch the glasses to SBS first**, then launch CRT XR on your normal monitor.
-4. Choose the glasses display and select **Open glasses view**. The app moves under a black curtain and opens when the selected display is ready. For normal-monitor play, choose **Play on this screen without glasses**.
-
-Windows uses native Xbox-compatible controller support. **LB + RB + Start** opens the menu (L1 + R1 + Start on the Deck); **R3** recentres. Both platforms use the same TV-distance range; desktop and XR field-of-view calibration are stored separately. Mixed Windows display scaling is handled by the exported app's per-monitor DPI manifest.
-
-Only **VITURE Pro 2** has been tested for Windows tracking. **Other glasses** can track through **OpenTrack**: run a tool that sends OpenTrack UDP to `127.0.0.1` port `4242` (for example [opentrack](https://github.com/opentrack/opentrack), [PhoenixHeadTracker](https://github.com/iVideoGameBoss/PhoenixHeadTracker) for XREAL Air, or VertoXR for Rokid and RayNeo), then choose **View & glasses → Tracking → Tracking source → OpenTrack**. This path is untested with real non-VITURE glasses; if a direction is reversed, invert that axis on the same page. SBS works with any glasses that offer a full side-by-side mode. Public-package setup with a different Windows user and extended reconnect/suspend testing remain beta feedback areas.
-
-## ROM folders
-
-In **Game Library → Library locations**, select your **main ROM folder**—the folder containing the console folders. An existing EmuDeck-style layout can stay where it is, including on an SD card:
-
-```text
-roms/
-├── snes/
-│   ├── Game.sfc
-│   └── RPGs/
-│       └── Another game.smc
-├── nes/
-│   └── Game.nes
-├── megadrive/       # genesis/ also works
-│   └── Game.md
-├── mastersystem/
-│   └── Game.sms
-├── gamegear/
-│   └── Game.gg
-├── gb/              # gbc/ and gameboy/ also work
-│   └── Game.gb
-├── gba/
-│   └── Game.gba
-├── pcengine/        # tg16/ turbografx16/ also work
-│   └── Game.pce
-├── segacd/          # megacd/ also works; needs the BIOS files
-│   ├── Game.cue
-│   └── Game.bin
-├── n64/             # nintendo64/ also works
-│   └── Game.z64             # .n64 and .v64 too
-├── psx/             # ps1/ playstation/ also work; a BIOS is optional
-│   ├── Game (USA).zip       # a zipped cue and its tracks
-│   ├── Other Game.chd
-│   └── Long Game.m3u        # lists each disc, for Change disc
-├── atari2600/       # atari/ atarivcs/ also work
-│   └── Game.a26
-├── atarilynx/       # needs lynxboot.img
-│   └── Game.lynx
-├── ngpc/            # ngp/ neogeopocket/ also work
-│   └── Game.ngpc
-└── vectrex/
-    └── Game.vec
-```
-
-Windows users can open **Computer drives** directly in the browser, including mapped drives, or use **Open folder or network path…** with a path such as `\\server\share\roms`. Connect protected shares in Windows File Explorer first. Choose **Use this folder for my library** to save the root.
-
-CRT XR discovers supported games in subfolders and presents them by system; you do not need to move ROMs into the app folder. Common folder aliases such as `genesis`, `superfamicom`, `sms` and `gg` are recognised. Folder names help discovery, while the supported file type/content chooses the emulator core. You can also select a single supported system folder or browse to a game directly.
-
-Known unsupported system folders and artwork/BIOS/save folders are skipped when scanning the main library, so a larger multi-system collection is fine. Supported, recognised games appear, including zipped cartridges, Sega CD CHDs and PlayStation discs (cue/bin, CHD, PBP, M3U or zipped). No ROMs are supplied.
-
-PC Engine, Atari 2600, Lynx and Vectrex still need real-game testing beyond diagnostic programs. PC Engine CD, SuperGrafx, Sega 32X, 7z/RAR archives and Sega CD discs inside ZIPs are unsupported. PlayStation has been played on the Steam Deck; a real BIOS (`scph5501.bin` and friends, in the `bios` folder) improves compatibility. Sega CD needs the BIOS matching the disc's region; a different region's BIOS can produce a generic load error. See [supported formats and BIOS setup](docs/emulation.md).
-
-## Videos
-
-In **Video Library**, select **Choose a video folder** and pick the folder holding your videos; subfolders are included. Your videos then appear in **Video Library**. MP4, M4V and MKV files are listed, with any `.srt` subtitles beside them.
-
-- **Steam Deck:** nothing to install; SteamOS's FFmpeg is used and decoding runs on the GPU.
-- **Windows:** choose **Set up video playback** in **Video Library**. CRT XR downloads FFmpeg's five LGPL video libraries (about 55 MB) from the public [BtbN builds](https://github.com/BtbN/FFmpeg-Builds), checks them and keeps them in its own user-data folder.
-- **Other Linux systems:** install FFmpeg 7.1 or 8 with your package manager.
-
-While watching, **A** pauses, **D-pad left/right** skips 10 seconds (hold to scrub), **up/down** skips a minute, **Y** changes broadcast framing and **X** changes the audio track. The pause menu has a timeline you can scrub. Open **Video settings** from the Video Library or go to **TV & picture → Videos** for default framing, picture lines, interlacing, VCR effects, subtitles and hardware decoding. See [Videos](docs/emulation.md#videos) for details.
-
-## Music and visualiser
-
-Expand **Music** on the home or pause menu to browse MP3 albums or play direct MP3 web radio. Select **Visualiser**, beside **Browse albums**, to put music visuals on the CRT. It pauses the previous game or video; **B / Escape** opens the menu while the visualiser stays active, and selecting **Visualiser** again returns to it.
-
-While viewing, **A / Space** pauses or plays music, **left/right** selects a preset, **up/down** changes brightness and **Y** toggles automatic preset changes. Automatic mode changes presets every 30 seconds; reduced animation keeps the current preset. **Sound → Visualiser** contains these settings and **Stop visualiser**, which restores the previous programme while music keeps playing. Preferences are remembered, but playback does not start automatically.
-
-Three original presets are included; importing your own presets is not yet supported. Steam Deck performance and long-session checks remain pending. See the [music visualiser guide](docs/music-visualiser.md).
-
-## Controls
-
-On Steam Deck, use Steam's **Gamepad With Joystick Trackpad** layout. On Windows, use an Xbox/XInput-compatible controller directly. You do not need to hold the three-lines button to switch Desktop/gamepad mappings.
-
-| Action | Controller | Keyboard |
-|---|---|---|
-| Open / close menu | L1 + R1 + Start | Escape |
-| Recenter | R3 | R |
-| Select / adjust a setting | Up/down / left/right | Arrow keys |
-| Activate / go back | A / B | Enter / Backspace |
-| Change category / subsection | L1/R1 / L2/R2 | Q/E / Z/C |
-| Reset selected option | Y | Y |
-| Compact adjustment preview | X | X |
-| Move TV closer / farther | Right stick, when enabled | Page Up / Page Down |
-| Screenshot | Pause menu | F6 |
-
-Continue or library setup leads the home screen. Home and game pause menus include a six-tile Quick settings grid for Room, Picture, Game volume, TV distance, TV height and TV & fit. Select distance or height to open the compact placement preview. Videos use the same layout with video volume and playback-specific controls. In system game lists, left/right or L1/R1 changes pages of 50 games; **Jump to letter** navigates longer lists. Steam Deck starts with controller glyphs, including in Desktop Mode; pressing a keyboard key switches to keyboard prompts.
-
-**Reset game** is in the pause menu. **Games & controls → Advanced → Separate preview core** controls the separate emulator copy used by **Reduce input delay**. Save picture presets under **TV & picture → Presets**. **Clearer menus** is under **Menu & access → Accessibility**. **Menu & access → Layout & placement → Menu on the TV** switches between the CRT and floating menu. **Menu depth** places the floating menu in front of the TV and dims the room in side-by-side 3D. The compact preview does not dim the room. **Menu & access → Audio & vibration** controls menu sounds, boot sound, menu music and controller vibration, with an independent menu music volume. Music uses a compact strip when idle or paused and expands its transport and timeline during playback. Left/right selects playback controls or seeks; up/down moves between music and game actions. Game controls follow each supported console's layout.
+Glasses need a full side-by-side (SBS) mode. Sega CD and Atari Lynx games need their BIOS files in a `bios` folder next to your `roms` folder (the EmuDeck layout); the library says what's missing. Formats and BIOS details: [emulation guide](docs/emulation.md).
 
 ## Updates, help and feedback
 
-On Steam Deck, run the installer from a newer complete package to update the existing Steam entry. On Windows, extract a new complete folder and run it; settings and saves remain in the separate user-data folder. Previous program versions are retained, and settings/saves live separately from the application. Old **RetroCRT XR** data is copied on first launch without deleting the originals.
+- **Updating**: on the Deck, run the new package's installer; on Windows, extract the new version to a new folder. Settings and saves are kept either way. **Scenes & help → System → Updates** can check for new releases (off until you turn it on), and **What's new** appears after each update.
+- **Guides**: [Using CRT XR](docs/USING-CRT-XR.md) (games, videos, music, controls, looks) · [Glasses](docs/glasses/README.md) · [Getting started and recovery](docs/GETTING-STARTED.md) · [Settings and startup](docs/settings-and-startup.md) · [Development builds](docs/DEVELOPMENT-BUILDS.md) · [Development](docs/DEVELOPMENT.md)
+- **Bug reports**: use **Scenes & help → System → Copy diagnostics** and include your device, glasses, Desktop/Gaming Mode and the steps to reproduce. [Open an issue](https://github.com/blackalice/CRT-XR/issues).
 
-- [Getting started and recovery](docs/GETTING-STARTED.md)
-- [Picture controls](docs/picture-controls.md) · [Room and view](docs/room-and-view.md) · [Audio](docs/audio.md)
-- [Menus, settings and startup](docs/settings-and-startup.md) · [Music visualiser](docs/music-visualiser.md)
-- [Development and builds](docs/DEVELOPMENT.md)
-- [Pre-launch checklist](docs/PRE-LAUNCH-CHECKLIST.md) · [Detailed beta review](docs/BETA-REVIEW.md)
-
-For a bug report, use **Help & system → Copy diagnostics** and include your device, Desktop/Gaming Mode, mono/SBS, and steps to reproduce. Review logs before sharing: they can contain local paths or radio URLs.
+CRT XR is free and early, and has been built with substantial AI coding assistance; code reviews and contributions are welcome.
 
 ## Credits and licensing
 

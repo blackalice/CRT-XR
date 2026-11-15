@@ -19,7 +19,7 @@ The mouse cursor is hidden throughout SBS playback and menus, including the SBS 
 
 ## TV power-on
 
-TV & picture → TV effects includes **TV power-on effect** (On by default), **TV effect sounds** (60%), and **Preview TV power-on**. Preview closes the menu and replays the effect. Zero volume keeps the animation silent; switching the effect Off bypasses both picture and sound.
+Room → TV moments includes **TV power-on effect** (On by default), **TV effect sounds** (60%), and **Preview TV power-on**. Preview closes the menu and replays the effect. Zero volume keeps the animation silent; switching the effect Off bypasses both picture and sound.
 
 The first unobstructed view of the TV in each application session gets a 0.70-second tube warm-up: a dim centre line opens into the full picture. It waits until the startup menu and SBS curtain have closed. Ordinary menu visits, game changes and recentering do not replay it. The game begins/resumes immediately; animation never stalls the core or queues additional game audio. The effect uses the existing CRT shader and screen lights, then stops its controller processing. The `--capture` tooling option bypasses startup for stable comparisons.
 

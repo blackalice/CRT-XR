@@ -1,6 +1,6 @@
 # CRT XR — Windows beta setup
 
-Version: 0.1.0-beta.14. Tested with VITURE Pro 2 and an Xbox-compatible controller.
+Tested with VITURE Pro 2 and an Xbox-compatible controller. Short guides: [VITURE](glasses/WINDOWS-VITURE.md) · [XREAL, Rokid, RayNeo and others](glasses/WINDOWS-OPENTRACK.md).
 
 ## Extract the app
 
@@ -16,7 +16,7 @@ The built-in tracking reads VITURE glasses. For other glasses, CRT XR can follow
 - [PhoenixHeadTracker](https://github.com/iVideoGameBoss/PhoenixHeadTracker) for XREAL Air glasses;
 - VertoXR, which supports Rokid and RayNeo glasses.
 
-Start the tool, then in CRT XR choose **View → Tracking → Tracking source → OpenTrack**. The status reads *OpenTrack UDP / LIVE 3DoF* once poses arrive, and the first pose centres the view. Only this computer can send: CRT XR listens on 127.0.0.1. This path has been tested with simulated packets, not yet with real non-VITURE glasses. OpenTrack has no documented sign convention, so if turning or tilting goes the wrong way, use **Invert yaw/pitch/roll** on the same page. Field of view differs between models; adjust **Vertical field of view** in View if the TV seems to slide as you turn. SBS works as with VITURE: switch the glasses to their full side-by-side mode and choose their display.
+Start the tool, then in CRT XR choose **View & glasses → Tracking → Tracking source → OpenTrack**. The status reads *OpenTrack UDP / LIVE 3DoF* once poses arrive, and the first pose centres the view. Only this computer can send: CRT XR listens on 127.0.0.1. This path has been tested with simulated packets, not yet with real non-VITURE glasses. OpenTrack has no documented sign convention, so if turning or tilting goes the wrong way, use **Invert yaw/pitch/roll** on the same page. Field of view differs between models; adjust **View & glasses → Calibration → Vertical field of view** (shown with **Show advanced settings** on) if the TV seems to slide as you turn. SBS works as with VITURE: switch the glasses to their full side-by-side mode and choose their display.
 
 ## Video playback (optional)
 
@@ -24,13 +24,13 @@ Windows has no built-in FFmpeg. To watch videos, open **Video Library** and choo
 
 ## Set up VITURE tracking
 
-The proprietary VITURE SDK is **not bundled**. Obtain the Windows x86_64 glasses SDK from the official developer page: https://www.viture.com/developer . Follow its terms and Windows driver prerequisites. SpaceWalker installation alone does not put the SDK in CRT XR's folder.
+The proprietary VITURE SDK is **not bundled**. Download the Windows SDK from https://www.viture.com/developer and follow its terms; keep the ZIP.
 
-Create a folder named **sdk** beside CRT-XR.exe, then copy the **contents of the SDK's x86_64 directory** into it. Keep all its dependency DLLs together, including glasses.dll and libusb-1.0.dll. You do not need to copy headers, demo programs or the original ZIP. CRT XR does not download these files, alter USB drivers or enable SDK telemetry.
+On CRT XR's start-up screen choose **Set up VITURE head tracking…** (or later, **View & glasses → Tracking → Set up VITURE SDK**) and pick the ZIP, its folder, or `glasses.dll` inside it. CRT XR copies the x86_64 DLLs into its own settings folder (`%APPDATA%/Godot/app_userdata/CRT XR/viture-sdk`), so the setup survives updates to a new app folder. An `sdk` folder beside CRT-XR.exe, as older versions used, still works. CRT XR does not download these files, alter USB drivers or enable SDK telemetry.
 
-Close SpaceWalker before tracking so it does not compete for the same USB device. Connect glasses directly to the PC. **Switch glasses into SBS before launching CRT XR.** Use your normal monitor for setup, choose the glasses display and select **Open glasses view**. CRT XR keeps the view black while moving to that display and waits for a stable, plausible full-SBS mode; its resolution is read from the selected display. The SBS button remains manual.
+Close SpaceWalker before tracking so it does not compete for the same USB device; CRT XR warns while it is running. Connect glasses directly to the PC. Use your normal monitor for setup: choose the glasses display (usually picked for you) and select **Open glasses view**, then switch the glasses to SBS when asked. Switching to SBS first also works. CRT XR keeps the view black while moving to that display and waits for a stable full-SBS mode, following the display if it reconnects as the mode changes.
 
-If the view stays black, return the glasses to mono and press B / Escape to retry. Recheck the selected display and Windows' active display mode. If tracking is unavailable, check the USB connection, SDK files and whether SpaceWalker is closed; **View → Tracking** has a retry and fixed-view option. Other brands of glasses can use OpenTrack instead (below). Reconnect/suspend reliability on other computers is not yet established.
+If the view stays black, return the glasses to 2D and press B / Escape to return to the start-up screen. Recheck the selected display. If tracking is unavailable, the Tracking page says why (SDK not set up, SpaceWalker running, glasses not found) and has a retry and fixed-view option. Reconnect/suspend reliability on other computers is not yet established.
 
 ## Controls and games
 
@@ -44,4 +44,4 @@ Desktop and XR calibration are stored independently. Older Windows preview setti
 
 Close the old app before running a new version. Extract updates into a new complete folder. Settings, music bookmarks and saves normally live in **%APPDATA%/Godot/app_userdata/CRT XR/**, separate from the app. Keep a backup and the previous release while testing.
 
-Report issues at https://github.com/blackalice/CRT-XR/issues with General → Copy diagnostics, Windows version, glasses model, display modes/scaling, controller and steps to reproduce. Review logs before sharing because they can contain local paths or radio URLs. The project is a public beta; code reviews, ideas and compatibility reports are welcome.
+Report issues at https://github.com/blackalice/CRT-XR/issues with Scenes & help → System → Copy diagnostics, Windows version, glasses model, display modes/scaling, controller and steps to reproduce. Review logs before sharing because they can contain local paths or radio URLs. The project is a public beta; code reviews, ideas and compatibility reports are welcome.

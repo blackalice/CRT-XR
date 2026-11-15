@@ -11,13 +11,13 @@ and restores the previous pause state. Failed saves keep the menu open with an e
 | Category | Tabs |
 |---|---|
 | View & glasses | Tracking (live status, fixed view, recentre, inversion); TV placement (with the right stick); Stereo & comfort (Flat screen, SBS, soft edges, edge smoothing, fullscreen off the Deck); Calibration (including Show test signal) |
-| Picture | Looks (built-in and My looks); Tube; Colour & signal; Fit & TV (scope, TV model, fitting, reset) |
+| Picture | Looks (built-in and your linked looks: see below); Tube; Colour & signal; Fit & TV (scope, TV model, fitting, reset) |
 | Room | Rooms (presets and My rooms); Lighting (including lamp position and room edge); Furniture & props (floor, wide TV finish, props, finish); TV moments |
 | Sound | Volumes (game, music, menu music, TV moments, room sound and tube whine); TV speakers; Music (repeat, music space, visualiser look); Menu sounds |
-| Games | Consoles (with console names & icons); This game; Controls; Input delay; Info; Dreamcast VMU last, while a Dreamcast game is loaded |
+| Games | Console settings (with console names & icons); Controls; Input delay (with rewind & fast-forward); Info; Dreamcast VMU last, while a Dreamcast game is loaded |
 | Videos | Picture (TV for videos, framing, lines, interlacing); VCR; Playback |
-| Menu & access | Accessibility; Layout; Screensaver; Vibration |
-| Setups & help | Saved setups; Help; System (device status, diagnostics, credits, reset) |
+| Menu & access | Accessibility (with Show advanced settings); Layout (with Menu shortcut); Screensaver (logo or switch the TV off); Vibration |
+| Scenes & help | Scenes; Help (with What's new); System (device status, diagnostics, credits, reset, updates) |
 
 Each category has at most five tabs, and tab titles stay the same whichever TV
 or programme is in use; the context line under the title says what the tab
@@ -26,7 +26,7 @@ tabs shows where the current tab sits. The footer's Y hint names what Y gives
 back: the default, the inherited picture, or the console's value.
 
 Category IDs are stable (`menu_controller.gd` `CATEGORIES`): 0 View & glasses,
-1 Picture, 2 Sound, 3 Room, 6 Setups & help, 8 Videos, 9 Menu & access,
+1 Picture, 2 Sound, 3 Room, 6 Scenes & help, 8 Videos, 9 Menu & access,
 10 Games. 4 (Controls), 5 (Saved setups) and 7 (Quick settings) are hidden
 aliases. Quick settings remain on Home/pause. The Video Library's Video settings
 opens Videos; the music browser offers Play radio, Radio stream URL, Start
@@ -257,7 +257,9 @@ from a child folder restores selection and scroll position. Missing folders,
 cards or files retain the saved path and offer recovery instructions. Windows also provides Computer drives for browsing another drive. Supported
 ROM extensions remain .sfc, .smc, .swc and .fig. No files are moved or deleted.
 
-## Saved setups
+## Scenes (saved setups)
+
+Saved setups are presented as **Scenes** ("a look, a room and your view"); the slot files and behaviour below are unchanged.
 
 Saved setups lists three named slots with Empty/Saved status. Open a slot for
 Save, Load, Rename slot and Undo last setup load. Slots are called Setup 1,
@@ -333,30 +335,37 @@ skipping, the complete audio tail and independence from visual accessibility.
 A new user (no saved settings) gets first-run setup straight after the boot
 sequence: instead of flipping away, the boot logo stays face-on and glides down
 onto the Welcome page's logo while the planet settles, and the page builds in
-around it. **Let's get set up** runs six steps; **Skip setup** (or X on any step)
+around it. **Let's get set up** runs four steps; **Skip setup** (or X on any step)
 goes to the last page, which still shows the menu shortcut.
 
 1. **Controls**: the menu shortcut (L1 + R1 + Start, or Escape) drawn as the
    menu's own glyphs. Pressing it lights them and turns "Can't press it right
    now? Continue" into Continue; it does not close setup or move on by itself. On other steps the shortcut and Escape say how to leave instead.
    Recentre, Back and moving the TV are shown below.
-2. **Your view**: tracking status (with Connect glasses / Use fixed view when
-   tracking is not running), recentring, TV distance and screen height (which
-   open the same compact preview as the pause menu's, floating over the room
-   whichever menu position is chosen), and
-   **Menu position** (On the TV or Floating, the same `menu_on_tv` setting).
-3. **Console region**: PAL, NTSC or Japan, first suggested from the system
-   locale; five consoles, Dreamcast included, show their names and pictures live.
-4. **Game library**: folders found automatically (EmuDeck, RetroDECK and plain
+2. **Your view**: Playing with Glasses / This screen, TV for games (videos
+   start on the wide TV; that and the fitting guide live in Settings), tracking
+   status (with Connect glasses / Use fixed view when tracking is not running),
+   recentring, TV distance and screen height (which open the same compact
+   preview as the pause menu's, floating over the room whichever menu position
+   is chosen), and **Menu position** (On the TV or Floating, `menu_on_tv`).
+3. **Game library**: folders found automatically (EmuDeck, RetroDECK and plain
    `roms` layouts at home and on SD cards), or Browse folders, SD card / Computer
    drives and Type a path, which borrow the menu's own pickers and return here.
    The results page lists every console found, in a grid that widens from two
-   to four columns as the library grows, with BIOS needs and skipped folders.
-5. **Videos & music** (optional): the video folder picker (or FFmpeg setup where
-   needed) and a music folder. The music folder is saved in `recent.cfg`
-   (`[music] folder`) and is where the music browser opens.
-6. **Comfort**: picture style and the larger text, reduced animation, menu
+   to four columns as the library grows, with BIOS needs and skipped folders,
+   and lands on Next. **Console names** (PAL, NTSC or Japan) sits on both
+   library pages and renames the consoles shown live. The first run suggests a
+   region from the language and, because SteamOS and many Windows installs
+   report en_US anywhere, the time zone (`menu_welcome.gd`
+   `suggested_region`: IANA zone from TZ or /etc/localtime, else the UTC offset).
+   **Add videos & music** opens the optional Videos & music page (part of step
+   3): the video folder picker (or FFmpeg setup where needed) and a music
+   folder, saved in `recent.cfg` (`[music] folder`).
+4. **Comfort**: picture style and the larger text, reduced animation, menu
    music and vibration switches.
+
+All set summarises the library, view, games TV, picture, console names and
+media, and offers **Pick a game** (or Open Game Library) and **Go to Home** side by side.
 
 Every step's Next (or Finish) is pinned below the page, outside its scrolling
 area, so it stays on screen with larger text or a long list. Pages with little
@@ -445,3 +454,31 @@ The default setup was captured from the user's saved Steam Deck preferences on 1
 Existing saved settings and per-game overrides are retained. New installs and explicit defaults resets use Showcase. Metrics is a persistent toggle under **View → Tracking → Metrics overlay**; F1 also toggles it. Closing the menu saves the choice. Native FOV remains platform-specific (24° for glasses tracking, 50° for the desktop simulation), rather than forcing the captured glasses calibration into desktop previews.
 
 `tests/showcase_defaults.gd` compares fresh settings against the captured reference, checks metrics persistence, full-setup undo, per-option/reset-all consistency, stronger presets and preservation of fitting/room when applying a picture-only preset.
+
+## Looks, Basic settings and other additions (ux-overhaul)
+
+**Looks** (`display_preferences.gd` "Looks", `menu_looks.gd`): named pictures in
+`data.pictures["look.<id>"]` (tube, colour and signal only, never fitting), named
+in `data.looks` and linked from `data.look_for` by `platform.<system>`,
+`game.<content hash>` or `path.<ROM path>`. `picture_keys()` layers TV defaults,
+the console's look, the console's changes, the game's look and the game's
+changes, so editing a look updates every linked game. Edit a look with
+`begin_look_edit` (the Picture tabs then commit into the look; the scope strip
+hides); closing the menu ends the edit. Share codes are `CRTXR-LOOK1:` plus
+base64 JSON of name and values; imports keep only known picture fields. The old
+My looks slot files convert once (`looks_migrated`). Picture → Looks says which
+look a game uses and offers **Clear this game's own changes**.
+
+**Basic settings**: `menu_catalog.gd` `ADVANCED` lists fine-tuning rows that
+`page()` leaves out unless `settings_advanced` is on, adding a "N advanced
+settings hidden · Show" row that turns it on. New users start Basic; settings
+from before it existed (and test scripts) keep every row.
+
+**Other additions**: Menu & access → Layout → Menu shortcut (`gamepad_input.gd`
+`poll_hold_select`); Games → Input delay → Rewind & fast-forward
+(`emulation_session.gd`, L2/R2, 8/16-bit consoles only); Sound → Music → Sleep
+timer and Screensaver → Style → Switch the TV off (`main.gd` `sleep_tv` /
+`wake_tv`); Video Library → Saturday Morning TV (`tv_channel.gd`); Library
+locations → Download missing box art (`box_art_fetch.gd`, `user://boxart`);
+Surprise me; the demo shelf (`demo_shelf.gd`, `demo/demo.json`); Scenes & help →
+System → Updates and Help → What's new (`update_check.gd`, `WHATS-NEW.md`).

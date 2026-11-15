@@ -20,6 +20,8 @@ Copy-Item -Path (Join-Path $root 'cores/*LICENSE*') -Destination (Join-Path $out
 Copy-Item -LiteralPath (Join-Path $root 'cores/sources') -Destination (Join-Path $out 'cores') -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $root 'cores/core-builds.json') -Destination (Join-Path $out 'cores')
 Copy-Item -LiteralPath (Join-Path $root 'docs/emulation.md') -Destination (Join-Path $out 'PLAYING.md')
+Copy-Item -LiteralPath (Join-Path $root 'docs/glasses/WINDOWS-VITURE.md') -Destination (Join-Path $out 'GLASSES-VITURE.md')
+Copy-Item -LiteralPath (Join-Path $root 'docs/glasses/WINDOWS-OPENTRACK.md') -Destination (Join-Path $out 'GLASSES-OTHER.md')
 Copy-Item -LiteralPath (Join-Path $root 'THIRD_PARTY.md') -Destination $out
 foreach ($notice in @('LICENSE','LICENSING.md')) { Copy-Item -LiteralPath (Join-Path $root $notice) -Destination $out }
 Copy-Item -LiteralPath (Join-Path $root 'docs/CORE-DISTRIBUTION.md') -Destination (Join-Path $out 'CORE-DISTRIBUTION.md')

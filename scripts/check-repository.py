@@ -20,7 +20,8 @@ for name in files:
         problem('Local-only path in publication inputs: ' + name)
     if path.stat().st_size > 50 * 1024 * 1024:
         problem('File exceeds repository size budget: ' + name)
-    if path.suffix.lower() in {'.sfc', '.smc', '.swc', '.fig', '.nes', '.unf', '.unif', '.gen', '.smd', '.sms', '.gg', '.srm', '.sav', '.pem', '.key', '.mp3', '.flac', '.m4a', '.bin'} and name != 'assets/audio/menu-click.mp3':
+    # demo/ holds only games whose licences allow redistribution (see demo/demo.json).
+    if path.suffix.lower() in {'.sfc', '.smc', '.swc', '.fig', '.nes', '.unf', '.unif', '.gen', '.smd', '.sms', '.gg', '.srm', '.sav', '.pem', '.key', '.mp3', '.flac', '.m4a', '.bin'} and name != 'assets/audio/menu-click.mp3' and not (name.startswith('demo/') and path.suffix.lower() not in {'.srm', '.sav', '.pem', '.key'}):
         problem('Private cartridge/save/key file in publication inputs: ' + name)
     if path.suffix.lower() in {'.png', '.jpg', '.wav', '.res', '.scn'}:
         continue
@@ -41,6 +42,8 @@ for line in result.stdout.decode('utf-8').splitlines():
     kind, size, *name = line.split(' ', 2)
     if kind == 'blob' and int(size) > 50 * 1024 * 1024:
         problem('Historical blob exceeds repository size budget: ' + (name[0] if name else '(unnamed)'))
+if subprocess.run([sys.executable, str(ROOT / 'scripts/check-doc-paths.py')], cwd=ROOT).returncode:
+    problem('User guides name menu paths the app no longer has; see check-doc-paths.py above')
 whitespace = subprocess.run(['git', 'diff', '--check'], cwd=ROOT, capture_output=True)
 if whitespace.returncode:
     problem('git diff --check reports whitespace errors; inspect locally')

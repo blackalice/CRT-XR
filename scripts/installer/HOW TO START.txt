@@ -8,9 +8,13 @@ CRT XR for Windows: how to start
    Windows may say it protected your PC, because CRT XR is not signed:
    choose "More info", then "Run anyway".
 
-3. Choose "Play on this screen without glasses", or set up VITURE glasses
-   with docs\WINDOWS-SETUP.md. Glasses tracking needs the VITURE SDK, which
-   is not included.
+3. Without glasses, choose "Play on this screen without glasses".
+   With glasses, choose their display and "Open glasses view", then switch
+   them to SBS when asked.
+   VITURE head tracking: download VITURE's free Windows SDK from
+   viture.com/developer, then choose "Set up VITURE head tracking..." and
+   pick its ZIP. Guide: docs\GLASSES-VITURE.md
+   XREAL, Rokid, RayNeo and others: docs\GLASSES-OTHER.md (OpenTrack).
 
 There is nothing to install. Keep CRT-XR.exe together with the files and
 folders next to it.
@@ -18,8 +22,9 @@ folders next to it.
 
 Your games
 ----------
-No games are included. In CRT XR, open Game library > Library locations and
-choose your main ROM folder (the one containing snes, nes, megadrive...).
+No games are included. CRT XR's first-run setup helps you choose your main ROM
+folder (the one containing snes, nes, megadrive...), or use Game Library >
+Library locations.
 
 Sega CD and Atari Lynx also need their BIOS files (bios_CD_U.bin and friends,
 lynxboot.img). Put them in a "bios" folder next to CRT-XR.exe, or in the

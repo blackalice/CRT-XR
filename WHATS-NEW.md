@@ -16,6 +16,13 @@
 - Set up VITURE head tracking by choosing the SDK's ZIP: no more copying DLLs into an sdk folder. Find it on the start-up screen or in View & glasses › Tracking.
 - Open glasses view first, then switch the glasses to SBS when asked: the order no longer matters.
 - CRT XR warns when SpaceWalker is holding the glasses' tracking.
+## Something always on
+- Saturday Morning TV (Video Library) plays your videos as a channel. Each day has its own running order from 6 am, so you tune in mid-programme; Up and Down change programme.
+- Rewind and fast-forward for 8- and 16-bit games: turn them on in Games › Input delay, then hold L2 to rewind and R2 to speed up.
+- Surprise me on the Game Library picks a random game. Download missing box art (Library locations) fetches covers for games your scrapes don't cover.
+- A sleep timer in Sound › Music, and a screensaver that switches the TV off (Menu & access › Screensaver › Style).
+- Your own projectM presets: put .milk files in a Visualiser presets folder inside your music folder.
+- Prefer one button? Menu & access › Layout › Menu shortcut › Also hold Select.
 ## Staying up to date
 - What's new (this page) appears once after each update, in Scenes & help › Help.
 - Scenes & help › System › Updates can check GitHub for a newer release, once a day or when you choose Check now. It's off until you turn it on, and nothing is downloaded for you.

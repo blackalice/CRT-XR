@@ -24,7 +24,7 @@ Steam Deck deployment and hardware validation follow separately.
 | PlayStation | PCSX ReARMed | `.cue`, `.bin`/`.iso` with a PlayStation volume, PS1 `.pbp`, `.m3u` playlists; `.chd` or zipped discs in a PlayStation folder |
 | Dreamcast (development) | Flycast (OpenGL) | `.gdi`, `.cdi`, `.chd` in a Dreamcast folder, `.m3u` playlists |
 
-Console names and menu icons follow **Menu → Layout & placement → Console region**
+Console names and menu icons follow **Games → Console settings → Console names & icons**
 (PAL, NTSC or Japan): for example Mega Drive / Genesis, Sega CD / Mega-CD and
 PC Engine / TurboGrafx-16 switch name and icon. The setting changes presentation
 only. See `docs/settings-and-startup.md` for the full table.
@@ -402,7 +402,7 @@ an `.m3u` playlist and the existing **Change disc** action. Dreamcast archives,
 Naomi/Atomiswave, light guns and multiplayer are outside this integration.
 
 Native 640×480, 4:3 and normal per-triangle transparency are the defaults.
-Input preview is disabled. **Emulation → Consoles → Dreamcast** exposes internal
+Input preview is disabled. **Games → Console settings → Dreamcast** exposes internal
 resolution (up to 960×720), transparency and Audio DSP with existing reset and
 per-game inheritance controls. Leave native resolution on Steam Deck until
 performance has been checked in the full room/SBS setup. Rendering stays on the
@@ -456,7 +456,7 @@ readback implementation is claimed here.
 
 ### Floating VMU LCD
 
-**Emulation → VMU** controls the first player's first VMU LCD. It is enabled by
+**Games → Dreamcast VMU** controls the first player's first VMU LCD. It is enabled by
 default, appears only after the game sends LCD data, and floats below/in front
 of the TV. Look down with head tracking to see it. Position is relative to the
 TV, so it follows TV placement and scale while remaining anchored in the room.
