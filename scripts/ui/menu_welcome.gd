@@ -546,7 +546,7 @@ func view_status() -> Control:
 		title_text = "Head tracking is on"; detail = str(host.provider.status); dot = Color("58d878")
 	elif host.provider.real:
 		title_text = "Glasses found, but no head tracking yet"; dot = MenuSkin.AMBER
-		detail = "Check the VITURE SDK is beside CRT-XR.exe, or use OpenTrack in View & glasses › Tracking." if OS.get_name() == "Windows" else "Check XR Gaming in Decky can see the glasses, then connect."
+		detail = "Set up the VITURE SDK, or use OpenTrack, in View & glasses › Tracking." if OS.get_name() == "Windows" else "Check XR Gaming in Decky can see the glasses, then connect."
 	words.add_child(text(title_text, 20)); words.add_child(text(detail, 16, MenuSkin.MUTED))
 	line.add_child(words)
 	var light := ColorRect.new(); light.color = dot; light.custom_minimum_size = Vector2(12, 12)

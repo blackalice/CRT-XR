@@ -47,10 +47,10 @@ func glasses_guide() -> String:
 	if OS.get_name()=="Windows":
 		return "\n".join([
 			"## Starting in 3D",
-			"1. Switch the glasses to their side-by-side (SBS) mode before starting CRT XR.",
-			"2. On your normal monitor, choose the glasses' display and select Open glasses view.",
+			"1. On your normal monitor, choose the glasses' display and select Open glasses view.",
+			"2. Switch the glasses to their side-by-side (SBS) mode when the view asks.",
 			"## Head tracking",
-			"- VITURE: put the VITURE Windows SDK in a folder named sdk beside CRT-XR.exe.",
+			"- VITURE: download VITURE's free Windows SDK, then choose its ZIP with Set up VITURE SDK (start-up screen, or View & glasses → Tracking).",
 			"- Other glasses: use a tool that sends OpenTrack, such as opentrack, PhoenixHeadTracker (XREAL) or VertoXR (Rokid, RayNeo), then choose View & glasses → Tracking → Tracking source → OpenTrack.",
 			"## While playing",
 			"R3 | R :: Recentre the view",

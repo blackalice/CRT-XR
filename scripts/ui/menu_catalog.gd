@@ -456,7 +456,16 @@ func tracking_rows() -> Array:
 		toggle("tracking.diagnostics","Metrics overlay",h,"metrics_visible",false,"Shows frame rate, pose and tracking details. Off by default for a clean view. F1 also toggles it.",unchanged,false)]
 	for axis in ["yaw","pitch","roll"]:
 		tracking.append(toggle("tracking."+axis,"Invert "+axis,h.provider,"invert_"+axis,false,"Turn on if the view moves the wrong way when you turn your head.",unchanged,false))
-	tracking[5]["section"] = "IF MOVEMENT FEELS REVERSED"
+	tracking[tracking.find(tracking.filter(func(row): return row.id == "tracking.yaw")[0])]["section"] = "IF MOVEMENT FEELS REVERSED"
+	if OS.get_name() == "Windows" and h.tracking_source != "opentrack":
+		var VitureSdk = preload("res://scripts/tracking/viture_sdk.gd")
+		var ready: bool = VitureSdk.available()
+		tracking.insert(2, action("tracking.sdk", "Set up VITURE SDK" if not ready else "Choose VITURE SDK again", func():
+			VitureSdk.choose(func(result: Dictionary):
+				menu.notify(str(result.message))
+				if result.ok: h.use_tracking(true)
+				menu.refresh()),
+			"VITURE head tracking needs VITURE's free Windows SDK from viture.com/developer. Choose its ZIP, or glasses.dll inside it; CRT XR copies what it needs into its own settings folder. Opens on your desktop monitor.", false, "✓ Set up" if ready else "Needed"))
 	return tracking
 
 ## View & glasses → TV placement: where the TV sits, and the right stick that moves it.

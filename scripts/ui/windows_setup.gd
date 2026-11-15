@@ -1,6 +1,7 @@
 extends Control
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const GlyphText = preload("res://scripts/ui/glyph_text.gd")
+const VitureSdk = preload("res://scripts/tracking/viture_sdk.gd")
 ## Explicit display choice and a black curtain across a physical SBS mode change.
 signal xr_ready(size: Vector2i)
 signal desktop_ready
@@ -10,6 +11,7 @@ var armed := false
 var armed_screen_count := 0
 var proceeding := false
 var elapsed := 0.0
+var armed_at := 0.0
 var stable_time := 0.0
 var last_size := Vector2i.ZERO
 var canvas: Control
@@ -17,6 +19,10 @@ var column: VBoxContainer
 var display_button: Button
 var hint: Control
 var buttons: Array[Button] = []
+var sdk_button: Button
+var sdk_status: Label
+## Shown on the black curtain until the glasses switch to SBS.
+var curtain_note: Label
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -49,23 +55,41 @@ func _ready() -> void:
 	MenuSkin.weigh(title,MenuSkin.BOLD)
 	column.add_child(title)
 	var instructions := Label.new()
-	instructions.text = "Switch your glasses to SBS before launching CRT XR.\nChoose their display below, then select Open glasses view.\nUse this setup screen on your normal monitor."
+	instructions.text = "Connect your glasses, choose their display and select Open glasses view.\nThen switch them to SBS (full side-by-side) when asked.\nUse this setup screen on your normal monitor."
 	instructions.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	instructions.add_theme_font_size_override("font_size",24)
 	MenuSkin.weigh(instructions,MenuSkin.REGULAR)
 	column.add_child(instructions)
-	selected_screen = get_window().current_screen
+	selected_screen = likely_glasses_screen(get_window().current_screen)
 	display_button = add_button("", func(): change_screen(1))
 	add_button("Open glasses view", begin)
 	add_button("Play on this screen without glasses", func():
 		if not proceeding:
 			proceeding=true
 			desktop_ready.emit())
+	sdk_button = add_button("", choose_sdk)
 	add_button("Exit", func(): get_tree().quit())
+	sdk_status = Label.new()
+	sdk_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sdk_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	sdk_status.custom_minimum_size.x = 760
+	sdk_status.add_theme_font_size_override("font_size", 20)
+	column.add_child(sdk_status)
+	column.move_child(sdk_status, column.get_child_count() - 1)
+	refresh_sdk()
 	# Controls drawn as the menus draw them, with the keyboard keys alongside.
-	hint = GlyphText.new("Display: {←→} / Left Right     Select: {↑↓} / Up Down     Open: {A} / Enter\nIf it stays black, return the glasses to mono and press {B} / Escape to retry.", 20, MenuSkin.TEXT)
+	hint = GlyphText.new("Display: {←→} / Left Right     Select: {↑↓} / Up Down     Open: {A} / Enter\nIf it stays black, return the glasses to 2D and press {B} / Escape to come back here.", 20, MenuSkin.TEXT)
 	hint.centred = true
 	column.add_child(hint)
+	curtain_note = Label.new()
+	curtain_note.text = "Now switch your glasses to SBS (full side-by-side)"
+	curtain_note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	curtain_note.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	curtain_note.add_theme_font_size_override("font_size", 28)
+	curtain_note.add_theme_color_override("font_color", Color(0.75, 0.75, 0.75))
+	curtain_note.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	curtain_note.hide()
+	add_child(curtain_note)
 	get_window().size_changed.connect(resize_canvas)
 	refresh_display()
 	resize_canvas()
@@ -93,6 +117,29 @@ func resize_canvas() -> void:
 	canvas.scale=Vector2.ONE*layout.scale
 	canvas.position=layout.position
 
+## The display most likely to be the glasses: one already in a full-SBS mode,
+## else the other display when there are exactly two, else `fallback`.
+static func likely_glasses_screen(fallback: int) -> int:
+	var count := DisplayServer.get_screen_count()
+	for i in range(count):
+		if i != fallback and usable_sbs(DisplayServer.screen_get_size(i)): return i
+	if usable_sbs(DisplayServer.screen_get_size(fallback)): return fallback
+	if count == 2: return 1 - clampi(fallback, 0, 1)
+	return fallback
+
+func refresh_sdk() -> void:
+	var ready := VitureSdk.available()
+	sdk_button.text = "VITURE tracking: set up  ·  Choose again…" if ready else "Set up VITURE head tracking…"
+	var words := "Other glasses: use OpenTrack (View & glasses › Tracking) after opening the view."
+	if not ready: words = "VITURE head tracking needs VITURE's free Windows SDK. Download it from viture.com/developer, then choose its ZIP here. " + words
+	if VitureSdk.spacewalker_running(): words = "Close SpaceWalker before opening the glasses view: it holds the glasses' tracking.\n" + words
+	sdk_status.text = words
+
+func choose_sdk() -> void:
+	VitureSdk.choose(func(result: Dictionary):
+		refresh_sdk()
+		sdk_status.text = str(result.message) + "\n" + sdk_status.text)
+
 func refresh_display() -> void:
 	selected_screen=clampi(selected_screen,0,maxi(0,DisplayServer.get_screen_count()-1))
 	var size := DisplayServer.screen_get_size(selected_screen)
@@ -111,6 +158,7 @@ func darken() -> void:
 func begin() -> void:
 	if armed or proceeding or elapsed<0.7: return
 	armed=true
+	armed_at=elapsed
 	armed_screen_count=DisplayServer.get_screen_count()
 	stable_time=0.0
 	last_size=Vector2i.ZERO
@@ -130,10 +178,20 @@ static func usable_sbs(size: Vector2i) -> bool:
 func _process(delta: float) -> void:
 	elapsed+=delta
 	if not armed or proceeding: return
+	# Some glasses reconnect as a new display when they switch to SBS: follow
+	# whichever display is now in a full-SBS mode rather than waiting for ever.
 	if DisplayServer.get_screen_count()!=armed_screen_count or selected_screen>=DisplayServer.get_screen_count():
+		armed_screen_count=DisplayServer.get_screen_count()
+		var moved := likely_glasses_screen(mini(selected_screen, armed_screen_count-1))
 		stable_time=0.0
+		if moved!=selected_screen or get_window().current_screen!=moved:
+			selected_screen=moved
+			get_window().mode=Window.MODE_WINDOWED
+			get_window().current_screen=selected_screen
+			get_window().mode=Window.MODE_FULLSCREEN
 		return
 	var size := DisplayServer.screen_get_size(selected_screen)
+	curtain_note.visible = not usable_sbs(size) and elapsed - armed_at > 1.0
 	if not usable_sbs(size):
 		stable_time=0.0
 		last_size=size
@@ -146,6 +204,7 @@ func _process(delta: float) -> void:
 	stable_time+=delta
 	if stable_time>=1.5 and get_window().size==size:
 		proceeding=true
+		curtain_note.hide()
 		xr_ready.emit(size)
 
 func _input(event: InputEvent) -> void:
@@ -174,6 +233,7 @@ func _input(event: InputEvent) -> void:
 			# Only reveal flat instructions once the selected display is mono again.
 			if not usable_sbs(DisplayServer.screen_get_size(get_window().current_screen)):
 				armed=false
+				curtain_note.hide()
 				get_window().mode=Window.MODE_WINDOWED
 				get_window().size=Vector2i(1280,720)
 				canvas.show()
