@@ -7,13 +7,22 @@
 set -eu
 NEW=${1:?Pass a new release tag, e.g. ux-overhaul-20261115}
 case "$NEW" in *[!a-zA-Z0-9_.-]*) echo 'Invalid release tag' >&2; exit 2;; esac
-S=/mnt/d/git/XR-CRT
+S=$(cd "$(dirname "$0")/../.." && pwd)
 PACK=${2:-$S/dist/ux-overhaul/crt-xr.pck}
 C=/tmp/retrocrt-deck-01a139ee.sock
-O="-o BatchMode=yes -o HostKeyAlias=steamdeck -o UserKnownHostsFile=$S/tools/deck-known_hosts"
 H=deck@192.168.1.6
+# The password session from connect-deck.ps1 if it is open; otherwise the deploy
+# key (tools/deck-key, see tools/authorize-deck-key.sh), copied with the strict
+# permissions ssh requires.
+if [ -S "$C" ]; then
+  O="-o BatchMode=yes -o HostKeyAlias=steamdeck -o UserKnownHostsFile=$S/tools/deck-known_hosts -o ControlPath=$C"
+else
+  KEY=$(mktemp); trap 'rm -f "$KEY"' EXIT
+  cp "$S/tools/deck-key" "$KEY"; chmod 600 "$KEY"
+  O="-o BatchMode=yes -o IdentitiesOnly=yes -i $KEY -o HostKeyAlias=steamdeck -o UserKnownHostsFile=$S/tools/deck-known_hosts -o ConnectTimeout=10"
+fi
 test -f "$PACK" || { echo "No pack at $PACK" >&2; exit 1; }
-ssh -S $C $O $H "NEW=$NEW bash -s" <<'REMOTE'
+ssh $O $H "NEW=$NEW bash -s" <<'REMOTE'
 set -eu
 if pgrep -x crt-xr-engine.x >/dev/null || pgrep -f crt-xr-engine.x86_64 >/dev/null; then echo 'Exit CRT XR on the Deck first.' >&2; exit 1; fi
 cd ~/Applications/CRT-XR/releases
@@ -24,8 +33,8 @@ rm -rf "$NEW"; cp -al "$BASE" "$NEW"
 rm -f "$NEW/crt-xr.pck" "$NEW/steam-session.py" "$NEW/linux-session.py" "$NEW/glasses-session.py"
 echo "prepared $NEW from $BASE"
 REMOTE
-scp -o ControlPath=$C $O "$PACK" $S/scripts/steam-session.py $S/scripts/linux-session.py $S/scripts/glasses-session.py "$H:/home/deck/Applications/CRT-XR/releases/$NEW/"
-ssh -S $C $O $H "NEW=$NEW bash -s" <<'REMOTE'
+scp $O "$PACK" $S/scripts/steam-session.py $S/scripts/linux-session.py $S/scripts/glasses-session.py "$H:/home/deck/Applications/CRT-XR/releases/$NEW/"
+ssh $O $H "NEW=$NEW bash -s" <<'REMOTE'
 set -eu
 cd ~/Applications/CRT-XR/releases/$NEW
 sed -i 's/\r$//' steam-session.py linux-session.py glasses-session.py
