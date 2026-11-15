@@ -2271,7 +2271,12 @@ func update_direction() -> void:
 func _process(delta: float) -> void:
 	if screensaver_allowed():
 		idle_time += delta
-		if idle_time >= host.menu_screensaver_delay: begin_screensaver()
+		if idle_time >= host.menu_screensaver_delay:
+			# Or switch the TV off, like leaving a set on standby.
+			if host.menu_screensaver_style == 1:
+				idle_time = 0.0
+				host.sleep_tv(false)
+			else: begin_screensaver()
 	else:
 		idle_time = 0.0
 		if is_instance_valid(screensaver): end_screensaver()

@@ -813,6 +813,9 @@ func category_pages(category: int) -> Array:
 				unavailable(toggle("access.depth","Floating menu depth",h,"menu_depth",true,"In side-by-side 3D, places a floating menu in front of the TV and dims the room. Off gives a flat menu.",func(): menu.refresh(),false).merged({"disabled":h.menu_on_tv and not h.flat_screen},true),"Only when the menu floats: turn off Menu on the TV."),
 				],"Where the menu appears"),page("Screensaver",[
 				toggle("access.screensaver","Screensaver",h,"menu_screensaver",true,"When the menu is left alone, the page gives way to the logo drifting across space. Any button brings the menu straight back.",func(): menu.refresh(),false),
+				unavailable({"id":"access.screensaver_style","label":"Style","kind":"choice","choices":["Drifting logo","Switch the TV off"],"default":0,"visual":false,"disabled":not h.menu_screensaver,
+					"getter":func(): return h.menu_screensaver_style,"setter":func(value): h.menu_screensaver_style=int(value),
+					"help":"The drifting logo, or the TV switching off with its power-down effect, leaving the room dark until you press something."},"Turn on Screensaver first."),
 				unavailable({"id":"access.screensaver_delay","label":"Start after","kind":"choice","choices":["30 seconds","1 minute","2 minutes","5 minutes","10 minutes","15 minutes"],"default":2,"visual":false,"disabled":not h.menu_screensaver,
 					"getter":func(): return maxi(0,h.SCREENSAVER_DELAYS.find(h.menu_screensaver_delay)),"setter":func(value): h.menu_screensaver_delay=h.SCREENSAVER_DELAYS[int(value)],
 					"help":"How long the menu waits without input before the screensaver starts."},"Turn on Screensaver first."),
@@ -866,6 +869,10 @@ func category_pages(category: int) -> Array:
 			audio_rows.append(action("audio.preview","Preview sound",audio.preview_sample,"Plays a short sample through the selected sound mode while the game stays paused."))
 			var music = h.music
 			var visualiser: Array = [
+				{"id":"music.sleep","label":"Sleep timer","kind":"choice","choices":h.SLEEP_CHOICES.map(func(m): return "Off" if m == 0 else "%d minutes" % m),"default":0,"visual":false,"section":"SLEEP",
+					"getter":func(): return maxi(0,h.SLEEP_CHOICES.find(h.sleep_minutes)),"setter":func(value): h.set_sleep_timer(h.SLEEP_CHOICES[int(value)]); menu.refresh(),
+					"detail_getter":func(): return ("%d min left" % ceili(h.sleep_left / 60.0)) if h.sleep_left > 0.0 else "",
+					"help":"Stops the music, pauses the game or video (saving its resume point) and switches the TV off after this long. For this session only."},
 				{"id":"visualiser.preset","label":"Visualiser preset","kind":"choice","choices":h.visualizer.preset_names(),"default":0,"getter":func(): return h.visualizer.preset_index,"setter":h.visualizer.select_preset,"help":"Three bundled presets, then your own: put projectM or MilkDrop .milk files in a folder called Visualiser presets inside your music folder.","visual":false},
 				toggle("visualiser.automatic","Automatic presets",h.visualizer,"automatic",true,"Change preset every 30 seconds. Reduced motion keeps the current preset.",h.visualizer.save_preferences,false),
 				number("visualiser.brightness","Visualiser brightness",h.visualizer,"brightness",0.3,1.5,0.1,1.0,"percent","Independent brightness for music visuals.",h.visualizer.save_preferences,false)]

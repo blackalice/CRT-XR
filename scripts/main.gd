@@ -77,6 +77,14 @@ var menu_screensaver_delay := 120.0
 ## Settings show every row (true) or only the everyday ones (false, Basic). New
 ## users start Basic; people set up before it existed keep seeing everything.
 var settings_advanced := false
+## Sleep timer (this session only): minutes chosen, seconds left, 0 when off.
+const SLEEP_CHOICES := [0, 15, 30, 45, 60, 90]
+var sleep_minutes := 0
+var sleep_left := 0.0
+## The tube is switched off (sleep timer or idle menu); any input wakes it.
+var tv_asleep := false
+## Screensaver style: 0 the drifting logo, 1 switch the TV off.
+var menu_screensaver_style := 0
 const SCREENSAVER_DELAYS := [30.0, 60.0, 120.0, 300.0, 600.0, 900.0]
 var menu_sounds := false
 var menu_boot_sound := true
@@ -757,6 +765,7 @@ func apply_settings(config: ConfigFile) -> void:
 	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
 	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
 	menu_screensaver = bool(config.get_value("accessibility","menu_screensaver",true))
+	menu_screensaver_style = clampi(int(config.get_value("accessibility","menu_screensaver_style",0)),0,1)
 	emulator.gamepad.menu_hold_select = bool(config.get_value("accessibility","menu_hold_select",false))
 	# Test scripts see every row unless they turn Basic on, as they skip first-run setup.
 	settings_advanced = bool(config.get_value("accessibility","settings_advanced","--script" in OS.get_cmdline_args()))
@@ -834,6 +843,13 @@ func apply_settings(config: ConfigFile) -> void:
 
 func _process(delta: float) -> void:
 	notice_time = maxf(0.0, notice_time - delta)
+	if sleep_left > 0.0 and not tv_asleep:
+		var before := sleep_left
+		sleep_left = maxf(0.0, sleep_left - delta)
+		if before > 60.0 and sleep_left <= 60.0: show_notice("Sleep timer: the TV switches off in a minute")
+		if sleep_left <= 0.0:
+			sleep_minutes = 0
+			sleep_tv(true)
 	if emulator.gamepad.poll_hold_select():
 		if settings_panel.visible and menu.mode == "welcome": menu.welcome.menu_shortcut()
 		else: toggle_settings()
@@ -989,6 +1005,11 @@ func capture() -> void:
 
 func _input(event: InputEvent) -> void:
 	if startup_loading: return
+	# A switched-off TV wakes on any button, key or click, and that press does nothing else.
+	if tv_asleep and (event is InputEventKey or event is InputEventJoypadButton or event is InputEventMouseButton) and event.is_pressed():
+		wake_tv()
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(menu): menu.release_input(event)
 	if is_instance_valid(sbs_prompt): return
 	if is_instance_valid(menu): menu.note_input(event)
@@ -1762,6 +1783,7 @@ func reset_all_options() -> void:
 	menu_screensaver_delay = 120.0
 	settings_advanced = false
 	emulator.gamepad.menu_hold_select = false
+	menu_screensaver_style = 0
 	power_on.enabled=true; power_on.sound_level=.60; power_on.reduced_motion=false; power_on.apply()
 	tv_effects.channel_change=true; tv_effects.power_off_effect=true; tv_effects.reduced_motion=false
 	rebuild_settings()
@@ -1832,6 +1854,44 @@ func start_update_notes(scripted: bool) -> void:
 		# A new user has nothing to catch up on.
 		updates.mark_whats_new_seen()
 	updates.startup_check()
+
+## Sets the sleep timer from Sound → Music (minutes; 0 turns it off).
+func set_sleep_timer(minutes: int) -> void:
+	sleep_minutes = minutes
+	sleep_left = minutes * 60.0
+	if minutes > 0: show_notice("Sleep timer: the TV switches off in %d minutes" % minutes)
+
+## Switches the tube off: with the timer, music and the game or video stop too.
+## The room stays, lit only by the dark set; any input switches it back on.
+func sleep_tv(stop_everything: bool) -> void:
+	if tv_asleep: return
+	if stop_everything:
+		save_play_clock()
+		if emulator.loaded:
+			emulator.save_auto()
+			emulator.set_paused(true)
+		if video.loaded:
+			remember_video_position()
+			video.set_paused(true, true)
+		if is_instance_valid(music): music.stop()
+		if visualizer.active: visualizer.leave()
+		if settings_panel.visible: close_settings()
+		if emulator.loaded: emulator.set_paused(true)
+	tv_asleep = true
+	# A floating menu would hang in the dark: hide it until the TV wakes.
+	if settings_panel.visible: settings_panel.modulate.a = 0.0
+	if not tv_effects.play("power_off"):
+		world.screen_material.set_shader_parameter("power_off", 1.0)
+		world.screen_light.power_level = 0.0
+
+func wake_tv() -> void:
+	if not tv_asleep: return
+	tv_asleep = false
+	settings_panel.modulate.a = 1.0
+	tv_effects.clear()
+	world.screen_light.power_level = 1.0
+	power_on.begin(true)
+	if not settings_panel.visible: toggle_settings()
 
 func show_notice(message: String) -> void:
 	for notice in notices: notice.text = message
@@ -1914,7 +1974,7 @@ func capture_settings() -> ConfigFile:
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
 	config.set_value("preferences","game_fps_visible",game_fps_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","library_group_versions","library_hide_extras","menu_screensaver","menu_screensaver_delay","settings_advanced"]: config.set_value("accessibility",key,get(key))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","library_group_versions","library_hide_extras","menu_screensaver","menu_screensaver_delay","settings_advanced","menu_screensaver_style"]: config.set_value("accessibility",key,get(key))
 	config.set_value("accessibility","menu_plain_picture_default",true)
 	config.set_value("accessibility","menu_hold_select",emulator.gamepad.menu_hold_select)
 	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
