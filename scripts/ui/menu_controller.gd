@@ -1481,6 +1481,8 @@ func _render(incremental: bool) -> void:
 	var saved: Dictionary = memory.get(state_key(),{})
 	var preferred: String = selected_id if preview else str(saved.get("id",""))
 	if mode=="library" and not scan_preferred_id.is_empty(): preferred=scan_preferred_id
+	# Setup's results land on Next, so A carries on; the rows above are optional.
+	if preferred.is_empty() and mode=="welcome" and welcome.step=="found": preferred="welcome.next"
 	if preferred.is_empty() and mode in ["games","recent","favourites","most_played"]:
 		# Land on the first game rather than the Jump to letter tool above it.
 		for row in rows:
@@ -1787,16 +1789,18 @@ func request_exit() -> void:
 	var detail := "Your place in this video and your settings will be saved." if host.video.loaded else ("An automatic resume point, settings and cartridge SRAM will be saved." if host.emulator.loaded else "Your settings will be saved.")
 	ask("Exit CRT XR?",detail,host.request_exit)
 
-## First-run setup's progress: six marks, the steps reached lit amber.
+## First-run setup's progress: one mark per step, the steps reached lit amber.
 func show_step_marks(reached: int) -> void:
 	step_marks.visible = reached > 0
 	if reached <= 0: return
-	if step_marks.get_child_count() != 6:
-		for i in range(6):
+	var count: int = welcome.STEP_COUNT
+	if step_marks.get_child_count() != count:
+		for old in step_marks.get_children(): old.free()
+		for i in range(count):
 			var mark := Panel.new(); mark.custom_minimum_size = Vector2(26, 8)
 			mark.mouse_filter = Control.MOUSE_FILTER_IGNORE
 			step_marks.add_child(mark)
-	for i in range(6):
+	for i in range(count):
 		var lit := i < reached
 		step_marks.get_child(i).add_theme_stylebox_override("panel", MenuSkin.box(MenuSkin.AMBER if lit else Color("152763"), Color("fff0b0") if lit else Color("526fd0"), 2, 0))
 
