@@ -107,3 +107,31 @@ live trace are in `build/gt4-specii-flash-20261116/`.
   that; unconfirmed until the flashing is tied to one of those windows.
 - An automatic save from before the core change was rejected ("Save is
   unreadable or does not match this game"); the save was kept.
+
+## The flash is the hardware renderer — 16 Nov, 13:25–13:28 UTC
+
+Description from the user: the whole screen strobes light blue/teal for about
+three seconds as the car crosses the line, before the trophy appears.
+
+Same licence test with the new per-game Renderer option on Software
+(`pcsx2_renderer="Software (HW)"`, confirmed in core-options.cfg on the Deck):
+no teal. A black scan-line flicker appeared at the same moment instead.
+Trace: `build/gt4-specii-sw-20261116/`.
+
+- The picture stayed 640×448 throughout, so the game does not change display
+  mode at the finish line.
+- Software costs nothing measurable here: core frame time p50/p95/p99
+  10.7/13.8/16.0 ms against 11.1/13.9/16.1 ms on OpenGL.
+- A PCSX2 forum report ("Flickering in Gran Turismo 4 with openGL hardware
+  option") describes the same: about ten seconds of whole-screen flicker at
+  race or replay start on OpenGL, none on software.
+
+So the teal strobe is the OpenGL hardware renderer drawing one of GT4's
+full-screen effects wrongly; teal is what a 24-bit depth buffer looks like
+read as colour. Prime suspect, unproven: `DetectStripedDoubleClear`, which
+carries a GT4 Online Public Beta special case and which this fork extended
+to 24-bit Z under a 32-bit frame with masked alpha. The core has no GS dump
+support, so the draw cannot yet be captured.
+
+The remaining black scan-line flicker is unexplained: it may be the effect
+as the game really draws it (field rendering), or a software-renderer issue.
