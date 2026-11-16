@@ -149,3 +149,24 @@ about 20 ms against 10.7 ms at 13:25. Unresolved; the Software renderer is not
 safe to recommend. Spec II's per-game renderer was reset to Default
 (backup: core-options.cfg.before-renderer-reset on the Deck) so the scan
 lines can be captured under the OpenGL renderer instead.
+
+## Frames captured — 16 Nov, 16:36 UTC (OpenGL, no teal this time)
+
+`build/gt4-specii-frames-20261116/`: 360 pictures as the core delivered them.
+The finish is followed by GT4's fade to black (frames 110–279, about 2.8 s).
+Through the fade, pictures alternate between two kinds:
+
+- every odd line exactly black, the even lines showing only the brighter parts
+  of the scene;
+- full pictures with the odd lines noticeably darker than the even ones, and
+  dark blocky patterns over textured areas (sky, trees).
+
+Before and after the fade, even and odd lines match. Both renderers show the
+lines, so the fault is downstream of drawing: the output circuit (PCRTC merge
+of the two read circuits, and interlace) as this fork implements it, which it
+has modified ("a half-height field is not offset here for the weave"). The
+fade presumably blends the two circuits or switches field mode.
+
+Next build: `lrps2-pcrtc-log.patch` logs PMODE, SMODE2 and both circuits'
+DISPFB/DISPLAY to core.log whenever they change (field flips excluded), and
+the PS2 options gain Deinterlacing (Default/Off/Bob/Blend/Adaptive) for an A/B.
