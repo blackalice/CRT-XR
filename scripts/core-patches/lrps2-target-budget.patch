@@ -1,0 +1,21 @@
+diff --git a/pcsx2/GS/Renderers/HW/GSTextureCache.h b/pcsx2/GS/Renderers/HW/GSTextureCache.h
+index 3a2d6febd..b339576fc 100644
+--- a/pcsx2/GS/Renderers/HW/GSTextureCache.h
++++ b/pcsx2/GS/Renderers/HW/GSTextureCache.h
+@@ -579,8 +579,14 @@ protected:
+ 	 * Legend's RAD camera at 4x asks for 4096x3584, 58 MB each - has
+ 	 * gigabytes of them live before the first one is a second old. Over
+ 	 * the budget, the targets that go are those GSTargetBudget.c picks:
+-	 * never the ones in use, which hold what the game reads next. */
+-	static constexpr u32 TARGET_LIVE_SETS = 2;
++	 * never the ones in use, which hold what the game reads next.
++	 *
++	 * CRT XR: eight, not two. At two, Gran Turismo 4's race start is over
++	 * the budget with only live targets left (8 MB at native), so every
++	 * target idle for two frames is dropped where upstream PCSX2 keeps it
++	 * for sixty; under test as the cause of its flashes. Eight is 32 MB at
++	 * native and still bounds the 4x case above. */
++	static constexpr u32 TARGET_LIVE_SETS = 8;
+ 	void EnforceTargetBudget();
+ 
+ public:

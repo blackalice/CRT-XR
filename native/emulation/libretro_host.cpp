@@ -518,7 +518,9 @@ std::int16_t LibretroHost::input(unsigned port, unsigned device, unsigned index,
 }
 // Cores' warnings and errors also go to <state>/crt_xr/core.log (XDG_STATE_HOME,
 // else ~/.local/state), one flushed line at a time, so a core's last words survive
-// a crash; the Steam session log only carries Godot's own output.
+// a crash; the Steam session log only carries Godot's own output. So do LRPS2's
+// game-database lines, info though they are: the disc serial it looked up and
+// each fix it applied, which is what says whether a PS2 game got its fixes.
 static std::FILE* core_log_file() {
     static std::FILE* file = [] {
         std::string folder;
@@ -534,13 +536,15 @@ static std::FILE* core_log_file() {
 void LibretroHost::log(retro_log_level level, const char* format, ...) {
     std::fputs("[Libretro] ", stderr);
     va_list arguments; va_start(arguments, format); std::vfprintf(stderr, format, arguments); va_end(arguments);
-    if (level < RETRO_LOG_WARN) return;
+    const bool game_database = level == RETRO_LOG_INFO && format
+        && (std::strncmp(format, "(GameDB)", 8) == 0 || std::strncmp(format, "[GameDB]", 8) == 0);
+    if (level < RETRO_LOG_WARN && !game_database) return;
     static std::mutex file_mutex;
     std::lock_guard<std::mutex> lock(file_mutex);
     if (std::FILE* file = core_log_file()) {
         const auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         char stamp[32]; std::strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
-        std::fprintf(file, "%s %s ", stamp, level == RETRO_LOG_ERROR ? "ERROR" : "WARN");
+        std::fprintf(file, "%s %s ", stamp, level == RETRO_LOG_ERROR ? "ERROR" : level == RETRO_LOG_WARN ? "WARN" : "INFO");
         va_list copy; va_start(copy, format); std::vfprintf(file, format, copy); va_end(copy);
         std::fflush(file);
     }
