@@ -135,3 +135,17 @@ support, so the draw cannot yet be captured.
 
 The remaining black scan-line flicker is unexplained: it may be the effect
 as the game really draws it (field rendering), or a software-renderer issue.
+
+## Software renderer crashes — 16 Nov, 16:30–16:34 UTC
+
+Four SIGSEGVs (16:30:46 in two threads at once, 16:31:24, 16:34:18), after a
+resume and after a fresh boot alike, 10–80 s into play. Every stack is the
+same: a software rasteriser worker (`GSJobQueue<...GSRasterizerData>::ThreadEntry`
+→ `isa_avx2::GSRasterizer::Draw`) faulting on a read inside its JIT-generated
+draw code (core + 0x2426xxxx, the code arena in the core's .bss). The
+13:25 software run lasted about three minutes without one, so it is
+intermittent rather than tied to resuming. Core frame time on these runs was
+about 20 ms against 10.7 ms at 13:25. Unresolved; the Software renderer is not
+safe to recommend. Spec II's per-game renderer was reset to Default
+(backup: core-options.cfg.before-renderer-reset on the Deck) so the scan
+lines can be captured under the OpenGL renderer instead.
