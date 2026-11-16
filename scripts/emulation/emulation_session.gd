@@ -763,6 +763,7 @@ func process_stream(delta: float) -> void:
 		frame_profiled.emit({"mode": "stream", "clock": "audio" if playback != null else "wall", "priming": async_audio_priming, "audio_recoveries": async_audio_recoveries, "fps": fps, "audio_skips": playback.get_skips() if playback != null else 0, "audio_queued": async_audio_capacity - playback.get_frames_available() if playback != null else 0, "pending": async_pending, "pending_audio": info.pending_audio, "shown": not bytes.is_empty(), "dropped": info.dropped, "at_us": started, "delta_us": int(delta * 1000000.0),
 			"process_us": Time.get_ticks_usec() - started, "steps": info.steps,
 			"picture_ages_us": info.picture_ages_us, "reserve": stream_reserve,
+			"size": PackedInt32Array([info.width, info.height]),
 			"audio_us": audio_us, "present_us": present_us,
 			"audio_overflows": audio_overflows, "slow_frames": slow_frames})
 

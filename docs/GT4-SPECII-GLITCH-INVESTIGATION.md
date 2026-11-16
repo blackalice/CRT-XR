@@ -86,3 +86,24 @@ on Direct3D. We build with `-DUSE_VULKAN=OFF`, so OpenGL is the only HW option.
 What to look for on the Deck: the over-budget WARN gone from core.log at race
 start, and whether the flashes go with it. If they persist with the new core,
 cause 2 is ruled out and the software-renderer A/B is next.
+
+## First run on the test build — 16 Nov, 13:12–13:14 UTC
+
+User report: "extreme flashing" at the end of a licence test. Logs and the
+live trace are in `build/gt4-specii-flash-20261116/`.
+
+- Game database: `[GameDB] Serial: "SCUS-97436"`; VU0 and VU1 clamp mode 2,
+  blending level 3 and half-pixel offset 4 all applied. The letters fix is
+  active, so missing letters from here on are not that.
+- No "targets still over budget" warning this session (it appeared on 14 and
+  16 Nov with the old core). The flashing persisted, so the target budget is
+  not its (only) cause.
+- Room drawing held 60 fps throughout (max draw gap 17 ms). The core's frame
+  time is 12–15 ms of a 16.7 ms budget, and the stream presenter drops game
+  frames in bursts: 10–14 per second at 13:12:33–35 and 13:13:16–18, with a
+  296 ms core stall at 13:13:10 (a load). In those bursts the presenter shows
+  two-then-none in alternate ticks, so one of every two game frames is never
+  shown. Any GT4 effect that alternates frame by frame would strobe under
+  that; unconfirmed until the flashing is tied to one of those windows.
+- An automatic save from before the core change was rejected ("Save is
+  unreadable or does not match this game"); the save was kept.

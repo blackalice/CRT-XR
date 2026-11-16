@@ -68,7 +68,8 @@ func _emulation(metrics: Dictionary) -> void:
 		"dropped": metrics.get("dropped", 0), "steps": cores, "ages": metrics.get("picture_ages_us", PackedInt32Array()),
 		"queued": metrics.get("audio_queued", 0), "reserve": metrics.get("reserve", 0),
 		"recoveries": metrics.get("audio_recoveries", 0), "skips": metrics.get("audio_skips", 0),
-		"process": metrics.get("process_us", 0), "fps": metrics.get("fps", 0.0)})
+		"process": metrics.get("process_us", 0), "fps": metrics.get("fps", 0.0),
+		"size": metrics.get("size", PackedInt32Array())})
 
 ## Hands buffered lines to a worker. A write still running keeps the buffer
 ## for the next flush rather than waiting for it.
