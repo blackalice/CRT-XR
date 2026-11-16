@@ -532,6 +532,11 @@ func start_application() -> void:
 		var trace = LiveTrace.new()
 		add_child(trace)
 		trace.start(self)
+	var FrameRecorder = preload("res://scripts/diagnostics/frame_recorder.gd")
+	if FrameRecorder.requested():
+		var recorder = FrameRecorder.new()
+		add_child(recorder)
+		recorder.start(self)
 	music=preload("res://scripts/audio/music_player.gd").new()
 	menu_ambience = preload("res://scripts/audio/menu_ambience.gd").new()
 	menu_ambience.name = "MenuAmbience"
