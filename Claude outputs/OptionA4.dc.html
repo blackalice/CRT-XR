@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Option A4: snapshot with your saves</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=VT323&display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+button{font-family:inherit}
+</style>
+</helmet>
+<div style="width: 960px; height: 720px; box-sizing: border-box; padding: 26px 40px 20px; display: flex; flex-direction: column; gap: 14px; background: linear-gradient(180deg, #050a24 0%, #0b1a52 100%); font-family: 'VT323', monospace; color: #e8eeff">
+<div style="display: flex; align-items: center; gap: 16px">
+<img src="/_blob/1e7fa7c39672a998f3e8334c125e903e" alt="Chrono Trigger box art" style="width: 96px; height: 70px; object-fit: contain; background: #08133a; border: 2px solid #3858a0; padding: 3px">
+<div style="display: flex; flex-direction: column; flex: 1; min-width: 0">
+<h1 style="margin: 0; font-size: 42px; font-weight: 400; line-height: 1">Chrono Trigger</h1>
+<div style="font-size: 22px; color: #9fb0de">SNES · 5h 20m played · last played today</div>
+</div>
+<div style="border: 2px solid #5878c8; padding: 2px 10px; font-size: 30px; color: #7fe0ff">7:02<span style="font-size: 16px">PM</span></div>
+</div>
+<div style="display: flex; gap: 22px">
+<div style="width: 520px; height: 390px; flex: none; box-sizing: border-box; border: 3px solid #ffb43a; background: repeating-linear-gradient(0deg, #0e1b44 0px, #0e1b44 3px, #13245a 3px, #13245a 6px); display: flex; align-items: center; justify-content: center; position: relative">
+<span style="font-size: 28px; color: #8fa4dc">The save you've picked, large</span>
+<div style="position: absolute; left: 10px; bottom: 10px; background: #050a24cc; padding: 2px 10px; font-size: 24px; color: #ffd27a">Resume point · today 19:00</div>
+</div>
+<div style="flex: 1; display: flex; flex-direction: column; gap: 10px; min-width: 0">
+<button style="height: 70px; border: 3px dashed #ffffff; background: #3150c8; color: #ffd27a; font-size: 32px; display: flex; align-items: center; justify-content: center; gap: 12px"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 22 22"><path d="M3 2 L20 11 L3 20 Z" fill="#ffb43a"></path></svg>Continue</button>
+<button style="height: 54px; border: 2px solid #3858a0; background: #16286a; color: #e8eeff; font-size: 26px">Fresh boot</button>
+<button style="height: 54px; border: 2px solid #3858a0; background: #16286a; color: #e8eeff; font-size: 26px">Home</button>
+<div style="font-size: 20px; color: #9fb0de; margin-top: 6px">Continue starts from the save picked below. Fresh boot keeps in-game saves.</div>
+</div>
+</div>
+<div style="font-size: 20px; color: #9fb0de; letter-spacing: 1px">YOUR SAVES · L1 / R1 TO PICK</div>
+<div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+<button style="height: 118px; box-sizing: border-box; border: 3px solid #ffb43a; background: #16286a; color: #e8eeff; padding: 6px; display: flex; flex-direction: column; gap: 4px"><span style="flex: 1; align-self: stretch; background: repeating-linear-gradient(0deg, #0e1b44 0px, #0e1b44 2px, #13245a 2px, #13245a 4px)"></span><span style="font-size: 20px">Resume · 19:00</span></button>
+<button style="height: 118px; box-sizing: border-box; border: 2px solid #3858a0; background: #16286a; color: #e8eeff; padding: 6px; display: flex; flex-direction: column; gap: 4px"><span style="flex: 1; align-self: stretch; background: #0e1b44"></span><span style="font-size: 20px">Slot 1 · Sat</span></button>
+<button style="height: 118px; box-sizing: border-box; border: 2px solid #3858a0; background: #16286a; color: #e8eeff; padding: 6px; display: flex; flex-direction: column; gap: 4px"><span style="flex: 1; align-self: stretch; background: #0e1b44"></span><span style="font-size: 20px">Slot 2 · Thu</span></button>
+<button style="height: 118px; box-sizing: border-box; border: 2px dashed #3858a0; background: transparent; color: #7f8fbe; padding: 6px; display: flex; flex-direction: column; justify-content: center; gap: 4px"><span style="font-size: 20px">Slot 3 · empty</span></button>
+<button style="height: 118px; box-sizing: border-box; border: 2px dashed #3858a0; background: transparent; color: #7f8fbe; padding: 6px; display: flex; flex-direction: column; justify-content: center; gap: 4px"><span style="font-size: 20px">Slot 4 · empty</span></button>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":960,"height":720}}'>
+class Component extends DCLogic {
+renderVals() { return {}; }
+}
+</script>
+</body>
+</html>
