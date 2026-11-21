@@ -18,6 +18,10 @@ const LocationBar = preload("res://scripts/ui/location_bar.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const GlyphText = preload("res://scripts/ui/glyph_text.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
+const HomeTile = preload("res://scripts/ui/home_tile.gd")
+## Home and Pause tiles: three 278 px columns across the 852 px reading area, 9 px apart.
+const TILE_GAP := 9
+const QUICK_WIDTH := 278
 ## Page builders and actions, one helper per area; each reaches the menu and host.
 var state_previews := preload("res://scripts/emulation/state_previews.gd").new()
 var preparing_pause := false
@@ -47,8 +51,9 @@ func prepare_pause() -> void:
 
 func pause_row_shape(definition: Dictionary) -> Dictionary:
 	var shape := {}
+	# A picture is pushed into the reused row (see _render), so a fresh one never forces a rebuild.
 	for key in definition:
-		if key in ["label", "disabled", "disabled_reason", "value", "help", "nav_row", "nav_col", "tile_index", "tile_count", "tile_columns"] or typeof(definition[key]) == TYPE_CALLABLE: continue
+		if key in ["label", "disabled", "disabled_reason", "value", "help", "nav_row", "nav_col", "tile_index", "tile_count", "tile_columns", "thumbnail"] or typeof(definition[key]) == TYPE_CALLABLE: continue
 		shape[key] = definition[key]
 	if definition.get("layout", "") == "transport" and definition.get("icon", "") in ["play", "pause"]: shape["icon"] = "play_pause"
 	return shape
@@ -59,21 +64,34 @@ func pause_style() -> Array:
 func pause_shape(definitions: Array) -> String:
 	return JSON.stringify([definitions.map(pause_row_shape), pause_style()])
 
-func park_layout() -> void:
+func cache_owner() -> Control:
 	if not is_instance_valid(pause_cache_owner):
 		pause_cache_owner = Control.new()
 		pause_cache_owner.hide()
 		pause_cache_owner.process_mode = Node.PROCESS_MODE_DISABLED
 		add_child(pause_cache_owner)
+	return pause_cache_owner
+
+func park_layout() -> void:
+	cache_owner()
 	for child in column.get_children():
 		column.remove_child(child)
 		if child in pause_cache.get("children", []): pause_cache_owner.add_child(child)
 		else: child.queue_free()
 
+## The pinned Actions of Home and Pause are cached with the page, so they are parked
+## rather than freed; a page without them frees whatever else is pinned.
+func park_pinned() -> void:
+	cache_owner()
+	for child in pinned.get_children():
+		pinned.remove_child(child)
+		if child in pause_cache.get("pinned", []): pause_cache_owner.add_child(child)
+		else: child.queue_free()
+
 func discard_pause_cache() -> void:
-	for child in pause_cache.get("children", []):
+	for child in pause_cache.get("children", []) + pause_cache.get("pinned", []):
 		if is_instance_valid(child):
-			child.get_parent().remove_child(child)
+			if child.get_parent() != null: child.get_parent().remove_child(child)
 			child.queue_free()
 	pause_cache = {}
 
@@ -89,9 +107,38 @@ var subtitle_row: HBoxContainer
 var scope_strip: HBoxContainer
 var scope_pills: HBoxContainer
 var scope_shown := ""
-## In Settings, B moves focus to the sidebar (up and down change category, A or
-## right goes back into the page); B there leaves Settings.
-var sidebar_focus := false
+## Settings' category rail is 68 px of icons; L1/R1 (Q/E) open it into a labelled
+## 330 px drawer that steps one category per press and closes by itself once
+## DRAWER_TIME passes without another press. A closes it at once. While it is
+## open it owns the controller, and the page behind it is dimmed.
+const DRAWER_TIME := 1.2
+const RAIL_WIDTH := 68
+const DRAWER_WIDTH := 330
+## The rail, the tab bar and the page below it share this height (canvas y 104 to 613).
+const RAIL_HEIGHT := 509
+var drawer_open := false
+## Seconds left before the open drawer closes: the one restartable timer.
+var drawer_time := 0.0
+var rail_slot: Control
+var drawer_dim: ColorRect
+var category_header: HBoxContainer
+var category_title_box: Control
+var category_keys: Array[Label] = []
+var layout_box: VBoxContainer
+var top_row: HBoxContainer
+var page_box: VBoxContainer
+var page_row: HBoxContainer
+var settings_gap: Control
+## The Settings help panel beside the rows: the focused setting's name, its help
+## and where its value comes from.
+var info_panel: PanelContainer
+var info_title: Label
+var info_slot: Control
+var info_text: Control
+var info_notice: Label
+var info_from: Label
+var info_source: Label
+var info_key := ""
 ## Where the changed-settings list (Start, or F) was opened from.
 var changed_origin: Dictionary = {}
 var scan_icon: Control
@@ -309,7 +356,7 @@ func _ready() -> void:
 		if items.any(func(item): return item.get("thumbnail_path", "") == path) or (mode == "launch" and host.emulator.auto_path_for(games.launch_path) == path) or (mode == "confirm" and confirmation.get("preview", "") == path): refresh())
 	for helper in [pictures,looks,videos,music,games,play,keys,controls,welcome]: helper.host=host; helper.menu=self
 	# The menu stops processing once hidden, so the screensaver is put away here.
-	visibility_changed.connect(func(): if not visible: end_screensaver())
+	visibility_changed.connect(func(): if not visible: end_screensaver(); end_drawer())
 	theme = MenuSkin.create()
 	host.box_art.art_ready.connect(thumbnail_arrived)
 	sound_player=AudioStreamPlayer.new(); sound_player.volume_db=-28; add_child(sound_player)
@@ -334,9 +381,11 @@ func _ready() -> void:
 	for side in ["top","bottom"]: frame.add_theme_constant_override("margin_"+side,12)
 	centred.add_child(frame)
 	var layout := VBoxContainer.new()
+	layout_box = layout
 	layout.add_theme_constant_override("separation",6)
 	frame.add_child(layout)
 	var top := HBoxContainer.new()
+	top_row = top
 	layout.add_child(top)
 	heading_symbol = TextureRect.new()
 	heading_symbol.texture = preload("res://assets/branding/menu-symbol.png")
@@ -391,12 +440,22 @@ func _ready() -> void:
 	scope_title.size_flags_vertical = Control.SIZE_SHRINK_CENTER; MenuSkin.weigh(scope_title,MenuSkin.BOLD); MenuSkin.shadow(scope_title)
 	scope_strip.add_child(scope_title)
 	scope_pills = HBoxContainer.new(); scope_pills.add_theme_constant_override("separation",6)
+	scope_pills.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	scope_strip.add_child(scope_pills)
+	# On Settings the strip is a bar the width of the page; View sits at its right end.
+	var scope_gap := Control.new(); scope_gap.size_flags_horizontal = Control.SIZE_EXPAND_FILL; scope_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scope_strip.add_child(scope_gap)
 	var scope_key := key_hint(); scope_key.name = "ScopeKey"; scope_key.text = "S"; scope_key.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	scope_strip.add_child(scope_key)
 	var scope_glyph := InputGlyph.new("back", 26.0); scope_glyph.name = "ScopeGlyph"; scope_glyph.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	scope_strip.add_child(scope_glyph)
+	var scope_edge := Control.new(); scope_edge.custom_minimum_size.x = 6; scope_edge.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scope_strip.add_child(scope_edge)
+	scope_strip.move_child(scope_title, 0)
+	var scope_pad := Control.new(); scope_pad.custom_minimum_size.x = 4; scope_pad.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	scope_strip.add_child(scope_pad); scope_strip.move_child(scope_pad, 0)
 	subtitle_row.add_child(scope_strip)
+	subtitle_row.draw.connect(draw_scope_bar)
 	layout.add_child(subtitle_row)
 	location_bar=LocationBar.new(); location_bar.hide(); layout.add_child(location_bar)
 	# Messages name controls in braces ("press {R1}"): drawn as the same glyphs as the hints.
@@ -418,51 +477,69 @@ func _ready() -> void:
 	body.add_theme_constant_override("separation",16)
 	body.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	layout.add_child(body)
-	# Categories sit on their own surface so they read apart from the page.
+	# Categories sit on their own surface so they read apart from the page: a 68 px
+	# rail of icons that opens into a labelled drawer over the page (see DRAWER_TIME).
+	rail_slot = Control.new()
+	rail_slot.custom_minimum_size = Vector2(RAIL_WIDTH, RAIL_HEIGHT)
+	rail_slot.z_index = 1
+	rail_slot.resized.connect(layout_rail)
+	body.add_child(rail_slot)
+	drawer_dim = ColorRect.new(); drawer_dim.color = Color(0.0, 0.02, 0.08, 0.6); drawer_dim.hide()
+	drawer_dim.gui_input.connect(func(event): if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT: close_drawer())
+	rail_slot.add_child(drawer_dim)
 	sidebar_panel = PanelContainer.new()
-	sidebar_panel.add_theme_stylebox_override("panel",MenuSkin.box(Color("000c30"),Color("1c3068"),2,6))
-	body.add_child(sidebar_panel)
+	var rail_panel := MenuSkin.box(Color("000c30"),Color("2c4a90"),2,0)
+	rail_panel.content_margin_left = 2; rail_panel.content_margin_right = 2; rail_panel.content_margin_top = 6; rail_panel.content_margin_bottom = 2
+	sidebar_panel.add_theme_stylebox_override("panel",rail_panel)
+	rail_slot.add_child(sidebar_panel)
 	sidebar = VBoxContainer.new()
-	sidebar.custom_minimum_size.x = 170
-	sidebar.add_theme_constant_override("separation",0)
+	sidebar.add_theme_constant_override("separation",8)
 	sidebar_panel.add_child(sidebar)
-	# A header lined up with the category names, with its shortcut chip on the right.
-	var category_header := HBoxContainer.new(); category_header.custom_minimum_size.y=28
+	# The shoulder badges head the rail; the drawer adds its name to their left.
+	category_header = HBoxContainer.new(); category_header.custom_minimum_size.y=34
+	category_header.add_theme_constant_override("separation",0)
+	category_header.alignment = BoxContainer.ALIGNMENT_CENTER
 	var category_title := Label.new(); category_title.text="CATEGORIES"
-	category_title.add_theme_font_size_override("font_size",14); category_title.add_theme_color_override("font_color",MenuSkin.MUTED)
-	MenuSkin.weigh(category_title,MenuSkin.BOLD); MenuSkin.shadow(category_title)
+	category_title.add_theme_font_size_override("font_size",18); category_title.add_theme_color_override("font_color",MenuSkin.TEXT)
+	MenuSkin.shadow(category_title)
 	category_title.size_flags_horizontal=Control.SIZE_EXPAND_FILL; category_title.size_flags_vertical=Control.SIZE_SHRINK_CENTER
-	var title_margin := MarginContainer.new(); title_margin.add_theme_constant_override("margin_left",12)
+	var title_margin := MarginContainer.new(); title_margin.add_theme_constant_override("margin_left",10)
 	title_margin.size_flags_horizontal=Control.SIZE_EXPAND_FILL; title_margin.add_child(category_title); category_header.add_child(title_margin)
-	var category_hint := key_hint(); category_hint.name="CategoryHint"; category_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
-	category_pad_hint=InputGlyph.row("L1 / R1", 26.0, 14, Color("c9cbce")); category_pad_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
-	category_header.add_child(category_hint); category_header.add_child(category_pad_hint); sidebar.add_child(category_header)
+	title_margin.hide(); category_title_box = title_margin
+	var category_badges := HBoxContainer.new(); category_badges.add_theme_constant_override("separation",2)
+	category_badges.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	# A keyboard shows Q and E as two chips in the badges' place.
+	for key_name in ["Q","E"]:
+		var chip := key_hint(); chip.name="CategoryHint"+key_name; chip.text=key_name; chip.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+		category_keys.append(chip); category_badges.add_child(chip)
+	category_pad_hint=badge_pair("L1","R1"); category_pad_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	category_badges.add_child(category_pad_hint)
+	var badge_margin := MarginContainer.new(); badge_margin.add_theme_constant_override("margin_right",6); badge_margin.add_child(category_badges)
+	category_header.add_child(badge_margin); sidebar.add_child(category_header)
 	for i in range(CATEGORIES.size()):
 		var index := i
 		var button := Button.new()
-		button.text = CATEGORIES[i]
-		button.add_theme_font_size_override("font_size",20)
-		# Button does not draw font shadows. Keep its text for sizing, and draw
-		# the visible caption with a Label, which supports the shared shadow.
-		for state in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color", "font_disabled_color"]:
-			button.add_theme_color_override(state, Color.TRANSPARENT)
+		# Button does not draw font shadows, so its caption is a Label (shown by the
+		# drawer); the rail is the icon alone, named by its tooltip.
+		button.text = ""
+		button.tooltip_text = CATEGORIES[i]
 		var caption := Label.new(); caption.name="CategoryCaption"; caption.text=CATEGORIES[i]
 		caption.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-		caption.offset_left=52; caption.offset_right=-12
+		caption.offset_left=56; caption.offset_right=-10
 		caption.vertical_alignment=VERTICAL_ALIGNMENT_CENTER
+		caption.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS; caption.clip_text=true
 		caption.add_theme_font_size_override("font_size",20); MenuSkin.shadow(caption)
-		caption.mouse_filter=Control.MOUSE_FILTER_IGNORE; button.add_child(caption)
-		button.custom_minimum_size.y = 32
+		caption.mouse_filter=Control.MOUSE_FILTER_IGNORE; caption.hide(); button.add_child(caption)
+		button.custom_minimum_size.y = 48
 		button.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		button.icon = RowIcon.doubled(CATEGORY_ICONS[i])
 		button.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-		button.add_theme_constant_override("h_separation",10)
 		button.add_theme_color_override("icon_normal_color",MenuSkin.MUTED)
 		for state in ["icon_hover_color","icon_pressed_color","icon_focus_color","icon_hover_pressed_color"]: button.add_theme_color_override(state,MenuSkin.TEXT)
-		for style in ["normal","pressed"]: button.add_theme_stylebox_override(style,sidebar_box(Color.TRANSPARENT))
-		button.add_theme_stylebox_override("hover",sidebar_box(Color("102860")))
+		for style in ["normal","pressed"]: button.add_theme_stylebox_override(style,rail_box())
+		button.add_theme_stylebox_override("hover",rail_box(false,true))
 		button.focus_mode = Control.FOCUS_NONE
-		button.pressed.connect(func(): switch_category(index-category))
+		button.pressed.connect(func(): pick_category(index))
 		sidebar.add_child(button); sidebar_buttons.append(button)
 	# Keep category IDs stable while putting the everyday route first.
 	sidebar.move_child(sidebar_buttons[7],1)
@@ -470,6 +547,7 @@ func _ready() -> void:
 	for i in range(SETTINGS_ORDER.size()):
 		sidebar.move_child(sidebar_buttons[SETTINGS_ORDER[i]], i + 1)
 	var content := VBoxContainer.new()
+	page_box = content
 	content.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content.add_theme_constant_override("separation",8)
 	body.add_child(content)
@@ -504,7 +582,7 @@ func _ready() -> void:
 	section_hint=key_hint(); section_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	section_hint.tooltip_text="Previous / next section"
 	section_bar.add_child(section_hint)
-	section_pad_hint=InputGlyph.row("L2 / R2", 26.0, 14, Color("c9cbce")); section_pad_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+	section_pad_hint=badge_pair("L2","R2"); section_pad_hint.size_flags_vertical=Control.SIZE_SHRINK_CENTER
 	section_bar.add_child(section_pad_hint)
 	# A baseline under the tabs; the chosen tab's underline sits on it.
 	section_rule=ColorRect.new(); section_rule.color=Color("3a3f46"); section_rule.custom_minimum_size.y=1
@@ -522,9 +600,16 @@ func _ready() -> void:
 	search_field.placeholder_text="Search games…  (Ctrl+F)"
 	search_field.text_changed.connect(update_search)
 	content.add_child(search_field); search_field.hide()
+	# The rows and, on Settings, the help panel beside them.
+	page_row = HBoxContainer.new()
+	page_row.add_theme_constant_override("separation",9)
+	page_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	content.add_child(page_row)
 	var scroll_frame := Control.new()
 	scroll_frame.size_flags_vertical=Control.SIZE_EXPAND_FILL
-	content.add_child(scroll_frame)
+	scroll_frame.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+	page_row.add_child(scroll_frame)
+	build_info_panel()
 	scroll_frame.add_child(scroll)
 	scroll.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var edges := preload("res://scripts/ui/scroll_edges.gd").new()
@@ -558,6 +643,9 @@ func _ready() -> void:
 	# Keep text inside a fixed slot so selection cannot resize the page.
 	help_slot=Control.new();help_slot.custom_minimum_size.y=64;help_slot.clip_contents=true
 	help_slot.add_child(help_label);help_frame.add_child(help_slot)
+	# On Settings the footer sits at the bottom of the page and this gap takes the slack.
+	settings_gap = Control.new(); settings_gap.size_flags_vertical = Control.SIZE_EXPAND_FILL; settings_gap.mouse_filter = Control.MOUSE_FILTER_IGNORE; settings_gap.hide()
+	layout.add_child(settings_gap)
 	layout.add_child(help_frame)
 	hints = preload("res://scripts/ui/shortcut_footer.gd").new()
 	hints.pressed.connect(footer_pressed)
@@ -603,19 +691,149 @@ func _ready() -> void:
 	open_pause()
 	hide()
 
-# Left-aligned category labels need side padding without taller buttons.
-func sidebar_box(colour: Color, chosen := false, focused := false) -> StyleBoxFlat:
-	# The open category is a lit bar with a light top-left edge; amber all round
-	# while the sidebar itself has the focus.
-	var style := MenuSkin.box(Color("142852") if chosen else colour,MenuSkin.AMBER if focused else Color("88a8e8"),0,6)
-	style.content_margin_left=12; style.content_margin_right=12
-	# Categories must fit beside a page with three lines of help. With their
-	# icons they get a little more room; Larger text hides the icons and keeps it tight.
-	var room := 3 if host.menu_large_text else 5
-	style.content_margin_top=room; style.content_margin_bottom=room
-	if chosen: style.border_width_top=2; style.border_width_left=2
-	if focused: style.set_border_width_all(2)
+## A category on the rail or in the drawer: the open one is lit with an amber left edge.
+## The icon's left margin keeps it at the same x (and so the same place) in both.
+func rail_box(chosen := false, hover := false) -> StyleBoxFlat:
+	var style := MenuSkin.box(Color("1c3470") if chosen else (Color("102860") if hover else Color.TRANSPARENT),MenuSkin.AMBER,0,0)
+	style.content_margin_left=16; style.content_margin_right=4
+	style.content_margin_top=4; style.content_margin_bottom=4
+	if chosen: style.border_width_left=3
 	return style
+
+## Two controller badges side by side (L1 R1, L2 R2), each drawn on its own as the
+## Deck's design shows them, rather than one "L1 / R1" run of text.
+func badge_pair(first: String, second: String, height := 26.0) -> HBoxContainer:
+	var pair := HBoxContainer.new()
+	pair.add_theme_constant_override("separation",2)
+	pair.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for badge in [first, second]: pair.add_child(InputGlyph.new(badge, height))
+	return pair
+
+## Home and the game or video Pause menu share one layout (menu_play.gd).
+func home_view() -> bool:
+	return mode == "pause" and not preview
+
+## Whether the Settings layout (rail, tabs, strip, rows and help panel) is on screen.
+func settings_view() -> bool:
+	return mode == "settings" and not preview
+
+## The Settings help panel: pale blue like the old help window, with the focused
+## setting's name over a rule, its help text, and its source at the bottom.
+func build_info_panel() -> void:
+	info_panel = PanelContainer.new()
+	info_panel.custom_minimum_size.x = 234
+	info_panel.hide()
+	var window := MenuSkin.box(Color("c5d7ff"),Color("3858a0"),2,0)
+	window.content_margin_left=12; window.content_margin_right=12; window.content_margin_top=8; window.content_margin_bottom=10
+	info_panel.add_theme_stylebox_override("panel",window)
+	var column_box := VBoxContainer.new(); column_box.add_theme_constant_override("separation",6)
+	info_panel.add_child(column_box)
+	info_title = Label.new(); info_title.add_theme_font_size_override("font_size",18)
+	info_title.add_theme_color_override("font_color",Color("09132b")); info_title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	column_box.add_child(info_title)
+	var rule := ColorRect.new(); rule.color = Color("8da3d6"); rule.custom_minimum_size.y = 1; rule.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	column_box.add_child(rule)
+	# The text keeps to its slot, so a long explanation never pushes the source out.
+	info_slot = Control.new(); info_slot.size_flags_vertical = Control.SIZE_EXPAND_FILL; info_slot.clip_contents = true
+	info_text = GlyphText.new("", 20, Color("09132b"))
+	info_text.controller = input_kind=="controller"
+	info_text.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
+	info_slot.add_child(info_text); column_box.add_child(info_slot)
+	info_notice = Label.new(); info_notice.add_theme_font_size_override("font_size",16); info_notice.add_theme_color_override("font_color",Color("5a3a00"))
+	info_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART; info_notice.hide()
+	column_box.add_child(info_notice)
+	var origin := VBoxContainer.new(); origin.name = "Origin"; origin.add_theme_constant_override("separation",0)
+	info_from = Label.new(); info_from.add_theme_font_size_override("font_size",14); info_from.add_theme_color_override("font_color",Color("4a5f9a"))
+	info_source = Label.new(); info_source.add_theme_font_size_override("font_size",20); info_source.add_theme_color_override("font_color",Color("09132b"))
+	info_source.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	origin.add_child(info_from); origin.add_child(info_source); column_box.add_child(origin)
+	page_row.add_child(info_panel)
+
+## Draws the rail at its width: 68 px collapsed, or the open drawer over the page.
+## Only the width and the labels change, so the icons never move.
+func layout_rail() -> void:
+	# The slot reports its first size while the rail is still being built.
+	if sidebar_buttons.size() < CATEGORIES.size(): return
+	sidebar_panel.position = Vector2.ZERO
+	sidebar_panel.size = Vector2(DRAWER_WIDTH if drawer_open else RAIL_WIDTH, rail_slot.size.y)
+	drawer_dim.position = Vector2.ZERO
+	drawer_dim.size = Vector2(body.size.x, rail_slot.size.y)
+	drawer_dim.visible = drawer_open
+	category_title_box.visible = drawer_open
+	category_header.alignment = BoxContainer.ALIGNMENT_BEGIN if drawer_open else BoxContainer.ALIGNMENT_CENTER
+	category_header.get_child(1).add_theme_constant_override("margin_right", 6 if drawer_open else 0)
+	for button in sidebar_buttons:
+		var caption: Label = button.get_node("CategoryCaption")
+		caption.visible = drawer_open
+		caption.add_theme_font_size_override("font_size", 23 if host.menu_large_text else 20)
+
+## Draws the editing strip's bar on Settings, the width of the page.
+func draw_scope_bar() -> void:
+	if not settings_view() or not scope_strip.visible: return
+	var bar := Rect2(Vector2.ZERO, Vector2(subtitle_row.size.x, 36))
+	subtitle_row.draw_rect(bar, Color("08153f"))
+	subtitle_row.draw_rect(bar, Color("3858a0"), false, 1.0)
+
+## Puts the chrome of the current screen in place: the Settings layout (rail,
+## tabs over strip over rows and help, footer at the bottom) or the ordinary page.
+func apply_settings_layout(on: bool) -> void:
+	if not on: end_drawer()
+	var home := home_view()
+	top_row.custom_minimum_size.y = 58 if on else (56 if home else 0)
+	body.add_theme_constant_override("separation", 9 if on else 16)
+	body.custom_minimum_size.y = RAIL_HEIGHT if on else 0
+	body.size_flags_vertical = Control.SIZE_SHRINK_BEGIN if on else Control.SIZE_EXPAND_FILL
+	settings_gap.visible = on
+	page_box.add_theme_constant_override("separation", 12 if on else 8)
+	section_bar.custom_minimum_size.y = 39 if on else 0
+	subtitle_row.custom_minimum_size.y = 38 if on else 0
+	rail_slot.visible = on
+	info_panel.visible = on
+	# The page's scrollbar sits in the gap beside the rows, so they keep the full 532 px.
+	scroll.offset_right = 10 if on or home else 0
+	# The context line and strip sit between the tabs and the rows on Settings.
+	var subtitle_home: Control = page_box if on else layout_box
+	if subtitle_row.get_parent() != subtitle_home:
+		subtitle_row.get_parent().remove_child(subtitle_row)
+		subtitle_home.add_child(subtitle_row); subtitle_home.move_child(subtitle_row, 1)
+	layout_rail()
+
+## Steps the rail's category, opening the drawer if it is closed. Every press
+## starts the closing timer again, so a run of presses keeps the drawer up.
+func step_category(delta: int) -> void:
+	if not settings_view(): return
+	drawer_open = true
+	drawer_time = DRAWER_TIME
+	switch_category(delta)
+
+## Closes the drawer and returns to the selected category's settings: its saved
+## tab, focused row and scroll are restored by the render, as for any category.
+func close_drawer(confirm := false) -> void:
+	if not drawer_open: return
+	end_drawer()
+	remember(); clear_input()
+	if confirm: play_menu_sound(true)
+	render()
+
+## Puts the drawer away without drawing anything; for leaving Settings, where the
+## next screen draws itself.
+func end_drawer() -> void:
+	drawer_time = 0.0
+	if not drawer_open: return
+	drawer_open = false
+	layout_rail()
+
+## A rail icon or drawer row picked with the mouse: that category, and no drawer.
+func pick_category(target: int) -> void:
+	if not settings_view(): return
+	end_drawer()
+	if target == category: remember(); render(); return
+	remember(); clear_input()
+	sections[category] = subsection
+	category = target
+	subsection = int(sections.get(category,0))
+	render()
+	play_navigation_click()
 
 ## A small key chip, such as "Q / E", so shortcuts read apart from content.
 func key_hint() -> Label:
@@ -665,11 +883,13 @@ func open_pause() -> void:
 	mode = "pause"; preview = false
 	selected_id = "resume" if host.emulator.loaded or host.video.loaded else ("home.continue" if FileAccess.file_exists(host.last_game_path) else "home.library")
 	memory[state_key()] = {"id":selected_id,"scroll":0}
+	# The paused game's picture is drawn once, here, for the card at the top of the page.
+	play.capture_pause_frame()
 	render()
 
 func open_settings() -> void:
 	remember(); clear_input()
-	settings_origin.clear(); sidebar_focus = false
+	settings_origin.clear(); end_drawer()
 	mode = "settings"; preview = false
 	subsection = int(sections.get(category,0))
 	render()
@@ -687,7 +907,8 @@ func open_settings_section(target: int, title: String) -> void:
 	remember(); clear_input()
 	if mode == "music_browser" and music.music_origin.get("mode") != "settings" or mode == "videos" and videos.video_origin.get("mode") != "settings":
 		settings_origin = snapshot()
-	mode = "settings"; preview = false; category = target; sidebar_focus = false
+	end_drawer()
+	mode = "settings"; preview = false; category = target
 	var pages := catalog.pages(target)
 	subsection = 0
 	for i in range(pages.size()):
@@ -723,7 +944,7 @@ func reveal_section_tab(tab: Control) -> void:
 	section_scroll.scroll_horizontal = int(maxf(scroll_x, 0.0))
 
 func switch_section(delta: int) -> void:
-	if mode!="settings" or preview: return
+	if mode!="settings" or preview or drawer_open: return
 	var next := posmod(subsection+delta,catalog.pages(category).size())
 	if next == subsection: return
 	remember(); clear_input()
@@ -732,31 +953,14 @@ func switch_section(delta: int) -> void:
 	render()
 	play_navigation_click()
 
-## B in Settings: the sidebar takes the focus and the page's selection steps back.
-func enter_sidebar() -> void:
-	if mode != "settings" or preview: return
-	remember(); clear_input()
-	sidebar_focus = true
-	finish_editing()
-	play_menu_sound()
-	render()
-
-## A or right on the sidebar: back into the page, where it was.
-func leave_sidebar() -> void:
-	if not sidebar_focus: return
-	sidebar_focus = false
-	clear_input()
-	play_menu_sound(true)
-	render()
-
 ## Every setting that differs from its default, across Settings, as a list that
 ## jumps to each one. The same test as the rows' changed-value dot.
 func open_changed() -> void:
 	if mode == "changed": back(); return
-	if mode != "settings": return
+	if mode != "settings" or drawer_open: return
 	remember(); clear_input()
 	changed_origin = snapshot()
-	sidebar_focus = false; preview = false
+	preview = false
 	mode = "changed"
 	memory[state_key()] = {"id":"", "scroll":0}
 	render()
@@ -780,8 +984,8 @@ func changed_items() -> Array:
 	return result
 
 func jump_to_setting(target: int, index: int, id: String) -> void:
+	end_drawer()
 	mode = "settings"; category = target; subsection = index; sections[target] = index
-	sidebar_focus = false
 	settings_origin = changed_origin.duplicate()
 	if settings_origin.get("mode", "") == "settings": settings_origin = {}
 	memory[state_key()] = {"id":id, "scroll":0}
@@ -794,12 +998,14 @@ func current_scope() -> Dictionary:
 
 ## Moves the editing scope along the strip (View / Select, or S), wrapping round.
 func change_scope(delta: int) -> void:
+	if drawer_open: return
 	var scope := current_scope()
 	if scope.is_empty() or scope.choices.size() < 2: return
 	var next := posmod(int(scope.index) + delta, scope.choices.size())
 	set_scope(next)
 
 func set_scope(index: int) -> void:
+	if drawer_open: return
 	var scope := current_scope()
 	if scope.is_empty() or index == int(scope.index): return
 	remember(); clear_input()
@@ -809,6 +1015,7 @@ func set_scope(index: int) -> void:
 
 ## Draws the strip for this tab: amber for the scope being edited.
 func refresh_scope_strip() -> void:
+	subtitle_row.queue_redraw()
 	var scope := current_scope()
 	scope_strip.visible = not scope.is_empty()
 	if scope.is_empty(): return
@@ -840,7 +1047,7 @@ func snapshot() -> Dictionary:
 	return {"mode":mode,"category":category,"subsection":subsection}
 
 func restore(state: Dictionary) -> void:
-	mode = state.mode; category = state.category; subsection = state.subsection; sidebar_focus = false
+	mode = state.mode; category = state.category; subsection = state.subsection; end_drawer()
 	clear_input(); render()
 
 func back() -> void:
@@ -851,10 +1058,9 @@ func back() -> void:
 	match mode:
 		"pause": host.close_settings()
 		"settings":
-			# A shortcut into Settings (Music settings, Video settings) goes straight back.
-			if not sidebar_focus and settings_origin.is_empty():
-				enter_sidebar(); return
-			sidebar_focus = false
+			# B always leaves Settings, drawer open or not: back to where it was opened
+			# from (Music settings, Video settings, the changed list), else Home or the pause menu.
+			end_drawer()
 			if settings_origin.is_empty(): mode="pause"; render()
 			else:
 				var origin := settings_origin
@@ -921,33 +1127,40 @@ func open_my_room(index: int) -> void:
 ## preset and game volume from the Everyday page, as compact rows you adjust
 ## with left and right.
 func quick_controls(video_view := false) -> Array:
-	var result: Array = [room_choice("pause.room")]
+	var room: Dictionary = room_choice("pause.room")
+	var preset: Dictionary = {}
+	var volume: Dictionary = {}
 	for source in catalog.pages(EVERYDAY)[0].rows:
-		if source.id in ["quick.preset","quick.game_volume"]: result.append(source.duplicate())
-	result[1].id="pause.preset"; result[1].label="Picture"; result[1]["row_icon"]="tv"
-	result[2].id="pause.game_volume"; result[2].label="Game volume"; result[2]["row_icon"]="audio"
-	result[0].help = "Switch room presets. Custom keeps your own room."
-	result[1].help = "Change the picture preset. Custom restores your tuned picture."
-	result[2].help = "Adjust video audio." if video_view else "Adjust game audio independently of music."
-	if video_view:result[2].label="Video volume"
+		if source.id == "quick.preset": preset = source.duplicate()
+		elif source.id == "quick.game_volume": volume = source.duplicate()
+	preset.id="pause.preset"; preset.label="Picture"; preset["row_icon"]="tv"
+	volume.id="pause.game_volume"; volume.label="Game volume"; volume["row_icon"]="audio"
+	room.help = "Switch room presets. Custom keeps your own room."
+	preset.help = "Change the picture preset. Custom restores your tuned picture."
+	volume.help = "Adjust video audio." if video_view else "Adjust game audio independently of music."
+	if video_view:volume.label="Video volume"
 	# TV position opens the preview strip, where up and down switch between its
 	# distance and height; so height is a tile only while that preview is open.
 	var position_ids: Array = ["quick.view.distance", "quick.view.height_offset"] if preview else ["quick.view.distance"]
 	# Flat view has no TV to place: its screen's shape takes that tile. On the
 	# whole display the TV model changes nothing, so the game's shape takes its tile.
 	var whole_display: bool = host.flat_screen and host.flat_shape == 0
+	# Row one reads Picture, Room, TV; row two TV position, Screen fit, Game volume.
+	var tv_tile: Array = []
+	var position_tiles: Array = []
+	var fit_tile: Array = []
 	if host.flat_screen:
 		position_ids = []
 		var shape: Dictionary = catalog.flat_shape_row("pause.flat_shape")
 		shape.merge({"label":"Screen","row_icon":"view","help":"Whole display fits the game to this screen; TV's shape keeps the TV's outline."}, true)
-		result.append(shape)
+		position_tiles.append(shape)
 	for wanted in position_ids + ["quick.tv", "quick.fit"]:
 		if wanted == "quick.tv" and whole_display:
 			var game_shape := picture_row("picture.source_aspect")
 			if not game_shape.is_empty():
 				game_shape.merge({"id":"pause.game_shape","row_icon":"tv","help":"Automatic normally. 16:9 if a game's widescreen mode looks squeezed."}, true)
 				game_shape.erase("detail_getter") # the tiles beside it have no source line
-				result.append(game_shape)
+				tv_tile.append(game_shape)
 			continue
 		for source in catalog.pages(EVERYDAY)[0].rows:
 			if source.id != wanted: continue
@@ -956,14 +1169,20 @@ func quick_controls(video_view := false) -> Array:
 			control["row_icon"] = {"quick.view.distance":"view", "quick.view.height_offset":"up", "quick.tv":"tv", "quick.fit":"fit"}[source.id]
 			if source.id.begins_with("quick.view."):
 				control["quick_preview"] = true
-				control["title_size"] = 18
+				if preview: control["title_size"] = 18
 				if source.id == "quick.view.distance" and not preview: control.label = "TV position"
 				control.help = "Preview: move the TV nearer, farther, up or down." if source.id == "quick.view.distance" else "Moves the screen, stand and room up or down."
-			elif source.id == "quick.tv": control.help = "The TV for this game or video."
-			else: control.help = "Fit shows it all; Fill crops; Stretch reshapes."
-			result.append(control)
+				position_tiles.append(control)
+			elif source.id == "quick.tv":
+				control.help = "The TV for this game or video."
+				tv_tile.append(control)
+			else:
+				control.label = "Screen fit"
+				control.help = "Fit shows it all; Fill crops; Stretch reshapes."
+				fit_tile.append(control)
+	var result: Array = [preset, room] + tv_tile + position_tiles + fit_tile + [volume]
 	for row in result:
-		row.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"stacked":true,"compact":true,"meter":false}, true)
+		row.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"inline":true,"arrow_width":18,"compact":true,"meter":false,"min_width":QUICK_WIDTH,"gap":TILE_GAP}, true)
 	return result
 
 ## A copy of one row from the Picture settings, by id; empty if it is not there.
@@ -1232,7 +1451,7 @@ func _render(incremental: bool) -> void:
 	rendering = true
 	layout_revision+=1
 	var build_revision := layout_revision
-	for child in pinned.get_children(): pinned.remove_child(child); child.queue_free()
+	park_pinned()
 	items = get_items()
 	profile_stages["items_us"] = Time.get_ticks_usec() - profile_start
 	var profile_stage := Time.get_ticks_usec()
@@ -1240,7 +1459,14 @@ func _render(incremental: bool) -> void:
 		items = items.filter(func(item): return item.get("quick_preview",false) if mode in ["pause","welcome"] else item.get("visual",false))
 		if mode == "pause":
 			for item in items: item.erase("layout")
-	column.add_theme_constant_override("separation", 4 if mode == "pause" else 6)
+	# Settings rows are drawn compact (56 px, the meter in the row) and carry no detail line.
+	if settings_view():
+		for item in items:
+			item["settings_row"] = true
+			# The "N advanced settings hidden · Show ›" line reads as a quiet note, not a row.
+			if str(item.id).begins_with("advanced.note."): item["plain"] = true; item["min_height"] = 30
+	column.add_theme_constant_override("separation", 5 if mode == "pause" else 6)
+	pinned.add_theme_constant_override("separation", 4 if home_view() else 6)
 	help_slot.custom_minimum_size.y = 32 if mode == "pause" else 64
 	var pause_key := pause_shape(items) if mode == "pause" and not preview else ""
 	var reuse_pause: bool = not pause_key.is_empty() and pause_cache.get("key", "") == pause_key
@@ -1250,6 +1476,10 @@ func _render(incremental: bool) -> void:
 			for child in pause_cache.children:
 				child.get_parent().remove_child(child)
 				column.add_child(child)
+		for child in pause_cache.pinned:
+			if child.get_parent() != pinned:
+				child.get_parent().remove_child(child)
+				pinned.add_child(child)
 		rows = pause_cache.rows.duplicate()
 		music_heading = pause_cache.music_heading
 		deck_detail = pause_cache.deck_detail
@@ -1258,6 +1488,8 @@ func _render(incremental: bool) -> void:
 			for key in ["nav_row", "nav_col", "tile_index", "tile_count", "tile_columns"]:
 				if rows[i].item.has(key): items[i][key] = rows[i].item[key]
 			rows[i].item = items[i]
+			# A new picture (the frame the game paused on) is pushed in; it is not part of the key.
+			if items[i].has("thumbnail_path"): rows[i].set_thumbnail(items[i].get("thumbnail"))
 			rows[i].refresh()
 	else:
 		if not pause_key.is_empty(): discard_pause_cache()
@@ -1276,7 +1508,7 @@ func _render(incremental: bool) -> void:
 		var transport_grid: HBoxContainer
 		var group_row := -1
 		var group_index := 0
-		var tiles: GridContainer
+		var tiles: Container
 		var tile_group := ""
 		var tile_counts := {}
 		var tile_numbers := {}
@@ -1333,16 +1565,29 @@ func _render(incremental: bool) -> void:
 				item["nav_row"]=group_row+group_index/2; item["nav_col"]=group_index%2; group_index+=1
 			if item.get("layout","")=="tile":
 				var named := str(item.get("group","tiles"))
+				# Home and Pause pin their Actions below the scrolling page.
+				var holder: Container = pinned if item.get("pinned",false) else column
 				if tiles==null or named!=tile_group:
 					tile_group=named
 					# A group can carry its own heading, above its grid.
 					if item.has("section") and item.section!=section:
 						section=item.section
 						var heading := Label.new(); heading.text=section; heading.add_theme_font_size_override("font_size",16); MenuSkin.weigh(heading,MenuSkin.BOLD); heading.add_theme_color_override("font_color",MenuSkin.MUTED)
-						column.add_child(heading)
-					tiles=GridContainer.new(); tiles.columns=int(item.get("columns",2)); tiles.add_theme_constant_override("h_separation",8); tiles.add_theme_constant_override("v_separation",6); column.add_child(tiles)
+						# Home and Pause set each heading's own gap above it by growing the label,
+						# with its text kept at the bottom, so it stays next to the tiles it names.
+						if item.has("section_extra"): heading.custom_minimum_size.y=24+int(item.section_extra); heading.vertical_alignment=VERTICAL_ALIGNMENT_BOTTOM
+						holder.add_child(heading)
+					if item.get("flow","")=="row":
+						tiles=HBoxContainer.new(); tiles.add_theme_constant_override("separation",int(item.get("gap",9)))
+					else:
+						tiles=GridContainer.new(); tiles.columns=int(item.get("columns",2)); tiles.add_theme_constant_override("h_separation",int(item.get("gap",8))); tiles.add_theme_constant_override("v_separation",6)
+					holder.add_child(tiles)
+					if item.has("below"):
+						# Space under a pinned group, so it ends where the help window begins.
+						var spacer := Control.new(); spacer.custom_minimum_size.y=int(item.below); spacer.mouse_filter=Control.MOUSE_FILTER_IGNORE
+						holder.add_child(spacer)
 				parent=tiles
-				item["tile_index"]=int(tile_numbers.get(named,0)); item["tile_count"]=int(tile_counts[named]); item["tile_columns"]=tiles.columns
+				item["tile_index"]=int(tile_numbers.get(named,0)); item["tile_count"]=int(tile_counts[named]); item["tile_columns"]=int(item.get("columns",2))
 				tile_numbers[named]=int(item.tile_index)+1
 			if mode in ["games", "recent", "favourites", "most_played"] and host.game_list_columns > 1 and item.get("layout", "") == "game" and item.has("rom_path"):
 				if game_grid == null:
@@ -1401,12 +1646,18 @@ func _render(incremental: bool) -> void:
 			if item.id in ["exit","home.exit"] and item.get("layout","")!="tile":
 				var divider := HSeparator.new()
 				column.add_child(divider)
-			var row = MusicIcon.new() if item.get("layout","")=="transport" else (MusicTimeline.new() if item.kind=="seek" else (LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))))
+			var row = HomeTile.new() if item.has("tile_look") else MusicIcon.new() if item.get("layout","")=="transport" else (MusicTimeline.new() if item.kind=="seek" else (LibraryCard.new() if item.get("layout","")=="card" else (GameRow.new() if item.get("layout","")=="game" else (ActionRow.new() if item.kind=="action" else Row.new()))))
 			# Build the row while detached so each child/theme change does not
 			# repeatedly invalidate the live menu layout. Attach the finished row once.
 			row.configure(item)
 			parent.add_child(row)
-			if item.get("layout","")=="tile": row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
+			if item.get("layout","")=="tile":
+				# Home and Pause tiles have their own widths: three 278 px columns, four Actions
+				# slots, a row that fills what its small tiles leave. Other grids share the width.
+				if item.has("min_width"):
+					row.custom_minimum_size.x=float(item.min_width)
+					row.size_flags_horizontal=Control.SIZE_EXPAND_FILL if item.get("fill",false) else Control.SIZE_SHRINK_BEGIN
+				else: row.size_flags_horizontal=Control.SIZE_EXPAND_FILL
 			row.selected.connect(select)
 			row.adjust_requested.connect(func(id,delta):
 				select(id,false)
@@ -1419,25 +1670,25 @@ func _render(incremental: bool) -> void:
 					row.text=item.label; row.add_theme_font_size_override("font_size",18)
 			rows.append(row)
 		if not pause_key.is_empty():
-			pause_cache = {"key": pause_key, "children": column.get_children(), "rows": rows.duplicate(), "music_heading": music_heading, "deck_detail": deck_detail, "deck_text": deck_text}
+			pause_cache = {"key": pause_key, "children": column.get_children(), "pinned": pinned.get_children(), "rows": rows.duplicate(), "music_heading": music_heading, "deck_detail": deck_detail, "deck_text": deck_text}
 	profile_stages["rows_us"] = Time.get_ticks_usec() - profile_stage
 	profile_stage = Time.get_ticks_usec()
-	sidebar.visible = mode=="settings" and not preview
+	sidebar.visible = settings_view()
 	sidebar_panel.visible = sidebar.visible
 	# Reserve the same tab and context space on every settings page. Single-page
-	# categories must not move the sidebar, content or help when switching.
-	section_bar.visible = mode=="settings" and not preview
+	# categories must not move the rail, content or help when switching.
+	section_bar.visible = settings_view()
 	section_block.visible = section_bar.visible
+	apply_settings_layout(settings_view())
 	for i in range(sidebar_buttons.size()):
-		sidebar_buttons[i].add_theme_stylebox_override("normal",sidebar_box(Color("3b3329") if i==category else Color.TRANSPARENT,i==category,i==category and sidebar_focus))
-		sidebar_buttons[i].add_theme_color_override("icon_normal_color",MenuSkin.TEXT if i==category else MenuSkin.MUTED)
-		# Larger text needs the sidebar's width for its words: the icons step aside.
-		sidebar_buttons[i].icon = null if host.menu_large_text else RowIcon.doubled(CATEGORY_ICONS[i])
+		var chosen := i == category
+		sidebar_buttons[i].add_theme_stylebox_override("normal",rail_box(chosen))
+		sidebar_buttons[i].add_theme_stylebox_override("pressed",rail_box(chosen))
+		sidebar_buttons[i].add_theme_stylebox_override("hover",rail_box(chosen,true))
+		sidebar_buttons[i].add_theme_color_override("icon_normal_color",MenuSkin.TEXT if chosen else MenuSkin.MUTED)
 		var caption: Label = sidebar_buttons[i].get_node("CategoryCaption")
-		caption.offset_left = 12 if host.menu_large_text else 52
-		caption.add_theme_color_override("font_color", MenuSkin.TEXT if i==category else MenuSkin.MUTED)
-		MenuSkin.weigh(caption,MenuSkin.SEMIBOLD if i==category else MenuSkin.REGULAR)
-		MenuSkin.weigh(sidebar_buttons[i],MenuSkin.SEMIBOLD if i==category else MenuSkin.REGULAR)
+		caption.add_theme_color_override("font_color", MenuSkin.TEXT if chosen else MenuSkin.MUTED)
+		MenuSkin.weigh(caption,MenuSkin.SEMIBOLD if chosen else MenuSkin.REGULAR)
 	if mode=="settings":
 		var pages: Array = catalog.pages(category)
 		for child in section_tabs.get_children(): section_tabs.remove_child(child);child.queue_free()
@@ -1448,14 +1699,15 @@ func _render(incremental: bool) -> void:
 			tab.focus_mode=Control.FOCUS_NONE
 			tab.add_theme_font_size_override("font_size",20 if host.menu_large_text else 18)
 			MenuSkin.weigh(tab,MenuSkin.SEMIBOLD if i==subsection else MenuSkin.REGULAR)
-			var tab_style := MenuSkin.box(Color.TRANSPARENT,MenuSkin.AMBER,0,6)
+			var tab_style := MenuSkin.box(Color("142852") if i==subsection else Color.TRANSPARENT,MenuSkin.AMBER,0,6)
+			tab_style.content_margin_left=18; tab_style.content_margin_right=18; tab_style.content_margin_top=1; tab_style.content_margin_bottom=1
 			tab_style.set_corner_radius_all(0)
 			# Reach down to the baseline rule so the underline sits on it.
 			tab_style.expand_margin_bottom=SECTION_UNDERLINE_REACH
 			if i==subsection: tab_style.border_width_bottom=3
 			tab.add_theme_stylebox_override("normal",tab_style)
 			tab.add_theme_stylebox_override("pressed",tab_style)
-			var hover_style: StyleBoxFlat=tab_style.duplicate(); hover_style.bg_color=Color("292d33")
+			var hover_style: StyleBoxFlat=tab_style.duplicate(); hover_style.bg_color=Color("102860")
 			tab.add_theme_stylebox_override("hover",hover_style)
 			tab.add_theme_color_override("font_color",MenuSkin.TEXT if i==subsection else MenuSkin.MUTED)
 			tab.pressed.connect(func(): switch_section(index-subsection))
@@ -1464,7 +1716,7 @@ func _render(incremental: bool) -> void:
 		heading.text = CATEGORIES[category]
 		tab_position.text = "%d / %d" % [subsection + 1, pages.size()]
 		tab_position.visible = pages.size() > 1
-	else: heading.text = {"help":help_title,"launch":("Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing") if games.has_saves(games.launch_path) else "Choose a version","recent":"Recently played","favourites":"Favourites","most_played":"Most played","alphabet":"Jump to letter","music_browser":"Music & albums","pause":playing_title(),"library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state","changed":"Changed settings"}.get(mode,"CRT XR")
+	else: heading.text = {"help":help_title,"launch":("Welcome back" if games.launch_origin.get("mode", "pause")=="pause" and not host.emulator.loaded else "Continue playing") if games.has_saves(games.launch_path) else "Choose a version","recent":"Recently played","favourites":"Favourites","most_played":"Most played","alphabet":"Jump to letter","music_browser":"Music & albums","pause":"CRT XR","library":"Game Library","library_tools":"Library locations","videos":"Video Library","video_search":"Search videos","video_folder":"Choose a video folder","video_launch":"Continue or start over?","games":library.Registry.SYSTEMS[games.library_system].name,"browser":"Browse games","volumes":"SD card volumes","drives":"Computer drives","slot":setup_name() if mode=="slot" else "","folder_path":"Open a folder", "rename":"Name your setup","welcome":welcome.title(),"confirm":str(confirmation.get("title","Please confirm")) if mode=="confirm" else "","my_room":host.rooms.name(my_room) if mode=="my_room" else "","states":"Save state" if play.states_saving else "Load state","changed":"Changed settings"}.get(mode,"CRT XR")
 	confirm_panel.visible = mode=="confirm"
 	if mode=="confirm":
 		state_previews.request(confirmation.get("preview", ""))
@@ -1494,7 +1746,7 @@ func _render(incremental: bool) -> void:
 	help_label.visible = not preview and not mode in ["help","library","games","launch","game_info"] and not (mode=="welcome" and welcome.step=="welcome") # These pages use the room for content.
 	# The Welcome page is the boot logo's landing place: no title bar above it.
 	heading.get_parent().visible = not (mode=="welcome" and welcome.step=="welcome")
-	help_frame.visible = help_label.visible
+	help_frame.visible = help_label.visible and not settings_view()
 	if preview: heading.add_theme_font_size_override("font_size",22)
 	else: heading.add_theme_font_size_override("font_size",32)
 	profile_stages["chrome_us"] = Time.get_ticks_usec() - profile_stage
@@ -1518,8 +1770,8 @@ func _render(incremental: bool) -> void:
 	for row in rows: row.editing = not editing_id.is_empty() and row.item.id==editing_id
 	select(selected_id,false)
 	style_rows()
-	# With the sidebar focused the page keeps its place but shows no selection.
-	if mode=="settings" and sidebar_focus:
+	# With the drawer open it holds the only focus mark: the page keeps its place but shows no selection.
+	if settings_view() and drawer_open:
 		for row in rows: row.set_selected(false)
 	if mode=="launch": decorate_launch()
 	if mode=="help":
@@ -1568,9 +1820,11 @@ func depth_layout() -> Dictionary:
 	if not visible: return layout
 	if body.visible:
 		var clip := scroll.get_global_rect()
+		# Home and Pause's pinned Actions belong to the page: they float with it, and lift when selected.
+		if pinned.visible and pinned.get_child_count() > 0: clip = clip.merge(pinned.get_global_rect())
 		layout.page = clip
 		var row = selected_row()
-		if row != null and row.is_visible_in_tree():
+		if row != null and row.is_visible_in_tree() and not drawer_open:
 			layout.lift = row.get_global_rect().intersection(clip)
 		# The About page's logo floats in front of its page, as a selected row does.
 		var logo := column.find_child("BrandLogo", true, false) as Control if mode == "help" else null
@@ -1616,6 +1870,11 @@ func finish_editing() -> void:
 		if each.editing: each.editing=false; each.update_selection_style(); each.refresh()
 	refresh_hints(selected_row())
 
+## A greyed-out Settings row can still be focused, so the help panel can say why it is
+## unavailable; activate, adjust and reset all skip a disabled row. Elsewhere it is skipped.
+func selectable(row) -> bool:
+	return not row.disabled or (mode == "settings" and bool(row.item.get("settings_row", false)))
+
 func select(id: String, user_action := true) -> void:
 	if rendering or selecting: return
 	exit_selected=false; footer_flat=false
@@ -1623,7 +1882,7 @@ func select(id: String, user_action := true) -> void:
 		scan_preferred_id=""; notification_time=0
 	var candidate = null
 	for row in rows:
-		if row.item.id==id and not row.disabled: candidate=row
+		if row.item.id==id and selectable(row): candidate=row
 	if candidate==null: return
 	if not editing_id.is_empty() and editing_id!=id: finish_editing()
 	selecting = true
@@ -1703,9 +1962,8 @@ func refresh_labels() -> void:
 	elif mode=="launch": subtitle.text = ""
 	elif mode=="library_tools": subtitle.text = "Where CRT XR finds your games · Your files stay where they are"
 	elif mode=="settings":
-		# Each tab says what it applies to; Picture names the scope being edited.
+		# Only Picture has a context line: the scope being edited.
 		subtitle.text = str(current_page.get("subtitle", ""))
-		if subtitle.text.is_empty(): subtitle.text = "• marks a changed setting · %s lists them all" % ("Start" if input_kind == "controller" else "F")
 	elif mode=="changed":
 		var count: int = items.filter(func(item): return not item.get("disabled", false)).size()
 		subtitle.text = count_caption(count, "setting") + " changed from their defaults"
@@ -1720,15 +1978,16 @@ func refresh_labels() -> void:
 	else: subtitle.text = ""
 	# Highlighted when Picture changes belong to one game or to videos, not everything.
 	subtitle.add_theme_color_override("font_color",MenuSkin.AMBER if mode=="settings" and category==1 and not host.display_settings.content.is_empty() else MenuSkin.MUTED)
-	# Settings always reserve the context line, even if a status is temporarily
-	# empty. Its appearance must never move the page below it.
-	subtitle.visible = not preview and (mode == "settings" or not subtitle.text.is_empty()) and not location_bar.visible and mode != "pause"
+	# The context line only appears when it says something; on Settings a tab
+	# without a scope or an editing note gives its rows the room instead.
+	subtitle.visible = not preview and not subtitle.text.is_empty() and not location_bar.visible and mode != "pause"
 	subtitle_row.visible = subtitle.visible
 	# A scoped tab shows its strip in the context line's place, at the same height.
 	refresh_scope_strip()
 	if scope_strip.visible:
-		subtitle_row.custom_minimum_size.y = subtitle.get_combined_minimum_size().y
+		if not settings_view(): subtitle_row.custom_minimum_size.y = subtitle.get_combined_minimum_size().y
 		subtitle.visible = false
+		subtitle_row.visible = true
 	show_step_marks(welcome.number() if mode=="welcome" and subtitle.visible else 0)
 	scan_icon.visible = mode=="library" and rom_index.scanning
 	if mode in ["games","recent","favourites","most_played"] and not search_query.is_empty(): subtitle.text += " · Search: "+search_query
@@ -1739,7 +1998,6 @@ func refresh_labels() -> void:
 	elif mode=="library": help_label.text=""
 	elif exit_selected and footer_flat: help_label.text = ("Back to the room and the TV." if host.flat_screen else "Shows the game full-screen without the room or the TV, for playing without glasses.") + " Also F3, or View & glasses → Stereo & comfort."
 	elif exit_selected: help_label.text = "Exit CRT XR. Your settings will be saved."
-	elif mode=="settings" and sidebar_focus: help_label.text = "Up and down choose a category. {A} opens it; {B} leaves Settings."
 	elif row!=null: help_label.text = str(row.item.get("help",""))
 	else: help_label.text = library.message if mode=="browser" else "Nothing here yet. {B} goes back."
 	if mode=="library":
@@ -1751,7 +2009,50 @@ func refresh_labels() -> void:
 		help_label.visible = help_frame.visible
 	help_frame.modulate.a = 0.0 if help_label.text.is_empty() else 1.0
 	if preview and row!=null: compact.text = "▸  %s    ‹  %s  ›" % [row.item.label,row.formatted_value()]
+	update_settings_help(row)
 	refresh_hints(row)
+
+## The Settings help panel for the focused row: its name, its own help text and
+## where its value comes from. A passing message ("Changed · Saved when you close
+## the menu", "Editing All SNES games") has its own line, so it never replaces the help.
+func update_settings_help(row) -> void:
+	if not settings_view() or info_panel == null: return
+	var origin := setting_origin(row)
+	info_title.text = str(row.item.label).to_upper() if row != null else ""
+	info_from.text = str(origin[0]) if not origin.is_empty() else ""
+	info_source.text = str(origin[1]) if not origin.is_empty() else ""
+	info_from.get_parent().visible = not origin.is_empty()
+	info_notice.text = GlyphText.plain(notification) if notification_time>0 and notification_context==state_key() else ""
+	info_notice.visible = not info_notice.text.is_empty()
+	var help := str(row.item.get("help","")) if row != null else "Nothing here yet. {B} goes back."
+	# An unavailable row leads with why; some reasons are already part of the help.
+	var reason := str(row.item.get("disabled_reason","")) if row != null and row.disabled else ""
+	if not reason.is_empty() and not help.contains(reason): help = reason + "\n\n" + help
+	var key := "%s|%s" % [help, input_kind]
+	if key == info_key: return
+	info_key = key
+	info_text.font_size = 20
+	info_text.text = help
+	fit_info_text.call_deferred(key)
+
+## A long explanation drops to a smaller size before it is clipped at the slot's edge.
+func fit_info_text(key: String) -> void:
+	await get_tree().process_frame
+	if key != info_key or not is_instance_valid(info_text) or not info_panel.is_visible_in_tree(): return
+	if info_text.get_combined_minimum_size().y > info_slot.size.y: info_text.font_size = 16
+
+## Where a setting's value comes from, as [caption, source]: a picture setting says
+## which scope it is set at or inherited from; a changed setting names the default Y
+## restores. Empty when there is nothing to add: a setting at its default already
+## shows that value in its row, and actions and pages have none.
+func setting_origin(row) -> Array:
+	if row == null: return []
+	var item: Dictionary = row.item
+	if item.has("picture_field"): return catalog.picture_origin(str(item.picture_field))
+	if item.has("detail_getter"): return ["SOURCE", str(item.detail_getter.call())]
+	if item.has("default") and item.has("getter") and Row.differs(item):
+		return ["DEFAULT", Row.format_value(item, true, item.default)]
+	return []
 
 func preview_available() -> bool:
 	if mode in ["pause","welcome"]: return items.any(func(item): return item.get("quick_preview",false))
@@ -1832,7 +2133,7 @@ func playing_title() -> String:
 ## Y on Home and the pause menu switches Flat view (not while a tile is being
 ## adjusted or previewed, where Y resets the value).
 func flat_shortcut_available() -> bool:
-	if mode != "pause" or preview or sidebar_focus: return false
+	if mode != "pause" or preview: return false
 	var row = selected_row()
 	return row == null or editing_id != str(row.item.id)
 
@@ -1891,8 +2192,8 @@ func refresh_hints(row) -> void:
 	# One place for prompts: the footer. The header keeps the title and clock.
 	back_button.visible=false
 	back_glyph.visible=false
-	var category_hint: Label = sidebar.find_child("CategoryHint",true,false)
-	category_hint.text="Q / E"; category_hint.visible=not pad; category_pad_hint.visible=pad
+	for chip in category_keys: chip.visible=not pad
+	category_pad_hint.visible=pad
 	section_hint.text="Z / C"; section_hint.visible=not pad; section_pad_hint.visible=pad
 	preview_button.visible=false
 	preview_button.text="Preview" if pad else "Preview  [X]"
@@ -1903,12 +2204,13 @@ func refresh_hints(row) -> void:
 	var go_back := "B Back" if pad else "Backspace Back"
 	if mode=="pause" and preview:
 		parts = ["↑↓ Setting", "←→ Adjust", "Y Reset", "B Quick settings" if pad else "Backspace Quick settings"]
-	elif mode=="settings" and sidebar_focus:
-		parts=["↑↓ Category", "A Open" if pad else "Enter Open", ("B Close" if pad else "Backspace Close") if settings_origin.is_empty() else go_back]
+	elif mode=="settings" and drawer_open:
+		parts=["A Done" if pad else "Enter Done", "B Back" if pad else "Backspace Back"]
 	elif mode=="settings":
 		# Up and down need no saying here; the footer keeps room for what changes.
 		parts=[]
-		if row!=null:
+		if row!=null and row.disabled: parts.append("Unavailable")
+		elif row!=null:
 			if row.item.kind=="toggle": parts.append("←→ Change")
 			elif row.item.kind!="action": parts.append("←→ Adjust")
 			elif str(row.item.get("value",""))=="Apply": parts.append("A Apply" if pad else "Enter Apply")
@@ -1983,9 +2285,10 @@ func navigate_library(next: Vector2i) -> void:
 			target+=next.y
 
 func navigate(next: Vector2i) -> void:
-	if mode=="settings" and sidebar_focus:
-		if next.y!=0: switch_category(next.y)
-		elif next.x>0: leave_sidebar()
+	# The open drawer takes the D-pad: up and down step categories, right is Done.
+	if settings_view() and drawer_open:
+		if next.y!=0: step_category(next.y)
+		elif next.x>0: close_drawer(true)
 		return
 	if exit_selected:
 		if next.y<0: select(selected_id)
@@ -2035,7 +2338,7 @@ func navigate(next: Vector2i) -> void:
 		if rows[index].item.get("layout","")=="transport":
 			while candidate>=0 and candidate<rows.size() and rows[candidate].item.get("layout","")=="transport": candidate+=next.y
 		while candidate>=0 and candidate<rows.size():
-			if not rows[candidate].disabled:
+			if selectable(rows[candidate]):
 				if rows[candidate].item.get("layout","")=="transport": select(lead_key(candidate))
 				else: select(rows[aligned(candidate, from_row)].item.id)
 				return
@@ -2053,7 +2356,7 @@ func navigate(next: Vector2i) -> void:
 				if not rows[candidate].disabled: select(rows[candidate].item.id); return
 				candidate+=next.x
 		elif mode in ["browser","games","recent","favourites","most_played"]: jump_entries(next.x*10)
-		elif mode=="settings" and next.x<0 and rows[index].item.kind=="action": enter_sidebar()
+		elif mode=="settings" and next.x<0 and rows[index].item.kind=="action": return
 		else: adjust(next.x)
 
 ## The key a row of deck keys is entered at: the one marked "lead", else the first.
@@ -2113,7 +2416,8 @@ func adjust(delta: int) -> void:
 func activate() -> void:
 	if exit_selected and footer_flat: toggle_flat_view(); return
 	if exit_selected: request_exit(); return
-	if mode=="settings" and sidebar_focus: leave_sidebar(); return
+	# A with the drawer open is Done, and nothing more: the setting behind it is not touched.
+	if settings_view() and drawer_open: close_drawer(true); return
 	var row=selected_row()
 	if row==null or row.disabled: return
 	if row.item.get("quick",false):
@@ -2136,7 +2440,7 @@ func activate() -> void:
 	refresh_labels()
 
 func reset_option() -> void:
-	if sidebar_focus: return
+	if drawer_open: return
 	var row = selected_row()
 	if row==null or row.disabled or not row.item.has("default"): return
 	if row.item.has("reset"): row.item.reset.call()
@@ -2144,7 +2448,7 @@ func reset_option() -> void:
 	row.refresh(); notify("Selected option restored to its default")
 
 func toggle_preview() -> void:
-	if mode not in ["settings", "pause", "welcome"] or sidebar_focus: return
+	if mode not in ["settings", "pause", "welcome"] or drawer_open: return
 	if preview:
 		remember(); keep_position_tile(); preview=false; clear_input(); render(); return
 	if not preview_available(): return
@@ -2247,13 +2551,13 @@ func handle(event: InputEvent) -> bool:
 					if library.current_dir != before: play_navigation_click()
 				elif mode=="games": games.change_game_page(-1)
 				elif mode=="launch": games.pick_save(-1)
-				else: switch_category(-1)
+				else: step_category(-1)
 			JOY_BUTTON_RIGHT_SHOULDER:
 				if mode=="browser": default_armed=not held.get(JOY_BUTTON_LEFT_SHOULDER,false)
 				elif mode=="games": games.change_game_page(1)
 				elif mode=="library": games.refresh_library(); play_navigation_click()
 				elif mode=="launch": games.pick_save(1)
-				else: switch_category(1)
+				else: step_category(1)
 		return true
 	if event is InputEventJoypadMotion:
 		if event.axis in [JOY_AXIS_TRIGGER_LEFT,JOY_AXIS_TRIGGER_RIGHT]:
@@ -2303,13 +2607,13 @@ func handle(event: InputEvent) -> bool:
 				KEY_R:
 					if mode=="library": games.refresh_library()
 				KEY_TAB:
-					switch_category(-1 if event.shift_pressed else 1)
+					step_category(-1 if event.shift_pressed else 1)
 				KEY_Q:
 					if mode=="launch": games.pick_save(-1)
-					else: switch_category(-1)
+					else: step_category(-1)
 				KEY_E:
 					if mode=="launch": games.pick_save(1)
-					else: switch_category(1)
+					else: step_category(1)
 				KEY_S:
 					change_scope(-1 if event.shift_pressed else 1)
 				KEY_F:
@@ -2330,6 +2634,10 @@ func update_direction() -> void:
 		if next!=Vector2i.ZERO: navigate(next)
 
 func _process(delta: float) -> void:
+	# The drawer's one timer: it counts down from the last shoulder press.
+	if drawer_open:
+		drawer_time -= delta
+		if drawer_time <= 0.0: close_drawer()
 	if screensaver_allowed():
 		idle_time += delta
 		if idle_time >= host.menu_screensaver_delay:
@@ -2363,7 +2671,7 @@ func _process(delta: float) -> void:
 func set_input_kind(kind: String) -> void:
 	if kind==input_kind: return
 	input_kind=kind
-	help_label.controller=kind=="controller"; error_label.controller=kind=="controller"
+	help_label.controller=kind=="controller"; error_label.controller=kind=="controller"; info_text.controller=kind=="controller"
 	search_field.visible=kind=="keyboard" and mode in ["games","recent","favourites","most_played","videos"] and (mode!="videos" or videos.videos_shown())
 	if kind=="controller" and search_field.has_focus():
 		search_field.release_focus(); select(selected_id,false)
@@ -2412,10 +2720,12 @@ func apply_accessibility() -> void:
 
 func style_rows() -> void:
 	for row in rows:
-		if row.item.get("layout","") in ["transport","card"]: continue
-		var compact: bool = row.item.get("compact",false)
+		if row.item.get("layout","") in ["transport","card"] or row.item.has("tile_look"): continue
+		# Settings rows use the compact sizes so a label, its meter and its value share one 56 px row.
+		var compact: bool = row.item.get("compact",false) or row.item.get("settings_row",false)
 		var hero: bool=row.item.get("hero",false)
 		row.title_label.add_theme_font_size_override("font_size",(23 if host.menu_large_text else 20) if compact else ((32 if host.menu_large_text else 29) if hero else (27 if host.menu_large_text else 24)))
+		if row.item.get("plain",false): row.title_label.add_theme_font_size_override("font_size",20 if host.menu_large_text else 18)
 		if row.item.has("title_size"): row.title_label.add_theme_font_size_override("font_size", int(row.item.title_size) + (3 if host.menu_large_text else 0))
 		row.value_label.add_theme_font_size_override("font_size",(21 if host.menu_large_text else 18) if compact else (25 if host.menu_large_text else 22))
 		# A row built off-screen keeps reporting its labels' old font height after

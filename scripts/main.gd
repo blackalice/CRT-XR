@@ -283,6 +283,9 @@ var last_game_path := ""
 ## Unpaused play of the running game not yet added to its total.
 var play_clock_game := ""
 var play_clock := 0.0
+## Seconds of unpaused play since the current game loaded: Pause's "Current session".
+## Unlike play_clock it is never flushed to the history, only reset by a new game.
+var session_seconds := 0.0
 const PLAY_CLOCK_SAVE_SECONDS := 60.0
 ## Videos are opt-in: nothing appears in the library until a folder is chosen.
 var video_dir := ""
@@ -581,6 +584,7 @@ func start_application() -> void:
 		save_play_clock()
 		play_clock_game = emulator.rom_path if active else ""
 		play_clock = 0.0
+		session_seconds = 0.0
 		if active:
 			last_game_path = emulator.rom_path
 			# Demo games never join Recent, so the shelf leaves no trace in your library.
@@ -1158,6 +1162,7 @@ func track_play_time(delta: float) -> void:
 	if play_clock_game.is_empty() or not emulator.loaded or emulator.paused or not loading_path.is_empty(): return
 	if emulator.rom_path != play_clock_game: return
 	play_clock += delta
+	session_seconds += delta
 	if play_clock >= PLAY_CLOCK_SAVE_SECONDS: save_play_clock()
 
 ## Adds the clock's whole seconds to the game's total in the play history.

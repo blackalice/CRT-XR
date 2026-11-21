@@ -27,7 +27,29 @@ func _notification(what: int) -> void:
 	if what == NOTIFICATION_TRANSFORM_CHANGED: queue_redraw()
 
 static func sprite(name: String) -> Texture2D:
+	if name == "heart_outline": return outline_of("heart")
 	return cached(SPRITES % name)
+
+## The edge of another sprite's shape, one sprite pixel wide and hollow inside: the
+## outline heart of Favourite, cut from the filled heart so the two always match.
+static func outline_of(name: String) -> Texture2D:
+	var key := "outline:" + name
+	if not sprites.has(key):
+		var picture := cached(SPRITES % name)
+		var image: Image = picture.get_image() if picture != null else null
+		if image != null:
+			var edge := Image.create_empty(image.get_width(), image.get_height(), false, Image.FORMAT_RGBA8)
+			for y in range(image.get_height()):
+				for x in range(image.get_width()):
+					if image.get_pixel(x, y).a <= 0: continue
+					var hollow := true
+					for step in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
+						var at: Vector2i = Vector2i(x, y) + step
+						if at.x < 0 or at.y < 0 or at.x >= image.get_width() or at.y >= image.get_height() or image.get_pixel(at.x, at.y).a <= 0: hollow = false
+					if not hollow: edge.set_pixel(x, y, image.get_pixel(x, y))
+			sprites[key] = ImageTexture.create_from_image(edge)
+		else: sprites[key] = null
+	return sprites[key]
 
 ## A sprite by path, or null without one. Kept here: a texture loaded only for
 ## one _draw is freed before the frame renders, and draws as a white square.

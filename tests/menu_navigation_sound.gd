@@ -31,7 +31,8 @@ func run() -> void:
 		menu.sound_player.stop(); shoulder(code)
 		check(not menu.sound_player.playing, "Holding a shoulder never repeats its click")
 		shoulder(code, false)
-	menu.category = 9; menu.subsection = 0; menu.render()
+	# The shoulders opened the category drawer, which ignores the triggers until it closes.
+	menu.end_drawer(); menu.category = 9; menu.subsection = 0; menu.render()
 	await settle()
 	for axis in [JOY_AXIS_TRIGGER_LEFT, JOY_AXIS_TRIGGER_RIGHT]:
 		var before: int = menu.subsection
@@ -47,7 +48,7 @@ func run() -> void:
 	menu.preview = true; menu.sound_player.stop()
 	shoulder(JOY_BUTTON_LEFT_SHOULDER); shoulder(JOY_BUTTON_LEFT_SHOULDER, false); trigger(JOY_AXIS_TRIGGER_LEFT, 1.0); trigger(JOY_AXIS_TRIGGER_LEFT, 0.0)
 	check(not menu.sound_player.playing, "Preview ignores shoulder/trigger actions without clicking")
-	menu.preview = false; menu.category = 4; menu.subsection = 0; menu.render()
+	menu.preview = false; menu.end_drawer(); menu.category = 4; menu.subsection = 0; menu.render()
 	# Controls has a single page: no subsection action, so no click.
 	if menu.catalog.pages(menu.category).size() == 1:
 		menu.sound_player.stop(); trigger(JOY_AXIS_TRIGGER_RIGHT, 1.0); trigger(JOY_AXIS_TRIGGER_RIGHT, 0.0)

@@ -49,8 +49,8 @@ func run():
  music.stop();music.toggle_playback();await settled_music(music);check(music.player.playing and music.track_index==0,"Play after Stop restarts the selected track")
  app.menu.open_pause(); app.menu.render()
  for i in range(4): await process_frame
- check(not is_instance_valid(app.menu.music_heading) and app.menu.items.any(func(i):return i.id=="transport.show" and i.label=="Music"),"Music panel starts closed and its entry is Music")
- app.menu.select("transport.show"); app.menu.activate()
+ check(not is_instance_valid(app.menu.music_heading) and app.menu.items.any(func(i):return i.id=="media.music" and i.label=="Music") and not app.menu.items.any(func(i):return i.id=="transport.choose"),"Music panel starts closed and its entry is the Music tile")
+ app.menu.select("media.music"); app.menu.activate()
  for i in range(4): await process_frame
  check(app.menu.items.any(func(i):return i.id=="transport.play") and is_instance_valid(app.menu.music_heading),"Main menu exposes transport controls and now-playing metadata")
  app.menu.select("transport.play"); app.menu.activate()
@@ -70,8 +70,8 @@ func run():
  check(transport_rows.all(func(r):return r.position.x+r.size.x<=transport_parent.size.x+1),"Music controls fit inside the deck")
  app.menu.activate()
  for i in range(4): await process_frame
- check(not is_instance_valid(app.menu.music_heading) and music.player.playing and not music.player.stream_paused and app.menu.items.any(func(i):return i.id=="transport.show"),"Hide closes the panel without stopping playback")
- app.menu.select("transport.show"); app.menu.activate()
+ check(not is_instance_valid(app.menu.music_heading) and music.player.playing and not music.player.stream_paused and app.menu.items.any(func(i):return i.id=="media.music") and not app.menu.items.any(func(i):return i.id=="transport.choose"),"Hide closes the panel without stopping playback")
+ app.menu.select("media.music"); app.menu.activate()
  for i in range(4): await process_frame
  check(is_instance_valid(app.menu.music_heading),"Show music panel restores the deck")
  check(app.menu.selected_id=="transport.seek","Showing the panel focuses its first control")

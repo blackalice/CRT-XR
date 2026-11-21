@@ -10,7 +10,9 @@ const SegmentBar = preload("res://scripts/ui/segment_bar.gd")
 const VALUE := MenuSkin.VALUE
 ## Optional item keys: "row_icon" (see row_icon.gd) leads the row; "emphasis" is
 ## "primary" for a screen's main action or "danger" for one that forgets
-## something; "compact" draws a smaller row for secondary places.
+## something; "compact" draws a smaller row for secondary places. Settings pages
+## set "settings_row": one 56 px line with a label, its meter inline and the value
+## (arrows appear on the focused row only), and "plain" for a quiet note line.
 const DANGER := Color("f87860")
 var item: Dictionary
 var setting_detail_label: Label
@@ -37,27 +39,32 @@ var panel: ColorRect
 var segments: Control
 ## A quick tile being adjusted: its arrows show and its marquee turns amber.
 var editing := false
+## A Settings row (see the item keys above).
+var tight := false
 
 func configure(definition: Dictionary) -> void:
 	item=definition
+	tight=bool(item.get("settings_row",false))
 	name="Row_"+str(item.id).sha256_text().left(12)
 	custom_minimum_size=Vector2(0,56)
 	size_flags_horizontal=Control.SIZE_EXPAND_FILL
 	focus_mode=Control.FOCUS_ALL
 	content_margin=MarginContainer.new()
 	content_margin.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	for side in ["left","right"]: content_margin.add_theme_constant_override("margin_"+side,16 + (int(item.get("indent", 0)) if side == "left" else 0))
-	for side in ["top","bottom"]: content_margin.add_theme_constant_override("margin_"+side,6 if item.get("compact",false) else 10)
+	# An inline quick tile (Home and Pause: icon, name left, value right) keeps its margins slim.
+	var inline: bool = item.get("inline",false)
+	for side in ["left","right"]: content_margin.add_theme_constant_override("margin_"+side,(14 if side == "left" else 8) if tight else (12 if inline else 16 + (int(item.get("indent", 0)) if side == "left" else 0)))
+	for side in ["top","bottom"]: content_margin.add_theme_constant_override("margin_"+side,2 if item.get("plain",false) else (6 if item.get("compact",false) or tight else 10))
 	content_margin.mouse_filter=Control.MOUSE_FILTER_IGNORE
 	add_child(content_margin)
 	content=VBoxContainer.new(); content.add_theme_constant_override("separation",8)
 	content.mouse_filter=Control.MOUSE_FILTER_IGNORE; content_margin.add_child(content)
-	if item.get("hero",false): content.alignment=BoxContainer.ALIGNMENT_CENTER
+	if item.get("hero",false) or tight: content.alignment=BoxContainer.ALIGNMENT_CENTER
 	# A save card centres its name over its time; other stacked tiles (quick
 	# settings) keep their icon beside the name and put only the value below.
 	var stacked: bool = item.get("no_value", false)
 	var line: BoxContainer = VBoxContainer.new() if stacked else HBoxContainer.new()
-	line.add_theme_constant_override("separation",6 if stacked else 16)
+	line.add_theme_constant_override("separation",6 if stacked else (10 if tight or inline else 16))
 	line.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(line)
 	# The outline carries focus; do not reserve a competing arrow column.
 	# Keep the changed-value dot outside the title's wrapping/layout bounds.
@@ -112,10 +119,13 @@ func configure(definition: Dictionary) -> void:
 	title_label.add_theme_font_size_override("font_size",22 if item.has("disclosure") else 24); MenuSkin.weigh(title_label,MenuSkin.SEMIBOLD)
 	title_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	title_label.max_lines_visible=3
+	# An inline tile is one 44 px line: a long name is trimmed, not wrapped onto a second.
+	if inline: title_label.autowrap_mode=TextServer.AUTOWRAP_OFF; title_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	title_label.mouse_filter=Control.MOUSE_FILTER_IGNORE; words.add_child(title_label)
 	MenuSkin.shadow(title_label)
 	if emphasis in ["primary","danger"]: title_label.add_theme_color_override("font_color",tint)
-	if item.has("detail_getter"):
+	# On Settings the help panel names where a value comes from; the row stays one line.
+	if item.has("detail_getter") and not tight:
 		setting_detail_label = Label.new()
 		if stacked: setting_detail_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		setting_detail_label.add_theme_font_size_override("font_size",16)
@@ -150,9 +160,11 @@ func configure(definition: Dictionary) -> void:
 	# A small mark in place of a value, such as the heart on a favourite game.
 	if item.has("value_icon"): value_group.add_child(RowIcon.new(str(item.value_icon), VALUE))
 	if item.kind in ["number", "choice"]:
-		value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+		value_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_RIGHT if inline else HORIZONTAL_ALIGNMENT_CENTER
 	if item.kind=="choice":
 		value_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+		# An inline tile keeps to one 44 px line, so a long value ("Whole display") is trimmed.
+		if inline: value_label.autowrap_mode=TextServer.AUTOWRAP_OFF; value_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS
 	# Under a stacked tile's name, the value keeps to one line across the tile.
 	if item.get("stacked",false):
 		value_label.custom_minimum_size.x=0
@@ -164,7 +176,7 @@ func configure(definition: Dictionary) -> void:
 		# ‹ value › reads as a selector and fills the row's edge like toggle values.
 		for direction in [-1,1]:
 			var arrow := Button.new(); arrow.text="‹" if direction<0 else "›"
-			arrow.custom_minimum_size=Vector2(float(item.get("arrow_width",30)),30)
+			arrow.custom_minimum_size=Vector2(float(item.get("arrow_width",14 if tight else 30)),30)
 			# The dot font's taller lines would push a 22 px arrow past the row's bounds.
 			arrow.add_theme_font_size_override("font_size",18)
 			arrow.size_flags_vertical=Control.SIZE_SHRINK_CENTER
@@ -180,7 +192,13 @@ func configure(definition: Dictionary) -> void:
 	track = ProgressBar.new()
 	if item.kind == "number" and item.get("meter", true):
 		meter=HBoxContainer.new(); meter.add_theme_constant_override("separation",10)
-		meter.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(meter)
+		meter.mouse_filter=Control.MOUSE_FILTER_IGNORE
+		# A Settings row keeps its meter on the same line, a fixed 170 px so the
+		# bars of a page line up; the range labels are left off.
+		if tight:
+			meter.custom_minimum_size.x=170; meter.size_flags_vertical=Control.SIZE_SHRINK_CENTER
+			line.add_child(meter); line.move_child(meter,value_group.get_index())
+		else: content.add_child(meter)
 		range_min_label=Label.new(); range_max_label=Label.new()
 		for label in [range_min_label,range_max_label]:
 			label.add_theme_font_size_override("font_size",16)
@@ -196,7 +214,9 @@ func configure(definition: Dictionary) -> void:
 		# The bar is drawn as segments; the ProgressBar keeps the value and the fill style.
 		track.self_modulate.a=0.0
 		segments=SegmentBar.new(); track.add_child(segments)
-		meter.add_child(track); meter.add_child(range_max_label)
+		meter.add_child(track)
+		meter.add_child(range_max_label)
+		if tight: range_min_label.hide(); range_max_label.hide()
 	else:
 		track.hide()
 		add_child(track)
@@ -204,6 +224,9 @@ func configure(definition: Dictionary) -> void:
 	unavailable_label.add_theme_color_override("font_color",MenuSkin.MUTED)
 	unavailable_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
 	unavailable_label.mouse_filter=Control.MOUSE_FILTER_IGNORE; content.add_child(unavailable_label)
+	# A quiet note ("2 advanced settings hidden · Show ›") has no row, until it is focused.
+	if item.get("plain",false):
+		title_label.add_theme_color_override("font_color",MenuSkin.MUTED); value_label.add_theme_color_override("font_color",MenuSkin.AMBER)
 	content_margin.minimum_size_changed.connect(sync_content_height)
 	if item.kind == "choice" and not item.get("stacked", false):
 		resized.connect(sync_content_height)
@@ -256,13 +279,15 @@ func refresh() -> void:
 	value_label.text=formatted_value()
 	if setting_detail_label != null: setting_detail_label.text = item.detail_getter.call()
 	if item.kind == "number" and not item.get("stacked",false):
-		value_label.custom_minimum_size.x = single_line_width(value_label)
+		# Settings rows give every value the same room so their meters line up.
+		value_label.custom_minimum_size.x = maxf(single_line_width(value_label), 76.0 if tight else 0.0)
 	title_label.text=str(item.label)
+	# A quick tile shows its arrows only while it is being adjusted.
+	var lit := (editing and selected_now) if item.get("quick",false) else selected_now
 	for button in adjust_buttons:
-		button.visible=true; button.disabled=disabled
-		# A quick tile shows its arrows only while it is being adjusted.
-		var lit := (editing and selected_now) if item.get("quick",false) else selected_now
-		button.modulate.a=1.0 if lit else (0.0 if item.get("quick",false) else 0.35)
+		# An inline tile gives the room back to its value until then.
+		button.visible=lit or not item.get("inline",false); button.disabled=disabled
+		button.modulate.a=0.0 if disabled and tight else (1.0 if lit else (0.0 if item.get("quick",false) or tight else 0.35))
 		button.mouse_filter=Control.MOUSE_FILTER_STOP if selected_now else Control.MOUSE_FILTER_IGNORE
 	# A compact control on the pause menu shows its value without the bar.
 	track.visible=item.kind=="number" and item.get("meter",true)
@@ -277,7 +302,8 @@ func refresh() -> void:
 	if unavailable_label!=null:
 		unavailable_label.text=str(item.get("disabled_reason","")) if disabled else ""
 		# Tiles stay one line; greyed out says enough beside its neighbour.
-		unavailable_label.visible=not unavailable_label.text.is_empty() and item.get("layout","")!="tile"
+		# A Settings row stays one 56 px line; its reason is in the help panel when focused.
+		unavailable_label.visible=not unavailable_label.text.is_empty() and item.get("layout","")!="tile" and not tight
 	tooltip_text=GlyphText.plain(str(item.get("disabled_reason",item.get("help",""))))
 	title_label.modulate=Color("85878b") if disabled else Color.WHITE
 	value_label.modulate=title_label.modulate
@@ -324,6 +350,7 @@ func update_selection_style() -> void:
 	if panel==null:
 		panel=MenuSkin.pixel_panel("row"); add_child(panel); move_child(panel,0)
 		for style in ["normal","hover","pressed","disabled","focus"]: add_theme_stylebox_override(style,StyleBoxEmpty.new())
+	panel.visible = not (item.get("plain",false) and not selected_now)
 	var kind := ("editing" if editing else "selected") if selected_now else "row"
 	if item.get("skin", "") == "music": kind = "music_selected" if selected_now else "music_row"
 	if str(item.get("id", "")) in ["exit", "home.exit"]: kind = "exit_selected" if selected_now else "exit_row"

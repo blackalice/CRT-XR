@@ -24,7 +24,7 @@ L1+R1+Start opens the pause menu. A activates, B goes back, up/down selects and 
 
 ## Music
 
-Browse albums from the main menu or Audio. MP3s up to 256 MiB are supported; only the current track is loaded. Folders play in disc/track order, then natural filename order. Press Play to start a restored song: its last timestamp is prepared silently on launch. Use left/right on the timeline to seek by ten seconds, or drag/click it with a pointer. Down exits the horizontal icon controls.
+Select Music on the main menu, then Browse Music. MP3s up to 256 MiB are supported; only the current track is loaded. Folders play in disc/track order, then natural filename order. Press Play to start a restored song: its last timestamp is prepared silently on launch. Use left/right on the timeline to seek by ten seconds, or drag/click it with a pointer. Down exits the horizontal icon controls.
 
 Audio → TV sound includes optional automatic game-volume dipping. Audio → Music & radio accepts direct MP3 stream URLs (keyboard entry). AAC, HLS, playlists, DRM and station webpages are not supported; live radio reconnects rather than time-shifts. No music is supplied.
 

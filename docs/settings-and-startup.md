@@ -45,14 +45,16 @@ game's layout…, which asks first). A new game opens on This game. The strip
 replaces the old Apply changes to and Edit picture defaults for rows, and
 Console settings replaces the separate Consoles and This game tabs.
 
-**Sidebar focus.** In Settings, B (or Left on a row with nothing to adjust)
-moves the focus to the sidebar, outlined in amber; up and down change category,
-A or Right goes back into the page where it was, and B again leaves Settings.
-Settings opened as a shortcut (Music settings, Video settings) go straight back
-to where they came from.
+**Category rail and drawer.** Categories sit in a 68 px icon rail. L1/R1 (Q/E or
+Tab on a keyboard) open a labelled 330 px drawer over the page and step one
+category; each further press steps again and restarts a 1.2 second timer, after
+which the drawer closes on the chosen category's settings. While it is open, up
+and down also step, A or Right closes it without touching the focused setting,
+and B leaves Settings from either state. Settings opened as a shortcut (Music
+settings, Video settings) go straight back to where they came from.
 
-**Clarity.** Help text fits its box on every settings row in normal and larger
-text (`tests/menu_reorganisation.gd` checks each one); room and colour values
+**Clarity.** Help text fits the help panel beside the rows on every settings row
+in normal and larger text (`tests/settings_drawer.gd` checks each one); room and colour values
 read as percentages rather than multipliers; Room → Rooms lists the built-in
 rooms as Apply rows like Picture → Looks, with Restore my custom room; Settings
 from a game's pause menu opens on Picture (This game) unless you were last in
