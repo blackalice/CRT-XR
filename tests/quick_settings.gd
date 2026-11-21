@@ -26,7 +26,7 @@ func run() -> void:
 	var menu = app.menu
 	menu.open_pause()
 	await fits("First-run Home")
-	check(menu.items.filter(func(item): return item.get("quick", false)).map(func(item): return item.id) == ["pause.room", "pause.preset", "pause.game_volume", "pause.view.distance", "pause.tv", "pause.fit"], "Six quick tiles: room, picture, volume, TV position, TV and fit")
+	check(menu.items.filter(func(item): return item.get("quick", false)).map(func(item): return item.id) == ["pause.preset", "pause.room", "pause.tv", "pause.view.distance", "pause.fit", "pause.game_volume"], "Six quick tiles: Picture, Room, TV, then TV position, Screen fit and Game volume")
 	menu.select("pause.view.distance",false); await settle()
 	var position_row = menu.selected_row()
 	check(position_row.item.label == "TV position", "The placement tile is called TV position")

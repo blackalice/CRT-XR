@@ -24,8 +24,15 @@ BUILD=ROOT/'build/lrps2-linux'
 # loaded, so a stale cache pointed into unmapped memory and vtlb_Init crashed).
 # lrps2-recommended-blending: apply the game database's recommended blending
 # accuracy (upstream only warns), capped at High for the Deck's GPU. GT4 needs
-# it for car brightness and banding. Listed first: git orders its file first.
-PATCHES=['lrps2-recommended-blending.patch','lrps2-image-maps.patch','lrps2-vtlb-moved-map.patch']
+# it for car brightness and banding.
+# lrps2-target-budget: keep render targets in a budget of eight GS memories
+# rather than two. At two, GT4's race start leaves only live targets and drops
+# every one idle for two frames (upstream PCSX2 keeps them sixty); under test as
+# the cause of GT4 Spec II's flashes. Listed in git's file order (pcsx2/GS/ sorts
+# before pcsx2/GameDatabase.cpp), since the check compares them with git diff.
+# lrps2-pcrtc-log: diagnostic. Log the output circuit's registers to core.log
+# whenever they change (GT4 Spec II's finish-line scan lines).
+PATCHES=['lrps2-pcrtc-log.patch','lrps2-target-budget.patch','lrps2-recommended-blending.patch','lrps2-image-maps.patch','lrps2-vtlb-moved-map.patch']
 FLAGS=['-DCMAKE_BUILD_TYPE=Release','-DLIBRETRO=ON','-DUSE_VULKAN=OFF']
 # The repository is bind-mounted from Windows, so its owner differs.
 ENV=dict(os.environ,GIT_CONFIG_COUNT='1',GIT_CONFIG_KEY_0='safe.directory',GIT_CONFIG_VALUE_0='*')

@@ -168,4 +168,25 @@ class InstallerTests(unittest.TestCase):
         with self.assertRaises(ValueError):setup.install(self.package,self.home,'','Native')
 
 
+class PrerequisiteTests(unittest.TestCase):
+    def test_reports_each_missing_piece_in_order(self):
+        with tempfile.TemporaryDirectory() as folder:
+            home=Path(folder)
+            self.assertEqual(setup.xr_prerequisites(home)['state'],'no-decky')
+            (home/'homebrew/plugins').mkdir(parents=True)
+            self.assertEqual(setup.xr_prerequisites(home)['state'],'no-plugin')
+            (home/'homebrew/plugins/XR Gaming').mkdir()
+            self.assertEqual(setup.xr_prerequisites(home)['state'],'no-driver')
+            (home/'.local/bin').mkdir(parents=True);(home/'.local/bin/xrDriver').write_text('')
+            status=setup.xr_prerequisites(home)
+            self.assertEqual(status['state'],'ready')
+            self.assertIn('ready',status['message'])
+
+    def test_gaming_mode_switch_only_on_steamos(self):
+        with patch.object(setup.shutil,'which',return_value=None):
+            self.assertIsNone(setup.gaming_mode_command())
+        with patch.object(setup.shutil,'which',return_value='/usr/bin/steamos-session-select'):
+            self.assertEqual(setup.gaming_mode_command(),['steamos-session-select','gamescope'])
+
+
 if __name__=='__main__':unittest.main()

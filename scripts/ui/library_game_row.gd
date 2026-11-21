@@ -10,6 +10,13 @@ func configure(definition: Dictionary) -> void:
 	detail_label.add_theme_font_size_override("font_size",18)
 	detail_label.add_theme_color_override("font_color",MenuSkin.MUTED)
 	detail_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+	# Three columns are narrow: a smaller title that wraps between words, and
+	# no chevron, so the cover and the name have the room.
+	if int(item.get("tile_columns",1)) >= 3:
+		title_label.add_theme_font_size_override("font_size",19)
+		title_label.autowrap_mode=TextServer.AUTOWRAP_WORD
+		value_label.custom_minimum_size.x=0
+		value_group.visible=false
 	if item.get("game_grid",false):
 		detail_label.autowrap_mode=TextServer.AUTOWRAP_OFF
 		detail_label.text_overrun_behavior=TextServer.OVERRUN_TRIM_ELLIPSIS

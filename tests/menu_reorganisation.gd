@@ -1,6 +1,6 @@
 extends SceneTree
 ## The reorganised settings: eight categories in task order, tabs that keep their
-## names, the editing scope strip, B to the sidebar, the changed-settings list,
+## names, the editing scope strip, the category drawer, the changed-settings list,
 ## a test signal that asks first, and the controls that say what they do.
 const UI = preload("res://tests/menu_test_helpers.gd")
 var failures := 0
@@ -41,28 +41,29 @@ func run() -> void:
 	var shown: Array = []
 	for button_node in m.sidebar.get_children():
 		if button_node is Button and button_node.visible: shown.append(m.CATEGORIES[m.sidebar_buttons.find(button_node)])
-	check(shown == ["View & glasses", "Picture", "Room", "Sound", "Games", "Videos", "Menu & access", "Setups & help"], "The sidebar reads in task order: %s" % [shown])
+	check(shown == ["View & glasses", "Picture", "Room", "Sound", "Games", "Videos", "Menu & access", "Scenes & help"], "The sidebar reads in task order: %s" % [shown])
 	m.open_settings(); m.category = 0; m.subsection = 0; m.render(); await settle()
 	check(m.tab_position.visible and m.tab_position.text == "1 / 4", "The tab marker shows where this tab sits")
 	app.world.set_widescreen(true); m.render(); await settle()
 	check(m.catalog.pages(0)[1].title == "TV placement" and m.catalog.pages(1)[3].title == "Fit & TV", "Tab titles stay the same on the wide TV")
 	app.world.set_widescreen(false)
 
-	# B moves into the sidebar; up and down change category; A goes back in.
+	# L1 / R1 open the category drawer; up and down step categories; A closes it and
+	# returns to the page where it was. B never opens the categories: it leaves Settings.
 	m.open_settings(); m.category = 0; m.subsection = 1; m.render(); await settle()
 	m.select("view.distance", false)
-	button(m, JOY_BUTTON_B); await settle()
-	check(m.mode == "settings" and m.sidebar_focus and m.selected_row() != null and not m.selected_row().selected_now, "B moves the focus to the sidebar and the page shows no selection")
-	check(m.hints.text.contains("Category"), "The footer says up and down change category")
+	button(m, JOY_BUTTON_RIGHT_SHOULDER); await settle()
+	check(m.mode == "settings" and m.drawer_open and m.category == m.SETTINGS_ORDER[1] and m.selected_row() != null and not m.selected_row().selected_now, "R1 opens the drawer on the next category and the page shows no selection")
+	check(m.hints.text.contains("Done") and m.hints.text.contains("Back"), "The footer says A is Done and B is Back")
 	m.navigate(Vector2i.DOWN); await settle()
-	check(m.category == 1 and m.sidebar_focus, "Down in the sidebar moves to the next category")
-	m.navigate(Vector2i.UP); await settle()
+	check(m.category == m.SETTINGS_ORDER[2] and m.drawer_open, "Down in the drawer moves to the next category")
+	m.navigate(Vector2i.UP); m.navigate(Vector2i.UP); await settle()
 	button(m, JOY_BUTTON_A); await settle()
-	check(m.category == 0 and not m.sidebar_focus and m.selected_id == "view.distance", "A goes back into the page where it was")
+	check(m.category == 0 and not m.drawer_open and m.selected_id == "view.distance", "A goes back into the page where it was")
 	m.select("view.fit", false); m.navigate(Vector2i.LEFT); await settle()
-	check(m.sidebar_focus, "Left on a row with nothing to adjust also reaches the sidebar")
+	check(m.mode == "settings" and not m.drawer_open, "Left on a row with nothing to adjust does nothing")
 	button(m, JOY_BUTTON_B); await settle()
-	check(m.mode == "pause" and not m.sidebar_focus, "B on the sidebar leaves Settings")
+	check(m.mode == "pause" and not m.drawer_open, "B leaves Settings")
 
 	# The scope strip with nothing loaded: game or video defaults.
 	UI.page(app, 1, 1); await settle()
@@ -73,7 +74,7 @@ func run() -> void:
 	key(m, KEY_S); await settle()
 	check(app.display_settings.kind == "game", "S wraps back to game defaults")
 	UI.page(app, 0, 2); await settle()
-	check(not m.scope_strip.visible and m.subtitle.visible, "Unscoped tabs keep their context line")
+	check(not m.scope_strip.visible and not m.subtitle_row.visible, "Unscoped tabs drop the context line and give the rows its room")
 
 	# Y names what it restores.
 	UI.select(app, "view.distance"); await settle()
@@ -108,7 +109,7 @@ func run() -> void:
 		var clipped: Array = []
 		for target in m.SETTINGS_ORDER:
 			for section in range(m.catalog.pages(target).size()):
-				m.mode = "settings"; m.category = target; m.subsection = section; m.preview = false; m.sidebar_focus = false; m.render()
+				m.mode = "settings"; m.category = target; m.subsection = section; m.preview = false; m.render()
 				for row in m.rows:
 					if row.disabled: continue
 					m.notification_time = 0.0
@@ -120,7 +121,7 @@ func run() -> void:
 
 	# Empty setup slots are numbered, not named as if something were saved.
 	var slots: Array = m.catalog.saved_setups_page().rows
-	check(slots[0].label == "Setup 1" and slots[0].value == "Empty", "An empty slot reads Setup 1 · Empty")
+	check(slots[0].label == "Scene 1" and slots[0].value == "Empty", "An empty slot reads Scene 1 · Empty")
 
 	# Picture rows say where their value comes from, on the row.
 	var gamma: Dictionary = m.catalog.pages(1)[2].rows.filter(func(row): return row.id == "picture.gamma")[0]

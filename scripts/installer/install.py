@@ -340,7 +340,7 @@ def install(package,home,account,resolution,dry_run=False):
 
         new_short=dump_binary(tree)
 
-    result={'appid':appid,'account':profile.name,'resolution':resolution,'tracking':'XR Gaming driver detected; runtime IPC checks determine tracking compatibility. Enable its service and connect the glasses.' if (home/'.local/bin/xrDriver').is_file() else 'Install and enable XR Gaming (Decky Loader), using a version with support for your glasses. Fixed view remains available.'}
+    result={'appid':appid,'account':profile.name,'resolution':resolution,'tracking':xr_prerequisites(home)['message']}
 
     if dry_run: return dict(result,dry_run=True)
 
@@ -438,6 +438,30 @@ def install(package,home,account,resolution,dry_run=False):
 
     return result
 
+def xr_prerequisites(home):
+    """What head tracking on the Deck still needs, in plain words.
+
+    Returns {'state': 'ready'|'no-decky'|'no-plugin'|'no-driver', 'message': ...}.
+    Only looks at files; it never installs, enables or changes anything."""
+    homebrew=home/'homebrew'
+    decky=(homebrew/'services/PluginLoader').exists() or (homebrew/'plugins').is_dir()
+    plugins=homebrew/'plugins'
+    plugin=plugins.is_dir() and any(p.is_dir() and p.name.lower().replace(' ','').replace('-','') in ['xrgaming','deckyxrgaming'] for p in plugins.iterdir())
+    driver=(home/'.local/bin/xrDriver').is_file()
+    guide='Step-by-step: docs/GLASSES.md in the CRT XR files folder, or github.com/blackalice/CRT-XR/blob/main/docs/glasses/STEAM-DECK.md'
+    if driver and plugin:
+        return {'state':'ready','message':'Head tracking: ready. XR Gaming is installed; connect your glasses and turn it on in Decky before you play.'}
+    if not decky:
+        return {'state':'no-decky','message':'Head tracking: Decky Loader is not installed yet. Install Decky Loader, then the XR Gaming plugin from its store. Until then CRT XR plays with a fixed view. '+guide}
+    if not plugin and not driver:
+        return {'state':'no-plugin','message':'Head tracking: Decky Loader is installed, but XR Gaming is not. Install XR Gaming from the Decky store. Until then CRT XR plays with a fixed view. '+guide}
+    return {'state':'no-driver','message':'Head tracking: XR Gaming is installed but its driver is not set up yet. Open XR Gaming in Decky, follow its setup, and connect your glasses. '+guide}
+
+def gaming_mode_command():
+    """SteamOS's own switch back to Gaming Mode, if this is a SteamOS desktop session."""
+    if shutil.which('steamos-session-select'): return ['steamos-session-select','gamescope']
+    return None
+
 def dialog(*args):
     if shutil.which('kdialog'):
         command=['kdialog','--title','CRT XR setup',*args]
@@ -497,9 +521,9 @@ def main():
 
             if not (shutil.which('kdialog') or shutil.which('zenity')): raise RuntimeError('Graphical setup needs kdialog or zenity. Run with --no-gui in a terminal.')
 
-            selection=dialog('--radiolist','XR setup requires Decky Loader + XR Gaming already installed.\nPro 2 glasses currently need the testing version of XR Gaming.\n\nChoose your display setup.\nVITURE Full SBS uses the tested 3840 × 1080 game resolution.\nOther glasses need manual display setup in this beta.',
+            selection=dialog('--radiolist','How will you play?\n\nXR glasses use full side-by-side 3D at 3840 × 1080 (1080p per eye: VITURE, XREAL, Rokid, RayNeo and similar). You can still play on the Deck screen with this choice.\nHead tracking also needs Decky Loader with the XR Gaming plugin; setup checks for it.',
 
-                             '3840x1080','VITURE Full SBS (Deck mono also supported)','on','Native','Deck / monitor only','off')
+                             '3840x1080','XR glasses (and the Deck screen)','on','Native','Deck screen or monitor only','off')
 
             if selection.returncode:return 0
 
@@ -535,10 +559,17 @@ def main():
 
         if args.gui and not args.dry_run:
 
-            dialog('--msgbox','CRT XR is installed.\n\n'+result['tracking']+'\n\nRestart Steam and find CRT XR under Non-Steam. On Steam Deck, you can Return to Gaming Mode.\nWith glasses: start in mono, then switch to SBS when prompted.\nWithout glasses: launch normally.\n\nYour ROMs, settings and saves were not moved.')
-
-            # The user restarts Steam or returns to Gaming Mode. A detached
-            # restart can inherit a stale X display during a session change.
+            done='CRT XR is installed. You\'ll find it in your Steam library under Non-Steam.\n\n'+result['tracking']+'\n\nWith glasses: start in 2D, then switch them to SBS when prompted.\nYour ROMs, settings and saves were not moved.'
+            switch=gaming_mode_command()
+            if switch:
+                # SteamOS's own session switch, as the desktop's Return to Gaming
+                # Mode shortcut uses; it restarts Steam in Gaming Mode for us.
+                if dialog('--yesno',done+'\n\nReturn to Gaming Mode now?').returncode==0:
+                    subprocess.Popen(switch,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,start_new_session=True)
+            else:
+                # Elsewhere the user restarts Steam: a detached restart can
+                # inherit a stale X display during a session change.
+                dialog('--msgbox',done+'\n\nRestart Steam to see it.')
 
         return 0
 

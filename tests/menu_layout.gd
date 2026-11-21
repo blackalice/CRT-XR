@@ -68,7 +68,7 @@ func run():
 						if row.unavailable_label.visible: contents_ok=contents_ok and inside(row,row.unavailable_label)
 						for arrow in row.adjust_buttons: contents_ok=contents_ok and inside(row,arrow) and arrow.size.y<=36
 					check(contents_ok,"Text, sliders and small arrows stay inside their row: "+context)
-			page(10,2); m.select("controls.preview",false); await settle()
+			page(10,3); m.select("controls.preview",false); await settle()
 			var performance_help_rect: Rect2 = m.help_frame.get_rect()
 			m.select("controls.separate_preview",false); await settle()
 			check(m.help_frame.get_rect()==performance_help_rect, "Emulation help does not shift the layout: %s large=%s" % [kind,large])
@@ -84,9 +84,15 @@ func run():
 			page(1,1); m.select("crt.scanlines",false); await capture("crt-"+kind+("-large" if large else ""))
 			m.games.open_library(); m.rom_index.cancel()
 			m.rom_index.games={"snes":[{"path":"/fixture/mario.sfc","label":"Super Mario World (Europe) (Rev 1)"},{"path":"/fixture/long.sfc","label":"A deliberately long game title with an extended subtitle (Europe) (En,Fr,De,Es,It) (Revision 12)"}]}
+			# One column: a normal title fits on one line beside its cover.
+			app.game_list_columns=1
 			m.games.open_system("snes"); m.select("game:/fixture/mario.sfc",false); await settle()
 			var game=m.selected_row()
 			check(game.title_label.get_line_count()==1 and inside(game,game.title_label) and inside(game,game.detail_label),"Normal game title and system caption fit: "+kind+str(large))
+			# Two columns (the default): it fits within two lines, inside its tile.
+			app.game_list_columns=2; m.render(); m.select("game:/fixture/mario.sfc",false); await settle()
+			game=m.selected_row()
+			check(game.title_label.get_visible_line_count()<=2 and inside(game,game.title_label),"Normal game title fits two columns (trimmed with … if needed): "+kind+str(large))
 			var longer=m.rows.filter(func(row):return row.item.id=="game:/fixture/long.sfc")[0]
 			check(inside(longer,longer.title_label) and inside(longer,longer.detail_label),"Long title grows its row and contains its caption: "+kind+str(large))
 			await capture("games-"+kind+("-large" if large else ""))
@@ -97,9 +103,9 @@ func run():
 			check(inside(full,full.detail_label),"Very long titles keep their caption inside the row")
 			var full_title: String=full.item.label
 			m.games.game_title_action(); await settle()
-			check(m.mode=="help" and m.help_copy==full_title+"
-
-File: very-long.sfc","Full title and file name are available in a scrollable view")
+			var page_text := ""
+			for node in m.column.find_children("*", "Label", true, false): page_text += node.text + "\n"
+			check(m.mode=="game_info" and page_text.contains("very-long.sfc") and page_text.contains(full_title.left(20)),"Y opens the game's page, with its full title and file name")
 			await capture("full-title-"+kind+("-large" if large else ""))
 			m.back(); await settle()
 			check(m.selected_id=="game:/fixture/very-long.sfc","Full title returns to the same cartridge")

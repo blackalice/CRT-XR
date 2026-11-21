@@ -93,9 +93,15 @@ func deck_text() -> PackedStringArray:
 func show_panel() -> void:
 	panel_hidden=false
 	menu.refresh()
-	# The hidden row disappears on rebuild; restore focus to the first usable
-	# control in the deck, rather than falling back to the top of the menu.
-	menu.memory[menu.state_key()]["id"]="transport.seek" if host.music.duration()>0 else "transport.play"
+	# Focus lands on the mini player's first usable key rather than the top of the menu.
+	menu.memory[menu.state_key()]["id"]="transport.seek" if host.music.duration()>0 else ("transport.play" if not host.music.kind.is_empty() else "transport.choose")
+
+## The Music tile on Home and Pause: opens the mini player under Media, or puts it away.
+## Closing never changes playback.
+func toggle_panel() -> void:
+	if panel_hidden: show_panel(); return
+	panel_hidden=true
+	menu.refresh()
 
 func visualizer_action() -> Dictionary:
 	return menu.catalog.action("transport.visualiser","Visualiser",host.visualizer.enter,"Show or return to the music visualiser on the CRT.",false,"")
@@ -108,10 +114,8 @@ func music_actions() -> Array:
 	var result: Array=[]
 	var music=host.music
 	var active: bool = not music.kind.is_empty() and (music.player.stream != null or music.http != null)
-	if active and panel_hidden:
-		var show: Dictionary = menu.catalog.action("transport.show", "Music", show_panel, "Show the music controls without changing playback.")
-		show["row_icon"]="music"
-		return [show]
+	# Closed, the mini player has no rows: the Music tile in Media opens it.
+	if panel_hidden: return result
 	if active:
 		for item in [menu.catalog.action("transport.previous","Previous",func(): music.skip(-1); menu.refresh(),"",not music.can_skip(-1),""),
 			menu.catalog.action("transport.play",music.playback_caption(),func(): music.toggle_playback(); menu.refresh(),"Pause/resume local music; reconnect live radio.",false,""),
@@ -133,22 +137,16 @@ func music_actions() -> Array:
 		var resume_music: Dictionary=menu.catalog.action("transport.play","Resume music",func(): music.toggle_playback(); menu.refresh(),music.now_playing(),false,"")
 		resume_music["row_icon"]="play"
 		result.append(resume_music)
-	var browse: Dictionary = menu.catalog.action("transport.choose","Music · Browse albums",open_music_browser,"Choose an album or MP3 from local storage or SD card.")
-	browse["row_icon"]="music"
-	browse["compact"]=true
-	# Match the one-line action tiles (Save state, Load state, Reset game).
-	browse["min_height"]=45
-	# Playing, Browse albums is the deck's last key, beside the transport.
-	if not result.is_empty() and result[0].get("layout", "") in ["transport", "music_seek"]:
-		browse.layout="transport"; browse.icon="music"; browse.caption="Browse albums"; browse["skin"]="music"
-	# With music stopped, Resume music and Browse share one row as two tiles.
+	var browse: Dictionary = menu.catalog.action("transport.choose","Browse Music",open_music_browser,"Choose an album or MP3 from local storage or SD card.")
+	# Browse Music is always a key of the mini player: beside the transport while playing,
+	# beside Resume music when stopped, and leading it when nothing has played yet.
+	browse.merge({"layout":"transport","skin":"music","icon":"music","caption":"Browse Music"})
+	if result.is_empty(): browse["deck_header"]=false
 	elif result.size()==1 and result[0].id=="transport.play":
 		result[0].merge({"layout":"transport","skin":"music","icon":"play","caption":"Resume music","lead":true,"deck_header":false})
-		browse.merge({"layout":"transport","skin":"music","icon":"music","caption":"Browse albums"})
 	result.append(browse)
-	if browse.get("layout", "")=="transport":
-		var visual: Dictionary=visualizer_action()
-		visual.merge({"layout":"transport","skin":"music","icon":"visualiser"})
-		result.append(visual)
-		result.append(volume_control())
+	var visual: Dictionary=visualizer_action()
+	visual.merge({"layout":"transport","skin":"music","icon":"visualiser"})
+	result.append(visual)
+	result.append(volume_control())
 	return result

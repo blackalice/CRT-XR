@@ -8,6 +8,14 @@
   "source_sha256": "9326c36789ff48bd1e44e696593df2505dc0433445148e2aa78b8c6e6e303d48",
   "patches": [
     {
+      "path": "sources/lrps2-pcrtc-log.patch",
+      "sha256": "e74124301497504a19f0b76ac8d39d6487c4fbe7da3da096d8a882534ac76a66"
+    },
+    {
+      "path": "sources/lrps2-target-budget.patch",
+      "sha256": "5e6180cdcab85ea43531cf9f4a16804cbf5618ed21bad6f370b97b4d7faf4844"
+    },
+    {
       "path": "sources/lrps2-recommended-blending.patch",
       "sha256": "d4bfd2e139fc43fd8fefc3fea2dcc4faa07ee4b2d330160b1920130114d96bd6"
     },
@@ -20,7 +28,7 @@
       "sha256": "85dd805a4de150697414069f7769188715356a0891ab494a1de761931341bef6"
     }
   ],
-  "binary_sha256": "d190c756f3bfe610c838038753c25a192528c51297948000e1344a2d81276e03",
+  "binary_sha256": "e76ec111d54b2534ebd3b0425f794df86b4ab3f70c6be760723cc65424eba605",
   "compiler": "g++-12 (Ubuntu 12.3.0-1ubuntu1~22.04.3) 12.3.0",
   "cmake_flags": [
     "-DCMAKE_BUILD_TYPE=Release",

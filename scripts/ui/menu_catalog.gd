@@ -109,6 +109,24 @@ const FLAT_ROOM_KEPT := ["room.preset","room.custom","room.ambience","room.ambie
 ## The TV model only shapes the flat screen in TV's shape; on the whole display
 ## it changes nothing.
 const FLAT_WHOLE_UNUSED := ["picture.cabinet","picture.tv_policy","picture.video_policy"]
+## Rows that Basic settings leave out: fine-tuning most people never need. They
+## keep working at their current values; Show advanced settings brings them back.
+const ADVANCED := ["tracking.diagnostics","view.tv_scale","view.distance_speed","view.edge_fade","view.scene_msaa",
+	"view.ipd","view.convergence","view.vertical_fov","view.smoothing","view.motion_predict",
+	"picture.beam_softness","picture.vignette","picture.gamma","picture.hue","picture.composite_strength","picture.artifact_strength","picture.phase_noise","picture.signal_motion",
+	"picture.width","picture.height","picture.shift_x","picture.shift_y","picture.safe_border","picture.guides",
+	"room.screen_bloom","room.ambient","room.key_energy","room.fill_energy","room.shadow_strength","room.lamp_height","room.lamp_side","room.fade_begin","room.fade_end",
+	"room.cabinet_ao_strength","room.cabinet_grain_strength","room.floor_brightness",
+	"music.duck_amount","audio.room_amount","audio.speaker_character","audio.directional_strength","music.directional","music.side",
+	"controls.separate_preview","emulation.game_fps","access.haptic_strength"]
+
+func advanced_hidden(id: String) -> bool:
+	return not bool(host.get("settings_advanced")) and id in ADVANCED
+
+## The Accessibility row that switches between Basic and all settings.
+func advanced_row() -> Dictionary:
+	return toggle("access.advanced","Show advanced settings",host,"settings_advanced",false,"Off keeps settings to the everyday ones. On adds fine-tuning: signal detail, lamp and lens calibration, picture position and more. Hidden settings keep working.",func(): menu.refresh(),false)
+
 const FLAT_REASON := "Not used in flat screen mode. Turn off View & glasses → Stereo & comfort → Flat screen to use it."
 
 static func flat_unused(id: String) -> bool:
@@ -123,16 +141,17 @@ func flat_unused_now(id: String) -> bool:
 ## Why a page's rows are hidden in flat view, for its one-line note.
 static func flat_note_reason(ids: Array) -> String:
 	if ids.all(func(id): return str(id).begins_with("crt.")):
-		return "They shape the TV's curved glass, which flat view does not draw. Turn off Flat view (beside Exit, or View & glasses → Stereo & comfort) to change them."
+		return "They shape the TV's curved glass, which flat view does not draw. Turn off Flat view (Y on Home, or View & glasses → Stereo & comfort) to change them."
 	if ids.all(func(id): return id in FLAT_WHOLE_UNUSED):
 		return "The TV model has no effect while Screen shape is Whole display. Choose TV's shape (View & glasses → Stereo & comfort), or turn off Flat view, to change it."
-	return "They move the TV or change the room. Turn off Flat view (beside Exit, or View & glasses → Stereo & comfort) to change them."
+	return "They move the TV or change the room. Turn off Flat view (Y on Home, or View & glasses → Stereo & comfort) to change them."
 
 ## Where a picture value comes from, as a short line under the row's title.
 func picture_source(field: String) -> String:
 	match host.display_settings.field_source(field):
 		"Custom at this scope": return "Changed here"
 		"Using console default": return "From console"
+		"Using look": return "From look"
 		"Using TV default": return "From defaults"
 	return "Default"
 
@@ -164,6 +183,25 @@ func page(title: String, rows: Array, subtitle := "", scope := {}, hide_flat := 
 				flat_note_reason(hidden))
 			kept.push_front(note)
 		rows = kept
+	if not bool(host.get("settings_advanced")):
+		var shown: Array = []
+		var hidden_count := 0
+		var carried := ""
+		for row in rows:
+			if row is Dictionary and str(row.get("id","")) in ADVANCED:
+				hidden_count += 1
+				if row.has("section"): carried = str(row.section)
+				continue
+			if not carried.is_empty() and row is Dictionary:
+				if not row.has("section"): row["section"] = carried
+				carried = ""
+			shown.append(row)
+		if hidden_count > 0:
+			# The note is also the way back: A shows every setting.
+			shown.append(action("advanced.note." + title.to_lower().replace(" ", "_"), "%d advanced %s hidden" % [hidden_count, "setting" if hidden_count == 1 else "settings"],
+				func(): host.settings_advanced = true; host.settings_dirty = true; menu.refresh(),
+				"Fine-tuning most people never need. Select to show every setting; turn them off again in Menu & access › Accessibility.", false, "Show ›"))
+		rows = shown
 	for row in rows:
 		if row is Dictionary and ROW_ICONS.has(row.get("id","")) and not row.has("row_icon"): row["row_icon"]=ROW_ICONS[row.id]
 		if not row is Dictionary: continue
@@ -178,6 +216,27 @@ func page(title: String, rows: Array, subtitle := "", scope := {}, hide_flat := 
 		if id=="picture.fitting":
 			row["reset"]=func(): host.display_settings.reset_fields(["picture.keep_aspect","picture.fit_mode"]); menu.refresh()
 	return {"title":title,"rows":rows,"subtitle":subtitle,"scope":scope}
+
+## Where a picture value comes from, as [caption, source] for the Settings help
+## panel's footer: "FROM DEFAULTS" over "Game defaults", "SET HERE" over "This game",
+## "FROM CONSOLE" over "All SNES games", or the look it comes from.
+func picture_origin(field: String) -> Array:
+	var prefs = host.display_settings
+	var scope := picture_scope()
+	var labels: Array = scope.get("choices", [])
+	match prefs.field_source(field):
+		"Custom at this scope":
+			return ["SET HERE", str(labels[clampi(int(scope.index), 0, labels.size() - 1)]) if not labels.is_empty() else "This setting"]
+		"Using console default": return ["FROM CONSOLE", "All %s games" % console_short(prefs.system)]
+		"Using look":
+			var keys: Array = prefs.picture_keys()
+			keys.pop_back(); keys.reverse()
+			for key in keys:
+				var parent = prefs.data.pictures.get(key, {})
+				if str(key).begins_with("look.") and parent is Dictionary and parent.has(field): return ["FROM LOOK", prefs.look_name(str(key).trim_prefix("look."))]
+			return ["FROM LOOK", "Look"]
+		"Using TV default": return ["FROM DEFAULTS", "Video defaults" if prefs.kind == "video" else "Game defaults"]
+	return ["FROM DEFAULTS", "App default"]
 
 func picture_scope_row() -> Dictionary:
 	var prefs = host.display_settings
@@ -195,6 +254,7 @@ func picture_scope_row() -> Dictionary:
 ## Changing scope only changes what is edited; it never removes anything.
 func picture_scope() -> Dictionary:
 	var prefs = host.display_settings
+	if not prefs.editing_look.is_empty(): return {}
 	if prefs.content.is_empty() and prefs.system.is_empty():
 		if host.emulator.loaded or host.video.loaded: return {}
 		return {"choices":["Game defaults","Video defaults"],"index":1 if prefs.kind == "video" else 0,
@@ -325,13 +385,9 @@ func core_option_pages() -> Array:
 		rows[0]["section"] = "Console defaults"
 		rows[0]["section_detail"] = "Applies next time you load a game."
 	rows.append(region_row())
-	var grouped := toggle("library.group_versions","One row per game",host,"library_group_versions",true,"Lists each game once and plays your region's version, or the one you last played. Pick another version when you start it.",func(): menu.games.list_changed(),false)
-	grouped["section"] = "GAME LISTS"
-	rows.append(grouped)
-	rows.append(toggle("library.hide_extras","Hide betas, demos & hacks",host,"library_hide_extras",false,"Leaves betas, prototypes, demos, hacks and bad dumps out of console lists; translations stay. Favourites and Recently played still show them.",func(): menu.games.list_changed(),false))
 	var scope := games_scope()
 	if playing.is_empty() or game_scope != 0:
-		return [page("Console settings", rows, "Defaults for each console" if playing.is_empty() else "Defaults for every %s game" % console_short(playing), scope)]
+		return [page("Console settings", rows, "", scope)]
 	var game_rows: Array = []
 	for definition in CoreOptions.definitions(playing): game_rows.append(core_option_row(playing, emulator.rom_hash, definition))
 	if not game_rows.is_empty():
@@ -434,6 +490,51 @@ func emulation_bios_info() -> String:
 	for folder in registry.bios_sources(): lines.append("- " + folder)
 	return "\n".join(lines)
 
+## Games → Library: how game lists look and where box art comes from.
+func library_page() -> Dictionary:
+	var h = host
+	var refresh_lists := func(): menu.games.list_changed(); h.settings_dirty = true
+	var columns := {"id":"access.game_columns","label":"Game list columns","kind":"choice","choices":["1 column", "2 columns", "3 columns"],"default":1,"visual":false,"section":"GAME LISTS",
+		"getter":func(): return h.game_list_columns - 1,"setter":func(value): h.game_list_columns=int(value)+1,
+		"help":"Console, recent and favourite lists. Two columns shows the most covers and names together. Left and right move between games."}
+	var art := toggle("library.box_art","Show box art",h,"library_box_art",true,"Covers beside your games, on Continue and when you start a game: from your own scrapes and anything downloaded. Off gives plain lists.",refresh_lists,false)
+	art["section"] = "BOX ART"
+	var fetch = menu.games.box_art_fetcher()
+	var busy: bool = fetch.running
+	var missing: int = menu.games.missing_box_art() if menu.rom_index.total() > 0 and not menu.rom_index.scanning else 0
+	var download := action("library.box_art_download", "Stop downloading box art" if busy else "Download missing box art", (func(): fetch.cancel(); menu.refresh()) if busy else (func(): menu.games.download_box_art()),
+		"Fetches front covers from the free libretro-thumbnails collection for games without art, matched by name. Kept in CRT XR's own folder; your ROM folders aren't touched.",
+		not busy and missing == 0, ("%d of %d" % [fetch.done, fetch.total]) if busy else (("%d without art" % missing) if missing > 0 else "Up to date"))
+	var auto := toggle("library.box_art_auto","Download for new games automatically",h,"library_box_art_auto",false,"When the Game Library opens, fetches covers for games that still have none, once a session. Needs an internet connection.",func(): menu.games.auto_box_art_done = false; h.settings_dirty = true,false)
+	var retry := action("library.box_art_retry","Try again for games not found",func(): menu.games.download_box_art(false, true),"Asks the collection again for games it had no cover for, for example after renaming files.",busy,"")
+	var online := toggle("library.info_online","Look up descriptions online",h,"library_info_online",false,"When a game's page ({Y} on a game) has no description from your gamelist, fetches a short summary from Wikipedia. Only the game's name is sent; each game is looked up once.",func(): h.settings_dirty = true,false)
+	online["section"] = "GAME DETAILS"
+	var grouped := toggle("library.group_versions","One row per game",h,"library_group_versions",true,"Lists each game once and plays your region's version, or the one you last played. Pick another version when you start it.",refresh_lists,false)
+	grouped["section"] = "WHICH GAMES"
+	var extras := toggle("library.hide_extras","Hide betas, demos & hacks",h,"library_hide_extras",false,"Leaves betas, prototypes, demos, hacks and bad dumps out of console lists; translations stay. Favourites and Recently played still show them.",refresh_lists,false)
+	return page("Library", [columns, art, download, auto, retry, online, grouped, extras])
+
+## Scenes & help → System → Updates: opt-in, and only ever a look at GitHub's
+## public release list. Nothing is downloaded or installed.
+func update_rows() -> Array:
+	var h = host
+	var u = h.updates
+	var auto := {"id":"system.update_auto","label":"Check for updates automatically","kind":"toggle","default":false,"visual":false,"section":"UPDATES",
+		"getter":func(): return u.auto,"setter":func(value): u.auto=bool(value); u.save_state(); menu.refresh(),
+		"help":"Once a day at start-up, asks GitHub whether a newer CRT XR has been released. Off by default; nothing else is sent."}
+	var now := action("system.update_check","Check now",func():
+		if u.checking: return
+		var done := func(result: Dictionary): menu.notify(str(result.message)); menu.refresh()
+		u.finished.connect(done, CONNECT_ONE_SHOT)
+		u.check_now(); menu.refresh(),
+		"Asks GitHub's public release list for the newest version. Updating is still your choice: download it from github.com/blackalice/CRT-XR/releases.",false,u.summary())
+	var result: Array = [auto, now]
+	if u.update_available():
+		result.append(action("system.update_open","Open the download page",func():
+			if OS.shell_open(u.latest_url if not u.latest_url.is_empty() else u.RELEASES_PAGE) != OK: menu.notify("Open github.com/blackalice/CRT-XR/releases on your computer."),
+			"Opens the release page in your browser (on the Deck, switch to Desktop Mode to download). Run the new package's installer, or extract it to a new folder on Windows; settings and saves are kept.",false,u.pretty(u.latest_tag)))
+	return result
+
 ## Tracking rows show what is happening: whether the glasses are tracking, and
 ## whether the fixed view is in use.
 func tracking_status() -> String:
@@ -456,7 +557,16 @@ func tracking_rows() -> Array:
 		toggle("tracking.diagnostics","Metrics overlay",h,"metrics_visible",false,"Shows frame rate, pose and tracking details. Off by default for a clean view. F1 also toggles it.",unchanged,false)]
 	for axis in ["yaw","pitch","roll"]:
 		tracking.append(toggle("tracking."+axis,"Invert "+axis,h.provider,"invert_"+axis,false,"Turn on if the view moves the wrong way when you turn your head.",unchanged,false))
-	tracking[5]["section"] = "IF MOVEMENT FEELS REVERSED"
+	tracking[tracking.find(tracking.filter(func(row): return row.id == "tracking.yaw")[0])]["section"] = "IF MOVEMENT FEELS REVERSED"
+	if OS.get_name() == "Windows" and h.tracking_source != "opentrack":
+		var VitureSdk = preload("res://scripts/tracking/viture_sdk.gd")
+		var ready: bool = VitureSdk.available()
+		tracking.insert(2, action("tracking.sdk", "Set up VITURE SDK" if not ready else "Choose VITURE SDK again", func():
+			VitureSdk.choose(func(result: Dictionary):
+				menu.notify(str(result.message))
+				if result.ok: h.use_tracking(true)
+				menu.refresh()),
+			"VITURE head tracking needs VITURE's free Windows SDK from viture.com/developer. Choose its ZIP, or glasses.dll inside it; CRT XR copies what it needs into its own settings folder. Opens on your desktop monitor.", false, "✓ Set up" if ready else "Needed"))
 	return tracking
 
 ## View & glasses → TV placement: where the TV sits, and the right stick that moves it.
@@ -573,11 +683,10 @@ func category_pages(category: int) -> Array:
 	var editing: String = "Editing " + h.display_settings.context_label()
 	match category:
 		0:
-			var status: String = tracking_status()
-			return [page("Tracking",tracking_rows(),"Fixed view · the TV stays still" if not h.provider.real else ("Glasses tracking" if status == "Tracking" else "Glasses not found · the view is held still")),
-				page("TV placement",placement_rows(),"Placement for the " + ("wide TV" if w.widescreen else "standard TV") + (" · fixed view" if not h.provider.real else " · head tracking")),
-				page("Stereo & comfort",stereo_rows(),"Applies to every game and video"),
-				page("Calibration",calibration_rows(),"For fine-tuning; most people never need these")]
+			return [page("Tracking",tracking_rows()),
+				page("TV placement",placement_rows()),
+				page("Stereo & comfort",stereo_rows()),
+				page("Calibration",calibration_rows())]
 			# Picture: the look, the tube, colour and signal, and the TV model with fitting.
 		1:
 			var crt: Array = []
@@ -611,13 +720,11 @@ func category_pages(category: int) -> Array:
 			presets[0]["section"] = "BUILT-IN LOOKS"
 			if menu.pictures.has_custom_picture():
 				presets.append(unavailable(action("preset.custom","Restore my custom picture",menu.pictures.restore_custom_picture,"Brings back the picture you had tuned yourself before choosing a look.",menu.pictures.applied_preset().is_empty()),"Your custom picture is already in use."))
-			for i in range(menu.pictures.MY_PRESET_COUNT):
-				var index: int = i
-				var state := "✓ Active" if menu.pictures.applied_preset()=="mine.%d" % index else ("Saved" if menu.pictures.my_preset_saved(index) else "Empty")
-				var mine := action("preset.mine.%d" % index,menu.pictures.my_preset_name(index),func(): menu.pictures.open_my_preset(index),"Your own saved look: apply it, save the current picture here, rename or delete.",false,state)
-				if i == 0: mine["section"] = "MY LOOKS"
-				presets.append(mine)
 			if menu.pictures.picture_undo!=null: presets.append(action("preset.undo","Undo picture look",menu.pictures.undo_picture_preset,"Restores the picture from before the last look."))
+			# Your own looks are linked: give one to games or consoles, edit it once.
+			var mine: Array = menu.looks.rows()
+			if not h.display_settings.editing_look.is_empty(): presets = mine + presets
+			else: presets.append_array(mine)
 			var signal_rows: Array = [{"id":"picture.connection","label":"Signal","kind":"choice","choices":["RGB","Composite (NTSC)","Composite (PAL)","Composite (auto)"],"default":0,"visual":true,"getter":func(): return w.picture.mode,"setter":func(value): w.picture.mode=value; refresh.call(); menu.refresh(),"help":"RGB is clean. Composite adds colour bleed and artefacts. Auto picks NTSC or PAL from the game's frame rate."}]
 			var colour: Array = picture_fields(w.picture.COLOR_FIELDS.slice(0,6))
 			colour[0]["section"] = "COLOUR"
@@ -685,10 +792,9 @@ func category_pages(category: int) -> Array:
 				var mine := action("room.mine.%d" % index,h.rooms.name(index),func(): menu.open_my_room(index),"Your own room: apply it, save the current room here, rename or delete.",false,state)
 				if i == 0: mine["section"] = "MY ROOMS"
 				presets.append(mine)
-			var shared := "Shared by every game and video"
-			return [page("Rooms",presets,shared),page("Lighting",groups.Lighting,shared),page("Furniture & props",furniture,shared),page("TV moments",tv_effect_rows(),"TV effects for games and videos · their volume is in Sound → Volumes")]
+			return [page("Rooms",presets),page("Lighting",groups.Lighting),page("Furniture & props",furniture),page("TV moments",tv_effect_rows())]
 		4:
-			return [page("Controls",menu.controls.rows(),controls_subtitle(),games_scope())]
+			return [page("Controls",menu.controls.rows(),"",games_scope())]
 		10:
 			var input_delay: Dictionary = {"id":"controls.preview","label":"Reduce input delay","kind":"choice","choices":["Off","1 frame","2 frames"],"default":1,"visual":false,"getter":func(): return h.emulator.run_ahead,"setter":func(value): h.emulator.run_ahead=value,"help":"Makes button presses show up sooner by running the game slightly ahead. 2 frames needs more processing power."}
 			if h.emulator.loaded and not h.emulator.preview_possible():
@@ -699,13 +805,17 @@ func category_pages(category: int) -> Array:
 				elif h.emulator.separate_preview: input_delay.disabled_reason="The second emulator copy could not start for %s." % console
 				else: input_delay.disabled_reason="%s needs Use a second emulator copy: its sound buzzes otherwise." % console
 			var separate_preview := toggle("controls.separate_preview","Use a second emulator copy",h.emulator,"separate_preview",true,"Keeps sound clean while reducing input delay. Uses more memory. Not available for PS1 or N64; SNES can work without it.",func(): h.emulator.set_separate_preview(h.emulator.separate_preview); menu.refresh(),false)
+			var rewind := toggle("emulation.rewind","Rewind & fast-forward",h.emulator,"rewind_enabled",false,"Hold L2 to rewind, R2 to play three times as fast ([ and ] on a keyboard). For 8- and 16-bit consoles, whose controls leave the triggers free.",func(): h.emulator.clear_rewind(); menu.refresh(),false)
+			if h.emulator.loaded and h.emulator.rewind_enabled and not h.emulator.speed_available():
+				rewind["help"] += " Not for this game: " + ("its controls use the triggers." if h.emulator.triggers_bound() else ("rewind needs more memory than this console allows." if h.emulator.rewind_unsupported else "this console isn't supported yet."))
 			var game_fps := toggle("emulation.game_fps","Show game frame rate",h,"game_fps_visible",false,"Shows the game's own frame rate and speed in the top corner while you play. Unlike Steam's counter, it measures the emulator, not the room.",unchanged,false)
 			var result: Array = core_option_pages()
-			result.append(page("Controls",menu.controls.rows(),controls_subtitle(),games_scope()))
-			result.append(page("Input delay",[input_delay,separate_preview,game_fps],"For the games you play"))
-			result.append(page("Info",[
-				action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate.",false,GameTitle.of(h.emulator.rom_path) if h.emulator.loaded else ""),
-				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")],"Read-only"))
+			result.append(library_page())
+			result.append(page("Controls",menu.controls.rows(),"",games_scope()))
+			var info: Array = [action("emulation.game_info","Current game",func(): menu.open_help("Current game",emulation_game_info()),"Console, emulator core and game frame rate.",false,GameTitle.of(h.emulator.rom_path) if h.emulator.loaded else ""),
+				action("emulation.bios_info","BIOS status",func(): menu.open_help("BIOS status",emulation_bios_info()),"See detected BIOS files and the folders searched.")]
+			info[0]["section"] = "ABOUT THIS GAME"
+			result.append(page("Play",[input_delay,separate_preview,rewind,game_fps]+info))
 			# Last, so the other tabs keep their places whether or not a Dreamcast game is loaded.
 			if h.emulator.loaded and h.emulator.system_id == "dreamcast": result.append(vmu_page())
 			return result
@@ -716,38 +826,43 @@ func category_pages(category: int) -> Array:
 				action("system.glasses","Using glasses",func(): menu.open_help("Using glasses",menu.play.glasses_guide()),"How to connect glasses, start in side-by-side 3D and recentre."),
 				action("system.controls","Controls",func(): menu.open_help("Controls",CONTROLS_GUIDE),"Controller and keyboard shortcuts."),
 				action("system.help","Troubleshooting",func(): menu.open_help("Troubleshooting",TROUBLESHOOTING_GUIDE),"Help with glasses, games, audio and saving."),
+				action("system.whats_new","What's new",func(): h.updates.mark_whats_new_seen(); menu.open_help("What's new in " + h.updates.current_version(),h.updates.whats_new_text()),"What changed in this version of CRT XR.",false,h.updates.current_version()),
 				action("system.setup","Run setup again",func(): menu.welcome.open(),"The first-run setup: the menu shortcut, your view, console region, game library, videos and music, and comfort options."),
-				action("system.version","About CRT XR",func(): menu.open_help("About CRT XR",about_page()),"A little CRT room for your XR glasses. About CRT XR, its maker and website.",false,str(ProjectSettings.get_setting("application/config/version")))],"Guides and setup"),
+				action("system.version","About CRT XR",func(): menu.open_help("About CRT XR",about_page()),"A little CRT room for your XR glasses. About CRT XR, its maker and website.",false,str(ProjectSettings.get_setting("application/config/version")))]),
 				page("System",[
 				action("system.device","Device status",func(): menu.open_help("Device status","!! "+menu.status_title+"\n"+menu.status_detail),"Current display and tracking status.",false,menu.status_title),
 				action("system.diagnostics","Copy diagnostics",func():
 					DisplayServer.clipboard_set("CRT XR "+str(ProjectSettings.get_setting("application/config/version"))+" | "+OS.get_name()+" | Godot "+str(Engine.get_version_info().string)+" | "+DisplayServer.get_name()); menu.notify("Version and platform details copied; no ROM or music paths included."),"Copies version and platform details for a bug report."),
 				action("system.credits","Credits & licences",func(): menu.open_help("Credits & licences",FileAccess.get_file_as_string("res://THIRD_PARTY.md")),"Godot, libretro, and the artists and developers behind CRT XR."),
-				action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")],"Version " + str(ProjectSettings.get_setting("application/config/version")))]
+				action("system.reset","Reset all settings",menu.confirm_reset,"Restores defaults without deleting games or saves.")]+update_rows(),"Version " + str(ProjectSettings.get_setting("application/config/version")))]
 		9:
 			return [page("Accessibility",[
 				toggle("access.large","Larger menu text",h,"menu_large_text",false,"Larger text and taller rows; lists scroll to keep focus visible.",menu.apply_accessibility,false),
 				toggle("access.contrast","Stronger menu contrast",h,"menu_high_contrast",false,"Brighter text and clearer borders on a dark background.",menu.apply_accessibility,false),
 				toggle("access.motion","Reduced animation",h,"menu_reduced_motion",false,"Instant focus changes and no TV warm-up animation.",menu.apply_accessibility,false),
+				advanced_row(),
 				toggle("access.clean_feed","Plain picture behind menus",h,"menu_clean_feed",true,"On: menus stay plain and readable in every game. Off: they take the game's own colour, signal and CRT effects.",unchanged,false),
-				],"How the menus look and move"),page("Layout",[
-				{"id":"access.game_columns","label":"Game list columns","kind":"choice","choices":["1 column", "2 columns", "3 columns"],"default":0,"visual":false,
-					"getter":func(): return h.game_list_columns - 1,"setter":func(value): h.game_list_columns=int(value)+1,
-					"help":"Choose the layout for console, recent and favourite game lists. Left and right move between games in multi-column views."},
+				]),page("Layout",[
+				{"id":"access.menu_shortcut","label":"Menu shortcut","kind":"choice","choices":["L1 + R1 + Start","Also hold Select"],"default":0,"visual":false,
+					"getter":func(): return 1 if h.emulator.gamepad.menu_hold_select else 0,"setter":func(value): h.emulator.gamepad.menu_hold_select=int(value)==1; h.settings_dirty=true; menu.refresh(),
+					"help":"L1 + R1 + Start always opens the menu. Also hold Select lets you hold Select (View) for just over half a second instead; a quick press still goes to the game."},
 				toggle("access.tv","Menu on the TV",h,"menu_on_tv",true,"Shows the menu on the TV. Off floats it in front of the TV; adjusting with preview always floats.",func(): menu.refresh(),false),
 				unavailable(toggle("access.depth","Floating menu depth",h,"menu_depth",true,"In side-by-side 3D, places a floating menu in front of the TV and dims the room. Off gives a flat menu.",func(): menu.refresh(),false).merged({"disabled":h.menu_on_tv and not h.flat_screen},true),"Only when the menu floats: turn off Menu on the TV."),
-				],"Where the menu appears"),page("Screensaver",[
+				]),page("Screensaver",[
 				toggle("access.screensaver","Screensaver",h,"menu_screensaver",true,"When the menu is left alone, the page gives way to the logo drifting across space. Any button brings the menu straight back.",func(): menu.refresh(),false),
+				unavailable({"id":"access.screensaver_style","label":"Style","kind":"choice","choices":["Drifting logo","Switch the TV off"],"default":0,"visual":false,"disabled":not h.menu_screensaver,
+					"getter":func(): return h.menu_screensaver_style,"setter":func(value): h.menu_screensaver_style=int(value),
+					"help":"The drifting logo, or the TV switching off with its power-down effect, leaving the room dark until you press something."},"Turn on Screensaver first."),
 				unavailable({"id":"access.screensaver_delay","label":"Start after","kind":"choice","choices":["30 seconds","1 minute","2 minutes","5 minutes","10 minutes","15 minutes"],"default":2,"visual":false,"disabled":not h.menu_screensaver,
 					"getter":func(): return maxi(0,h.SCREENSAVER_DELAYS.find(h.menu_screensaver_delay)),"setter":func(value): h.menu_screensaver_delay=h.SCREENSAVER_DELAYS[int(value)],
 					"help":"How long the menu waits without input before the screensaver starts."},"Turn on Screensaver first."),
-				],"When the menu is left alone"),page("Vibration",[
+				]),page("Vibration",[
 				toggle("access.haptics","Menu vibration",h,"menu_haptics",false,"A light tick as the selection moves and a firmer one when you confirm.",func(): menu.refresh(),false),
-				unavailable(number("access.haptic_strength","Vibration strength",h,"haptic_strength",0.1,1.0,0.1,0.8,"percent","How strong the ticks feel. The Steam Deck passes on only part of it, so it may need to be higher there.",func(): h.menu_vibrate(1.0, 0.07),false).merged({"disabled":not h.menu_haptics},true),"Turn on Menu vibration first.")],"Controller feedback in the menus")]
+				unavailable(number("access.haptic_strength","Vibration strength",h,"haptic_strength",0.1,1.0,0.1,0.8,"percent","How strong the ticks feel. The Steam Deck passes on only part of it, so it may need to be higher there.",func(): h.menu_vibrate(1.0, 0.07),false).merged({"disabled":not h.menu_haptics},true),"Turn on Menu vibration first.")])]
 		8:
 			if not menu.videos.videos_shown():
-				return [page("Videos",[action("videos.setup","Set up videos",menu.videos.open_videos,"Set up video playback and choose your video folder.",false,"›")],"Video playback is not set up yet")]
-			return [page("Picture",[h.display_settings.video_tv_row("picture.video_policy")]+video_picture_rows(),"For every video · each video remembers its own framing"),page("VCR",vcr_rows(),"The recorder the videos play from"),page("Playback",playback_rows(),"Subtitles, decoding and your video folder")]
+				return [page("Videos",[action("videos.setup","Set up videos",menu.videos.open_videos,"Set up video playback and choose your video folder.",false,"›")])]
+			return [page("Picture",[h.display_settings.video_tv_row("picture.video_policy")]+video_picture_rows()),page("VCR",vcr_rows()),page("Playback",playback_rows())]
 		7:
 			var quick: Array = []
 			# Through page() first, so the copies carry its markings (flat screen mode).
@@ -791,7 +906,7 @@ func category_pages(category: int) -> Array:
 			audio_rows.append(action("audio.preview","Preview sound",audio.preview_sample,"Plays a short sample through the selected sound mode while the game stays paused."))
 			var music = h.music
 			var visualiser: Array = [
-				{"id":"visualiser.preset","label":"Visualiser preset","kind":"choice","choices":h.visualizer.PRESETS,"default":0,"getter":func(): return h.visualizer.preset_index,"setter":h.visualizer.select_preset,"help":"Choose a bundled visualiser preset.","visual":false},
+				{"id":"visualiser.preset","label":"Visualiser preset","kind":"choice","choices":h.visualizer.preset_names(),"default":0,"getter":func(): return h.visualizer.preset_index,"setter":h.visualizer.select_preset,"help":"Three bundled presets, then your own: put projectM or MilkDrop .milk files in a folder called Visualiser presets inside your music folder.","visual":false},
 				toggle("visualiser.automatic","Automatic presets",h.visualizer,"automatic",true,"Change preset every 30 seconds. Reduced motion keeps the current preset.",h.visualizer.save_preferences,false),
 				number("visualiser.brightness","Visualiser brightness",h.visualizer,"brightness",0.3,1.5,0.1,1.0,"percent","Independent brightness for music visuals.",h.visualizer.save_preferences,false)]
 			visualiser[0]["section"] = "VISUALISER"
@@ -801,14 +916,18 @@ func category_pages(category: int) -> Array:
 				number("music.directional","Stays beside the TV",music,"directional",0,1,.05,.8,"percent","Music stays put as you turn your head. Zero keeps normal stereo.",music.apply,false),
 				number("music.side","Radio position",music,"side",-2,2,.1,-1.1,"m","Left or right of the TV, independent of the game's sound.",music.apply,false)]
 			music_rows.append_array(visualiser)
+			music_rows.append({"id":"music.sleep","label":"Sleep timer","kind":"choice","choices":h.SLEEP_CHOICES.map(func(m): return "Off" if m == 0 else "%d minutes" % m),"default":0,"visual":false,"section":"SLEEP",
+					"getter":func(): return maxi(0,h.SLEEP_CHOICES.find(h.sleep_minutes)),"setter":func(value): h.set_sleep_timer(h.SLEEP_CHOICES[int(value)]); menu.refresh(),
+					"detail_getter":func(): return ("%d min left" % ceili(h.sleep_left / 60.0)) if h.sleep_left > 0.0 else "",
+					"help":"Stops the music, pauses the game or video (saving its resume point) and switches the TV off after this long. For this session only."})
 			var menu_rows: Array = [
 				toggle("access.menu_music","Menu music",h,"menu_music_enabled",true,"Quiet background music while menus are open. Waits for the boot sound to tail off and yields to your own music. Its volume is on Volumes.",h.apply_menu_music,false),
 				toggle("access.boot_sound","Boot sound",h,"menu_boot_sound",true,"Plays the startup sound when the boot screen appears. Turn off for a quiet launch.",h.apply_boot_sound,false),
 				toggle("access.sounds","Menu clicks",h,"menu_sounds",false,"Quiet feedback for focus and confirmation.",unchanged,false)]
-			return [page("Volumes",volume_rows(),"Every level in one place"),page("TV speakers",audio_rows,"How the game sounds from the TV"),page("Music",music_rows,"Music preferences · play albums and radio from the music browser"),page("Menu sounds",menu_rows,"Sounds the menu itself makes")]
+			return [page("Volumes",volume_rows()),page("TV speakers",audio_rows),page("Music",music_rows),page("Menu sounds",menu_rows)]
 	return []
 
-## Saved setups: three slots holding the view, the room and the picture together.
+## Scenes (saved setups): three slots holding the view, the room and the picture together.
 func saved_setups_page() -> Dictionary:
 	var h = host
 	var slots: Array = []
@@ -816,9 +935,9 @@ func saved_setups_page() -> Dictionary:
 		var slot := i
 		var config = h.settings_store.read("user://presets/slot-%d.cfg" % i)
 		var saved: bool = config.has_section("view")
-		slots.append(action("slot.%d" % i,str(config.get_value("meta","name",h.PROFILE_NAMES[i])),func(): menu.open_slot(slot),"Stores TV placement, the room and the picture. Games with their own picture keep it; input delay stays as it is.",false,"Saved" if saved else "Empty"))
-	if h.profile_undo!=null: slots.append(action("setups.undo","Undo last setup load",h.undo_profile,"Restore the view, room and picture from before the last setup load."))
-	return page("Saved setups",slots,"View, room and picture, saved together")
+		slots.append(action("slot.%d" % i,str(config.get_value("meta","name",h.PROFILE_NAMES[i])),func(): menu.open_slot(slot),"A scene is a whole mood: where the TV sits, the room and the picture. Games with their own picture or look keep it; input delay stays as it is.",false,"Saved" if saved else "Empty"))
+	if h.profile_undo!=null: slots.append(action("setups.undo","Undo last scene load",h.undo_profile,"Restore the view, room and picture from before the last scene load."))
+	return page("Scenes",slots)
 
 ## Games → Consoles: console names and icons as they were sold in your region.
 func region_row() -> Dictionary:
@@ -828,14 +947,9 @@ func region_row() -> Dictionary:
 		"setter":func(value): h.apply_console_region(h.emulator.Registry.REGIONS[int(value)]); menu.refresh(),
 		"help":"Shows console names and icons as they were sold in your region. Games and saves are not affected."}
 
-func controls_subtitle() -> String:
-	var em = host.emulator
-	if not em.loaded: return "Start a game to change its controls"
-	return em.Registry.SYSTEMS[em.system_id].name + " controls"
-
 func vmu_page() -> Dictionary:
 	var vmu = host.vmu_display
 	var vmu_rows: Array = [toggle("vmu.enabled","Floating VMU display",vmu,"enabled",true,"Shows player one's VMU LCD below the TV during Dreamcast games. Look down to see it. The panel stays anchored in the room.",vmu.apply_layout)]
 	for spec in [["horizontal","Horizontal position",-1.5,1.5,0.05],["vertical","Vertical position",-1.5,-0.1,0.05],["forward","Distance in front of TV",0.2,1.5,0.05],["width","Display width",0.2,0.8,0.02]]:
 		vmu_rows.append(number("vmu."+spec[0],spec[1],vmu,spec[0],spec[2],spec[3],spec[4],vmu.DEFAULTS[spec[0]],"m","Relative to the TV. Changes apply immediately and are saved with your settings.",vmu.apply_layout))
-	return page("Dreamcast VMU",vmu_rows,"While a Dreamcast game is loaded")
+	return page("Dreamcast VMU",vmu_rows)

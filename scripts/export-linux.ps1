@@ -31,6 +31,7 @@ Copy-Item -LiteralPath (Join-Path $root 'docs/display-setup.md') -Destination (J
 Copy-Item -LiteralPath (Join-Path $root 'docs/LINUX-DESKTOP.md') -Destination (Join-Path $out 'LINUX-DESKTOP.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/emulation.md') -Destination (Join-Path $out 'PLAYING.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/gaming-mode.md') -Destination (Join-Path $out 'GAMING-MODE.md')
+Copy-Item -LiteralPath (Join-Path $root 'docs/glasses/STEAM-DECK.md') -Destination (Join-Path $out 'GLASSES.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/input-latency.md') -Destination (Join-Path $out 'INPUT-LATENCY.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/room-and-view.md') -Destination (Join-Path $out 'ROOM-AND-VIEW.md')
 Copy-Item -LiteralPath (Join-Path $root 'docs/picture-controls.md') -Destination (Join-Path $out 'PICTURE-CONTROLS.md')

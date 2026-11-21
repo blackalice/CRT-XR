@@ -1,0 +1,41 @@
+diff --git a/pcsx2/GS/Renderers/Common/GSRenderer.cpp b/pcsx2/GS/Renderers/Common/GSRenderer.cpp
+index d6e9fe2a0..d89fabecc 100644
+--- a/pcsx2/GS/Renderers/Common/GSRenderer.cpp
++++ b/pcsx2/GS/Renderers/Common/GSRenderer.cpp
+@@ -241,6 +241,36 @@ bool GSState::Merge(int field)
+ 	const u32 c = (m_regs->BGCOLOR.U32[0] & 0x00FFFFFFu) | (m_regs->PMODE.ALP << 24);
+ 	g_gs_device->Merge(tex, src_gs_read, dst, fs, m_regs->PMODE, m_regs->EXTBUF, c);
+ 
++	/* CRT XR diagnostic: the output circuit's state each time it changes
++	 * (the field alone, which flips every frame, does not count), up to a
++	 * bound per session. Logged as a warning so the host keeps it in
++	 * core.log. */
++	{
++		static char last[384];
++		static unsigned logged;
++		char line[384];
++		const GSRegDISPFB& f0 = m_regs->DISP[0].DISPFB;
++		const GSRegDISPFB& f1 = m_regs->DISP[1].DISPFB;
++		const GSRegDISPLAY& d0 = m_regs->DISP[0].DISPLAY;
++		const GSRegDISPLAY& d1 = m_regs->DISP[1].DISPLAY;
++		snprintf(line, sizeof(line),
++			"int=%d ffmd=%d real_int=%d imode=%d mode=%d field2=%d bob=%d gamedeint=%d scanmask=%d "
++			"pmode en=%d%d mmod=%d amod=%d slbg=%d alp=%d tex=%d%d "
++			"fb0 %x/%d/%x %d,%d disp0 %d,%d %dx%d mv%d fb1 %x/%d/%x %d,%d disp1 %d,%d %dx%d mv%d",
++			m_regs->SMODE2.INT, m_regs->SMODE2.FFMD, isReallyInterlaced() ? 1 : 0,
++			static_cast<int>(GSConfig.InterlaceMode), mode, field2, is_bob ? 1 : 0, game_deinterlacing ? 1 : 0, m_scanmask_used,
++			m_regs->PMODE.EN1, m_regs->PMODE.EN2, m_regs->PMODE.MMOD, m_regs->PMODE.AMOD, m_regs->PMODE.SLBG, m_regs->PMODE.ALP,
++			tex[0] ? 1 : 0, tex[1] ? 1 : 0,
++			f0.FBP, f0.FBW, f0.PSM, f0.DBX, f0.DBY, d0.DX, d0.DY, d0.DW + 1, d0.DH + 1, d0.MAGV,
++			f1.FBP, f1.FBW, f1.PSM, f1.DBX, f1.DBY, d1.DX, d1.DY, d1.DW + 1, d1.DH + 1, d1.MAGV);
++		if (strcmp(line, last) != 0 && logged < 2000)
++		{
++			memcpy(last, line, sizeof(last));
++			logged++;
++			log_cb(RETRO_LOG_WARN, "[PCRTC] %u field=%d %s\n", (unsigned)s_n, field, line);
++		}
++	}
++
+ 	if (isReallyInterlaced() && GSConfig.InterlaceMode != GSInterlaceMode::Off)
+ 	{
+ 		const float offset = is_bob ? (tex[1] ? tex_scale[1] : tex_scale[0]) : 0.0f;

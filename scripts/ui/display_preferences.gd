@@ -2,7 +2,7 @@ extends RefCounted
 ## Display policy and sparse picture overrides. Runtime menu previews never
 ## become hardware calibration or another programme's inherited defaults.
 var host: Node
-var data: Dictionary = {"version":1,"last_screen":"standard","game_tv_policy":"standard","defaults":{"game":"standard","video":"wide"},"platforms":{},"games":{},"videos":{},"views":{},"pictures":{}}
+var data: Dictionary = {"version":1,"last_screen":"standard","game_tv_policy":"standard","defaults":{"game":"standard","video":"wide"},"platforms":{},"games":{},"videos":{},"views":{},"pictures":{},"looks":{},"look_for":{}}
 var initialized := false
 var kind := "game"
 var system := ""
@@ -11,6 +11,14 @@ var scope := 0 # This programme, platform, TV default
 var base: Dictionary = {}
 var applied: Dictionary = {}
 var busy := false
+## Looks: named pictures that games and consoles link to rather than copy.
+## A look's values live in data.pictures["look.<id>"]; its name in data.looks;
+## which consoles and games use it in data.look_for ("platform.<system>",
+## "game.<content hash>" or "path.<ROM path>"). A game's picture is, in order:
+## the TV defaults, its console's look, its console's changes, its own look,
+## then its own changes. Editing a look changes every game that uses it.
+var editing_look := ""
+const LOOK_SHARE_PREFIX := "CRTXR-LOOK1:"
 const DISPLAY_CHOICES := ["Standard · Fit","Standard · Fill","Standard · Stretch","Wide · Fit","Wide · Fill","Wide · Stretch"]
 const WIDE_TV_PLATFORMS := ["ps2","gamecube","psp"]
 const PLATFORM_DEFAULTS_VERSION := 1
@@ -84,7 +92,7 @@ func read(config: ConfigFile) -> void:
 		data.game_tv_policy = policy if policy in TV_POLICIES else "custom"
 		data.legacy_tv_seeds = saved.get("legacy_tv_seeds", not saved.has("game_tv_policy")) == true
 		data["legacy_import"]=saved.get("legacy_import",true) if saved.get("legacy_import",true) is bool else true
-		for key in ["defaults","platforms","games","videos","views","pictures","migrated"]:
+		for key in ["defaults","platforms","games","videos","views","pictures","migrated","looks","look_for"]:
 			if saved.get(key) is Dictionary: data[key]=saved[key].duplicate(true)
 	elif not initialized:
 		data.defaults.game="wide" if bool(config.get_value("room","widescreen",false)) else "standard"
@@ -167,9 +175,170 @@ func apply_picture(values: Dictionary) -> void:
 func picture_keys() -> Array[String]:
 	var prefix:=kind+"."+screen_id()+"."
 	var keys: Array[String]=[prefix+"screen"]
-	if kind=="game" and not system.is_empty() and scope!=2: keys.append(prefix+"platform."+system)
-	if not content.is_empty() and scope==0: keys.append(prefix+"content."+content)
+	if not editing_look.is_empty():
+		keys.append("look."+editing_look)
+		return keys
+	if kind=="game" and not system.is_empty() and scope!=2:
+		var console_look := look_for_console(system)
+		if not console_look.is_empty(): keys.append("look."+console_look)
+		keys.append(prefix+"platform."+system)
+	if not content.is_empty() and scope==0:
+		var game_look := look_for_game(content, host.emulator.rom_path if kind=="game" else "")
+		if not game_look.is_empty(): keys.append("look."+game_look)
+		keys.append(prefix+"content."+content)
 	return keys
+
+# ── Looks ───────────────────────────────────────────────────────────────────
+
+func looks() -> Dictionary:
+	if not data.get("looks") is Dictionary: data.looks = {}
+	return data.looks
+
+func look_links() -> Dictionary:
+	if not data.get("look_for") is Dictionary: data.look_for = {}
+	return data.look_for
+
+func look_exists(id: String) -> bool:
+	return not id.is_empty() and looks().has(id) and data.pictures.get("look."+id) is Dictionary
+
+func look_name(id: String) -> String:
+	var item = looks().get(id, {})
+	return str(item.get("name", "Look")) if item is Dictionary else "Look"
+
+## Looks in name order, as [id, name] pairs.
+func look_list() -> Array:
+	var result: Array = []
+	for id in looks():
+		if look_exists(id): result.append([id, look_name(id)])
+	result.sort_custom(func(a, b): return str(a[1]).naturalnocasecmp_to(str(b[1])) < 0)
+	return result
+
+func look_for_console(platform: String) -> String:
+	var id := str(look_links().get("platform."+platform, ""))
+	return id if look_exists(id) else ""
+
+func look_for_game(hash: String, path := "") -> String:
+	var id := str(look_links().get("game."+hash, "")) if not hash.is_empty() else ""
+	if not look_exists(id) and not path.is_empty(): id = str(look_links().get("path."+path, ""))
+	return id if look_exists(id) else ""
+
+## The fields a look carries: the tube, colour and signal, never the fitting,
+## which belongs to each game's shape and the TV it plays on.
+func look_fields() -> Array[String]:
+	var fit: Array = ["picture.keep_aspect","picture.fit_mode","picture.aspect_override"]
+	for field in host.world.picture.FIT_FIELDS: fit.append("picture."+str(field[0]))
+	var result: Array[String] = []
+	for key in live_picture():
+		if not key in fit: result.append(key)
+	return result
+
+func look_values_from(values: Dictionary) -> Dictionary:
+	var result := {}
+	for key in look_fields():
+		if values.has(key): result[key] = values[key]
+	return result
+
+func new_look_id() -> String:
+	var id := "l%d" % Time.get_unix_time_from_system()
+	var n := 0
+	while looks().has(id if n == 0 else "%s_%d" % [id, n]): n += 1
+	return id if n == 0 else "%s_%d" % [id, n]
+
+## A new look holding the picture on screen now. Returns its id.
+func create_look(name: String, values := {}) -> String:
+	commit()
+	var id := new_look_id()
+	looks()[id] = {"name": clean_look_name(name)}
+	data.pictures["look."+id] = look_values_from(values if not values.is_empty() else live_picture())
+	return id
+
+static func clean_look_name(name: String) -> String:
+	var title := name.strip_edges().left(32)
+	return title if not title.is_empty() else "My look"
+
+func rename_look(id: String, name: String) -> void:
+	if looks().has(id): looks()[id]["name"] = clean_look_name(name)
+
+func duplicate_look(id: String) -> String:
+	if not look_exists(id): return ""
+	return create_look((look_name(id) + " copy").left(32), data.pictures["look."+id])
+
+## Removes a look; consoles and games that used it go back to their own picture.
+func delete_look(id: String) -> void:
+	if editing_look == id: end_look_edit()
+	commit()
+	looks().erase(id)
+	data.pictures.erase("look."+id)
+	for key in look_links().keys():
+		if str(look_links()[key]) == id: look_links().erase(key)
+	resolve_picture()
+
+## Links a console ("platform.snes"), a game ("game.<hash>") or a ROM path
+## ("path.<path>") to a look; an empty id unlinks it.
+func link_look(target: String, id: String) -> void:
+	commit()
+	if id.is_empty(): look_links().erase(target)
+	else: look_links()[target] = id
+	resolve_picture()
+
+## The loaded game's link key: by content, which survives renaming the file.
+func game_link_key() -> String:
+	return "game."+content if not content.is_empty() else ""
+
+func look_usage(id: String) -> Dictionary:
+	var consoles: Array = []
+	var games := 0
+	for key in look_links():
+		if str(look_links()[key]) != id: continue
+		if str(key).begins_with("platform."): consoles.append(str(key).trim_prefix("platform."))
+		else: games += 1
+	return {"consoles": consoles, "games": games}
+
+## Edit a look itself: the Picture tabs then change the look, and so every game
+## using it, until end_look_edit (or the menu closes).
+func begin_look_edit(id: String) -> void:
+	if not look_exists(id): return
+	commit()
+	editing_look = id
+	applied.clear()
+	resolve_picture()
+
+func end_look_edit() -> void:
+	if editing_look.is_empty(): return
+	commit()
+	editing_look = ""
+	applied.clear()
+	resolve_picture()
+
+## A short text that carries a look to another CRT XR: name and values only.
+func look_share_code(id: String) -> String:
+	if not look_exists(id): return ""
+	var payload := {"name": look_name(id), "values": data.pictures["look."+id]}
+	return LOOK_SHARE_PREFIX + Marshalls.utf8_to_base64(JSON.stringify(payload))
+
+## Adds a look from a share code. Unknown fields and values that are not
+## numbers or switches are dropped. Returns its id, or "" if the code is not a look.
+func import_look(code: String) -> String:
+	var text := code.strip_edges()
+	var at := text.find(LOOK_SHARE_PREFIX)
+	if at < 0: return ""
+	var rest := text.substr(at + LOOK_SHARE_PREFIX.length()).strip_edges()
+	var words := rest.split(" ", false)
+	if words.is_empty(): return ""
+	text = words[0]
+	var parsed = JSON.parse_string(Marshalls.base64_to_utf8(text))
+	if not parsed is Dictionary or not parsed.get("values") is Dictionary: return ""
+	var known := live_picture()
+	var values := {}
+	for key in parsed.values:
+		var value = parsed.values[key]
+		if not known.has(key) or not str(key) in look_fields(): continue
+		if typeof(known[key]) == TYPE_BOOL:
+			if value is bool: values[key] = value
+		elif (value is float or value is int) and is_finite(float(value)):
+			values[key] = int(value) if typeof(known[key]) == TYPE_INT else float(value)
+	if values.is_empty(): return ""
+	return create_look(str(parsed.get("name", "Shared look")), values)
 
 func resolve_picture() -> void:
 	if busy: return
@@ -203,6 +372,12 @@ func commit() -> void:
 	var patch: Dictionary=stored.duplicate(true) if stored is Dictionary else {}
 	for key in current:
 		if current[key] != applied.get(key): patch[key]=current[key]
+	if target_key().begins_with("look."):
+		# A look never carries fitting: that stays with each game and TV.
+		var fitting: Array = []
+		for key in patch:
+			if not key in look_fields(): fitting.append(key)
+		for key in fitting: patch.erase(key)
 	if not patch.is_empty(): data.pictures[target_key()]=patch
 	applied=current
 
@@ -216,6 +391,7 @@ func inherit_picture() -> void:
 	resolve_picture()
 
 func context_label() -> String:
+	if not editing_look.is_empty(): return "Look · " + look_name(editing_look)
 	var screen: String="Wide" if host.world.widescreen else "Standard"
 	if scope==2 or content.is_empty() and system.is_empty(): return "%s TV · %s defaults" % [screen,kind]
 	if scope==1: return "%s · %s defaults" % [screen,system.to_upper()]
@@ -232,6 +408,7 @@ func field_source(field: String) -> String:
 	for key in keys:
 		var parent = data.pictures.get(key, {})
 		if parent is Dictionary and parent.has(field):
+			if key.begins_with("look."): return "Using look"
 			return "Using console default" if ".platform." in key else "Using TV default"
 	return "Using TV default" if scope != 2 and not content.is_empty() else "Using app default"
 
@@ -335,6 +512,7 @@ func refresh_screen() -> void:
 	base=live_picture();applied.clear();migrate_picture();resolve_picture()
 
 func finish_edit() -> void:
+	end_look_edit()
 	commit()
 	if kind=="video" and not host.video.loaded and not host.emulator.loaded:
 		leave_context();kind="game";system="";content="";scope=0;refresh_screen()

@@ -18,7 +18,7 @@ func run() -> void:
  app.emulator.set_paused(true)
  var catalog = app.menu.catalog
  var pages: Array = catalog.pages(10)
- check(pages.map(func(p): return p.title) == ["Console settings", "Controls", "Input delay", "Info"], "Console settings lead the navigation")
+ check(pages.map(func(p): return p.title) == ["Console settings", "Library", "Controls", "Play"], "Console settings lead the navigation")
  check(catalog.game_scope == 0 and pages[0].scope.choices == ["This game", "All SNES games"], "A loaded game opens on its own settings, with the console a scope away")
  var game_page: Dictionary = pages[0]
  catalog.game_scope = 1

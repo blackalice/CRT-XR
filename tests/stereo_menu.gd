@@ -32,8 +32,6 @@ func run():
    UI.page(app,category,section);await settle()
    check(app.menu.get_rect().end.y<=720 and app.menu.get_rect().end.x<=960,"Category %d page %d fits shared canvas"%[category,section])
  app.menu.back()
- check(app.menu.mode=="settings" and app.menu.sidebar_focus,"Back first moves to the sidebar")
- app.menu.back()
  check(app.menu.mode=="pause" and app.menu.selected_id=="home.settings","Back restores originating pause selection")
  app.menu.select("home.library");await press(JOY_BUTTON_A)
  check(app.menu.mode=="library" and app.stereo,"Library preserves SBS")

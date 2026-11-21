@@ -61,6 +61,8 @@ func run():
 	await settle()
 	check(menu.items.any(func(item): return item.id=="library.system.snes") and menu.items.any(func(item): return item.id=="library.system.megadrive"),"System selector appears after scan")
 	check(not menu.items.any(func(item): return item.id=="library.system.gamegear"),"Empty systems stay hidden")
+	# Ten-game jumps are the one-column list's; in columns left and right move between games.
+	menu.host.game_list_columns=1
 	menu.select("library.system.snes");await press(JOY_BUTTON_A)
 	check(menu.mode=="games" and menu.items.size()==53,"Game list is paged rather than building thousands of rows")
 	var visible_in_list := func() -> bool:

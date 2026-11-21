@@ -28,7 +28,8 @@ func _draw() -> void:
 	if picture == null or row == null or menu.preview or not row.is_visible_in_tree(): return
 	var shown: Rect2 = row.get_global_rect()
 	# Only beside a row that is in view: a scrolled-off row keeps no pointer.
-	if not scroll.get_global_rect().grow(1.0).encloses(shown): return
+	# (Home and Pause's pinned Actions sit below the page and are always in view.)
+	if not scroll.get_global_rect().grow(1.0).encloses(shown) and not menu.pinned.is_ancestor_of(row): return
 	var bob := 0.0 if menu.host.menu_reduced_motion else float(int(time * 2.5) % 2) * CELL
 	var tip := shown.end - Vector2(12, 12) + Vector2(bob, bob) - get_global_transform().origin
 	var at := ((tip - TIP * CELL) / CELL).round() * CELL

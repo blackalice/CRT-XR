@@ -7,7 +7,7 @@ discovery, its folder names stay unsupported, and its settings do not appear.
 | Console | Opt-in | Core | Pinned source |
 |---|---|---|---|
 | Wii | `CRT_XR_EXPERIMENTAL_GAMECUBE=1` (shared) | Dolphin, the GameCube build | libretro/dolphin `b93001e` |
-| PlayStation 2 | `CRT_XR_EXPERIMENTAL_PS2=1` | LRPS2 (`pcsx2_libretro.so`) | libretro/ps2 `88098c4` + `lrps2-recommended-blending.patch`, `lrps2-image-maps.patch`, `lrps2-vtlb-moved-map.patch` |
+| PlayStation 2 | `CRT_XR_EXPERIMENTAL_PS2=1` | LRPS2 (`pcsx2_libretro.so`) | libretro/ps2 `88098c4` + `lrps2-target-budget.patch`, `lrps2-recommended-blending.patch`, `lrps2-image-maps.patch`, `lrps2-vtlb-moved-map.patch` |
 | PSP | `CRT_XR_EXPERIMENTAL_PSP=1` | PPSSPP (`ppsspp_libretro.so`) | hrydgard/ppsspp `v1.20.4` + `ppsspp-unload-during-boot.patch` |
 
 Builds: `scripts/build-lrps2-deck.py` (in the Dolphin image) and

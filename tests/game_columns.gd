@@ -23,7 +23,7 @@ func run():
   check(entries.size()==7 and entries.all(func(r):return r.item.get("game_grid",false)==(columns>1)),"%d columns arrange every game" % columns)
   if columns>1:
    var grid: GridContainer=entries[0].get_parent()
-   check(grid.columns==columns and entries.all(func(r):return r.size.y>= (108 if columns==2 else 124) and r.get_rect().end.x<=grid.size.x+1),"%d-column tiles fit and are taller" % columns)
+   check(grid.columns==columns and entries.all(func(r):return r.size.y>= (104 if columns==2 else 96) and r.get_rect().end.x<=grid.size.x+1),"%d-column tiles fit and are taller" % columns)
    m.select(entries[0].item.id,false); m.navigate(Vector2i.RIGHT)
    check(m.selected_id==entries[1].item.id,"Right selects the next game in %d columns" % columns)
    m.navigate(Vector2i.DOWN)
@@ -32,7 +32,7 @@ func run():
    check(m.selected_id==entries[6].item.id,"Incomplete final row selects its nearest game in %d columns" % columns)
    m.navigate(Vector2i.UP)
    check(m.selected_id==entries[6-columns].item.id,"Up returns to the same column in %d columns" % columns)
- m.mode="settings"; m.category=9; m.subsection=1; m.memory.clear(); m.render(); await settle()
+ m.open_settings_section(10, "Library"); m.memory.clear(); m.render(); await settle()
  m.select("access.game_columns",false); m.adjust(1)
  check(app.game_list_columns==1,"Column choice wraps from three to one in Settings")
  m.adjust(1)

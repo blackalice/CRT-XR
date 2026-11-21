@@ -162,6 +162,14 @@ func remember(path: String, seconds: float, length: float, display_style: int) -
 		resume.erase_section_key(section, "position")
 	return SettingsStore.write(resume_path, resume)
 
+## Takes a video off Continue watching: its place is forgotten (its picture
+## shape and subtitle choice are kept); it starts from the beginning next time.
+func forget_position(path: String) -> Error:
+	var section := key(path)
+	if not resume.has_section_key(section, "position"): return OK
+	resume.erase_section_key(section, "position")
+	return SettingsStore.write(resume_path, resume)
+
 ## Videos left part-way through, most recently watched first. Only files still
 ## present and unchanged qualify (the key covers size and modification time).
 func continue_watching(limit := 5) -> Array[Dictionary]:

@@ -84,13 +84,16 @@ func video_items() -> Array:
 		if found.is_empty(): result.append(menu.entry(menu.catalog.unavailable(menu.catalog.action("videos.none","No videos match",func(): pass,"",true),"Try fewer letters, or clear the search."),section))
 		return result
 	if video_view_dir==host.video_dir:
+		result.append(menu.entry(menu.catalog.action("videos.channel","Saturday Morning TV",watch_channel,
+			"Your videos as a channel that's always on: today's running order started at 6 am, so you tune in mid-programme. Up and Down change programme; the next starts by itself.",false,"›"),"ON AIR NOW","video","primary","Tune in to your own channel"))
 		for resume in host.video_library.continue_watching(5):
 			var path: String=resume.path
 			var seconds: float=resume.position
 			var row: Dictionary=video_row(path,path.get_file().get_basename(),"CONTINUE WATCHING",video_place(path))
 			row["id"]="video.continue:"+path
 			row["action"]=func(): play_video(path,seconds)
-			row["help"]="Carry on from "+VideoLibrary.clock(seconds)+"."
+			row["help"]="Carry on from "+VideoLibrary.clock(seconds)+". {Y} removes it from Continue watching."
+			row["continue_path"]=path
 			result.append(row)
 		if menu.input_kind!="keyboard": result.append(menu.entry(menu.catalog.action("videos.search","Search videos…",open_video_search,"Find a video anywhere in your video folder. With a keyboard, Ctrl+F searches as you type.",false,""),"FIND","search","","",true))
 	if video_view_dir!=host.video_dir: result.append_array(menu.up_entry("videos.up",video_view_dir,open_videos))
@@ -144,6 +147,19 @@ func select_video(path: String) -> void:
 		menu.remember(); video_launch_path=path; menu.clear_input(); menu.mode="video_launch"; menu.render()
 	else: play_video(path,0.0)
 
+## Y on a Continue watching row: forget its place, so it leaves the list.
+func remove_continue(path: String) -> void:
+	if host.video_library.forget_position(path) != OK:
+		menu.show_error("Couldn't update Continue watching. Check CRT XR can write to its settings folder."); return
+	menu.notify("Removed from Continue watching · it starts from the beginning next time")
+	menu.render()
+
+func watch_channel() -> void:
+	host.channel.host = host
+	if not host.channel.tune_in(): menu.show_error("Saturday Morning TV needs MP4, M4V or MKV videos in your video folder."); return
+	host.video_was_paused_before_menu=false
+	host.close_settings()
+
 func play_video(path: String, from_seconds: float) -> void:
 	if not host.play_video(path,from_seconds): menu.show_error(host.startup_message); return
 	host.video_was_paused_before_menu=false
@@ -168,25 +184,28 @@ func video_pause_items() -> Array:
 		"getter":func(): return video.style,"setter":func(value):
 			video.set_style(int(value)); h.remember_video_position(),
 		"help":"Original keeps the video's shape; the others simulate a 4:3 broadcast."}
-	var resume: Dictionary=menu.catalog.action("resume","Resume",h.close_settings,"Return to the video with your settings saved.",false,"▶")
-	resume=menu.entry(resume,"","play")
-	resume.merge({"hero":true,"min_height":56,"value":""})
-	var timeline := {"id":"video.seek","label":"Position","kind":"seek","layout":"video_seek","getter":func(): return video.clock,"setter":func(value): video.seek_to(float(value)),
+	var timeline := {"id":"video.seek","label":"Position","kind":"seek","layout":"video_seek","deck_header":false,"getter":func(): return video.clock,"setter":func(value): video.seek_to(float(value)),
 		"duration":func(): return length,"progress":func(): return VideoLibrary.clock(video.clock)+" / "+VideoLibrary.clock(length),
 		"help":"Left/right seeks 10 seconds; click or drag to jump."}
 	var tape_row := {"id":"video.tape","label":"Tape look","kind":"choice","choices":VideoSession.TAPES,"default":0,
 		"getter":func(): return h.video_tape,"setter":func(value): h.video_tape=int(value); video.set_tape(h.video_tape); h.save_library(),
 		"help":"VHS wear and noise bars while seeking. Shared by all videos."}
-	# Resume leads as it does for games; playback controls stay in the deck.
-	var restart: Dictionary = menu.catalog.action("video.restart","Start over",func(): video.seek_to(0.0); h.video_was_paused_before_menu=false; h.close_settings(),"")
-	restart.merge({"layout":"transport","icon":"refresh","caption":"Start over"})
-	var stop: Dictionary = menu.catalog.action("video.stop","Stop video",func(): h.stop_video(); menu.open_pause(),"Saves your place and returns the TV to its test signal.")
-	stop.merge({"layout":"transport","icon":"stop","caption":"Stop"})
-	for control in [timeline, restart, stop]: control["skin"]="music"
-	var items: Array=[resume]
-	items.append_array(menu.play.library_tiles("video.choose",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else "")))
-	items.append_array([timeline,restart,stop])
+	# The video's card leads as the game's does, with Start over and Stop as small tiles beside
+	# it; the Position row sits right under them, and Media, Quick settings and Actions follow.
+	var restart: Dictionary = menu.play.top_tile(menu.catalog.action("video.restart","Start over",func(): video.seek_to(0.0); h.video_was_paused_before_menu=false; h.close_settings(),"Plays the video again from the start."),"refresh")
+	var stop: Dictionary = menu.play.top_tile(menu.catalog.action("video.stop","Stop",func(): h.stop_video(); menu.open_pause(),"Saves your place and returns the TV to its test signal."),"stop")
+	var card: Dictionary = menu.play.top_card(menu.catalog.action("resume",video.path.get_file().get_basename(),h.close_settings,"Return to the video with your settings saved.",false,""),
+		"%s / %s" % [VideoLibrary.clock(video.clock),VideoLibrary.clock(length)],"›")
+	menu.play.preview_fields(card,"",menu.play.preview_size(video.display_aspect()),menu.play.pause_frame,"video")
+	timeline["skin"]="music"
+	var items: Array=[card,restart,stop]
+	for item in items: item["columns"]=items.size()
+	items.append(timeline)
+	var music: Array=menu.music.music_actions()
+	items.append_array(menu.play.media_tiles(44,"games","video.choose",func(): open_videos(video.path.get_base_dir() if video.path.get_base_dir().begins_with(h.video_dir) else ""),music,false,7))
+	items.append_array(music)
 	var controls: Array=menu.quick_controls(true)
+	controls[0]["section_extra"]=7
 	controls.append_array([style_row,tape_row])
 	var subtitles: PackedStringArray=video.subtitle_names()
 	if not subtitles.is_empty():
@@ -198,9 +217,9 @@ func video_pause_items() -> Array:
 			"getter":func(): return int(video.info.get("audio_track",0)),"setter":func(value): video.select_audio_track(int(value)),
 			"help":"Language or commentary track. X changes it while watching."})
 	for control in controls:
-		control.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"stacked":true,"compact":true,"meter":false},true)
+		control.merge({"layout":"tile","group":"quick","columns":3,"section":"QUICK SETTINGS","quick":true,"inline":true,"arrow_width":18,"compact":true,"meter":false,"min_width":menu.QUICK_WIDTH,"gap":menu.TILE_GAP},true)
 	items.append_array(controls)
-	items.append_array(menu.play.action_tiles())
+	items.append_array(menu.play.action_slots(menu.play.action_tiles()))
 	return items
 
 ## Folder picker for the video folder: folders only, with the videos inside shown as a count.

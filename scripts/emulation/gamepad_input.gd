@@ -21,6 +21,10 @@ var active_device := -1
 var right_stick_game := false
 var devices: Dictionary = {}
 var menu_active := false
+## Holding Select (View / ⧉) opens the menu too, when turned on: one button
+## instead of three. A short press still reaches the game.
+var menu_hold_select := false
+const HOLD_SELECT_MS := 600
 
 func handle_event(event: InputEvent) -> bool:
 	if not (event is InputEventJoypadButton or event is InputEventJoypadMotion): return false
@@ -30,6 +34,9 @@ func handle_event(event: InputEvent) -> bool:
 	var state: Dictionary = devices[id]
 	if event is InputEventJoypadButton:
 		state.buttons[event.button_index] = event.pressed
+		if event.button_index == JOY_BUTTON_BACK:
+			state["select_down"] = Time.get_ticks_msec() if event.pressed else -1
+			if not event.pressed: state["select_fired"] = false
 		if event.pressed: active_device = id
 		else: state.blocked.erase(event.button_index)
 	else:
@@ -54,6 +61,22 @@ func handle_event(event: InputEvent) -> bool:
 	if held == MENU_BUTTONS.size():
 		state.chord = true
 		return true
+	return false
+
+## How far the active controller's trigger is pressed (0 to 1).
+func trigger(axis: int) -> float:
+	if menu_active or not devices.has(active_device): return 0.0
+	return float(devices[active_device].triggers.get(axis, 0.0))
+
+## True once when Select has been held long enough to open or close the menu.
+func poll_hold_select(now := -1) -> bool:
+	if not menu_hold_select: return false
+	var time := Time.get_ticks_msec() if now < 0 else now
+	for state in devices.values():
+		var down := int(state.get("select_down", -1))
+		if down >= 0 and not bool(state.get("select_fired", false)) and time - down >= HOLD_SELECT_MS:
+			state["select_fired"] = true
+			return true
 	return false
 
 func set_menu_active(value: bool) -> void:

@@ -2,7 +2,7 @@
 
 Open settings with **L1 + R1 + Start**. Use up/down to select and left/right to adjust. **A** activates actions or toggles switches; **B** goes back. **L1/R1** changes category and **L2/R2** changes subsection. **Y resets only the selected option**; **X** opens compact preview for visual settings. Closing the menu saves preferences.
 
-## TV & picture → Screen fit
+## Picture → Fit & TV
 
 The whole framebuffer is mapped into a safe rectangle inside the rounded tube,
 including PAL-height and high-resolution SNES output. It does not discard
@@ -21,7 +21,7 @@ Restore full-picture fit resets these fitting controls.
 helps if the virtual TV is outside the camera frame at the current settings.
 Head tracking still lets you look away from the anchored television.
 
-## TV & picture → Signal and CRT
+## Picture → Tube, and Colour & signal
 
 Signal offers Clean, RGB CRT, PAL composite, NTSC composite and Auto composite
 presets. Auto chooses PAL below 55 Hz and NTSC otherwise, using the core's game
@@ -30,7 +30,7 @@ Picture presets preserve fitting, room and view. Deck Showcase is no longer offe
 
 Your own tuned picture is never lost to a preset: choosing any preset while the
 picture is Custom first keeps it in `presets/picture-custom.cfg`. **Custom** in
-Quick settings, or **TV & picture → Presets → Restore my custom picture**, brings it
+Quick settings, or **Picture → Looks → Restore my custom picture**, brings it
 back. **My preset 1–3** on the same page save, apply, rename and delete your own
 pictures (CRT, colour and signal; screen fitting stays per game). Saved presets
 also appear by name in the Quick settings preset choice.

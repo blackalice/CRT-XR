@@ -18,9 +18,9 @@ func run():
  app.menu.music.panel_hidden=false;app.menu.open_pause()
  for i in range(8):await process_frame
  var ids: Array=app.menu.items.map(func(item):return item.id)
- check(ids.find("transport.visualiser")==ids.find("transport.choose")+1,"Visualiser is immediately right of Browse albums")
+ check(ids.find("transport.visualiser")==ids.find("transport.choose")+1,"Visualiser is immediately right of Browse Music")
  app.menu.select("transport.choose");app.menu.navigate(Vector2i.RIGHT)
- check(app.menu.selected_id=="transport.visualiser","Controller moves right from Browse albums to Visualiser")
+ check(app.menu.selected_id=="transport.visualiser","Controller moves right from Browse Music to Visualiser")
  var controls: Array=app.menu.rows.filter(func(row):return row.item.get("layout", "")=="transport")
  check(controls.all(func(row):return row.position.x+row.size.x<=row.get_parent().size.x+1),"Transport row fits with Visualiser button")
  if DisplayServer.get_name()!="headless":

@@ -60,6 +60,14 @@ func run() -> void:
 	check(welcome.suggested_region("en_GB") == "pal" and welcome.suggested_region("fr") == "pal", "Europe and bare languages suggest PAL")
 	check(welcome.suggested_region("en_US") == "ntsc" and welcome.suggested_region("pt-BR") == "ntsc", "The Americas suggest NTSC")
 	check(welcome.suggested_region("ja_JP") == "japan" and welcome.suggested_region("ja") == "japan", "Japanese suggests Japan")
+	# en_US is what SteamOS and many Windows installs report anywhere: the time zone decides.
+	check(welcome.suggested_region("en_US", "Europe/London") == "pal", "en_US in Europe/London suggests PAL")
+	check(welcome.suggested_region("en_US", "America/Chicago") == "ntsc", "en_US in America/Chicago suggests NTSC")
+	check(welcome.suggested_region("en_US", "Asia/Tokyo") == "japan", "Asia/Tokyo suggests Japan")
+	check(welcome.suggested_region("en_US", "", 0, true) == "pal" and welcome.suggested_region("en_US", "", 60, true) == "pal", "en_US at UTC+0 or +1 (a Windows bias) suggests PAL")
+	check(welcome.suggested_region("en_US", "", -300, true) == "ntsc", "en_US at UTC-5 suggests NTSC")
+	check(welcome.suggested_region("en_GB", "America/New_York") == "pal", "An explicit non-US country still wins over the zone")
+	check(welcome.suggested_region("en_US.UTF-8") == "ntsc", "Without a zone, en_US still suggests NTSC")
 
 	# Welcome: no title bar, the logo for the boot to land on, two choices.
 	app.menu_reduced_motion = false; app.menu_high_contrast = false
@@ -85,8 +93,8 @@ func run() -> void:
 	# Controls: the shortcut is the lesson, and Escape or the chord does not close setup.
 	menu.select("welcome.start", false); menu.activate()
 	await shot("01-controls")
-	check(welcome.step == "controls" and menu.subtitle.text == "First-run setup · Step 1 of 6", "Controls is step 1 of 6")
-	check(menu.step_marks.visible and menu.step_marks.get_child_count() == 6, "Six step marks show beside the subtitle")
+	check(welcome.step == "controls" and menu.subtitle.text == "First-run setup · Step 1 of 4", "Controls is step 1 of 4")
+	check(menu.step_marks.visible and menu.step_marks.get_child_count() == 4, "Four step marks show beside the subtitle")
 	check(menu.pinned.visible and menu.pinned.get_child_count() == 1 and menu.selected_id == "welcome.next", "Continue is pinned below the page")
 	check(not menu.scroll.is_ancestor_of(menu.selected_row()), "The pinned row sits outside the scrolling page")
 	check(menu.hints.text.contains("X Skip setup"), "The footer offers Skip setup")
@@ -127,17 +135,6 @@ func run() -> void:
 	check(app.menu_on_tv, "Menu position switches back to On the TV")
 	menu.back(); await settle()
 	check(welcome.step == "controls", "B goes back a step")
-	welcome.go("region"); await settle()
-
-	# Console region: chosen live, with the consoles named for it.
-	await shot("03-region")
-	check(menu.subtitle.text.ends_with("Step 3 of 6"), "Region is step 3")
-	menu.select("welcome.region.ntsc", false); menu.activate(); await settle()
-	check(app.console_region == "ntsc" and texts(menu.column).contains("Genesis") and texts(menu.column).contains("Dreamcast"), "NTSC shows Genesis, and Dreamcast is in the preview")
-	menu.select("welcome.region.japan", false); menu.activate(); await settle()
-	check(texts(menu.column).contains("Super Famicom"), "Japan shows Super Famicom")
-	menu.select("welcome.region.pal", false); menu.activate(); await settle()
-	check(app.console_region == "pal", "PAL is chosen again")
 
 	# Library: the folder browser returns here; choosing a folder scans it.
 	var roms := ProjectSettings.globalize_path("user://welcome-roms")
@@ -145,7 +142,9 @@ func run() -> void:
 	app.default_rom_dir=roms
 	welcome.go("library"); await settle()
 	await shot("04-library")
+	check(menu.subtitle.text.ends_with("Step 3 of 4"), "Game library is step 3")
 	check(row_ids().has("welcome.library.browse") and row_ids().has("welcome.library.later"), "Library offers Browse folders and Not now")
+	check(row_ids().has("welcome.region") and row_ids().has("welcome.library.media"), "Library also offers console names and optional videos & music")
 	menu.select("welcome.library.browse", false); menu.activate(); await settle()
 	check(menu.mode == "browser" and welcome.choosing == "library", "Browse folders opens the folder browser for setup")
 	menu.back(); await settle()
@@ -164,11 +163,22 @@ func run() -> void:
 	check(found.contains("SKIPPED"), "Folders for unsupported consoles are worth knowing about")
 	check(menu.pinned.get_child_count() == 1 and menu.selected_id == "welcome.next", "Next stays pinned below the results")
 	check(menu.hints.text.contains("Choose another folder"), "B offers another folder")
+	# Console names sit beside the consoles they rename, and change them live.
+	menu.select("welcome.region", false)
+	app.apply_console_region("pal"); menu.refresh(); await settle()
+	menu.adjust(1); await settle()
+	check(app.console_region == "ntsc" and texts(menu.column).contains("Genesis"), "Console names → NTSC renames the found Mega Drive to Genesis")
+	menu.adjust(1); await settle()
+	check(app.console_region == "japan", "Console names → Japan")
+	menu.adjust(-2); await settle()
+	check(app.console_region == "pal", "PAL is chosen again")
+	check(row_ids().has("welcome.found.media"), "Results offer Add videos & music too")
 
 	# Videos & music: the music browser chooses a folder and returns.
 	app.music_folder=ProjectSettings.globalize_path("user://welcome-music")
 	DirAccess.make_dir_recursive_absolute(app.music_folder)
-	welcome.go("media"); await settle()
+	menu.select("welcome.found.media", false); menu.activate(); await settle()
+	check(welcome.step == "media" and menu.subtitle.text.ends_with("Step 3 of 4"), "Videos & music is an optional part of step 3")
 	await shot("06-media")
 	menu.select("welcome.media.music", false); menu.activate(); await settle()
 	check(menu.mode == "music_browser" and row_ids().has("music.use_folder"), "The music browser offers Use this folder for music")
@@ -180,6 +190,7 @@ func run() -> void:
 
 	# Comfort: rows scroll; Finish stays pinned.
 	welcome.go("comfort"); await settle()
+	check(menu.subtitle.text.ends_with("Step 4 of 4"), "Comfort is the last step")
 	await shot("07-comfort")
 	check(menu.pinned.get_child_count() == 1 and menu.pinned.get_child(0).item.label == "Finish", "Finish is pinned below the comfort options")
 	menu.select("welcome.large", false); menu.activate(); await settle()

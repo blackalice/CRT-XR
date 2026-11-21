@@ -1,8 +1,8 @@
 extends RefCounted
 ## First-run setup: a short run of pages, in the menu's own look, that teaches
-## the menu shortcut and sets up the view, console region, game library, videos
-## and music, and comfort options. New users see it once, straight from the boot
-## animation; Help & system → Run setup again shows it any time.
+## the menu shortcut and sets up the view, the game library (with console names),
+## optional videos and music, and comfort options. New users see it once, straight
+## from the boot animation; Scenes & help → Help → Run setup again shows it any time.
 const MenuSkin = preload("res://scripts/ui/menu_theme.gd")
 const InputGlyph = preload("res://scripts/ui/input_glyph.gd")
 const RowIcon = preload("res://scripts/ui/row_icon.gd")
@@ -12,10 +12,12 @@ const LOGO := preload("res://assets/branding/logo/boot-logo.svg")
 const DIAMONDS := [preload("res://assets/branding/logo/boot-diamond-0.svg"), preload("res://assets/branding/logo/boot-diamond-1.svg"), preload("res://assets/branding/logo/boot-diamond-2.svg")]
 ## The boot logo is drawn at 348×400; the Welcome page holds it at two thirds.
 const LOGO_SIZE := Vector2(232, 266)
-const STEPS := ["welcome", "controls", "view", "region", "library", "found", "media", "comfort", "done"]
-## Welcome and All set sit outside the six numbered steps; both library pages are step 4.
-const NUMBERS := {"controls": 1, "view": 2, "region": 3, "library": 4, "found": 4, "media": 5, "comfort": 6}
-const TITLES := {"controls": "Controls", "view": "Your view", "region": "Console names & icons", "library": "Game library",
+const STEPS := ["welcome", "controls", "view", "library", "found", "media", "comfort", "done"]
+## Welcome and All set sit outside the four numbered steps. The library pages,
+## and the optional videos and music page they lead to, are all step 3.
+const NUMBERS := {"controls": 1, "view": 2, "library": 3, "found": 3, "media": 3, "comfort": 4}
+const STEP_COUNT := 4
+const TITLES := {"controls": "Controls", "view": "Your view", "library": "Game library",
 	"found": "Game library", "media": "Videos & music", "comfort": "Comfort", "done": "You're all set"}
 ## The consoles the region page shows; their names and pictures follow the region.
 const PREVIEW_CONSOLES := ["snes", "nes", "megadrive", "pcengine", "dreamcast"]
@@ -23,7 +25,9 @@ const REGION_CHOICES := [["pal", "PAL", "Europe and Australia: SNES, Mega Drive 
 	["ntsc", "NTSC", "The Americas: SNES, Genesis and TurboGrafx-16 names and pictures."],
 	["japan", "Japan", "Japanese names and pictures: Super Famicom, Famicom and Mark III."]]
 ## Countries that sold the NTSC (American) consoles under their American names.
-const NTSC_COUNTRIES := ["US", "CA", "MX", "BR", "AR", "CL", "CO", "PE", "VE", "EC", "BO", "UY", "PY", "CR", "PA", "GT", "HN", "SV", "NI", "DO", "PR", "CU"]
+## South Korea is here too: its consoles were NTSC-J hardware with mostly
+## American-style names (Super Comboy aside), which suit it better than PAL.
+const NTSC_COUNTRIES := ["US", "CA", "MX", "BR", "AR", "CL", "CO", "PE", "VE", "EC", "BO", "UY", "PY", "CR", "PA", "GT", "HN", "SV", "NI", "DO", "PR", "CU", "KR", "TW", "PH"]
 var host: Node
 var menu: Control
 var step := "welcome"
@@ -57,11 +61,11 @@ func resume() -> void:
 func go(next: String) -> void:
 	menu.remember(); menu.clear_input(); menu.error_label.hide()
 	step = next
-	if step == "region" and not region_suggested:
+	if step in ["library", "found"] and not region_suggested:
 		region_suggested = true
 		# A first run starts from the region the system language suggests; running
 		# setup again keeps the region already chosen.
-		if not host.welcome_done: host.apply_console_region(suggested_region(OS.get_locale()))
+		if not host.welcome_done: host.apply_console_region(detected_region())
 	menu.render()
 
 func back() -> void:
@@ -69,6 +73,7 @@ func back() -> void:
 		"welcome": return
 		"found": go("library")
 		"media": go("found" if not host.default_rom_dir.is_empty() else "library")
+		"comfort": go("found" if not host.default_rom_dir.is_empty() else "library")
 		_: go(STEPS[maxi(0, STEPS.find(step) - 1)])
 
 ## Skip setup goes to All set, which still shows the menu shortcut.
@@ -95,13 +100,44 @@ func menu_shortcut() -> void:
 		return
 	menu.notify("That's the menu shortcut. Finish setup, or press {X} to skip it.")
 
-static func suggested_region(locale: String) -> String:
-	var parts := locale.replace("-", "_").split("_", false)
+## The region to start from. The system language alone is a poor guide: SteamOS
+## and many Windows installs report en_US wherever they are. So an American (or
+## missing) country defers to the time zone: an IANA zone name when there is one
+## ("Europe/London"), otherwise the UTC offset in minutes (`bias`, east positive).
+static func suggested_region(locale: String, zone := "", bias := 0, has_bias := false) -> String:
+	var parts := locale.replace("-", "_").replace(".", "_").split("_", false)
 	var language := parts[0].to_lower() if parts.size() > 0 else ""
 	var country := parts[1].to_upper() if parts.size() > 1 else ""
-	if language == "ja" or country == "JP": return "japan"
-	if country in NTSC_COUNTRIES: return "ntsc"
-	return "pal"
+	if language == "ja" or country == "JP" or zone == "Asia/Tokyo": return "japan"
+	if not country.is_empty() and country != "US":
+		return "ntsc" if country in NTSC_COUNTRIES else "pal"
+	if not zone.is_empty():
+		if zone.begins_with("America/") or zone.begins_with("US/") or zone.begins_with("Canada/") or zone in ["Pacific/Honolulu", "Asia/Seoul", "Asia/Taipei", "Asia/Manila"]: return "ntsc"
+		if zone.contains("/"): return "pal"
+	if has_bias: return "ntsc" if bias <= -180 and bias >= -660 else "pal"
+	return "ntsc" if country == "US" else "pal"
+
+## The system's IANA time zone, when it has one (Linux and the Deck), else "".
+static func system_zone() -> String:
+	var zone := OS.get_environment("TZ").trim_prefix(":")
+	if zone.contains("/"): return zone
+	if OS.get_name() in ["Linux", "FreeBSD"]:
+		var out: Array = []
+		if OS.execute("readlink", ["-f", "/etc/localtime"], out) == 0 and not out.is_empty():
+			var target := str(out[0]).strip_edges()
+			var at := target.find("zoneinfo/")
+			if at >= 0: return target.substr(at + 9)
+	return ""
+
+## The region suggested for this device: language, then time zone, then UTC offset.
+static func detected_region() -> String:
+	var tz := Time.get_time_zone_from_system()
+	return suggested_region(OS.get_locale(), system_zone(), int(tz.get("bias", 0)), tz.has("bias"))
+
+## Why the region was suggested, for the setup page.
+static func region_reason() -> String:
+	var zone := system_zone()
+	return ("your time zone (%s)" % zone) if not zone.is_empty() else ("your language and time zone (%s)" % OS.get_locale())
 
 func number() -> int:
 	return int(NUMBERS.get(step, 0))
@@ -110,7 +146,7 @@ func title() -> String:
 	return str(TITLES.get(step, "Welcome to CRT XR"))
 
 func subtitle() -> String:
-	return "First-run setup · Step %d of 6" % number() if number() > 0 else ""
+	return "First-run setup · Step %d of %d" % [number(), STEP_COUNT] if number() > 0 else ""
 
 func pinned(item: Dictionary) -> Dictionary:
 	item["pinned"] = true
@@ -151,16 +187,17 @@ func items() -> Array:
 			return [pinned(c.action("welcome.next", "Continue" if shortcut_done else "Can't press it right now? Continue", func(): go("view"),
 				"The game pauses while the menu is open. Close it with the same buttons, or choose Resume."))]
 		"view": return view_items()
-		"region": return region_items()
 		"library": return library_items()
-		"found":
-			return [next_row("media", "Next", "Change or refresh this any time in Game Library › Library locations.")]
+		"found": return found_items()
 		"media": return media_items()
 		"comfort": return comfort_items()
 		"done":
-			var library: Dictionary = menu.entry(c.action("welcome.library", "Open Game Library", func(): finish(true), "Run this setup again from Settings › Setups & help › Help › Run setup again.", false, "›"), "", "gamepad")
+			var again := "Run this setup again from Settings › Scenes & help › Help › Run setup again."
+			var has_games: bool = menu.rom_index.total() > 0
+			var library: Dictionary = menu.tile(c.action("welcome.library", "Pick a game" if has_games else "Open Game Library", func(): finish(true), again, false, ""), "gamepad", "", "finish", 2)
+			var home: Dictionary = menu.tile(c.action("welcome.home", "Go to Home", func(): finish(false), again, false, ""), "home", "", "finish", 2)
 			library["emphasis"] = "primary"
-			return [library, menu.entry(c.action("welcome.home", "Go to Home", func(): finish(false), "Run this setup again from Settings › Setups & help › Help › Run setup again.", false, "›"), "", "home")]
+			return [library, home]
 	return []
 
 func tracking_working() -> bool:
@@ -176,7 +213,7 @@ func view_items() -> Array:
 		"section": "HOW YOU PLAY", "row_icon": "glasses", "visual": false,
 		"getter": func(): return 1 if h.flat_screen else 0,
 		"setter": func(value): h.set_flat_screen(int(value) == 1); menu.refresh(),
-		"help": "This screen shows the game full-screen without the room (Flat view). Switch any time with Flat view beside Exit."})
+		"help": "This screen shows the game full-screen without the room (Flat view). Switch any time with {Y} on Home."})
 	# Flat view asks for its screen first; the TV models only shape it in TV's shape.
 	if h.flat_screen:
 		var shape: Dictionary = c.flat_shape_row("welcome.view.flat_shape")
@@ -188,14 +225,12 @@ func view_items() -> Array:
 		if not h.flat_screen:
 			games_tv["section"] = "YOUR TV"
 			games_tv["section_detail"] = "Either TV can show 4:3 or widescreen games. Fit adds borders; Fill crops; Stretch changes shape."
+		# Videos start on the wide TV; that and the fitting guide live in Settings.
+		games_tv["help"] = str(games_tv.get("help", "")) + " Videos use the wide TV; change that in Settings › Videos."
 		result.append(games_tv)
-		result.append(h.display_settings.video_tv_row("welcome.tv.videos"))
-	var fitting_help: Dictionary = c.fitting_help("welcome.tv.help")
-	fitting_help["compact"] = true
-	result.append(fitting_help)
 	# Flat view has no room to place the TV in, no head to track and no menu position.
 	if h.flat_screen:
-		result.append(next_row("region"))
+		result.append(next_row("library"))
 		return result
 	if not tracking_working():
 		result.append(menu.tile(c.action("welcome.view.connect", "Connect glasses", func(): h.use_tracking(true); menu.refresh(), "Connects or retries the glasses' head tracking.", false, ""), "glasses", "", "tracking", 2))
@@ -218,22 +253,24 @@ func view_items() -> Array:
 		"getter": func(): return 0 if h.menu_on_tv else 1,
 		"setter": func(value): h.menu_on_tv = int(value) == 0; menu.refresh(),
 		"help": "Choose where menus appear after this step. This page floats so you can see and position either TV without moving the controls."})
-	result.append(next_row("region"))
+	result.append(next_row("library"))
 	return result
 
-func region_items() -> Array:
-	var c = menu.catalog
+## Console names and pictures, chosen beside the consoles they rename.
+func region_row() -> Dictionary:
 	var h = host
-	var suggestion := suggested_region(OS.get_locale())
-	var result: Array = []
-	for choice in REGION_CHOICES:
-		var id: String = choice[0]
-		var item: Dictionary = c.action("welcome.region." + id, choice[1], func():
-			h.apply_console_region(id); menu.refresh(), choice[2], false, "Suggested" if id == suggestion else "")
-		item.merge({"layout": "tile", "group": "regions", "columns": 3, "expanded": h.console_region == id}, true)
-		if h.console_region == id: item["row_icon"] = "check"
-		result.append(item)
-	result.append(next_row("library", "Next", "Also in Settings › Games › Consoles › Console names & icons."))
+	return {"id": "welcome.region", "label": "Console names", "kind": "choice", "choices": REGION_CHOICES.map(func(choice): return choice[1]),
+		"section": "CONSOLE NAMES & ICONS", "row_icon": "gamepad", "visual": false,
+		"getter": func(): return maxi(0, REGION_CHOICES.map(func(choice): return choice[0]).find(h.console_region)),
+		"setter": func(value): h.apply_console_region(REGION_CHOICES[int(value)][0]); menu.refresh(),
+		"detail_getter": func(): return REGION_CHOICES[maxi(0, REGION_CHOICES.map(func(choice): return choice[0]).find(h.console_region))][2],
+		"help": "Suggested from %s. Only names and pictures change: games, saves and folders aren't affected. Also in Settings › Games › Consoles." % region_reason()}
+
+func found_items() -> Array:
+	var c = menu.catalog
+	var result: Array = [region_row()]
+	result.append(menu.entry(c.action("welcome.found.media", "Add videos & music too", func(): go("media"), "Optional. Point CRT XR at your own videos and albums now, or later from Home.", false, "›"), "ALSO ON THIS TV", "video"))
+	result.append(next_row("comfort", "Next", "Change or refresh your library any time in Game Library › Library locations."))
 	return result
 
 ## "SD card · Emulation/roms" or "Deck storage · Emulation/roms" for a found folder.
@@ -274,7 +311,9 @@ func library_items() -> Array:
 		result.append(menu.tile(c.action("welcome.library.sd", "SD card", func(): choosing = "library"; menu.games.open_cards(), "Browse a mounted SD card.", false, ""), "sd", "", "find", 3))
 	result.append(menu.tile(c.action("welcome.library.path", "Type a path", func(): choosing = "library"; menu.games.enter_folder_path(), "Enter a folder or a network share path.", false, ""), "network", "", "find", 3))
 	for item in result.slice(result.size() - 3): item["section"] = find
-	result.append(pinned(c.action("welcome.library.later", "Not now: I'll add games later", func(): go("media"), "Plain files or single-game ZIPs. Box art scraped by EmuDeck, ES-DE or RetroDECK shows automatically.")))
+	result.append(region_row())
+	result.append(menu.entry(c.action("welcome.library.media", "Add videos & music", func(): go("media"), "Optional. Point CRT XR at your own videos and albums.", false, "›"), "ALSO ON THIS TV", "video"))
+	result.append(pinned(c.action("welcome.library.later", "Not now: I'll add games later", func(): go("comfort"), "Plain files or single-game ZIPs. Box art scraped by EmuDeck, ES-DE or RetroDECK shows automatically.")))
 	return result
 
 func media_items() -> Array:
@@ -411,20 +450,11 @@ func decorate() -> void:
 		"welcome": decorate_welcome(column); return
 		"controls": top = controls_parts()
 		"view": top = [view_status()]
-		"region":
-			top = [text("Which consoles did you grow up with? Names and pictures follow your region.", 18)]
-			var grid := GridContainer.new(); grid.columns = PREVIEW_CONSOLES.size()
-			grid.add_theme_constant_override("h_separation", 6)
-			for system in PREVIEW_CONSOLES:
-				if Registry.SYSTEMS.has(system): grid.add_child(console_tile(system, str(Registry.SYSTEMS[system].name)))
-			for part in [heading("YOUR LIBRARY WILL SHOW (and more!)"), well(grid, 12),
-					text("Suggested from your system language (%s). Games, saves and folder names aren't affected." % OS.get_locale(), 16, MenuSkin.MUTED)]:
-				column.add_child(part)
 		"library":
 			top = [text("Choose your main ROM folder: the one holding snes, nes, megadrive and the rest.\nEvery supported console inside is found for you.", 18)]
 		"found": top = found_parts()
 		"media":
-			top = [text("This TV plays more than games. Point CRT XR at your own videos and albums now, or later from Home.", 18)]
+			top = [text("Optional: this TV plays more than games. Point CRT XR at your own videos and albums now, or later from Home.", 18)]
 		"done": top = done_parts()
 	for i in range(top.size()):
 		column.add_child(top[i]); column.move_child(top[i], i)
@@ -511,12 +541,12 @@ func view_status() -> Control:
 	var dot := MenuSkin.MUTED
 	if host.flat_screen:
 		title_text = "Flat view: the game fills this screen"
-		detail = "No room and no TV around it. Switch any time with Flat view beside Exit."
+		detail = "No room and no TV around it. Switch any time with Y on Home."
 	elif tracking_working():
 		title_text = "Head tracking is on"; detail = str(host.provider.status); dot = Color("58d878")
 	elif host.provider.real:
 		title_text = "Glasses found, but no head tracking yet"; dot = MenuSkin.AMBER
-		detail = "Check the VITURE SDK is beside CRT-XR.exe, or use OpenTrack in View & glasses › Tracking." if OS.get_name() == "Windows" else "Check XR Gaming in Decky can see the glasses, then connect."
+		detail = "Set up the VITURE SDK, or use OpenTrack, in View & glasses › Tracking." if OS.get_name() == "Windows" else "Check XR Gaming in Decky can see the glasses, then connect."
 	words.add_child(text(title_text, 20)); words.add_child(text(detail, 16, MenuSkin.MUTED))
 	line.add_child(words)
 	var light := ColorRect.new(); light.color = dot; light.custom_minimum_size = Vector2(12, 12)
@@ -633,12 +663,12 @@ func done_parts() -> Array[Control]:
 	if not h.video_dir.is_empty(): media.append("Videos")
 	if not h.music_folder.is_empty(): media.append("Music")
 	var region_index: int = maxi(0, Registry.REGIONS.find(h.console_region))
-	for pair in [["Console names & icons", Registry.REGION_LABELS[region_index]], ["Game library", library], ["Head tracking", tracking],
+	var view: String = "Flat view on this screen" if h.flat_screen else tracking
+	for pair in [["Game library", library], ["View", view],
 			["Games TV", h.display_settings.TV_POLICY_NAMES[h.display_settings.TV_POLICIES.find(h.display_settings.data.game_tv_policy)] if h.display_settings.data.game_tv_policy in h.display_settings.TV_POLICIES else "Current console preferences"],
-			["Videos TV", "Wide TV (16:9)" if h.display_settings.data.defaults.video == "wide" else "Standard TV (4:3)"],
-			["Menu", "On the TV" if h.menu_on_tv else "Floating"], ["Picture", picture],
-			["Videos, music", " and ".join(media) + " ready" if not media.is_empty() else "Not set up yet: add them from Home"]]:
-		var key := text(pair[0], 18, MenuSkin.MUTED); key.custom_minimum_size.x = 190
+			["Picture", picture], ["Console names", Registry.REGION_LABELS[region_index]],
+			["Videos, music", " and ".join(media) + " ready" if not media.is_empty() else "Add them any time from Home"]]:
+		var key := text(pair[0], 18, MenuSkin.MUTED); key.custom_minimum_size.x = 170
 		key.autowrap_mode = TextServer.AUTOWRAP_OFF
 		var value := text(pair[1], 18); value.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		grid.add_child(key); grid.add_child(value)

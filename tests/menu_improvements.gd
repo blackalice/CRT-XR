@@ -64,7 +64,9 @@ func run():
 	check(m.pictures.picture_signature()==custom and m.pictures.preset_caption().contains("My preset 1"),"A saved preset restores its picture")
 	m.pictures.rename_my_preset(0,"Night"); page(7)
 	check(m.items.filter(func(i):return i.id=="quick.preset")[0].choices.has("Night"),"Saved presets appear by name in Quick settings")
-	page(1,0); check(m.items.any(func(i):return i.id=="preset.mine.0" and i.value.contains("✓")),"Picture → Looks marks the active saved look")
+	# Saved slots became linked looks (tests/looks.gd); the Looks tab lists them.
+	app.display_settings.data.erase("looks_migrated")
+	page(1,0); check(m.items.any(func(i):return str(i.id).begins_with("look.open.")),"Picture → Looks lists your own looks")
 	page(2,0); check(m.items.slice(0,4).map(func(i):return i.id)==["music.game_volume","music.duck_game","music.duck_amount","music.volume"],"Volumes start with the game, its music ducking, then music")
 	app.music.duck_game=false; page(2,0); m.select("music.duck_game",false)
 	check(m.rows[2].disabled,"Ducking amount is disabled while ducking is off")

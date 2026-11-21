@@ -28,7 +28,7 @@ const PICTURE_SECTIONS := ["crt", "picture"]
 const VIDEO_PROFILE := "video"
 const VIDEO_CHECKPOINT_SECONDS := 30.0
 ## Names for setup slots until you name them yourself.
-const PROFILE_NAMES := ["Setup 1", "Setup 2", "Setup 3"]
+const PROFILE_NAMES := ["Scene 1", "Scene 2", "Scene 3"]
 ## What a saved setup holds: TV placement, the room and the base picture.
 const SETUP_SECTIONS := ["view", "room", "crt", "picture"]
 var settings_store := SettingsStore.new()
@@ -57,21 +57,42 @@ var picture_preset_signature := ""
 var room_preset_id := ""
 var room_preset_signature := ""
 var rooms = preload("res://scripts/ui/room_presets.gd").new()
+## Saturday Morning TV: the video folder as an always-on channel.
+var channel = preload("res://scripts/video/tv_channel.gd").new()
+## Opt-in update check and the once-per-version What's new note.
+var updates = preload("res://scripts/content/update_check.gd").new()
 ## Box art from the player's own scrapes, for game rows and Continue.
 var box_art: Node
 var menu_large_text := false
-var game_list_columns := 1
+var game_list_columns := 2
 ## Console collection (pal, ntsc, japan): console names and icons follow it.
 var console_region := "pal"
 ## Console lists show one row per game, playing the version for console_region.
 var library_group_versions := true
 ## Console lists leave out betas, prototypes, demos, hacks and bad dumps.
 var library_hide_extras := false
+## Box art beside games in lists, on Continue and on the launch page.
+var library_box_art := true
+## Download missing box art by itself when the library has new games.
+var library_box_art_auto := false
+## Look up a game's description on Wikipedia when its page opens without one.
+var library_info_online := false
 var menu_high_contrast := false
 var menu_reduced_motion := false
 ## The menu screensaver: on/off, and seconds without input before it starts.
 var menu_screensaver := true
 var menu_screensaver_delay := 120.0
+## Settings show every row (true) or only the everyday ones (false, Basic). New
+## users start Basic; people set up before it existed keep seeing everything.
+var settings_advanced := false
+## Sleep timer (this session only): minutes chosen, seconds left, 0 when off.
+const SLEEP_CHOICES := [0, 15, 30, 45, 60, 90]
+var sleep_minutes := 0
+var sleep_left := 0.0
+## The tube is switched off (sleep timer or idle menu); any input wakes it.
+var tv_asleep := false
+## Screensaver style: 0 the drifting logo, 1 switch the TV off.
+var menu_screensaver_style := 0
 const SCREENSAVER_DELAYS := [30.0, 60.0, 120.0, 300.0, 600.0, 900.0]
 var menu_sounds := false
 var menu_boot_sound := true
@@ -262,6 +283,9 @@ var last_game_path := ""
 ## Unpaused play of the running game not yet added to its total.
 var play_clock_game := ""
 var play_clock := 0.0
+## Seconds of unpaused play since the current game loaded: Pause's "Current session".
+## Unlike play_clock it is never flushed to the history, only reset by a new game.
+var session_seconds := 0.0
 const PLAY_CLOCK_SAVE_SECONDS := 60.0
 ## Videos are opt-in: nothing appears in the library until a folder is chosen.
 var video_dir := ""
@@ -511,6 +535,11 @@ func start_application() -> void:
 		var trace = LiveTrace.new()
 		add_child(trace)
 		trace.start(self)
+	var FrameRecorder = preload("res://scripts/diagnostics/frame_recorder.gd")
+	if FrameRecorder.requested():
+		var recorder = FrameRecorder.new()
+		add_child(recorder)
+		recorder.start(self)
 	music=preload("res://scripts/audio/music_player.gd").new()
 	menu_ambience = preload("res://scripts/audio/menu_ambience.gd").new()
 	menu_ambience.name = "MenuAmbience"
@@ -555,9 +584,11 @@ func start_application() -> void:
 		save_play_clock()
 		play_clock_game = emulator.rom_path if active else ""
 		play_clock = 0.0
+		session_seconds = 0.0
 		if active:
 			last_game_path = emulator.rom_path
-			profile_boot_action("history", func():
+			# Demo games never join Recent, so the shelf leaves no trace in your library.
+			if not preload("res://scripts/content/demo_shelf.gd").is_demo(last_game_path): profile_boot_action("history", func():
 				if not play_history.played(last_game_path): show_notice("Could not save recently played games"))
 			profile_boot_action("library", func():
 				if save_library() != OK: show_notice("Could not save the recent game location")))
@@ -587,8 +618,13 @@ func start_application() -> void:
 	video.finished.connect(func():
 		# Watched to the end: the next play starts from the beginning.
 		video_library.remember(video.path, float(video.info.duration), float(video.info.duration), video.style)
+		if channel.active: channel.programme_ended.call_deferred(); return
 		flash_video_bar("Finished · A plays it again · B opens the menu"))
 	emulator.status_changed.connect(func(_message): refresh_startup_status())
+	emulator.speed_mode_changed.connect(func(mode: String):
+		if mode == "rewind": show_notice("◀◀  Rewinding · let go of L2 to play on")
+		elif mode == "fast": show_notice("▶▶  Fast-forward · ×3")
+		else: notice_time = minf(notice_time, 0.4))
 	display_settings.read(settings_store.read("user://settings.cfg"))
 	var defaults := capture_settings()
 	var showcase_defaults := Showcase.config()
@@ -598,6 +634,9 @@ func start_application() -> void:
 	# [welcome] entry, belong to someone already set up.
 	var stored: ConfigFile = settings_store.read("user://settings.cfg")
 	welcome_done = bool(stored.get_value("welcome", "done", not stored.get_sections().is_empty()))
+	# Basic settings arrived after people had learnt the full set: keep it for them.
+	if welcome_done and stored.has_section("accessibility") and not stored.has_section_key("accessibility", "settings_advanced"): settings_advanced = true
+	if "--script" in OS.get_cmdline_args() and not stored.has_section_key("accessibility", "settings_advanced"): settings_advanced = true
 	start_flat_on_deck_screen()
 	var recent := settings_store.read("user://recent.cfg")
 	if recent.has_section("library"):
@@ -684,6 +723,7 @@ func start_application() -> void:
 	if (not welcome_done or welcome_forced) and settings_panel.visible and not emulator.loaded and not video.loaded and not "--capture" in arguments and (welcome_forced or not "--script" in OS.get_cmdline_args()):
 		menu.welcome.open()
 	refresh_startup_status()
+	start_update_notes("--script" in OS.get_cmdline_args() or "--capture" in arguments)
 	if "--capture" in arguments:
 		power_on.started=true; power_on.set_progress(1.0)
 	elif not settings_panel.visible and not is_instance_valid(sbs_prompt): power_on.begin()
@@ -736,14 +776,23 @@ func apply_settings(config: ConfigFile) -> void:
 	var menu_level = config.get_value("accessibility","menu_music_volume",0.10)
 	menu_music_volume = float(menu_level) if typeof(menu_level) in [TYPE_INT, TYPE_FLOAT] and is_finite(float(menu_level)) else 0.10
 	apply_menu_music()
-	game_list_columns = clampi(int(config.get_value("accessibility", "game_list_columns", 1)), 1, 3)
+	game_list_columns = clampi(int(config.get_value("accessibility", "game_list_columns", 2)), 1, 3)
+	# Two columns, with covers, became the default; a list left on one column moves once.
+	if not bool(config.get_value("accessibility", "game_columns_v2", false)) and game_list_columns == 1: game_list_columns = 2
 	apply_console_region(str(config.get_value("accessibility", "console_region", "pal")))
 	library_group_versions = bool(config.get_value("accessibility", "library_group_versions", true))
 	library_hide_extras = bool(config.get_value("accessibility", "library_hide_extras", false))
+	library_box_art = bool(config.get_value("accessibility", "library_box_art", true))
+	library_box_art_auto = bool(config.get_value("accessibility", "library_box_art_auto", false))
+	library_info_online = bool(config.get_value("accessibility", "library_info_online", false))
 	menu_depth = bool(config.get_value("accessibility","menu_depth",true))
 	menu_on_tv = bool(config.get_value("accessibility","menu_on_tv",true))
 	haptic_strength = clampf(float(config.get_value("accessibility","haptic_strength",0.8)),0.1,1.0)
 	menu_screensaver = bool(config.get_value("accessibility","menu_screensaver",true))
+	menu_screensaver_style = clampi(int(config.get_value("accessibility","menu_screensaver_style",0)),0,1)
+	emulator.gamepad.menu_hold_select = bool(config.get_value("accessibility","menu_hold_select",false))
+	# Test scripts see every row unless they turn Basic on, as they skip first-run setup.
+	settings_advanced = bool(config.get_value("accessibility","settings_advanced","--script" in OS.get_cmdline_args()))
 	var delay = config.get_value("accessibility","menu_screensaver_delay",120.0)
 	menu_screensaver_delay = float(delay) if typeof(delay) in [TYPE_INT, TYPE_FLOAT] and float(delay) in SCREENSAVER_DELAYS else 120.0
 	for key in music.DEFAULTS: music.set(key,config.get_value("music",key,music.DEFAULTS[key]))
@@ -774,6 +823,7 @@ func apply_settings(config: ConfigFile) -> void:
 	world.ambience_level = clampf(float(config.get_value("room", "ambience_level", Showcase.ROOM.ambience_level)), 0.0, 1.0)
 	var preview_depth = config.get_value("emulation", "run_ahead", 1)
 	emulator.run_ahead = clampi(int(preview_depth), 0, 2)
+	emulator.rewind_enabled = bool(config.get_value("emulation", "rewind", false))
 	emulator.set_separate_preview(bool(config.get_value("emulation", "separate_preview", true)))
 	distance = clampf(config.get_value("view", "distance", Showcase.VIEW.distance), 1.2, 5.0)
 	height_offset = clampf(config.get_value("view", "height_offset", Showcase.VIEW.height_offset), -1.5, 1.5)
@@ -817,6 +867,16 @@ func apply_settings(config: ConfigFile) -> void:
 
 func _process(delta: float) -> void:
 	notice_time = maxf(0.0, notice_time - delta)
+	if sleep_left > 0.0 and not tv_asleep:
+		var before := sleep_left
+		sleep_left = maxf(0.0, sleep_left - delta)
+		if before > 60.0 and sleep_left <= 60.0: show_notice("Sleep timer: the TV switches off in a minute")
+		if sleep_left <= 0.0:
+			sleep_minutes = 0
+			sleep_tv(true)
+	if emulator.gamepad.poll_hold_select():
+		if settings_panel.visible and menu.mode == "welcome": menu.welcome.menu_shortcut()
+		else: toggle_settings()
 	track_play_time(delta)
 	if video.loaded and not video.paused:
 		video_checkpoint += delta
@@ -969,6 +1029,11 @@ func capture() -> void:
 
 func _input(event: InputEvent) -> void:
 	if startup_loading: return
+	# A switched-off TV wakes on any button, key or click, and that press does nothing else.
+	if tv_asleep and (event is InputEventKey or event is InputEventJoypadButton or event is InputEventMouseButton) and event.is_pressed():
+		wake_tv()
+		get_viewport().set_input_as_handled()
+		return
 	if is_instance_valid(menu): menu.release_input(event)
 	if is_instance_valid(sbs_prompt): return
 	if is_instance_valid(menu): menu.note_input(event)
@@ -1097,6 +1162,7 @@ func track_play_time(delta: float) -> void:
 	if play_clock_game.is_empty() or not emulator.loaded or emulator.paused or not loading_path.is_empty(): return
 	if emulator.rom_path != play_clock_game: return
 	play_clock += delta
+	session_seconds += delta
 	if play_clock >= PLAY_CLOCK_SAVE_SECONDS: save_play_clock()
 
 ## Adds the clock's whole seconds to the game's total in the play history.
@@ -1180,9 +1246,9 @@ func offer_flat_view(delta: float) -> void:
 	if no_glasses_time < FLAT_VIEW_OFFER_SECONDS: return
 	flat_view_offered = true
 	settings_dirty = true
-	menu.ask("Use Flat view?", "No glasses found. Flat view shows the game full-screen on this screen, without the room. Switch any time with Flat view beside Exit.", func():
+	menu.ask("Use Flat view?", "No glasses found. Flat view shows the game full-screen on this screen, without the room. Switch any time with Y on Home.", func():
 		set_flat_screen(true)
-		show_notice("Flat view on · Flat view beside Exit switches back"), "", "Use Flat view", "Keep the room")
+		show_notice("Flat view on · Y on Home switches back"), "", "Use Flat view", "Keep the room")
 
 ## A side-by-side glasses session: launched for SBS, or the Windows XR setup
 ## found the glasses. Anything else is this screen.
@@ -1407,6 +1473,8 @@ func stop_for_disc(path: String, background := false) -> bool:
 	return true
 
 func play_video(path: String, from_seconds := 0.0) -> bool:
+	channel.host = self
+	channel.leave()
 	if loading_game or emulator.transition_busy:
 		startup_message = "A game operation is still running. Please wait for it to finish."
 		return false
@@ -1487,6 +1555,9 @@ func video_input(event: InputEvent) -> bool:
 			if video.ended: video.seek_to(0.0)
 			else: video.set_paused(not video.paused)
 			flash_video_bar()
+		"back_long", "forward_long" when channel.active:
+			# On the channel, up and down change programme.
+			channel.next_programme(1 if action == "forward_long" else -1)
 		"back", "forward", "back_long", "forward_long":
 			video.seek_by({"back":-10.0,"forward":10.0,"back_long":-60.0,"forward_long":60.0}[action])
 			flash_video_bar()
@@ -1612,7 +1683,7 @@ func load_profile() -> void:
 	validator.parse(merged.encode_to_text())
 	apply_settings(validated_settings(validator,profile_undo))
 	rebuild_settings()
-	show_notice("Setup loaded. Undo is available in Saved setups." + (" " + reader.warning if not reader.warning.is_empty() else ""))
+	show_notice("Scene loaded. Undo is available in Scenes & help › Scenes." + (" " + reader.warning if not reader.warning.is_empty() else ""))
 
 func validated_settings(config: ConfigFile, fallback: ConfigFile) -> ConfigFile:
 	for section in fallback.get_sections():
@@ -1733,13 +1804,16 @@ func reset_all_options() -> void:
 	menu_music_enabled = true
 	menu_music_volume = 0.10
 	apply_menu_music()
-	game_list_columns = 1
+	game_list_columns = 2
 	apply_console_region("pal")
 	menu_depth = true
 	menu_on_tv = true
 	haptic_strength = 0.8
 	menu_screensaver = true
 	menu_screensaver_delay = 120.0
+	settings_advanced = false
+	emulator.gamepad.menu_hold_select = false
+	menu_screensaver_style = 0
 	power_on.enabled=true; power_on.sound_level=.60; power_on.reduced_motion=false; power_on.apply()
 	tv_effects.channel_change=true; tv_effects.power_off_effect=true; tv_effects.reduced_motion=false
 	rebuild_settings()
@@ -1794,6 +1868,60 @@ func update_game_fps(eye: int) -> void:
 	label.add_theme_color_override("font_color", Color.WHITE if emulator.game_fps >= target * 0.97 else Color("ffd060"))
 	label.reset_size()
 	label.position = Vector2(panels[eye].size.x - label.size.x - 22.0, 18.0)
+
+## After start-up settles (past the boot sequence): tell someone who has just
+## updated where What's new is, and run the daily check if they turned it on.
+func start_update_notes(scripted: bool) -> void:
+	if updates.get_parent() == null: add_child(updates)
+	if scripted: return
+	updates.finished.connect(func(result: Dictionary):
+		if result.get("newer", false) and not updates.checking: show_notice("CRT XR %s is available · Scenes & help › System › Updates" % updates.pretty(str(result.tag))))
+	await get_tree().create_timer(6.0).timeout
+	if updates.should_show_whats_new(welcome_done):
+		show_notice("Updated to CRT XR %s · What's new is in Scenes & help › Help" % updates.current_version())
+		updates.mark_whats_new_seen()
+	elif not welcome_done:
+		# A new user has nothing to catch up on.
+		updates.mark_whats_new_seen()
+	updates.startup_check()
+
+## Sets the sleep timer from Sound → Music (minutes; 0 turns it off).
+func set_sleep_timer(minutes: int) -> void:
+	sleep_minutes = minutes
+	sleep_left = minutes * 60.0
+	if minutes > 0: show_notice("Sleep timer: the TV switches off in %d minutes" % minutes)
+
+## Switches the tube off: with the timer, music and the game or video stop too.
+## The room stays, lit only by the dark set; any input switches it back on.
+func sleep_tv(stop_everything: bool) -> void:
+	if tv_asleep: return
+	if stop_everything:
+		save_play_clock()
+		if emulator.loaded:
+			emulator.save_auto()
+			emulator.set_paused(true)
+		if video.loaded:
+			remember_video_position()
+			video.set_paused(true, true)
+		if is_instance_valid(music): music.stop()
+		if visualizer.active: visualizer.leave()
+		if settings_panel.visible: close_settings()
+		if emulator.loaded: emulator.set_paused(true)
+	tv_asleep = true
+	# A floating menu would hang in the dark: hide it until the TV wakes.
+	if settings_panel.visible: settings_panel.modulate.a = 0.0
+	if not tv_effects.play("power_off"):
+		world.screen_material.set_shader_parameter("power_off", 1.0)
+		world.screen_light.power_level = 0.0
+
+func wake_tv() -> void:
+	if not tv_asleep: return
+	tv_asleep = false
+	settings_panel.modulate.a = 1.0
+	tv_effects.clear()
+	world.screen_light.power_level = 1.0
+	power_on.begin(true)
+	if not settings_panel.visible: toggle_settings()
 
 func show_notice(message: String) -> void:
 	for notice in notices: notice.text = message
@@ -1876,12 +2004,15 @@ func capture_settings() -> ConfigFile:
 	config.set_value("preferences", "per_game_picture", remember_game_picture)
 	config.set_value("preferences","metrics_visible",metrics_visible)
 	config.set_value("preferences","game_fps_visible",game_fps_visible)
-	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","library_group_versions","library_hide_extras","menu_screensaver","menu_screensaver_delay"]: config.set_value("accessibility",key,get(key))
+	for key in ["menu_large_text","menu_high_contrast","menu_reduced_motion","menu_sounds","menu_boot_sound","menu_haptics","menu_depth","menu_on_tv","menu_curve","menu_clean_feed","haptic_strength","game_list_columns","console_region","library_group_versions","library_hide_extras","menu_screensaver","menu_screensaver_delay","settings_advanced","menu_screensaver_style","library_box_art","library_box_art_auto","library_info_online"]: config.set_value("accessibility",key,get(key))
 	config.set_value("accessibility","menu_plain_picture_default",true)
+	config.set_value("accessibility","game_columns_v2",true)
+	config.set_value("accessibility","menu_hold_select",emulator.gamepad.menu_hold_select)
 	config.set_value("accessibility","menu_music_enabled",menu_music_enabled)
 	config.set_value("accessibility","menu_music_volume",menu_music_volume)
 	config.set_value("welcome","done",welcome_done)
 	config.set_value("emulation", "run_ahead", emulator.run_ahead)
+	config.set_value("emulation", "rewind", emulator.rewind_enabled)
 	config.set_value("emulation", "separate_preview", emulator.separate_preview)
 	config.set_value("view", "right_stick_distance", right_stick_distance)
 	config.set_value("view", "distance_speed", distance_speed)

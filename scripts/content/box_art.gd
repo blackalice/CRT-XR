@@ -1,7 +1,8 @@
 extends Node
 ## Box art from scrapes the player already has: ES-DE / EmuDeck / RetroDECK
-## "downloaded_media" folders, and media folders beside the ROMs. Nothing is
-## downloaded. Images load on a background thread; art_ready announces each.
+## "downloaded_media" folders, and media folders beside the ROMs, then any art
+## downloaded on request (box_art_fetch.gd, user://boxart). Images load on a
+## background thread; art_ready announces each.
 signal art_ready(rom_path: String, texture: Texture2D)
 ## A printed front cover for the box on the table (see cover()).
 signal cover_ready(rom_path: String, texture: Texture2D)
@@ -25,6 +26,10 @@ var queue: Array = []
 var thread: Thread
 
 ## Starts again for a (new) ROM folder.
+## Forgets what was found, so newly downloaded art is picked up.
+func refresh() -> void:
+	found.clear(); listings.clear()
+
 func set_root(path: String) -> void:
 	if path == rom_root: return
 	rom_root = path
@@ -57,6 +62,14 @@ func match_in(folder: String, base: String) -> String:
 	var names := listing(folder)
 	return folder.path_join(names[base]) if names.has(base) else ""
 
+## The console folder a ROM sits in (its name, as scrapes and downloads use).
+func console_folder(rom_path: String) -> String:
+	var folder := rom_path.get_base_dir()
+	if not rom_root.is_empty() and folder.begins_with(rom_root):
+		var parts := folder.substr(rom_root.length()).trim_prefix("/").trim_prefix("\\").replace("\\", "/").split("/", false)
+		if not parts.is_empty(): return parts[0]
+	return folder.get_file()
+
 ## The box art file for a ROM, or "" when the player has none. `kinds` and
 ## `beside` narrow the search, as cover() does for printable front covers.
 func find(rom_path: String, kinds: Array = MEDIA_TYPES, beside_folders: Array = BESIDE) -> String:
@@ -81,6 +94,9 @@ func find(rom_path: String, kinds: Array = MEDIA_TYPES, beside_folders: Array = 
 			if result.is_empty() and not relative.is_empty(): result = match_in(root.path_join(system).path_join(kind), base)
 			if not result.is_empty(): break
 		if not result.is_empty(): break
+	if result.is_empty():
+		# Art downloaded on request is a flat front cover, fine for both uses.
+		result = match_in(ProjectSettings.globalize_path("user://boxart").path_join(system), base)
 	if result.is_empty():
 		for beside in beside_folders:
 			result = match_in(folder.path_join(beside), base)
